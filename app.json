@@ -1,1 +1,43 @@
-{"expo":{"android":{"adaptiveIcon":{"backgroundColor":"#000000","foregroundImage":"./assets/adaptive-icon.png"},"package":"com.nearry.app"},"icon":"./assets/icon.png","ios":{"bundleIdentifier":"com.nearry.app","supportsTablet":true},"name":"Nearry","orientation":"portrait","plugins":["expo-location"],"scheme":"nearry","slug":"nearry","splash":{"backgroundColor":"#000000","image":"./assets/splash.png","resizeMode":"contain"},"userInterfaceStyle":"dark","version":"0.1.0","web":{"bundler":"metro","favicon":"./assets/favicon.png","output":"static"}}}
+{
+  "expo": {
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#000000",
+        "foregroundImage": "./assets/adaptive-icon.png"
+      },
+      "package": "com.nearry.app"
+    },
+    "icon": "./assets/icon.png",
+    "ios": {
+      "bundleIdentifier": "com.nearry.app",
+      "supportsTablet": true
+    },
+    "name": "Nearry",
+    "orientation": "portrait",
+    "plugins": [
+      "expo-location",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "kotlinVersion": "1.9.25"
+          }
+        }
+      ]
+    ],
+    "scheme": "nearry",
+    "slug": "nearry",
+    "splash": {
+      "backgroundColor": "#000000",
+      "image": "./assets/splash.png",
+      "resizeMode": "contain"
+    },
+    "userInterfaceStyle": "dark",
+    "version": "0.1.0",
+    "web": {
+      "bundler": "metro",
+      "favicon": "./assets/favicon.png",
+      "output": "static"
+    }
+  }
+}
