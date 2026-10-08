@@ -1,0 +1,49 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+  workflow_dispatch:
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 18
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Generate app icons
+        run: pip install pillow && python3 assets/generate_icons.py
+
+      - name: Ensure Android SDK 35
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "platforms;android-35" "build-tools;35.0.0" > /dev/null
+
+      - name: Prebuild Android native project
+        run: npx expo prebuild --platform android --non-interactive --no-install
+
+      - name: Build debug APK
+        run: cd android && ./gradlew assembleDebug --no-daemon
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nearry-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 14
