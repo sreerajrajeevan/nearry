@@ -8,24 +8,23 @@ const { withAppBuildGradle } = require("@expo/config-plugins");
  * Metro server and show "Unable to load script" without one. Clearing the
  * list makes the debug APK bundle JS and run standalone.
  *
- * Diagnostic: prints the patched react{} block to the prebuild log so a
- * mis-patch is visible in CI output ([withBundleInDebug]).
+ * NOTE: Expo's template ships a COMMENTED-OUT debuggableVariants line, so
+ * a naive "already present" check skips patching. We strip any existing
+ * assignment (commented or not) and insert ours.
  */
 function withBundleInDebug(config) {
   return withAppBuildGradle(config, (cfg) => {
     let contents = cfg.modResults.contents;
-    if (!contents.includes("debuggableVariants")) {
-      contents = contents.replace(
-        /react\s*\{/,
-        "react {\n    // withBundleInDebug: bundle JS even for debuggable variants\n    debuggableVariants = []"
-      );
-      cfg.modResults.contents = contents;
-      console.log("[withBundleInDebug] inserted debuggableVariants = []");
-    } else {
-      console.log("[withBundleInDebug] debuggableVariants already present, skipping insert");
+    contents = contents.replace(/^[ \t]*(\/\/[ \t]*)?debuggableVariants\s*=[^\n]*\r?$/gm, "");
+    const patched = contents.replace(
+      /react\s*\{/,
+      "react {\n    // withBundleInDebug: bundle JS even for debuggable variants\n    debuggableVariants = []"
+    );
+    if (patched === contents) {
+      throw new Error("[withBundleInDebug] react{} block not found in app/build.gradle");
     }
-    const block = cfg.modResults.contents.match(/react\s*\{[\s\S]*?\n\}/);
-    console.log("[withBundleInDebug] react block now:\n" + (block ? block[0] : "(react block NOT FOUND)"));
+    cfg.modResults.contents = patched;
+    console.log("[withBundleInDebug] debuggableVariants = [] applied");
     return cfg;
   });
 }
