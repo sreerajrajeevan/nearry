@@ -24,7 +24,8 @@
           }
         }
       ],
-      "./plugins/withBundleInDebug"
+      "./plugins/withBundleInDebug",
+      "./plugins/withSharedDebugKeystore"
     ],
     "scheme": "nearry",
     "slug": "nearry",
