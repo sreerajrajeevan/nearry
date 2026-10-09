@@ -2,17 +2,19 @@ const { withAppBuildGradle } = require("@expo/config-plugins");
 
 /**
  * Forces the JS bundle to be packaged into debug APKs.
- * Without this, `assembleDebug` produces an APK that expects a running
- * Metro server ("Unable to load script" red screen) instead of running
- * standalone from the APK.
+ *
+ * The react-native-gradle-plugin skips bundling for variants listed in
+ * `debuggableVariants` (default: ["debug"]) — those APKs expect a running
+ * Metro server and show "Unable to load script" without one. Clearing the
+ * list makes the debug APK bundle JS and run standalone.
  */
 function withBundleInDebug(config) {
   return withAppBuildGradle(config, (cfg) => {
     const contents = cfg.modResults.contents;
-    if (!contents.includes("bundleInDebug")) {
+    if (!contents.includes("debuggableVariants")) {
       cfg.modResults.contents = contents.replace(
         /react\s*\{/,
-        "react {\n    // withBundleInDebug: package JS so the debug APK runs without Metro\n    bundleInDebug = true"
+        "react {\n    // withBundleInDebug: bundle JS even for debuggable variants\n    debuggableVariants = []"
       );
     }
     return cfg;
