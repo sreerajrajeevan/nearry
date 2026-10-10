@@ -28,6 +28,7 @@ export type PersonalStackParamList = {
   PostDetails: { postId: string };
   VenueDetails: { venueId: string };
   EditPost: { postId: string };
+  OfferDetails: { offerId: string };
 };
 
 /** Navigation available inside personal tab screens (tab + parent stack). */

@@ -8,10 +8,10 @@ import { EmptyState } from '../../components/EmptyState';
 import { Button } from '../../components/Button';
 import { PostRow } from '../../components/PostRow';
 import { colors, typography, spacing } from '../../theme';
-import { mockOffers } from '../../data/mock';
 import { listPosts, subscribeToPosts } from '../../services/posts';
+import { listLiveOffers } from '../../services/offers';
 import { listVenues } from '../../services/venues';
-import { NeedPost, Venue } from '../../services/mappers';
+import { NeedPost, Venue, Offer } from '../../services/mappers';
 import { timeLeft } from '../../utils/format';
 import { PersonalTabNav } from '../../navigation/types';
 
@@ -21,15 +21,17 @@ export function NearbyScreen() {
   const navigation = useNavigation<PersonalTabNav>();
   const [posts, setPosts] = useState<NeedPost[]>([]);
   const [venues, setVenues] = useState<Venue[]>([]);
+  const [offers, setOffers] = useState<Offer[]>([]);
   const [state, setState] = useState<LoadState>('loading');
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setState('loading');
     try {
-      const [p, v] = await Promise.all([listPosts(), listVenues()]);
+      const [p, v, o] = await Promise.all([listPosts(), listVenues(), listLiveOffers()]);
       setPosts(p);
       setVenues(v);
+      setOffers(o);
       setState('ready');
     } catch {
       setState('error');
@@ -52,7 +54,7 @@ export function NearbyScreen() {
     setRefreshing(false);
   };
 
-  const liveOffers = mockOffers.filter((o) => o.status === 'live');
+  const liveOffers = offers;
 
   return (
     <Screen>
@@ -77,11 +79,17 @@ export function NearbyScreen() {
             {liveOffers.length > 0 ? (
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.offerRow}>
                 {liveOffers.map((offer) => (
-                  <Card key={offer.id} accent style={styles.offerCard}>
-                    <Text style={styles.offerBusiness}>{offer.businessName}</Text>
-                    <Text style={styles.offerTitle}>{offer.title}</Text>
-                    <Badge label={timeLeft(offer.endsAt)} tone="red" />
-                  </Card>
+                  <TouchableOpacity
+                    key={offer.id}
+                    activeOpacity={0.85}
+                    onPress={() => navigation.navigate('OfferDetails', { offerId: offer.id })}
+                  >
+                    <Card accent style={styles.offerCard}>
+                      <Text style={styles.offerBusiness}>{offer.businessName}</Text>
+                      <Text style={styles.offerTitle}>{offer.title}</Text>
+                      <Badge label={timeLeft(offer.endsAt)} tone="red" />
+                    </Card>
+                  </TouchableOpacity>
                 ))}
               </ScrollView>
             ) : (

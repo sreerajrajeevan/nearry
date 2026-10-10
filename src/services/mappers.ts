@@ -216,3 +216,103 @@ export function toJoinRequest(row: DbJoinRequest): JoinRequest {
     createdAt: row.created_at,
   };
 }
+
+// ── Offers ────────────────────────────────────────────────
+
+export type DbOffer = {
+  id: string;
+  business_id: string;
+  title: string;
+  description: string;
+  discount_pct: number | null;
+  price_cents: number | null;
+  starts_at: string;
+  ends_at: string;
+  venue_id: string | null;
+  slot_capacity: number;
+  max_redemptions: number | null;
+  redemptions: number;
+  status: 'draft' | 'live' | 'ended' | 'cancelled';
+  created_at: string;
+  business?: { display_name: string } | null;
+};
+
+export type Offer = {
+  id: string;
+  businessId: string;
+  businessName: string;
+  title: string;
+  description: string;
+  discountPct?: number;
+  priceCents?: number;
+  startsAt: string;
+  endsAt: string;
+  venueId?: string;
+  slotCapacity: number;
+  maxRedemptions?: number;
+  redemptions: number;
+  status: 'draft' | 'live' | 'ended' | 'cancelled';
+  createdAt: string;
+};
+
+export function toOffer(row: DbOffer): Offer {
+  return {
+    id: row.id,
+    businessId: row.business_id,
+    businessName: row.business?.display_name ?? 'Business',
+    title: row.title,
+    description: row.description,
+    discountPct: row.discount_pct ?? undefined,
+    priceCents: row.price_cents ?? undefined,
+    startsAt: row.starts_at,
+    endsAt: row.ends_at,
+    venueId: row.venue_id ?? undefined,
+    slotCapacity: row.slot_capacity,
+    maxRedemptions: row.max_redemptions ?? undefined,
+    redemptions: row.redemptions,
+    status: row.status,
+    createdAt: row.created_at,
+  };
+}
+
+// ── Bookings ──────────────────────────────────────────────
+
+export type DbBooking = {
+  id: string;
+  offer_id: string;
+  customer_id: string;
+  slot: string;
+  party_size: number;
+  status: 'pending' | 'confirmed' | 'cancelled';
+  created_at: string;
+  customer?: { display_name: string } | null;
+  offer?: { title: string } | null;
+  customer_name?: string;
+  offer_title?: string;
+};
+
+export type Booking = {
+  id: string;
+  offerId: string;
+  customerId: string;
+  customerName: string;
+  offerTitle: string;
+  slot: string;
+  partySize: number;
+  status: 'pending' | 'confirmed' | 'cancelled';
+  createdAt: string;
+};
+
+export function toBooking(row: DbBooking): Booking {
+  return {
+    id: row.id,
+    offerId: row.offer_id,
+    customerId: row.customer_id,
+    customerName: row.customer?.display_name ?? row.customer_name ?? 'Someone',
+    offerTitle: row.offer?.title ?? row.offer_title ?? 'Offer',
+    slot: row.slot,
+    partySize: row.party_size,
+    status: row.status,
+    createdAt: row.created_at,
+  };
+}

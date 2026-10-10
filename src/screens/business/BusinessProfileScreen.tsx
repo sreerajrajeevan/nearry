@@ -1,36 +1,117 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { Screen } from '../../components/Screen';
 import { Card } from '../../components/Card';
 import { Button } from '../../components/Button';
 import { Badge } from '../../components/Badge';
 import { Avatar } from '../../components/Avatar';
+import { Input } from '../../components/Input';
+import { EmptyState } from '../../components/EmptyState';
 import { colors, typography, spacing } from '../../theme';
 import { useAuth } from '../../store/AuthContext';
-import { mockOffers } from '../../data/mock';
-import { isSupabaseConfigured } from '../../services/supabase';
+import {
+  getVerificationState,
+  submitVerificationDoc,
+  claimVenue,
+  VerificationState,
+} from '../../services/verification';
+import { searchVenues, listVenues } from '../../services/venues';
+import { Venue } from '../../services/mappers';
+import { isDemoMode } from '../../services/supabase';
 
-function InfoRow({ label, value, last }: { label: string; value: string; last?: boolean }) {
-  return (
-    <View style={[styles.infoRow, !last && styles.infoRowBorder]}>
-      <Text style={styles.infoLabel}>{label}</Text>
-      <Text style={styles.infoValue}>{value}</Text>
-    </View>
-  );
+const STATUS_COPY: Record<VerificationState, string> = {
+  unverified: 'Not verified. Submit a business document to get reviewed.',
+  pending: 'Under review. You can publish once approved.',
+  verified: 'Verified. Your offers can go live.',
+  rejected: 'Not approved. Submit a clearer document to try again.',
+};
+
+function statusTone(s: VerificationState): 'neutral' | 'green' | 'red' {
+  if (s === 'verified') return 'green';
+  if (s === 'pending') return 'neutral';
+  return 'red';
 }
 
-function StatBox({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.statBox}>
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
-    </View>
-  );
-}
-
+/** Business profile: verification, venue association, sign out. */
 export function BusinessProfileScreen() {
-  const { profile, signOut } = useAuth();
-  const name = (profile?.displayName ?? 'YOUR BUSINESS').toUpperCase();
+  const { profile, refreshProfile, signOut } = useAuth();
+  const [verif, setVerif] = useState<{ status: VerificationState; docPath?: string }>({
+    status: 'unverified',
+  });
+  const [venue, setVenue] = useState<Venue | null>(null);
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<Venue[]>([]);
+  const [busy, setBusy] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    if (!profile || isDemoMode()) return;
+    try {
+      setVerif(await getVerificationState(profile.id));
+      const venues = await listVenues();
+      setVenue(venues.find((v) => v.businessId === profile.id) ?? null);
+    } catch {
+      /* keep last known */
+    }
+  }, [profile]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+  useFocusEffect(
+    useCallback(() => {
+      void load();
+    }, [load]),
+  );
+
+  useEffect(() => {
+    const q = query.trim();
+    if (!q) {
+      setResults([]);
+      return;
+    }
+    const t = setTimeout(async () => {
+      try {
+        setResults((await searchVenues(q)).filter((v) => !v.businessId).slice(0, 5));
+      } catch {
+        setResults([]);
+      }
+    }, 250);
+    return () => clearTimeout(t);
+  }, [query]);
+
+  const name = (profile?.businessName ?? profile?.displayName ?? 'YOUR BUSINESS').toUpperCase();
+  const details = (profile?.businessDetails ?? {}) as { category?: string; area?: string };
+  const category = (details.category ?? profile?.businessDetails?.toString() ?? '').toString().toUpperCase();
+
+  const onSubmitDoc = async () => {
+    if (!profile) return;
+    setBusy('doc');
+    try {
+      await submitVerificationDoc(profile.id);
+      await refreshProfile();
+      await load();
+      Alert.alert('Submitted', 'Your documents are under review.');
+    } catch (e) {
+      Alert.alert('Could not submit', e instanceof Error ? e.message : 'Please try again.');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const onClaim = async (v: Venue) => {
+    setBusy(`claim-${v.id}`);
+    try {
+      await claimVenue(v.id);
+      setQuery('');
+      setResults([]);
+      await load();
+    } catch (e) {
+      Alert.alert('Could not claim', e instanceof Error ? e.message : 'Please try again.');
+    } finally {
+      setBusy(null);
+    }
+  };
 
   return (
     <Screen>
@@ -39,33 +120,72 @@ export function BusinessProfileScreen() {
           <Avatar name={name} size={64} />
           <View style={styles.nameBlock}>
             <Text style={styles.name}>{name}</Text>
-            <Text style={styles.category}>CAFÉ · FORT KOCHI</Text>
+            <Text style={styles.category}>
+              {[category, details.area?.toUpperCase()].filter(Boolean).join(' · ') || 'BUSINESS'}
+            </Text>
           </View>
         </View>
 
-        {!isSupabaseConfigured ? (
-          <View style={styles.mockBadge}>
-            <Badge label="MOCK MODE" tone="neutral" />
+        {isDemoMode() && (
+          <View style={styles.demoRow}>
+            <Badge label="DEMO MODE" tone="red" />
           </View>
-        ) : null}
+        )}
 
-        <Card style={styles.infoCard}>
-          <InfoRow label="ADDRESS" value="Marine Drive, Fort Kochi" />
-          <InfoRow label="HOURS" value="9:00 AM – 11:00 PM" />
-          <InfoRow label="PHONE" value="+91 98470 12345" last />
+        <Text style={styles.sectionTitle}>VERIFICATION</Text>
+        <Card style={styles.verifyCard} accent={verif.status !== 'verified'}>
+          <View style={styles.verifyRow}>
+            <Text style={styles.verifyTitle}>BUSINESS VERIFICATION</Text>
+            <Badge label={verif.status.toUpperCase()} tone={statusTone(verif.status)} />
+          </View>
+          <Text style={styles.verifyDesc}>{STATUS_COPY[verif.status]}</Text>
+          {(verif.status === 'unverified' || verif.status === 'rejected') && !isDemoMode() && (
+            <Button
+              title="SUBMIT DOCUMENT"
+              variant="secondary"
+              loading={busy === 'doc'}
+              onPress={onSubmitDoc}
+              style={styles.verifyBtn}
+            />
+          )}
         </Card>
 
-        <View style={styles.statsRow}>
-          <StatBox label="RATING" value="4.6" />
-          <StatBox label="OFFERS" value={String(mockOffers.length)} />
-          <StatBox label="FOLLOWERS" value="1.2K" />
-        </View>
+        <Text style={styles.sectionTitle}>MY VENUE</Text>
+        {venue ? (
+          <Card>
+            <Text style={styles.venueName}>{venue.name}</Text>
+            <Text style={styles.venueMeta}>
+              {venue.category} · {venue.area}
+            </Text>
+          </Card>
+        ) : (
+          <>
+            <Text style={styles.venueHint}>Claim your venue so customers can find you.</Text>
+            <Input label="" placeholder="Search venues to claim…" value={query} onChangeText={setQuery} />
+            {results.map((v) => (
+              <View key={v.id} style={styles.claimRow}>
+                <View style={styles.claimText}>
+                  <Text style={styles.venueName}>{v.name}</Text>
+                  <Text style={styles.venueMeta}>
+                    {v.category} · {v.area}
+                  </Text>
+                </View>
+                <Button
+                  title="CLAIM"
+                  variant="secondary"
+                  loading={busy === `claim-${v.id}`}
+                  onPress={() => onClaim(v)}
+                />
+              </View>
+            ))}
+          </>
+        )}
 
         <Button
           title="LOG OUT"
           variant="danger"
           onPress={() => {
-            signOut();
+            void signOut();
           }}
           style={styles.logoutBtn}
         />
@@ -80,23 +200,25 @@ const styles = StyleSheet.create({
   nameBlock: { flex: 1 },
   name: { ...typography.title, color: colors.text },
   category: { ...typography.caption, color: colors.textDim, marginTop: spacing.xs },
-  mockBadge: { marginTop: spacing.md, alignItems: 'flex-start' },
-  infoCard: { marginTop: spacing.lg, paddingVertical: spacing.sm },
-  infoRow: { paddingVertical: spacing.sm, paddingHorizontal: spacing.sm },
-  infoRowBorder: { borderBottomWidth: 1, borderColor: colors.border },
-  infoLabel: { ...typography.caption, color: colors.textFaint },
-  infoValue: { ...typography.body, color: colors.text, marginTop: 2 },
-  statsRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.md },
-  statBox: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 2,
-    paddingVertical: spacing.md,
+  demoRow: { marginTop: spacing.md, alignItems: 'flex-start' },
+  sectionTitle: { ...typography.label, color: colors.textDim, marginTop: spacing.xl, marginBottom: spacing.sm },
+  verifyCard: {},
+  verifyRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing.sm },
+  verifyTitle: { ...typography.label, color: colors.text },
+  verifyDesc: { ...typography.bodySmall, color: colors.textDim, marginTop: spacing.sm },
+  verifyBtn: { marginTop: spacing.md },
+  venueHint: { ...typography.bodySmall, color: colors.textDim, marginBottom: spacing.sm },
+  venueName: { ...typography.heading, color: colors.text },
+  venueMeta: { ...typography.caption, color: colors.textDim, marginTop: spacing.xs },
+  claimRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.surface,
+    justifyContent: 'space-between',
+    gap: spacing.md,
+    paddingVertical: spacing.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
   },
-  statValue: { ...typography.title, color: colors.text },
-  statLabel: { ...typography.caption, color: colors.textFaint, marginTop: spacing.xs },
+  claimText: { flex: 1 },
   logoutBtn: { marginTop: spacing.xl },
 });

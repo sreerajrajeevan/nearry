@@ -1,230 +1,168 @@
 import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  Alert,
-} from 'react-native';
+import { View, Text, StyleSheet, ScrollView, Alert } from 'react-native';
 import { Screen } from '../../components/Screen';
 import { Button } from '../../components/Button';
 import { Input } from '../../components/Input';
+import { Badge } from '../../components/Badge';
+import { EmptyState } from '../../components/EmptyState';
 import { colors, typography, spacing } from '../../theme';
 import { useAuth } from '../../store/AuthContext';
-import { createOffer } from '../../services/offers';
+import { createDraft, publishOffer, NewOfferInput } from '../../services/offers';
+import { validateOfferInput } from '../../utils/validation';
+import { BusinessTabParamList } from '../../navigation/types';
 
-type StartsIn = 'NOW' | 'IN 1H' | 'TONIGHT';
-type Duration = '2H' | '4H' | 'TODAY';
+type Props = {
+  navigation: { navigate: (screen: keyof BusinessTabParamList) => void };
+};
 
-const STARTS_IN_OPTIONS: StartsIn[] = ['NOW', 'IN 1H', 'TONIGHT'];
-const DURATION_OPTIONS: Duration[] = ['2H', '4H', 'TODAY'];
-
-function ChipRow<T extends string>({
-  options,
-  selected,
-  onSelect,
-}: {
-  options: T[];
-  selected: T;
-  onSelect: (v: T) => void;
-}) {
-  return (
-    <View style={styles.chipRow}>
-      {options.map((opt) => {
-        const active = opt === selected;
-        return (
-          <TouchableOpacity
-            key={opt}
-            onPress={() => onSelect(opt)}
-            activeOpacity={0.8}
-            style={[styles.chip, active && styles.chipSelected]}
-          >
-            <Text style={[styles.chipText, active && styles.chipTextSelected]}>{opt}</Text>
-          </TouchableOpacity>
-        );
-      })}
-    </View>
-  );
+function parseDateTime(dateStr: string, timeStr: string): Date | null {
+  const d = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr.trim());
+  const t = /^(\d{2}):(\d{2})$/.exec(timeStr.trim());
+  if (!d || !t) return null;
+  const dt = new Date(Number(d[1]), Number(d[2]) - 1, Number(d[3]), Number(t[1]), Number(t[2]));
+  return Number.isNaN(dt.getTime()) ? null : dt;
 }
 
-function Stepper({
-  label,
-  value,
-  suffix,
-  min,
-  max,
-  step,
-  onChange,
-}: {
-  label: string;
-  value: number;
-  suffix: string;
-  min: number;
-  max: number;
-  step: number;
-  onChange: (v: number) => void;
-}) {
-  return (
-    <View style={styles.stepperRow}>
-      <Text style={styles.fieldLabel}>{label}</Text>
-      <View style={styles.stepper}>
-        <TouchableOpacity
-          style={styles.stepBtn}
-          activeOpacity={0.8}
-          onPress={() => onChange(Math.max(min, value - step))}
-        >
-          <Text style={styles.stepBtnText}>−</Text>
-        </TouchableOpacity>
-        <Text style={styles.stepValue}>
-          {value}
-          {suffix}
-        </Text>
-        <TouchableOpacity
-          style={styles.stepBtn}
-          activeOpacity={0.8}
-          onPress={() => onChange(Math.min(max, value + step))}
-        >
-          <Text style={styles.stepBtnText}>+</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-}
-
-function computeWindow(startsIn: StartsIn, duration: Duration): { startsAt: string; endsAt: string } {
-  const now = new Date();
-  let start: Date;
-  if (startsIn === 'IN 1H') {
-    start = new Date(now.getTime() + 3_600_000);
-  } else if (startsIn === 'TONIGHT') {
-    start = new Date(now);
-    start.setHours(19, 0, 0, 0);
-    if (start.getTime() <= now.getTime()) start = new Date(now.getTime() + 3_600_000);
-  } else {
-    start = now;
-  }
-
-  let end: Date;
-  if (duration === '2H') {
-    end = new Date(start.getTime() + 2 * 3_600_000);
-  } else if (duration === '4H') {
-    end = new Date(start.getTime() + 4 * 3_600_000);
-  } else {
-    end = new Date(start);
-    end.setHours(23, 59, 0, 0);
-  }
-
-  return { startsAt: start.toISOString(), endsAt: end.toISOString() };
-}
-
-export function CreateOfferScreen() {
+/**
+ * Create an offer: save as draft, then publish. Publishing is gated
+ * server-side — only verified businesses go live.
+ */
+export function CreateOfferScreen({ navigation }: Props) {
   const { profile } = useAuth();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [titleError, setTitleError] = useState<string | undefined>(undefined);
-  const [discount, setDiscount] = useState(20);
-  const [startsIn, setStartsIn] = useState<StartsIn>('NOW');
-  const [duration, setDuration] = useState<Duration>('2H');
-  const [maxRedemptions, setMaxRedemptions] = useState(50);
-  const [publishing, setPublishing] = useState(false);
+  const [discount, setDiscount] = useState('');
+  const [price, setPrice] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [startTime, setStartTime] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [endTime, setEndTime] = useState('');
+  const [capacity, setCapacity] = useState('10');
+  const [formError, setFormError] = useState('');
+  const [saving, setSaving] = useState(false);
 
-  const reset = () => {
-    setTitle('');
-    setDescription('');
-    setTitleError(undefined);
-    setDiscount(20);
-    setStartsIn('NOW');
-    setDuration('2H');
-    setMaxRedemptions(50);
+  const verified = profile?.verificationStatus === 'verified';
+
+  if (!profile) {
+    return (
+      <Screen>
+        <EmptyState title="Sign in required" hint="Log in as a business to create offers." />
+      </Screen>
+    );
+  }
+
+  const buildInput = (): NewOfferInput | null => {
+    setFormError('');
+    const startsAt = parseDateTime(startDate, startTime);
+    const endsAt = parseDateTime(endDate, endTime);
+    if (!startsAt || !endsAt) {
+      setFormError('Enter dates as YYYY-MM-DD and times as HH:MM (24h).');
+      return null;
+    }
+    const discountPct = discount.trim() ? Number(discount.trim()) : undefined;
+    const priceCents = price.trim() ? Math.round(Number(price.trim()) * 100) : undefined;
+    const input: NewOfferInput = {
+      title,
+      description,
+      discountPct,
+      priceCents,
+      startsAt: startsAt.toISOString(),
+      endsAt: endsAt.toISOString(),
+      slotCapacity: Number(capacity) || 10,
+    };
+    const err = validateOfferInput(input);
+    if (err) {
+      setFormError(err);
+      return null;
+    }
+    return input;
   };
 
-  const publish = async () => {
-    if (!title.trim()) {
-      setTitleError('TITLE IS REQUIRED');
-      return;
-    }
-    setTitleError(undefined);
-    setPublishing(true);
+  const onSaveDraft = async () => {
+    const input = buildInput();
+    if (!input) return;
+    setSaving(true);
     try {
-      const { startsAt, endsAt } = computeWindow(startsIn, duration);
-      await createOffer(profile?.id ?? 'demo-business', {
-        title: title.trim(),
-        description: description.trim(),
-        discountPct: discount,
-        startsAt,
-        endsAt,
-        maxRedemptions,
-      });
-      Alert.alert('Offer is live', `"${title.trim()}" is now visible to nearby users.`);
-      reset();
+      await createDraft(profile.id, input);
+      Alert.alert('Draft saved', 'Publish it from the dashboard when ready.');
+      navigation.navigate('Dashboard');
     } catch (e) {
-      Alert.alert('Publish failed', e instanceof Error ? e.message : 'Something went wrong.');
+      Alert.alert('Could not save', e instanceof Error ? e.message : 'Please try again.');
     } finally {
-      setPublishing(false);
+      setSaving(false);
+    }
+  };
+
+  const onPublish = async () => {
+    const input = buildInput();
+    if (!input) return;
+    setSaving(true);
+    try {
+      const draft = await createDraft(profile.id, input);
+      await publishOffer(draft.id);
+      Alert.alert('Offer live', 'Customers can now book it.');
+      navigation.navigate('Dashboard');
+    } catch (e) {
+      Alert.alert('Could not publish', e instanceof Error ? e.message : 'Please try again.');
+    } finally {
+      setSaving(false);
     }
   };
 
   return (
     <Screen>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <Text style={styles.header}>CREATE OFFER</Text>
-        <Text style={styles.caption}>LAST-MINUTE PUSH</Text>
+        <View style={styles.statusRow}>
+          <Badge label={verified ? 'VERIFIED — CAN PUBLISH' : 'UNVERIFIED — DRAFTS ONLY'} tone={verified ? 'green' : 'red'} />
+        </View>
 
-        <Input
-          label="OFFER TITLE"
-          placeholder="e.g. Happy Hours Flat 20% Off"
-          value={title}
-          onChangeText={(t: string) => {
-            setTitle(t);
-            if (titleError && t.trim()) setTitleError(undefined);
-          }}
-          error={titleError}
-          maxLength={60}
-        />
+        <Input label="TITLE" placeholder="e.g. Happy Hours Flat 20% Off" value={title} onChangeText={setTitle} />
         <Input
           label="DESCRIPTION"
-          placeholder="What is included, when it applies…"
+          placeholder="What's included, fine print, how to redeem"
           value={description}
           onChangeText={setDescription}
           multiline
-          numberOfLines={3}
-          maxLength={240}
-          style={styles.textarea}
+          numberOfLines={4}
+          style={styles.multiline}
         />
+        <View style={styles.row}>
+          <View style={styles.half}>
+            <Input label="DISCOUNT % (OPTIONAL)" placeholder="20" value={discount} onChangeText={(t: string) => setDiscount(t.replace(/[^0-9]/g, ''))} keyboardType="number-pad" />
+          </View>
+          <View style={styles.half}>
+            <Input label="PRICE ₹ (OPTIONAL)" placeholder="499" value={price} onChangeText={(t: string) => setPrice(t.replace(/[^0-9.]/g, ''))} keyboardType="decimal-pad" />
+          </View>
+        </View>
+        <Text style={styles.fieldLabel}>BOOKING WINDOW</Text>
+        <View style={styles.row}>
+          <View style={styles.half}>
+            <Input label="START DATE" placeholder="YYYY-MM-DD" value={startDate} onChangeText={setStartDate} />
+          </View>
+          <View style={styles.half}>
+            <Input label="START TIME" placeholder="HH:MM" value={startTime} onChangeText={setStartTime} />
+          </View>
+        </View>
+        <View style={styles.row}>
+          <View style={styles.half}>
+            <Input label="END DATE" placeholder="YYYY-MM-DD" value={endDate} onChangeText={setEndDate} />
+          </View>
+          <View style={styles.half}>
+            <Input label="END TIME" placeholder="HH:MM" value={endTime} onChangeText={setEndTime} />
+          </View>
+        </View>
+        <Input label="SEATS PER SLOT" placeholder="10" value={capacity} onChangeText={(t: string) => setCapacity(t.replace(/[^0-9]/g, ''))} keyboardType="number-pad" />
 
-        <Stepper
-          label="DISCOUNT"
-          value={discount}
-          suffix="%"
-          min={0}
-          max={90}
-          step={5}
-          onChange={setDiscount}
-        />
-
-        <Text style={styles.fieldLabel}>STARTS</Text>
-        <ChipRow options={STARTS_IN_OPTIONS} selected={startsIn} onSelect={setStartsIn} />
-
-        <Text style={styles.fieldLabel}>DURATION</Text>
-        <ChipRow options={DURATION_OPTIONS} selected={duration} onSelect={setDuration} />
-
-        <Stepper
-          label="MAX REDEMPTIONS"
-          value={maxRedemptions}
-          suffix=""
-          min={10}
-          max={500}
-          step={10}
-          onChange={setMaxRedemptions}
-        />
-
-        <Button
-          title="PUBLISH OFFER"
-          onPress={publish}
-          loading={publishing}
-          style={styles.publishBtn}
-        />
+        {formError ? <Text style={styles.formError}>{formError}</Text> : null}
+        <Button title="SAVE DRAFT" variant="secondary" onPress={onSaveDraft} loading={saving} style={styles.btn} />
+        <Button title="PUBLISH NOW" onPress={onPublish} loading={saving} style={styles.btn} />
+        {!verified && (
+          <Text style={styles.note}>
+            Publishing needs a verified business. Drafts are safe to create anytime —
+            submit your documents from the Business tab.
+          </Text>
+        )}
       </ScrollView>
     </Screen>
   );
@@ -233,56 +171,12 @@ export function CreateOfferScreen() {
 const styles = StyleSheet.create({
   scroll: { paddingBottom: spacing.xl },
   header: { ...typography.title, color: colors.text, marginTop: spacing.sm },
-  caption: { ...typography.caption, color: colors.textDim, marginTop: spacing.xs, marginBottom: spacing.lg },
-  /** Replaces Input's fixed-height style (spread order) for a 3-row textarea. */
-  textarea: {
-    height: 96,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 2,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    color: colors.text,
-    fontSize: 15,
-    backgroundColor: colors.surface,
-    textAlignVertical: 'top',
-  },
-  fieldLabel: { ...typography.label, color: colors.textDim, marginTop: spacing.md, marginBottom: spacing.sm },
-  chipRow: { flexDirection: 'row', gap: spacing.sm },
-  chip: {
-    flex: 1,
-    height: 44,
-    borderWidth: 1,
-    borderColor: colors.borderStrong,
-    borderRadius: 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'transparent',
-  },
-  chipSelected: { borderColor: colors.red, backgroundColor: colors.surfaceRaised },
-  chipText: { ...typography.label, color: colors.textFaint },
-  chipTextSelected: { color: colors.red },
-  stepperRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: spacing.md,
-    paddingVertical: spacing.sm,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: colors.border,
-  },
-  stepper: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
-  stepBtn: {
-    width: 40,
-    height: 40,
-    borderWidth: 1,
-    borderColor: colors.borderStrong,
-    borderRadius: 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stepBtnText: { ...typography.heading, color: colors.text },
-  stepValue: { ...typography.heading, color: colors.red, minWidth: 64, textAlign: 'center' },
-  publishBtn: { marginTop: spacing.xl },
+  statusRow: { marginTop: spacing.sm, marginBottom: spacing.md, alignItems: 'flex-start' },
+  multiline: { height: 110, textAlignVertical: 'top', paddingTop: spacing.md },
+  row: { flexDirection: 'row', gap: spacing.md },
+  half: { flex: 1 },
+  fieldLabel: { ...typography.label, color: colors.textDim, marginBottom: spacing.sm, marginTop: spacing.sm },
+  formError: { ...typography.body, color: colors.red, marginVertical: spacing.sm },
+  btn: { marginTop: spacing.md },
+  note: { ...typography.caption, color: colors.textDim, marginTop: spacing.lg, textAlign: 'center' },
 });

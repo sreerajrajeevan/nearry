@@ -3,3 +3,7 @@ node_modules/
 dist/
 .env
 *.log
+
+# CI-managed: workflow is edited via GitHub web UI; icons are generated in CI
+.github/
+assets/*.png

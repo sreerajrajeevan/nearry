@@ -6,6 +6,7 @@ import { PersonalTabs } from './PersonalTabs';
 import { PostDetailsScreen } from '../screens/personal/PostDetailsScreen';
 import { VenueDetailsScreen } from '../screens/personal/VenueDetailsScreen';
 import { EditPostScreen } from '../screens/personal/EditPostScreen';
+import { OfferDetailsScreen } from '../screens/personal/OfferDetailsScreen';
 
 const Stack = createNativeStackNavigator<PersonalStackParamList>();
 
@@ -23,6 +24,7 @@ export function PersonalStack() {
       <Stack.Screen name="PostDetails" component={PostDetailsScreen} />
       <Stack.Screen name="VenueDetails" component={VenueDetailsScreen} />
       <Stack.Screen name="EditPost" component={EditPostScreen} />
+      <Stack.Screen name="OfferDetails" component={OfferDetailsScreen} />
     </Stack.Navigator>
   );
 }

@@ -19,7 +19,8 @@ import {
   listRequestsForPost,
   withdrawRequest,
 } from '../../services/joinRequests';
-import { NeedPost, JoinRequest } from '../../services/mappers';
+import { NeedPost, JoinRequest, Booking } from '../../services/mappers';
+import { listMyBookings, cancelBooking, subscribeToBookings } from '../../services/bookings';
 
 type IncomingItem = { post: NeedPost; requests: JoinRequest[] };
 
@@ -34,6 +35,7 @@ export function ActivityScreen() {
 
   const [mine, setMine] = useState<(JoinRequest & { postTitle: string })[]>([]);
   const [incoming, setIncoming] = useState<IncomingItem[]>([]);
+  const [bookings, setBookings] = useState<Booking[]>([]);
   const [state, setState] = useState<'loading' | 'error' | 'ready'>('loading');
   const [busy, setBusy] = useState<string | null>(null);
 
@@ -44,11 +46,13 @@ export function ActivityScreen() {
     }
     setState('loading');
     try {
-      const [myReqs, myPosts] = await Promise.all([
+      const [myReqs, myPosts, myBookings] = await Promise.all([
         listMyRequests(myId),
         listPosts({ authorId: myId, status: 'all' }),
+        listMyBookings(myId),
       ]);
       setMine(myReqs);
+      setBookings(myBookings);
       const items: IncomingItem[] = [];
       for (const post of myPosts) {
         const reqs = await listRequestsForPost(post.id);
@@ -69,7 +73,8 @@ export function ActivityScreen() {
       void load();
     }, [load]),
   );
-  useEffect(() => subscribeToPosts(() => load()), [load]);
+  useEffect(() => subscribeToPosts(() => void load()), [load]);
+  useEffect(() => subscribeToBookings(() => void load()), [load]);
 
   const run = async (key: string, fn: () => Promise<void>) => {
     setBusy(key);
@@ -82,6 +87,9 @@ export function ActivityScreen() {
       setBusy(null);
     }
   };
+
+  const bookingTone = (s: Booking['status']): 'neutral' | 'green' | 'red' =>
+    s === 'confirmed' ? 'green' : s === 'pending' ? 'neutral' : 'red';
 
   const statusTone = (s: JoinRequest['status']) =>
     s === 'approved' ? 'green' : s === 'pending' ? 'neutral' : 'red';
@@ -136,6 +144,32 @@ export function ActivityScreen() {
                         </Card>
                       ))}
                   </View>
+                ))}
+              </>
+            )}
+
+            {bookings.length > 0 && (
+              <>
+                <Text style={styles.sectionLabel}>MY BOOKINGS</Text>
+                {bookings.map((b) => (
+                  <Card key={b.id} style={styles.row}>
+                    <View style={styles.rowTop}>
+                      <Text style={styles.postTitle}>{b.offerTitle}</Text>
+                      <Badge label={b.status.toUpperCase()} tone={bookingTone(b.status)} />
+                    </View>
+                    <Text style={styles.bookMeta}>
+                      {new Date(b.slot).toLocaleString()} · {b.partySize} {b.partySize === 1 ? 'SEAT' : 'SEATS'}
+                    </Text>
+                    {(b.status === 'pending' || b.status === 'confirmed') && (
+                      <TouchableOpacity
+                        activeOpacity={0.7}
+                        style={styles.cancelWrap}
+                        onPress={() => run(`bk${b.id}`, () => cancelBooking(b.id))}
+                      >
+                        <Text style={styles.withdraw}>{busy === `bk${b.id}` ? '…' : 'CANCEL BOOKING'}</Text>
+                      </TouchableOpacity>
+                    )}
+                  </Card>
                 ))}
               </>
             )}
@@ -200,6 +234,8 @@ const styles = StyleSheet.create({
   rowTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
   postTitle: { ...typography.body, color: colors.text, flex: 1 },
   rowActions: { flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing.sm },
+  bookMeta: { ...typography.caption, color: colors.textDim, marginTop: spacing.xs },
+  cancelWrap: { marginTop: spacing.sm, alignSelf: 'flex-start' },
   viewPost: { ...typography.label, color: colors.textDim },
   withdraw: { ...typography.label, color: colors.red },
 });

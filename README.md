@@ -111,7 +111,7 @@ src/services/
   posts.ts               CRUD + post_cards read model + realtime subscribe
   joinRequests.ts        Request/withdraw/approve(RPC)/decline + lists
   location.ts            Permissions + position + haversine
-  offers.ts              Business offers (M5)
+  offers.ts              Business offers: drafts, verification-gated publish, real lists (M5)
   chat.ts                Threads/messages stubs (M6)
   notifications.ts       Push stubs (M6)
 src/utils/validation.ts  Client validation mirroring DB CHECKs
@@ -133,7 +133,7 @@ supabase/
 - **M4** — Join requests (request/withdraw/approve/decline), atomic approval
   RPC, no self-join/duplicates/closed-expired joins, withdrawal reopens,
   server expiry, cross-device realtime sync.
-- **M5** — Business verification, offers, bookings (next).
+- **M5** — Business verification, offers, bookings (done, needs live-backend test).
 - **M6** — Chat + notifications (next).
 - **M7** — Testing + delivery (next).
 
@@ -144,8 +144,11 @@ flow, session restore, profile routing, onboarding resume, venue list/search/
 nearby/detail, post create/list/detail/edit/cancel, join request/withdraw/
 approve/decline, atomic capacity, expiry, realtime sync, demo mode.
 
-**Still mock:** business offers/bookings lists (M5), chat + notifications
-(M6), live-offer cards on Nearby (M5), profile stats (placeholder).
+**Still mock:** chat + notifications (M6), some profile stats (placeholder).
+Admin review of verification docs is via the service-role key in the
+Supabase dashboard (documented in `supabase/migrations/00008_verification.sql`);
+there is no in-app admin panel in this milestone. Payments are out of scope —
+bookings hold seats only.
 
 **Blocked by missing credentials:** everything under "Working" above —
 no Supabase project exists yet, so no live integration has been tested.

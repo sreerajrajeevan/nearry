@@ -1,30 +1,7 @@
 /** Mock data for milestone 1 — replaced by Supabase queries in milestone 2. */
 
-export type { Venue, NeedPost } from '../services/mappers';
-import type { Venue, NeedPost } from '../services/mappers';
-
-export type Offer = {
-  id: string;
-  businessId: string;
-  businessName: string;
-  title: string;
-  description: string;
-  discountPct?: number;
-  startsAt: string;
-  endsAt: string;
-  maxRedemptions?: number;
-  redemptions: number;
-  status: 'live' | 'ended';
-};
-
-export type Booking = {
-  id: string;
-  customerName: string;
-  offerTitle: string;
-  slot: string;
-  partySize: number;
-  status: 'pending' | 'confirmed' | 'cancelled';
-};
+export type { Venue, NeedPost, Offer, Booking } from '../services/mappers';
+import type { Venue, NeedPost, Offer, Booking } from '../services/mappers';
 
 export const mockVenues: Venue[] = [
   { id: 'v1', name: 'Kochi Marine Brews', category: 'Café', area: 'Fort Kochi', distanceKm: 0.4, rating: 4.6, openNow: true, liveOffer: '20% off till 6 PM', createdAt: '2026-10-08T08:00:00Z' },
@@ -60,20 +37,22 @@ export const mockOffers: Offer[] = [
     id: 'o1', businessId: 'b1', businessName: 'Kochi Marine Brews', title: 'Happy Hours Flat 20% Off',
     description: 'All brews and bakes, 4–6 PM today only.', discountPct: 20,
     startsAt: '2026-10-08T10:30:00Z', endsAt: '2026-10-08T12:30:00Z',
-    maxRedemptions: 50, redemptions: 23, status: 'live',
+    maxRedemptions: 50, redemptions: 23, status: 'live', slotCapacity: 20,
+    createdAt: '2026-10-08T08:00:00Z',
   },
   {
     id: 'o2', businessId: 'b1', businessName: 'Kochi Marine Brews', title: 'Weekend Brunch Combo',
     description: 'Brunch platter + cold brew at a combo price.', discountPct: 15,
     startsAt: '2026-10-11T04:00:00Z', endsAt: '2026-10-11T08:00:00Z',
-    maxRedemptions: 100, redemptions: 0, status: 'live',
+    maxRedemptions: 100, redemptions: 0, status: 'live', slotCapacity: 30,
+    createdAt: '2026-10-08T08:00:00Z',
   },
 ];
 
 export const mockBookings: Booking[] = [
-  { id: 'bk1', customerName: 'Anjali', offerTitle: 'Happy Hours Flat 20% Off', slot: 'Today · 5:00 PM', partySize: 2, status: 'confirmed' },
-  { id: 'bk2', customerName: 'Dev', offerTitle: 'Happy Hours Flat 20% Off', slot: 'Today · 5:30 PM', partySize: 4, status: 'pending' },
-  { id: 'bk3', customerName: 'Meera', offerTitle: 'Weekend Brunch Combo', slot: 'Sat · 10:00 AM', partySize: 3, status: 'pending' },
+  { id: 'bk1', offerId: 'o1', customerId: 'u2', customerName: 'Anjali', offerTitle: 'Happy Hours Flat 20% Off', slot: '2026-10-08T11:30:00Z', partySize: 2, status: 'confirmed', createdAt: '2026-10-08T09:00:00Z' },
+  { id: 'bk2', offerId: 'o1', customerId: 'u3', customerName: 'Dev', offerTitle: 'Happy Hours Flat 20% Off', slot: '2026-10-08T12:00:00Z', partySize: 4, status: 'pending', createdAt: '2026-10-08T09:30:00Z' },
+  { id: 'bk3', offerId: 'o2', customerId: 'u4', customerName: 'Meera', offerTitle: 'Weekend Brunch Combo', slot: '2026-10-11T04:30:00Z', partySize: 3, status: 'pending', createdAt: '2026-10-08T10:00:00Z' },
 ];
 
 export const mockActivity = [
