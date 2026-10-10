@@ -7,7 +7,6 @@ import { Button } from '../../components/Button';
 import { EmptyState } from '../../components/EmptyState';
 import { colors, typography, spacing } from '../../theme';
 import { useAuth } from '../../store/AuthContext';
-import { isSupabaseConfigured } from '../../services/supabase';
 
 const MENU_ITEMS = ['Edit profile', 'Notifications', 'Privacy', 'Help'];
 
@@ -18,9 +17,9 @@ const STATS = [
 ];
 
 export function ProfileScreen() {
-  const { user, signOut } = useAuth();
+  const { profile, session, demoMode, signOut } = useAuth();
 
-  if (!user) {
+  if (!profile) {
     return (
       <Screen>
         <EmptyState title="Not signed in" hint="Log in to view your profile." />
@@ -31,17 +30,17 @@ export function ProfileScreen() {
   return (
     <Screen>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-        {!isSupabaseConfigured ? (
+        {demoMode ? (
           <View style={styles.mockRow}>
-            <Badge label="MOCK MODE" tone="neutral" />
+            <Badge label="DEMO MODE" tone="red" />
           </View>
         ) : null}
 
         <View style={styles.headerRow}>
-          <Avatar name={user.displayName || 'N'} size={64} />
+          <Avatar name={profile.displayName || 'N'} size={64} />
           <View style={styles.nameCol}>
-            <Text style={styles.name}>{user.displayName}</Text>
-            <Text style={styles.email}>{user.email}</Text>
+            <Text style={styles.name}>{profile.displayName}</Text>
+            <Text style={styles.email}>{session?.user.email ?? ''}</Text>
           </View>
         </View>
 

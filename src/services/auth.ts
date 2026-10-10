@@ -1,152 +1,129 @@
 import * as WebBrowser from 'expo-web-browser';
-import * as AuthSession from 'expo-auth-session';
-import { getSupabase, isSupabaseConfigured } from './supabase';
+import * as Linking from 'expo-linking';
+import { requireSupabase } from './supabase';
 import { AccountType } from '../navigation/types';
 
 WebBrowser.maybeCompleteAuthSession();
 
-export type AuthUser = {
-  id: string;
-  email: string;
-  displayName: string;
-  accountType: AccountType;
-  avatarUrl?: string;
-};
-
-const GOOGLE_DISCOVERY = {
-  authorizationEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
-  tokenEndpoint: 'https://oauth2.googleapis.com/token',
-  revocationEndpoint: 'https://oauth2.googleapis.com/revoke',
-};
-
-function googleClientId() {
-  // Expo Go dev uses the Expo client id; standalone builds use platform ids.
-  return (
-    process.env.EXPO_PUBLIC_GOOGLE_EXPO_CLIENT_ID ||
-    process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ||
-    ''
-  );
-}
-
 /**
- * Email/password auth. Uses Supabase when configured, otherwise mock mode
- * (any credentials succeed — for UI development only).
+ * Authentication — Supabase only.
+ *
+ * - Email: passwordless OTP (6-digit code). No passwords, no phone numbers.
+ * - Google: OAuth *through Supabase* (Supabase handles the Google exchange;
+ *   the app only opens the provider URL and completes the PKCE/code flow).
+ *
+ * There is intentionally no mock fallback here. When the backend is not
+ * configured these functions throw; the UI must route to explicit demo mode.
  */
-export async function signInWithEmail(
-  email: string,
-  password: string,
-  accountType: AccountType,
-): Promise<AuthUser> {
-  const supabase = getSupabase();
-  if (supabase) {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw new Error(error.message);
-    const metaType = (data.user?.user_metadata?.account_type as AccountType) ?? accountType;
-    return {
-      id: data.user!.id,
-      email: data.user!.email!,
-      displayName: data.user!.user_metadata?.display_name ?? email.split('@')[0],
-      accountType: metaType,
-    };
-  }
-  await new Promise((r) => setTimeout(r, 800)); // simulate latency
+
+export type OtpChannel = 'signup' | 'login';
+
+function accountTypeMeta(accountType: AccountType, displayName?: string) {
   return {
-    id: `mock-${Date.now()}`,
-    email,
-    displayName: email.split('@')[0],
-    accountType,
+    data: {
+      account_type: accountType,
+      ...(displayName ? { display_name: displayName } : {}),
+    },
   };
 }
 
-export async function signUpWithEmail(
+/** Step 1: send a 6-digit code to the email. Creates the user on first use. */
+export async function sendEmailOtp(
   email: string,
-  password: string,
-  displayName: string,
   accountType: AccountType,
-): Promise<AuthUser> {
-  const supabase = getSupabase();
-  if (supabase) {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { data: { display_name: displayName, account_type: accountType } },
-    });
-    if (error) throw new Error(error.message);
-    return {
-      id: data.user!.id,
-      email: data.user!.email!,
-      displayName,
-      accountType,
-    };
-  }
-  await new Promise((r) => setTimeout(r, 800));
-  return { id: `mock-${Date.now()}`, email, displayName, accountType };
+  displayName?: string,
+): Promise<void> {
+  const supabase = requireSupabase();
+  const { error } = await supabase.auth.signInWithOtp({
+    email: email.trim().toLowerCase(),
+    options: accountTypeMeta(accountType, displayName),
+  });
+  if (error) throw new Error(error.message);
+}
+
+/** Step 2: verify the 6-digit code. Returns the authenticated user id. */
+export async function verifyEmailOtp(email: string, code: string): Promise<string> {
+  const supabase = requireSupabase();
+  const { data, error } = await supabase.auth.verifyOtp({
+    email: email.trim().toLowerCase(),
+    token: code.trim(),
+    type: 'email',
+  });
+  if (error) throw new Error(friendlyAuthError(error.message));
+  if (!data.user) throw new Error('Verification succeeded but no user was returned.');
+  return data.user.id;
 }
 
 /**
- * Google OAuth via Expo AuthSession. In mock mode (no client id configured)
- * returns a mock Google user so the flow can be exercised in the UI.
+ * Google sign-in through Supabase.
+ *
+ * Requires the Google provider to be enabled in the Supabase dashboard
+ * (Auth → Providers → Google) with a Google Cloud OAuth client, and the
+ * redirect URL `nearry://auth/callback` allow-listed under
+ * Auth → URL Configuration → Redirect URLs.
  */
-export async function signInWithGoogle(accountType: AccountType): Promise<AuthUser> {
-  const clientId = googleClientId();
-  const redirectUri = AuthSession.makeRedirectUri({ useProxy: true });
+export async function signInWithGoogle(accountType: AccountType): Promise<string> {
+  const supabase = requireSupabase();
+  const redirectTo = Linking.createURL('auth/callback');
 
-  if (!clientId) {
-    await new Promise((r) => setTimeout(r, 800));
-    return {
-      id: `mock-google-${Date.now()}`,
-      email: 'demo.user@gmail.com',
-      displayName: 'Demo User',
-      accountType,
-    };
-  }
-
-  const request = new AuthSession.AuthRequest({
-    clientId,
-    redirectUri,
-    scopes: ['openid', 'profile', 'email'],
-    responseType: AuthSession.ResponseType.Code,
+  const { data, error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      redirectTo,
+      skipBrowserRedirect: true,
+      queryParams: { access_type: 'offline', prompt: 'consent' },
+    },
   });
+  if (error) throw new Error(friendlyAuthError(error.message));
+  if (!data.url) throw new Error('Could not start Google sign-in.');
 
-  const result = await request.promptAsync(GOOGLE_DISCOVERY);
-  if (result.type !== 'success' || !result.params.code) {
+  // Stash the intended account type so a brand-new Google user lands in the
+  // right onboarding. Applied to user_metadata on first session below.
+  const res = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+  if (res.type !== 'success' || !res.url) {
     throw new Error('Google sign-in was cancelled.');
   }
 
-  const supabase = getSupabase();
-  if (supabase) {
-    const { data, error } = await supabase.auth.exchangeCodeForSession(result.params.code);
-    if (error) throw new Error(error.message);
-    return {
-      id: data.user.id,
-      email: data.user.email!,
-      displayName: data.user.user_metadata?.full_name ?? data.user.email!.split('@')[0],
-      accountType,
-      avatarUrl: data.user.user_metadata?.avatar_url,
-    };
-  }
+  const code = extractCode(res.url);
+  if (!code) throw new Error('Google sign-in completed without an auth code.');
 
-  // No Supabase — exchange code for profile directly (dev only).
-  const tokenRes = await AuthSession.exchangeCodeAsync(
-    { clientId, code: result.params.code, redirectUri, extraParams: {} },
-    GOOGLE_DISCOVERY,
-  );
-  const profileRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-    headers: { Authorization: `Bearer ${tokenRes.accessToken}` },
-  });
-  const profile = await profileRes.json();
-  return {
-    id: `google-${profile.sub}`,
-    email: profile.email,
-    displayName: profile.name,
-    accountType,
-    avatarUrl: profile.picture,
-  };
+  const { data: sessionData, error: exchangeError } =
+    await supabase.auth.exchangeCodeForSession(code);
+  if (exchangeError) throw new Error(friendlyAuthError(exchangeError.message));
+
+  const userId = sessionData.user?.id;
+  if (!userId) throw new Error('Google sign-in completed without a user.');
+
+  // First-time Google users get no user_metadata from the OAuth dance above,
+  // so stamp the chosen account type for the profile trigger / routing.
+  const meta = sessionData.user?.user_metadata ?? {};
+  if (!meta.account_type) {
+    await supabase.auth.updateUser({ data: { ...meta, account_type: accountType } });
+  }
+  return userId;
 }
 
 export async function signOut(): Promise<void> {
-  const supabase = getSupabase();
-  if (supabase) await supabase.auth.signOut();
+  const supabase = requireSupabase();
+  const { error } = await supabase.auth.signOut();
+  if (error) throw new Error(error.message);
 }
 
-export { isSupabaseConfigured };
+function extractCode(url: string): string | null {
+  try {
+    const parsed = new URL(url);
+    return parsed.searchParams.get('code');
+  } catch {
+    const m = /[?&#]code=([^&#]+)/.exec(url);
+    return m ? decodeURIComponent(m[1]) : null;
+  }
+}
+
+function friendlyAuthError(message: string): string {
+  const m = message.toLowerCase();
+  if (m.includes('invalid') && m.includes('otp')) return 'That code is incorrect or expired.';
+  if (m.includes('expired')) return 'That code has expired — request a new one.';
+  if (m.includes('rate limit') || m.includes('too many')) return 'Too many attempts — wait a minute and try again.';
+  if (m.includes('provider') && m.includes('not enabled')) return 'Google sign-in is not enabled yet.';
+  return message;
+}

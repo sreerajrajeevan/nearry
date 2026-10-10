@@ -1,14 +1,20 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { Screen } from '../../components/Screen';
 import { Card } from '../../components/Card';
 import { Badge } from '../../components/Badge';
 import { Input } from '../../components/Input';
 import { EmptyState } from '../../components/EmptyState';
+import { Button } from '../../components/Button';
+import { PostRow } from '../../components/PostRow';
 import { colors, typography, spacing } from '../../theme';
-import { mockPosts, mockOffers, Venue } from '../../data/mock';
+import { mockOffers } from '../../data/mock';
 import { searchVenues } from '../../services/venues';
+import { listPosts } from '../../services/posts';
+import { NeedPost, Venue } from '../../services/mappers';
 import { timeLeft } from '../../utils/format';
+import { PersonalTabNav } from '../../navigation/types';
 
 type Filter = 'all' | 'venues' | 'posts' | 'offers';
 
@@ -20,25 +26,46 @@ const FILTERS: { key: Filter; label: string }[] = [
 ];
 
 export function SearchScreen() {
+  const navigation = useNavigation<PersonalTabNav>();
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
   const [venues, setVenues] = useState<Venue[]>([]);
+  const [posts, setPosts] = useState<NeedPost[]>([]);
+  const [state, setState] = useState<'idle' | 'loading' | 'error' | 'ready'>('idle');
 
   useEffect(() => {
-    searchVenues(query)
-      .then(setVenues)
-      .catch(() => setVenues([]));
+    const q = query.trim();
+    if (!q) {
+      setState('idle');
+      setVenues([]);
+      setPosts([]);
+      return;
+    }
+    setState('loading');
+    const t = setTimeout(async () => {
+      try {
+        const [v, p] = await Promise.all([searchVenues(q), listPosts({ search: q })]);
+        setVenues(v);
+        setPosts(p);
+        setState('ready');
+      } catch {
+        setState('error');
+      }
+    }, 300);
+    return () => clearTimeout(t);
   }, [query]);
 
   const q = query.trim().toLowerCase();
-  const posts = mockPosts.filter((p) => p.title.toLowerCase().includes(q));
-  const offers = mockOffers.filter(
-    (o) => o.title.toLowerCase().includes(q) || o.businessName.toLowerCase().includes(q),
-  );
+  const offers = q
+    ? mockOffers.filter(
+        (o) => o.title.toLowerCase().includes(q) || o.businessName.toLowerCase().includes(q),
+      )
+    : [];
 
   const showVenues = filter === 'all' || filter === 'venues';
   const showPosts = filter === 'all' || filter === 'posts';
   const showOffers = filter === 'all' || filter === 'offers';
+  const searched = state === 'ready' || state === 'loading' || state === 'error';
   const hasResults =
     (showVenues && venues.length > 0) ||
     (showPosts && posts.length > 0) ||
@@ -77,18 +104,33 @@ export function SearchScreen() {
           })}
         </View>
 
-        {hasResults ? (
+        {!searched ? (
+          <EmptyState title="Search Nearry" hint="Find venues, people and offers around you." />
+        ) : state === 'loading' ? (
+          <Text style={styles.status}>SEARCHING…</Text>
+        ) : state === 'error' ? (
+          <View>
+            <EmptyState title="Search failed" hint="Check your connection and try again." />
+            <Button title="RETRY" onPress={() => setQuery((s) => s + ' ')} />
+          </View>
+        ) : hasResults ? (
           <>
             {showVenues && venues.length > 0 ? (
               <>
                 <Text style={styles.sectionLabel}>VENUES</Text>
                 {venues.map((venue) => (
-                  <Card key={venue.id} style={styles.resultCard}>
-                    <Text style={styles.resultTitle}>{venue.name}</Text>
-                    <Text style={styles.resultMeta}>
-                      {venue.category} · {venue.area} · {venue.distanceKm.toFixed(1)} KM
-                    </Text>
-                  </Card>
+                  <TouchableOpacity
+                    key={venue.id}
+                    activeOpacity={0.85}
+                    onPress={() => navigation.navigate('VenueDetails', { venueId: venue.id })}
+                  >
+                    <Card style={styles.resultCard}>
+                      <Text style={styles.resultTitle}>{venue.name}</Text>
+                      <Text style={styles.resultMeta}>
+                        {venue.category} · {venue.area}
+                      </Text>
+                    </Card>
+                  </TouchableOpacity>
                 ))}
               </>
             ) : null}
@@ -97,12 +139,11 @@ export function SearchScreen() {
               <>
                 <Text style={styles.sectionLabel}>POSTS</Text>
                 {posts.map((post) => (
-                  <Card key={post.id} style={styles.resultCard}>
-                    <Text style={styles.resultTitle}>{post.title}</Text>
-                    <Text style={styles.resultMeta}>
-                      {post.authorName} · {post.startsAt}
-                    </Text>
-                  </Card>
+                  <PostRow
+                    key={post.id}
+                    post={post}
+                    onPress={() => navigation.navigate('PostDetails', { postId: post.id })}
+                  />
                 ))}
               </>
             ) : null}
@@ -134,6 +175,7 @@ const styles = StyleSheet.create({
   scroll: { paddingBottom: spacing.xl },
   header: { ...typography.title, color: colors.text, marginTop: spacing.sm },
   input: { marginTop: spacing.md },
+  status: { ...typography.label, color: colors.textDim, marginTop: spacing.xl },
   chips: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.sm, flexWrap: 'wrap' },
   chip: {
     borderWidth: 1,
