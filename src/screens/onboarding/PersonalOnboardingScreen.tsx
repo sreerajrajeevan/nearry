@@ -102,7 +102,7 @@ export function PersonalOnboardingScreen() {
           </Text>
           <Text style={styles.sub}>Your people are already out there. Go find them.</Text>
           <View style={styles.footer}>
-            <Button title="START EXPLORING" onPress={completeOnboarding} />
+            <Button title="START EXPLORING" onPress={() => completeOnboarding({ interests: selected })} />
           </View>
           <TouchableOpacity onPress={() => setStep(2)} style={styles.back} activeOpacity={0.7}>
             <Text style={styles.backText}>← BACK</Text>

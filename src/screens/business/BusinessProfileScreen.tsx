@@ -29,8 +29,8 @@ function StatBox({ label, value }: { label: string; value: string }) {
 }
 
 export function BusinessProfileScreen() {
-  const { user, signOut } = useAuth();
-  const name = (user?.displayName ?? 'YOUR BUSINESS').toUpperCase();
+  const { profile, signOut } = useAuth();
+  const name = (profile?.displayName ?? 'YOUR BUSINESS').toUpperCase();
 
   return (
     <Screen>

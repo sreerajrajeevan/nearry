@@ -9,20 +9,23 @@ import { PersonalAuthScreen } from '../screens/auth/PersonalAuthScreen';
 import { BusinessAuthScreen } from '../screens/auth/BusinessAuthScreen';
 import { PersonalOnboardingScreen } from '../screens/onboarding/PersonalOnboardingScreen';
 import { BusinessOnboardingScreen } from '../screens/onboarding/BusinessOnboardingScreen';
-import { PersonalTabs } from './PersonalTabs';
+import { PersonalStack } from './PersonalStack';
 import { BusinessTabs } from './BusinessTabs';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 /**
  * Routes by auth state:
- * - no user            -> Welcome / auth / onboarding
- * - personal, onboarded -> PersonalApp tabs
- * - business, onboarded -> BusinessApp tabs
- * Onboarding completion is tracked per account type in the auth screens.
+ * - bootstrapping              -> spinner
+ * - demo mode                  -> demo lane tabs (explicitly separate)
+ * - no session                 -> Welcome / auth
+ * - session, onboarding needed -> resume onboarding (lane from saved profile)
+ * - session, onboarded         -> lane from SAVED profile account type,
+ *                                 regardless of which auth screen was used
  */
 export function RootNavigator() {
-  const { user, bootstrapping, pendingOnboarding } = useAuth();
+  const { session, demoMode, bootstrapping, accountType, needsOnboarding, pendingOnboarding } =
+    useAuth();
 
   if (bootstrapping) {
     return (
@@ -40,20 +43,22 @@ export function RootNavigator() {
         animation: 'fade',
       }}
     >
-      {!user ? (
+      {demoMode || (session && accountType) ? (
+        needsOnboarding && pendingOnboarding === 'personal' ? (
+          <Stack.Screen name="PersonalOnboarding" component={PersonalOnboardingScreen} />
+        ) : needsOnboarding && pendingOnboarding === 'business' ? (
+          <Stack.Screen name="BusinessOnboarding" component={BusinessOnboardingScreen} />
+        ) : accountType === 'business' ? (
+          <Stack.Screen name="BusinessApp" component={BusinessTabs} />
+        ) : (
+          <Stack.Screen name="PersonalApp" component={PersonalStack} />
+        )
+      ) : (
         <>
           <Stack.Screen name="Welcome" component={WelcomeScreen} />
           <Stack.Screen name="PersonalAuth" component={PersonalAuthScreen} />
           <Stack.Screen name="BusinessAuth" component={BusinessAuthScreen} />
         </>
-      ) : pendingOnboarding === 'personal' ? (
-        <Stack.Screen name="PersonalOnboarding" component={PersonalOnboardingScreen} />
-      ) : pendingOnboarding === 'business' ? (
-        <Stack.Screen name="BusinessOnboarding" component={BusinessOnboardingScreen} />
-      ) : user.accountType === 'personal' ? (
-        <Stack.Screen name="PersonalApp" component={PersonalTabs} />
-      ) : (
-        <Stack.Screen name="BusinessApp" component={BusinessTabs} />
       )}
     </Stack.Navigator>
   );

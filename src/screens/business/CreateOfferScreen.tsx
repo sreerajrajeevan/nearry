@@ -119,7 +119,7 @@ function computeWindow(startsIn: StartsIn, duration: Duration): { startsAt: stri
 }
 
 export function CreateOfferScreen() {
-  const { user } = useAuth();
+  const { profile } = useAuth();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [titleError, setTitleError] = useState<string | undefined>(undefined);
@@ -148,7 +148,7 @@ export function CreateOfferScreen() {
     setPublishing(true);
     try {
       const { startsAt, endsAt } = computeWindow(startsIn, duration);
-      await createOffer(user?.id ?? 'mock-business', {
+      await createOffer(profile?.id ?? 'demo-business', {
         title: title.trim(),
         description: description.trim(),
         discountPct: discount,
@@ -175,7 +175,7 @@ export function CreateOfferScreen() {
           label="OFFER TITLE"
           placeholder="e.g. Happy Hours Flat 20% Off"
           value={title}
-          onChangeText={(t) => {
+          onChangeText={(t: string) => {
             setTitle(t);
             if (titleError && t.trim()) setTitleError(undefined);
           }}

@@ -119,7 +119,15 @@ export function BusinessOnboardingScreen() {
           </Text>
           <Text style={styles.sub}>Post offers, take bookings, watch footfall grow.</Text>
           <View style={styles.footerWide}>
-            <Button title="OPEN DASHBOARD" onPress={completeOnboarding} />
+            <Button
+              title="OPEN DASHBOARD"
+              onPress={() =>
+                completeOnboarding({
+                  businessName: businessName.trim(),
+                  businessDetails: { category, area: area.trim() },
+                })
+              }
+            />
           </View>
           <TouchableOpacity onPress={() => setStep(2)} style={styles.back} activeOpacity={0.7}>
             <Text style={styles.backText}>← BACK</Text>

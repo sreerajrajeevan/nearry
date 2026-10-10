@@ -27,9 +27,9 @@ function StatBox({ label, value }: { label: string; value: string }) {
 }
 
 export function DashboardScreen({ navigation }: Props) {
-  const { user } = useAuth();
+  const { profile } = useAuth();
   const [offers, setOffers] = useState<Offer[]>([]);
-  const businessName = (user?.displayName ?? 'YOUR BUSINESS').toUpperCase();
+  const businessName = (profile?.displayName ?? 'YOUR BUSINESS').toUpperCase();
 
   useFocusEffect(
     useCallback(() => {
