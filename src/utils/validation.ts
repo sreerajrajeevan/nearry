@@ -52,3 +52,33 @@ export function isValidBusinessName(name: string): boolean {
   const t = name.trim();
   return t.length >= 2 && t.length <= 80;
 }
+
+export type OfferDraft = {
+  title: string;
+  description: string;
+  discountPct?: number;
+  priceCents?: number;
+  startsAt: string;
+  endsAt: string;
+  slotCapacity: number;
+};
+
+/**
+ * Mirrors the offers CHECK constraints + guard rules:
+ * future start, end after start, sane discount/price/capacity.
+ */
+export function validateOfferInput(input: OfferDraft): string | null {
+  if (input.title.trim().length < 4) return 'Give the offer a title (min 4 characters).';
+  if (input.description.trim().length < 10) return 'Add a few more details (min 10 characters).';
+  const starts = new Date(input.startsAt).getTime();
+  const ends = new Date(input.endsAt).getTime();
+  if (Number.isNaN(starts) || Number.isNaN(ends)) return 'Start/end times are invalid.';
+  if (starts <= Date.now()) return 'Start time must be in the future.';
+  if (ends <= starts) return 'End time must be after the start time.';
+  if (input.discountPct !== undefined && (input.discountPct < 0 || input.discountPct > 90))
+    return 'Discount must be between 0 and 90%.';
+  if (input.priceCents !== undefined && input.priceCents < 0) return 'Price cannot be negative.';
+  if (!Number.isInteger(input.slotCapacity) || input.slotCapacity < 1 || input.slotCapacity > 500)
+    return 'Seats per slot must be between 1 and 500.';
+  return null;
+}

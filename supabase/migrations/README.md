@@ -26,6 +26,8 @@ idempotent where it matters (`if not exists` / `drop … if exists`).
 | `00005_seed_venues.sql` | Starter venue list |
 | `00006_rls_hardening.sql` | Approvals only via RPC; insert guards (no self-join, open+unexpired) |
 | `00007_post_readmodel.sql` | `post_cards` view (author + approved count), host edit guard, `cancel_post()` |
+| `00008_verification.sql` | Proof-doc storage (private bucket + RLS), verification status flow (owner submits → admin reviews via service key) |
+| `00009_offers_bookings.sql` | Offer drafts/publish gate (verified only), atomic `create_booking()` RPC, `claim_venue()` RPC, `business_bookings` view |
 
 ## Scheduled jobs
 
