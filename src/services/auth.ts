@@ -84,8 +84,18 @@ export async function signInWithGoogle(accountType: AccountType): Promise<string
     throw new Error('Google sign-in was cancelled.');
   }
 
-  const code = extractCode(res.url);
-  if (!code) throw new Error('Google sign-in completed without an auth code.');
+  const code = extractParam(res.url, 'code');
+  if (!code) {
+    // Supabase bounces OAuth failures back to the redirect URL with
+    // ?error=&error_description= — surface those instead of a generic message.
+    const detail =
+      extractParam(res.url, 'error_description') || extractParam(res.url, 'error');
+    throw new Error(
+      detail
+        ? `Google sign-in failed: ${detail}`
+        : 'Google sign-in completed without an auth code.',
+    );
+  }
 
   const { data: sessionData, error: exchangeError } =
     await supabase.auth.exchangeCodeForSession(code);
@@ -109,12 +119,11 @@ export async function signOut(): Promise<void> {
   if (error) throw new Error(error.message);
 }
 
-function extractCode(url: string): string | null {
+function extractParam(url: string, name: string): string | null {
   try {
-    const parsed = new URL(url);
-    return parsed.searchParams.get('code');
+    return new URL(url).searchParams.get(name);
   } catch {
-    const m = /[?&#]code=([^&#]+)/.exec(url);
+    const m = new RegExp(`[?&#]${name}=([^&#]+)`).exec(url);
     return m ? decodeURIComponent(m[1]) : null;
   }
 }
