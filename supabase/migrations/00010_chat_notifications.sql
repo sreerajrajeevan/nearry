@@ -12,6 +12,12 @@
 
 -- ── Conversations & messages ──────────────────────────────
 
+-- Replace the milestone-1 thread/message/notification stubs with the real
+-- M6 schema. Nothing real exists yet (fresh project), so drop + recreate.
+drop table if exists messages cascade;
+drop table if exists threads cascade;
+drop table if exists notifications cascade;
+
 create table conversations (
   id uuid primary key default gen_random_uuid(),
   post_id uuid references posts(id) on delete cascade,
