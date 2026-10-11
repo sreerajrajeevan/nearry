@@ -28,6 +28,7 @@ idempotent where it matters (`if not exists` / `drop … if exists`).
 | `00007_post_readmodel.sql` | `post_cards` view (author + approved count), host edit guard, `cancel_post()` |
 | `00008_verification.sql` | Proof-doc storage (private bucket + RLS), verification status flow (owner submits → admin reviews via service key) |
 | `00009_offers_bookings.sql` | Offer drafts/publish gate (verified only), atomic `create_booking()` RPC, `claim_venue()` RPC, `business_bookings` view |
+| `00010_chat_notifications.sql` | 1:1 chat (authorized `get_or_create_conversation()`), messages, read receipts, `list_my_conversations()` with unread counts, `push_tokens`, `notifications` + event triggers |
 
 ## Scheduled jobs
 

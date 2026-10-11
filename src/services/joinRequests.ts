@@ -60,10 +60,21 @@ export async function requestToJoin(postId: string, requesterId: string): Promis
   if (error) throw new Error(friendlyRequestError(error.message));
   const row = data as Record<string, unknown>;
   const req = row.requester as { display_name?: string } | null;
-  return toJoinRequest({
+  const created = toJoinRequest({
     ...(row as unknown as DbJoinRequest),
     requester: { display_name: req?.display_name ?? (await requesterName(supabase, requesterId)) },
   });
+  // Best-effort remote push to the post author.
+  const { data: post } = await supabase.from('posts').select('author_id').eq('id', postId).maybeSingle();
+  if (post) {
+    const { pushToUser } = await import('./notifications');
+    void pushToUser(
+      (post as { author_id: string }).author_id,
+      'New join request',
+      `${created.requesterName} wants to join your post`,
+    ).catch(() => {});
+  }
+  return created;
 }
 
 /** Withdraw my pending request. Approved joins are released via cancelParticipation. */
@@ -111,6 +122,19 @@ export async function approveRequest(requestId: string): Promise<{ spotsLeft: nu
   const { data, error } = await supabase.rpc('approve_join_request', { p_request_id: requestId });
   if (error) throw new Error(friendlyRequestError(error.message));
   const res = data as { spots_left: number; post_closed: boolean };
+  const { data: reqRow } = await supabase
+    .from('join_requests')
+    .select('requester_id')
+    .eq('id', requestId)
+    .maybeSingle();
+  if (reqRow) {
+    const { pushToUser } = await import('./notifications');
+    void pushToUser(
+      (reqRow as { requester_id: string }).requester_id,
+      'Request approved',
+      "You're in! Check Activity for details",
+    ).catch(() => {});
+  }
   return { spotsLeft: res.spots_left, postClosed: res.post_closed };
 }
 

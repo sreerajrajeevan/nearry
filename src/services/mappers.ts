@@ -281,6 +281,7 @@ export type DbBooking = {
   id: string;
   offer_id: string;
   customer_id: string;
+  business_id?: string;
   slot: string;
   party_size: number;
   status: 'pending' | 'confirmed' | 'cancelled';
@@ -295,6 +296,7 @@ export type Booking = {
   id: string;
   offerId: string;
   customerId: string;
+  businessId?: string;
   customerName: string;
   offerTitle: string;
   slot: string;
@@ -308,11 +310,106 @@ export function toBooking(row: DbBooking): Booking {
     id: row.id,
     offerId: row.offer_id,
     customerId: row.customer_id,
+    businessId: (row as Record<string, unknown>).business_id as string | undefined,
     customerName: row.customer?.display_name ?? row.customer_name ?? 'Someone',
     offerTitle: row.offer?.title ?? row.offer_title ?? 'Offer',
     slot: row.slot,
     partySize: row.party_size,
     status: row.status,
+    createdAt: row.created_at,
+  };
+}
+
+// ── Chat ──────────────────────────────────────────────────
+
+export type Conversation = {
+  id: string;
+  otherUserId: string;
+  otherName: string;
+  postId?: string;
+  bookingId?: string;
+  contextTitle: string;
+  lastBody?: string;
+  lastAt?: string;
+  unreadCount: number;
+};
+
+export function toConversation(row: Record<string, unknown>): Conversation {
+  return {
+    id: row.id as string,
+    otherUserId: row.other_user_id as string,
+    otherName: (row.other_name as string) ?? 'Someone',
+    postId: (row.post_id as string) ?? undefined,
+    bookingId: (row.booking_id as string) ?? undefined,
+    contextTitle: (row.context_title as string) ?? 'Chat',
+    lastBody: (row.last_body as string) ?? undefined,
+    lastAt: (row.last_at as string) ?? undefined,
+    unreadCount: Number(row.unread_count ?? 0),
+  };
+}
+
+export type DbMessage = {
+  id: string;
+  conversation_id: string;
+  sender_id: string;
+  body: string;
+  created_at: string;
+  sender?: { display_name: string } | null;
+};
+
+export type ChatMessage = {
+  id: string;
+  conversationId: string;
+  senderId: string;
+  senderName: string;
+  body: string;
+  createdAt: string;
+  mine: boolean;
+};
+
+export function toChatMessage(row: DbMessage, myId: string): ChatMessage {
+  return {
+    id: row.id,
+    conversationId: row.conversation_id,
+    senderId: row.sender_id,
+    senderName: row.sender?.display_name ?? 'Someone',
+    body: row.body,
+    createdAt: row.created_at,
+    mine: row.sender_id === myId,
+  };
+}
+
+// ── Notifications ─────────────────────────────────────────
+
+export type DbNotification = {
+  id: string;
+  user_id: string;
+  kind: string;
+  title: string;
+  body: string;
+  ref_id: string | null;
+  read_at: string | null;
+  created_at: string;
+};
+
+export type AppNotification = {
+  id: string;
+  kind: string;
+  title: string;
+  body: string;
+  refId?: string;
+  read: boolean;
+  createdAt: string;
+};
+
+export function toAppNotification(row: DbNotification): AppNotification {
+  return {
+    id: row.id,
+    kind: row.kind,
+    title: row.title,
+    body: row.body,
+    refId: row.ref_id ?? undefined,
+    read: row.read_at !== null,
     createdAt: row.created_at,
   };
 }
