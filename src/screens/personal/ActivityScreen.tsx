@@ -21,6 +21,7 @@ import {
 } from '../../services/joinRequests';
 import { NeedPost, JoinRequest, Booking } from '../../services/mappers';
 import { listMyBookings, cancelBooking, subscribeToBookings } from '../../services/bookings';
+import { getOrCreateConversation } from '../../services/chat';
 
 type IncomingItem = { post: NeedPost; requests: JoinRequest[] };
 
@@ -83,6 +84,19 @@ export function ActivityScreen() {
       await load();
     } catch (e) {
       Alert.alert('Hmm', e instanceof Error ? e.message : 'Something went wrong.');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const openBookingChat = async (b: Booking) => {
+    if (!myId || !b.businessId) return;
+    setBusy(`m${b.id}`);
+    try {
+      const conversationId = await getOrCreateConversation(b.businessId, { bookingId: b.id });
+      navigation.navigate('Conversation', { conversationId, title: b.offerTitle });
+    } catch (e) {
+      Alert.alert('Could not open chat', e instanceof Error ? e.message : 'Please try again.');
     } finally {
       setBusy(null);
     }
@@ -160,15 +174,27 @@ export function ActivityScreen() {
                     <Text style={styles.bookMeta}>
                       {new Date(b.slot).toLocaleString()} · {b.partySize} {b.partySize === 1 ? 'SEAT' : 'SEATS'}
                     </Text>
-                    {(b.status === 'pending' || b.status === 'confirmed') && (
-                      <TouchableOpacity
-                        activeOpacity={0.7}
-                        style={styles.cancelWrap}
-                        onPress={() => run(`bk${b.id}`, () => cancelBooking(b.id))}
-                      >
-                        <Text style={styles.withdraw}>{busy === `bk${b.id}` ? '…' : 'CANCEL BOOKING'}</Text>
-                      </TouchableOpacity>
-                    )}
+                    <View style={styles.bookActions}>
+                      {b.businessId && (
+                        <TouchableOpacity
+                          activeOpacity={0.7}
+                          onPress={() => openBookingChat(b)}
+                        >
+                          <Text style={styles.messageLink}>
+                            {busy === `m${b.id}` ? '…' : 'MESSAGE'}
+                          </Text>
+                        </TouchableOpacity>
+                      )}
+                      {(b.status === 'pending' || b.status === 'confirmed') && (
+                        <TouchableOpacity
+                          activeOpacity={0.7}
+                          style={styles.cancelWrap}
+                          onPress={() => run(`bk${b.id}`, () => cancelBooking(b.id))}
+                        >
+                          <Text style={styles.withdraw}>{busy === `bk${b.id}` ? '…' : 'CANCEL BOOKING'}</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
                   </Card>
                 ))}
               </>
@@ -235,6 +261,8 @@ const styles = StyleSheet.create({
   postTitle: { ...typography.body, color: colors.text, flex: 1 },
   rowActions: { flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing.sm },
   bookMeta: { ...typography.caption, color: colors.textDim, marginTop: spacing.xs },
+  bookActions: { flexDirection: 'row', gap: spacing.lg, marginTop: spacing.sm, alignItems: 'center' },
+  messageLink: { ...typography.label, color: colors.red },
   cancelWrap: { marginTop: spacing.sm, alignSelf: 'flex-start' },
   viewPost: { ...typography.label, color: colors.textDim },
   withdraw: { ...typography.label, color: colors.red },

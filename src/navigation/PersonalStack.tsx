@@ -7,6 +7,9 @@ import { PostDetailsScreen } from '../screens/personal/PostDetailsScreen';
 import { VenueDetailsScreen } from '../screens/personal/VenueDetailsScreen';
 import { EditPostScreen } from '../screens/personal/EditPostScreen';
 import { OfferDetailsScreen } from '../screens/personal/OfferDetailsScreen';
+import { ChatListScreen } from '../screens/chat/ChatListScreen';
+import { ConversationScreen } from '../screens/chat/ConversationScreen';
+import { NotificationCenterScreen } from '../screens/NotificationCenterScreen';
 
 const Stack = createNativeStackNavigator<PersonalStackParamList>();
 
@@ -25,6 +28,9 @@ export function PersonalStack() {
       <Stack.Screen name="VenueDetails" component={VenueDetailsScreen} />
       <Stack.Screen name="EditPost" component={EditPostScreen} />
       <Stack.Screen name="OfferDetails" component={OfferDetailsScreen} />
+      <Stack.Screen name="Messages" component={ChatListScreen} />
+      <Stack.Screen name="Conversation" component={ConversationScreen} />
+      <Stack.Screen name="Notifications" component={NotificationCenterScreen} />
     </Stack.Navigator>
   );
 }

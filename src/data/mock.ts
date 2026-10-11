@@ -1,7 +1,7 @@
 /** Mock data for milestone 1 — replaced by Supabase queries in milestone 2. */
 
-export type { Venue, NeedPost, Offer, Booking } from '../services/mappers';
-import type { Venue, NeedPost, Offer, Booking } from '../services/mappers';
+export type { Venue, NeedPost, Offer, Booking, Conversation, ChatMessage, AppNotification } from '../services/mappers';
+import type { Venue, NeedPost, Offer, Booking, Conversation, ChatMessage, AppNotification } from '../services/mappers';
 
 export const mockVenues: Venue[] = [
   { id: 'v1', name: 'Kochi Marine Brews', category: 'Café', area: 'Fort Kochi', distanceKm: 0.4, rating: 4.6, openNow: true, liveOffer: '20% off till 6 PM', createdAt: '2026-10-08T08:00:00Z' },
@@ -50,13 +50,39 @@ export const mockOffers: Offer[] = [
 ];
 
 export const mockBookings: Booking[] = [
-  { id: 'bk1', offerId: 'o1', customerId: 'u2', customerName: 'Anjali', offerTitle: 'Happy Hours Flat 20% Off', slot: '2026-10-08T11:30:00Z', partySize: 2, status: 'confirmed', createdAt: '2026-10-08T09:00:00Z' },
-  { id: 'bk2', offerId: 'o1', customerId: 'u3', customerName: 'Dev', offerTitle: 'Happy Hours Flat 20% Off', slot: '2026-10-08T12:00:00Z', partySize: 4, status: 'pending', createdAt: '2026-10-08T09:30:00Z' },
-  { id: 'bk3', offerId: 'o2', customerId: 'u4', customerName: 'Meera', offerTitle: 'Weekend Brunch Combo', slot: '2026-10-11T04:30:00Z', partySize: 3, status: 'pending', createdAt: '2026-10-08T10:00:00Z' },
+  { id: 'bk1', offerId: 'o1', customerId: 'u2', businessId: 'b1', customerName: 'Anjali', offerTitle: 'Happy Hours Flat 20% Off', slot: '2026-10-08T11:30:00Z', partySize: 2, status: 'confirmed', createdAt: '2026-10-08T09:00:00Z' },
+  { id: 'bk2', offerId: 'o1', customerId: 'u3', businessId: 'b1', customerName: 'Dev', offerTitle: 'Happy Hours Flat 20% Off', slot: '2026-10-08T12:00:00Z', partySize: 4, status: 'pending', createdAt: '2026-10-08T09:30:00Z' },
+  { id: 'bk3', offerId: 'o2', customerId: 'u4', businessId: 'b1', customerName: 'Meera', offerTitle: 'Weekend Brunch Combo', slot: '2026-10-11T04:30:00Z', partySize: 3, status: 'pending', createdAt: '2026-10-08T10:00:00Z' },
 ];
 
 export const mockActivity = [
   { id: 'a1', text: 'Your join request for "Sunset kayaking" was approved', time: '2h ago', unread: true },
   { id: 'a2', text: 'Kochi Marine Brews posted a last-minute offer near you', time: '5h ago', unread: true },
   { id: 'a3', text: 'Anjali joined your badminton post', time: '1d ago', unread: false },
+];
+
+export const mockConversations: Conversation[] = [
+  {
+    id: 'mc1', otherUserId: 'u2', otherName: 'Anjali', postId: 'p1',
+    contextTitle: 'Need 2 players at Unity Turf',
+    lastBody: 'I\'ll bring an extra ball', lastAt: '2026-10-10T11:30:00Z', unreadCount: 1,
+  },
+  {
+    id: 'mc2', otherUserId: 'b1', otherName: 'Kochi Marine Brews', bookingId: 'bk1',
+    contextTitle: 'Happy Hours Flat 20% Off',
+    lastBody: 'Table for 2 confirmed', lastAt: '2026-10-10T09:15:00Z', unreadCount: 0,
+  },
+];
+
+export const mockMessages: ChatMessage[] = [
+  { id: 'mm1', conversationId: 'mc1', senderId: 'u2', senderName: 'Anjali', body: 'Hey! Still need players?', createdAt: '2026-10-10T11:20:00Z', mine: false },
+  { id: 'mm2', conversationId: 'mc1', senderId: 'demo-user', senderName: 'You', body: 'Yes, 7 PM at Unity Turf', createdAt: '2026-10-10T11:25:00Z', mine: true },
+  { id: 'mm3', conversationId: 'mc1', senderId: 'u2', senderName: 'Anjali', body: "I'll bring an extra ball", createdAt: '2026-10-10T11:30:00Z', mine: false },
+  { id: 'mm4', conversationId: 'mc2', senderId: 'b1', senderName: 'Kochi Marine Brews', body: 'Table for 2 confirmed', createdAt: '2026-10-10T09:15:00Z', mine: false },
+];
+
+export const mockNotifications: AppNotification[] = [
+  { id: 'mn1', kind: 'request_approved', title: 'Request approved', body: 'You\'re in! "Need 2 players at Unity Turf"', refId: 'p1', read: false, createdAt: '2026-10-10T12:00:00Z' },
+  { id: 'mn2', kind: 'message', title: 'Message from Anjali', body: "I'll bring an extra ball", refId: 'mc1', read: false, createdAt: '2026-10-10T11:30:00Z' },
+  { id: 'mn3', kind: 'booking_confirmed', title: 'Booking confirmed', body: '"Happy Hours Flat 20% Off" — see you there', refId: 'o1', read: true, createdAt: '2026-10-10T09:00:00Z' },
 ];

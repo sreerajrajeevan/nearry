@@ -8,6 +8,7 @@ import { Card } from '../../components/Card';
 import { EmptyState } from '../../components/EmptyState';
 import { Avatar } from '../../components/Avatar';
 import { colors, typography, spacing } from '../../theme';
+import { getOrCreateConversation } from '../../services/chat';
 import { PostDetailsProps } from '../../navigation/types';
 import { useAuth } from '../../store/AuthContext';
 import { getPost, cancelPost, subscribeToPosts } from '../../services/posts';
@@ -83,6 +84,19 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
       await load();
     } catch (e) {
       Alert.alert('Hmm', e instanceof Error ? e.message : 'Something went wrong.');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const openChat = async (otherUserId: string, otherName: string) => {
+    if (!myId) return;
+    setBusy('msg');
+    try {
+      const conversationId = await getOrCreateConversation(otherUserId, { postId });
+      navigation.navigate('Conversation', { conversationId, title: otherName });
+    } catch (e) {
+      Alert.alert('Could not open chat', e instanceof Error ? e.message : 'Please try again.');
     } finally {
       setBusy(null);
     }
@@ -182,6 +196,12 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
                 <Avatar name={r.requesterName} size={24} />
                 <Text style={styles.approvedName}>{r.requesterName}</Text>
                 <Badge label="IN" tone="green" />
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={() => openChat(r.requesterId, r.requesterName)}
+                >
+                  <Text style={styles.messageLink}>MESSAGE</Text>
+                </TouchableOpacity>
               </View>
             ))}
             {post.status === 'open' && (
@@ -222,6 +242,13 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
                 <Badge label="YOU'RE IN" tone="green" />
                 <View style={styles.gap} />
                 <Button
+                  title="MESSAGE HOST"
+                  variant="secondary"
+                  loading={busy === 'msg'}
+                  onPress={() => post && myId && openChat(post.authorId, post.authorName)}
+                />
+                <View style={styles.gap} />
+                <Button
                   title="LEAVE ACTIVITY"
                   variant="danger"
                   loading={busy === 'lv'}
@@ -257,6 +284,7 @@ const styles = StyleSheet.create({
   reqGap: { width: spacing.sm },
   approvedRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginBottom: spacing.sm },
   approvedName: { ...typography.body, color: colors.text, flex: 1 },
+  messageLink: { ...typography.label, color: colors.red },
   hostActions: { marginTop: spacing.lg },
   gap: { height: spacing.md },
 });

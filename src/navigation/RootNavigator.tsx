@@ -4,13 +4,14 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { colors } from '../theme';
 import { RootStackParamList } from './types';
 import { useAuth } from '../store/AuthContext';
+import { usePushSetup } from '../hooks/useUnreadCounts';
 import { WelcomeScreen } from '../screens/WelcomeScreen';
 import { PersonalAuthScreen } from '../screens/auth/PersonalAuthScreen';
 import { BusinessAuthScreen } from '../screens/auth/BusinessAuthScreen';
 import { PersonalOnboardingScreen } from '../screens/onboarding/PersonalOnboardingScreen';
 import { BusinessOnboardingScreen } from '../screens/onboarding/BusinessOnboardingScreen';
 import { PersonalStack } from './PersonalStack';
-import { BusinessTabs } from './BusinessTabs';
+import { BusinessStack } from './BusinessStack';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -26,6 +27,8 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 export function RootNavigator() {
   const { session, demoMode, bootstrapping, accountType, needsOnboarding, pendingOnboarding } =
     useAuth();
+
+  usePushSetup();
 
   if (bootstrapping) {
     return (
@@ -49,7 +52,7 @@ export function RootNavigator() {
         ) : needsOnboarding && pendingOnboarding === 'business' ? (
           <Stack.Screen name="BusinessOnboarding" component={BusinessOnboardingScreen} />
         ) : accountType === 'business' ? (
-          <Stack.Screen name="BusinessApp" component={BusinessTabs} />
+          <Stack.Screen name="BusinessApp" component={BusinessStack} />
         ) : (
           <Stack.Screen name="PersonalApp" component={PersonalStack} />
         )

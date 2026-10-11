@@ -16,6 +16,7 @@ import {
   subscribeToBookings,
 } from '../../services/bookings';
 import { Booking } from '../../services/mappers';
+import { getOrCreateConversation } from '../../services/chat';
 
 const FILTERS = ['ALL', 'PENDING', 'CONFIRMED', 'CANCELLED'] as const;
 type Filter = (typeof FILTERS)[number];
@@ -26,8 +27,12 @@ function statusTone(status: Booking['status']): 'neutral' | 'green' | 'red' {
   return 'neutral';
 }
 
+type Props = {
+  navigation: { navigate: (screen: string, params?: Record<string, unknown>) => void };
+};
+
 /** Business bookings view — real records, confirm/cancel, realtime-synced. */
-export function BookingsScreen() {
+export function BookingsScreen({ navigation }: Props) {
   const { profile } = useAuth();
   const [filter, setFilter] = useState<Filter>('ALL');
   const [bookings, setBookings] = useState<Booking[]>([]);
@@ -56,6 +61,20 @@ export function BookingsScreen() {
   useEffect(() => subscribeToBookings(() => void load()), [load]);
 
   const visible = bookings.filter((b) => filter === 'ALL' || b.status === filter.toLowerCase());
+
+  const openChat = async (booking: Booking) => {
+    setBusy(`m${booking.id}`);
+    try {
+      const conversationId = await getOrCreateConversation(booking.customerId, {
+        bookingId: booking.id,
+      });
+      navigation.navigate('Conversation', { conversationId, title: booking.customerName });
+    } catch (e) {
+      Alert.alert('Could not open chat', e instanceof Error ? e.message : 'Please try again.');
+    } finally {
+      setBusy(null);
+    }
+  };
 
   const run = async (key: string, fn: () => Promise<void>) => {
     setBusy(key);
@@ -117,8 +136,16 @@ export function BookingsScreen() {
               <Text style={styles.meta}>
                 {new Date(b.slot).toLocaleString()} · {b.partySize} {b.partySize === 1 ? 'SEAT' : 'SEATS'}
               </Text>
+              <View style={styles.actions}>
+                <Button
+                  title="MESSAGE"
+                  variant="ghost"
+                  loading={busy === `m${b.id}`}
+                  onPress={() => openChat(b)}
+                />
+                <View style={styles.gap} />
               {b.status === 'pending' && (
-                <View style={styles.actions}>
+                <>
                   <Button
                     title="DECLINE"
                     variant="ghost"
@@ -131,8 +158,9 @@ export function BookingsScreen() {
                     loading={busy === `c${b.id}`}
                     onPress={() => run(`c${b.id}`, () => confirmBooking(b.id))}
                   />
-                </View>
+                </>
               )}
+              </View>
             </Card>
           ))
         )}

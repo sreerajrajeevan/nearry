@@ -1,5 +1,6 @@
 import React from 'react';
 import { Text, StyleSheet } from 'react-native';
+import { useUnreadCounts } from '../hooks/useUnreadCounts';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { colors, typography } from '../theme';
 import { PersonalTabParamList } from './types';
@@ -37,12 +38,21 @@ function screenOptions({ route }: { route: { name: keyof PersonalTabParamList } 
 }
 
 export function PersonalTabs() {
+  const { messages, notifications } = useUnreadCounts();
+  const total = messages + notifications;
   return (
     <Tab.Navigator screenOptions={screenOptions}>
       <Tab.Screen name="Nearby" component={NearbyScreen} />
       <Tab.Screen name="Search" component={SearchScreen} />
       <Tab.Screen name="CreatePost" component={CreatePostScreen} />
-      <Tab.Screen name="Activity" component={ActivityScreen} />
+      <Tab.Screen
+        name="Activity"
+        component={ActivityScreen}
+        options={{
+          tabBarBadge: total > 0 ? total : undefined,
+          tabBarBadgeStyle: { backgroundColor: colors.red },
+        }}
+      />
       <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>
   );

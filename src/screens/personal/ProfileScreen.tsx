@@ -7,6 +7,7 @@ import { Button } from '../../components/Button';
 import { EmptyState } from '../../components/EmptyState';
 import { colors, typography, spacing } from '../../theme';
 import { useAuth } from '../../store/AuthContext';
+import { useUnreadCounts } from '../../hooks/useUnreadCounts';
 
 const MENU_ITEMS = ['Edit profile', 'Notifications', 'Privacy', 'Help'];
 
@@ -16,8 +17,13 @@ const STATS = [
   { value: '8', label: 'FOLLOWING' },
 ];
 
-export function ProfileScreen() {
+type Props = {
+  navigation: { navigate: (screen: string) => void };
+};
+
+export function ProfileScreen({ navigation }: Props) {
   const { profile, session, demoMode, signOut } = useAuth();
+  const { notifications } = useUnreadCounts();
 
   if (!profile) {
     return (
@@ -59,9 +65,16 @@ export function ProfileScreen() {
               key={item}
               style={styles.menuRow}
               activeOpacity={0.7}
-              onPress={() => undefined}
+              onPress={() => {
+                if (item === 'Notifications') navigation.navigate('Notifications');
+              }}
             >
-              <Text style={styles.menuLabel}>{item}</Text>
+              <View style={styles.menuLabelRow}>
+                <Text style={styles.menuLabel}>{item}</Text>
+                {item === 'Notifications' && notifications > 0 && (
+                  <Badge label={String(notifications)} tone="red" />
+                )}
+              </View>
               <Text style={styles.chevron}>›</Text>
             </TouchableOpacity>
           ))}
@@ -111,6 +124,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   menuLabel: { ...typography.body, color: colors.text },
+  menuLabelRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
   chevron: { ...typography.heading, color: colors.textDim },
   logout: { marginTop: spacing.lg },
 });

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Text, StyleSheet } from 'react-native';
+import { useUnreadCounts } from '../hooks/useUnreadCounts';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { colors, typography } from '../theme';
 import { BusinessTabParamList } from './types';
@@ -45,12 +46,20 @@ function screenOptions({ route }: { route: { name: keyof BusinessTabParamList } 
 }
 
 export function BusinessTabs() {
+  const { messages } = useUnreadCounts();
   return (
     <Tab.Navigator screenOptions={screenOptions}>
       <Tab.Screen name="Dashboard" component={DashboardScreen} />
       <Tab.Screen name="CreateOffer" component={CreateOfferScreen} />
       <Tab.Screen name="Bookings" component={BookingsScreen} />
-      <Tab.Screen name="Messages" component={MessagesScreen} />
+      <Tab.Screen
+        name="Messages"
+        component={MessagesScreen}
+        options={{
+          tabBarBadge: messages > 0 ? messages : undefined,
+          tabBarBadgeStyle: { backgroundColor: colors.red },
+        }}
+      />
       <Tab.Screen name="Business" component={BusinessProfileScreen} />
     </Tab.Navigator>
   );

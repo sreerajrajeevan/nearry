@@ -10,6 +10,7 @@ import { Input } from '../../components/Input';
 import { EmptyState } from '../../components/EmptyState';
 import { colors, typography, spacing } from '../../theme';
 import { useAuth } from '../../store/AuthContext';
+import { useUnreadCounts } from '../../hooks/useUnreadCounts';
 import {
   getVerificationState,
   submitVerificationDoc,
@@ -34,8 +35,13 @@ function statusTone(s: VerificationState): 'neutral' | 'green' | 'red' {
 }
 
 /** Business profile: verification, venue association, sign out. */
-export function BusinessProfileScreen() {
+type Props = {
+  navigation: { navigate: (screen: string) => void };
+};
+
+export function BusinessProfileScreen({ navigation }: Props) {
   const { profile, refreshProfile, signOut } = useAuth();
+  const { notifications } = useUnreadCounts();
   const [verif, setVerif] = useState<{ status: VerificationState; docPath?: string }>({
     status: 'unverified',
   });
@@ -182,6 +188,12 @@ export function BusinessProfileScreen() {
         )}
 
         <Button
+          title={`NOTIFICATIONS${notifications > 0 ? ` (${notifications})` : ''}`}
+          variant="secondary"
+          onPress={() => navigation.navigate('Notifications')}
+          style={styles.notifBtn}
+        />
+        <Button
           title="LOG OUT"
           variant="danger"
           onPress={() => {
@@ -220,5 +232,6 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   claimText: { flex: 1 },
-  logoutBtn: { marginTop: spacing.xl },
+  notifBtn: { marginTop: spacing.xl },
+  logoutBtn: { marginTop: spacing.md },
 });

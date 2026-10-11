@@ -112,8 +112,8 @@ src/services/
   joinRequests.ts        Request/withdraw/approve(RPC)/decline + lists
   location.ts            Permissions + position + haversine
   offers.ts              Business offers: drafts, verification-gated publish, real lists (M5)
-  chat.ts                Threads/messages stubs (M6)
-  notifications.ts       Push stubs (M6)
+  chat.ts                Authorized 1:1 chat: get_or_create_conversation, realtime messages, unread (M6)
+  notifications.ts       Notification center, push token registration, send-push fan-out (M6)
 src/utils/validation.ts  Client validation mirroring DB CHECKs
 src/data/mock.ts         Explicit demo-mode fixture data
 supabase/
@@ -134,7 +134,7 @@ supabase/
   RPC, no self-join/duplicates/closed-expired joins, withdrawal reopens,
   server expiry, cross-device realtime sync.
 - **M5** — Business verification, offers, bookings (done, needs live-backend test).
-- **M6** — Chat + notifications (next).
+- **M6** — Chat + notifications (done, needs live-backend test).
 - **M7** — Testing + delivery (next).
 
 ## Status: completed vs remaining
@@ -144,7 +144,10 @@ flow, session restore, profile routing, onboarding resume, venue list/search/
 nearby/detail, post create/list/detail/edit/cancel, join request/withdraw/
 approve/decline, atomic capacity, expiry, realtime sync, demo mode.
 
-**Still mock:** chat + notifications (M6), some profile stats (placeholder).
+**Still mock:** some profile stats (placeholder).
+Remote push delivery needs the `send-push` edge function deployed
+(`supabase/functions/send-push`); until then, events surface as local
+notifications + the in-app center.
 Admin review of verification docs is via the service-role key in the
 Supabase dashboard (documented in `supabase/migrations/00008_verification.sql`);
 there is no in-app admin panel in this milestone. Payments are out of scope —

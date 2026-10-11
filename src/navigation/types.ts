@@ -29,6 +29,15 @@ export type PersonalStackParamList = {
   VenueDetails: { venueId: string };
   EditPost: { postId: string };
   OfferDetails: { offerId: string };
+  Messages: undefined;
+  Conversation: { conversationId: string; title?: string };
+  Notifications: undefined;
+};
+
+export type BusinessStackParamList = {
+  BusinessTabs: undefined;
+  Conversation: { conversationId: string; title?: string };
+  Notifications: undefined;
 };
 
 /** Navigation available inside personal tab screens (tab + parent stack). */

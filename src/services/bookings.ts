@@ -45,6 +45,19 @@ export async function bookOffer(
   });
   if (error) throw new Error(friendlyBookingError(error.message));
   const res = data as { booking_id: string; seats_left: number };
+  const { data: offerRow } = await supabase
+    .from('offers')
+    .select('business_id')
+    .eq('id', offerId)
+    .maybeSingle();
+  if (offerRow) {
+    const { pushToUser } = await import('./notifications');
+    void pushToUser(
+      (offerRow as { business_id: string }).business_id,
+      'New booking',
+      `${partySize} seat(s) booked`,
+    ).catch(() => {});
+  }
   return { bookingId: res.booking_id, seatsLeft: res.seats_left };
 }
 
@@ -54,15 +67,16 @@ export async function listMyBookings(customerId: string): Promise<Booking[]> {
   const supabase = getSupabase()!;
   const { data, error } = await supabase
     .from('bookings')
-    .select('*, offer:offers!bookings_offer_id_fkey(title)')
+    .select('*, offer:offers!bookings_offer_id_fkey(title, business_id)')
     .eq('customer_id', customerId)
     .order('slot', { ascending: true });
   if (error) throw new Error(error.message);
   return ((data ?? []) as Record<string, unknown>[]).map((row) => {
-    const offer = row.offer as { title?: string } | null;
+    const offerRow = row.offer as { title?: string; business_id?: string } | null;
     return toBooking({
       ...(row as unknown as DbBooking),
-      offer: { title: offer?.title ?? 'Offer' },
+      business_id: offerRow?.business_id,
+      offer: { title: offerRow?.title ?? 'Offer' },
       customer: { display_name: 'You' },
     });
   });
@@ -89,11 +103,24 @@ export async function confirmBooking(bookingId: string): Promise<void> {
     return;
   }
   const supabase = getSupabase()!;
+  const { data: bkRow } = await supabase
+    .from('bookings')
+    .select('customer_id')
+    .eq('id', bookingId)
+    .maybeSingle();
   const { error } = await supabase
     .from('bookings')
     .update({ status: 'confirmed' })
     .eq('id', bookingId);
   if (error) throw new Error(error.message);
+  if (bkRow) {
+    const { pushToUser } = await import('./notifications');
+    void pushToUser(
+      (bkRow as { customer_id: string }).customer_id,
+      'Booking confirmed',
+      'Your booking was confirmed — see you there',
+    ).catch(() => {});
+  }
 }
 
 /**
