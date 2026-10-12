@@ -1,38 +1,23 @@
-# Supabase migrations
+# Apply migrations safely
 
-Apply in numeric order. `00001_baseline.sql` is the full baseline snapshot
-(identical to `../schema.sql`); later files are additive, non-destructive
-changes. Nothing here drops data.
+Never run `run-all.sql` against an existing project. It is generated, fresh-install-only and protected by a transaction and existing-schema guard.
 
-## Fresh project
+For a fresh database, run `run-all.sql`, or apply `00001` through `00014` once in order. For an existing project, inspect its migration history and apply **only missing** numbered migrations in order. Back up the project first. Do not replay old migrations.
 
-1. Create the project (region `ap-south-1` recommended for India).
-2. SQL Editor → run `00001_baseline.sql`, then `00002` … `00006` in order.
-   (Or paste `../schema.sql` for the baseline, then the migrations.)
+For a project already on `00010`, apply `00011`, `00012`, `00013`, `00014`. These are forward migrations. Existing posts, profiles, offers and bookings are preserved. New columns and grants require deploying the matching app build together with these migrations.
 
-## Existing project
+If upgrading an original pre-chat database, `00010` now archives its old messages/threads/notifications as `legacy_messages`, `legacy_threads`, `legacy_notifications`. Records remain available to administrators and are not automatically shown in the new conversation interface. This revised fresh/legacy install path must never be replayed on a project where `00010` is already applied.
 
-Run any migration you haven't applied yet, in order. Each file is
-idempotent where it matters (`if not exists` / `drop … if exists`).
+`00011`: authorized join lifecycle, consistent counts, profile privacy, first-time role selection and safe cancellation.
 
-## What's where
+`00012`: stable slots generated from each offer's window/duration; legacy bookings retain timestamps and are assigned slot IDs. Existing pending bookings have no new hold deadline; only new requests have a 30-minute confirmation hold. New bookings cannot use arbitrary timestamps. Archived/overlapping legacy slots are protected by overlap checks. Live slot definitions cannot be rescheduled; create a new draft instead. Resource names distinguish courts/stylists; using the same name blocks overlapping live offers at one business.
 
-| File | Purpose |
-|---|---|
-| `00001_baseline.sql` | Tables, RLS, `close_post_when_full`, `nearby_venues`, profile auto-create |
-| `00002_profile_fields.sql` | Interests, business fields, `verification_status` (+ admin-only trigger), `onboarding_completed` |
-| `00003_post_fields.sql` | `expires_at`, `cost_cents`, `cancelled`/`withdrawn` statuses, `close_expired_posts()` |
-| `00004_approve_rpc.sql` | Atomic `approve_join_request()` (row-locked), withdraw→reopen trigger |
-| `00005_seed_venues.sql` | Starter venue list |
-| `00006_rls_hardening.sql` | Approvals only via RPC; insert guards (no self-join, open+unexpired) |
-| `00007_post_readmodel.sql` | `post_cards` view (author + approved count), host edit guard, `cancel_post()` |
-| `00008_verification.sql` | Proof-doc storage (private bucket + RLS), verification status flow (owner submits → admin reviews via service key) |
-| `00009_offers_bookings.sql` | Offer drafts/publish gate (verified only), atomic `create_booking()` RPC, `claim_venue()` RPC, `business_bookings` view |
-| `00010_chat_notifications.sql` | 1:1 chat (authorized `get_or_create_conversation()`), messages, read receipts, `list_my_conversations()` with unread counts, `push_tokens`, `notifications` + event triggers |
+`00013`: server push outbox, token registration and realtime publication. Older duplicate token registrations are consolidated to the newest account registration. Existing public push function callers are disabled in the new app; deploy the secret-authenticated worker as part of the upgrade.
 
-## Scheduled jobs
+`00014`: spatial venue results with distances and refreshed business booking view.
 
-- `close_expired_posts()` — call every 15–60 min via the Supabase dashboard's
-  cron (or any external scheduler hitting the RPC with the service key).
-  Expiry is *also* enforced inside `approve_join_request()` and filtered in
-  list queries, so the app stays correct even if the cron lapses.
+Schedule `close_expired_posts()` and `expire_booking_holds()` with a trusted service role every minute. New approvals/bookings/confirmations independently enforce expiry even if the scheduler is delayed. Never put a service-role key in the app.
+
+Venue ownership changes require administrative review. After checking submitted proof, an administrator may set `venues.business_id`. There is no immediate self-service claim path.
+
+`npm run sql:generate` regenerates the fresh-install bundle. `npm run sql:check` verifies it matches the migrations.

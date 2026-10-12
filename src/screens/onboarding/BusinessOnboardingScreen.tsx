@@ -1,13 +1,20 @@
-import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { Screen } from '../../components/Screen';
-import { Button } from '../../components/Button';
-import { Input } from '../../components/Input';
-import { colors, typography, spacing, radius } from '../../theme';
-import { useAuth } from '../../store/AuthContext';
-import { requestLocationPermission } from '../../services/location';
+import React, { useState } from "react";
+import { View, Text, TouchableOpacity, StyleSheet, Alert } from "react-native";
+import { Screen } from "../../components/Screen";
+import { Button } from "../../components/Button";
+import { Input } from "../../components/Input";
+import { colors, typography, spacing, radius } from "../../theme";
+import { useAuth } from "../../store/AuthContext";
+import { requestLocationPermission } from "../../services/location";
 
-const CATEGORIES = ['Café', 'Restaurant', 'Games', 'Culture', 'Fitness', 'Retail'];
+const CATEGORIES = [
+  "Café",
+  "Restaurant",
+  "Games",
+  "Culture",
+  "Fitness",
+  "Retail",
+];
 
 function Chip({
   label,
@@ -35,16 +42,16 @@ function Chip({
 export function BusinessOnboardingScreen() {
   const { completeOnboarding } = useAuth();
   const [step, setStep] = useState(1);
-  const [businessName, setBusinessName] = useState('');
+  const [businessName, setBusinessName] = useState("");
   const [category, setCategory] = useState<string | null>(null);
-  const [area, setArea] = useState('');
+  const [area, setArea] = useState("");
   const [locating, setLocating] = useState(false);
 
   const useCurrentLocation = async () => {
     setLocating(true);
     try {
       const granted = await requestLocationPermission();
-      if (granted) setArea('Current location');
+      if (granted) setArea("Current location");
     } finally {
       setLocating(false);
     }
@@ -80,7 +87,11 @@ export function BusinessOnboardingScreen() {
             ))}
           </View>
           <View style={styles.footer}>
-            <Button title="CONTINUE" onPress={() => setStep(2)} />
+            <Button
+              title="CONTINUE"
+              disabled={businessName.trim().length < 2 || !category}
+              onPress={() => setStep(2)}
+            />
           </View>
         </View>
       )}
@@ -88,7 +99,9 @@ export function BusinessOnboardingScreen() {
       {step === 2 && (
         <View style={styles.body}>
           <Text style={styles.title}>Where is it?</Text>
-          <Text style={styles.sub}>Set your area so nearby explorers can discover you.</Text>
+          <Text style={styles.sub}>
+            Set your area so nearby explorers can discover you.
+          </Text>
           <Input
             label="AREA / LOCALITY"
             placeholder="e.g. Indiranagar, Bengaluru"
@@ -104,9 +117,17 @@ export function BusinessOnboardingScreen() {
             loading={locating}
           />
           <View style={styles.footer}>
-            <Button title="CONTINUE" onPress={() => setStep(3)} />
+            <Button
+              title="CONTINUE"
+              disabled={!area.trim()}
+              onPress={() => setStep(3)}
+            />
           </View>
-          <TouchableOpacity onPress={() => setStep(1)} style={styles.back} activeOpacity={0.7}>
+          <TouchableOpacity
+            onPress={() => setStep(1)}
+            style={styles.back}
+            activeOpacity={0.7}
+          >
             <Text style={styles.backText}>← BACK</Text>
           </TouchableOpacity>
         </View>
@@ -117,19 +138,30 @@ export function BusinessOnboardingScreen() {
           <Text style={styles.doneTitle}>
             READY TO FILL TABLES<Text style={styles.dot}>.</Text>
           </Text>
-          <Text style={styles.sub}>Post offers, take bookings, watch footfall grow.</Text>
+          <Text style={styles.sub}>
+            Post offers, take bookings, watch footfall grow.
+          </Text>
           <View style={styles.footerWide}>
             <Button
               title="OPEN DASHBOARD"
               onPress={() =>
-                completeOnboarding({
+                void completeOnboarding({
                   businessName: businessName.trim(),
                   businessDetails: { category, area: area.trim() },
-                })
+                }).catch((e) =>
+                  Alert.alert(
+                    "Could not save profile",
+                    e instanceof Error ? e.message : "Please retry.",
+                  ),
+                )
               }
             />
           </View>
-          <TouchableOpacity onPress={() => setStep(2)} style={styles.back} activeOpacity={0.7}>
+          <TouchableOpacity
+            onPress={() => setStep(2)}
+            style={styles.back}
+            activeOpacity={0.7}
+          >
             <Text style={styles.backText}>← BACK</Text>
           </TouchableOpacity>
         </View>
@@ -165,8 +197,8 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
   chips: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
   },
   chip: {
     borderWidth: 1,
@@ -189,15 +221,15 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   footer: {
-    marginTop: 'auto',
+    marginTop: "auto",
     marginBottom: spacing.md,
   },
   footerWide: {
     marginTop: spacing.xl,
-    width: '100%',
+    width: "100%",
   },
   back: {
-    alignItems: 'center',
+    alignItems: "center",
     paddingVertical: spacing.sm,
   },
   backText: {
@@ -207,13 +239,13 @@ const styles = StyleSheet.create({
   done: {
     flex: 1,
     marginTop: spacing.xl,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   doneTitle: {
     ...typography.display,
     color: colors.text,
-    textAlign: 'center',
+    textAlign: "center",
   },
   dot: {
     color: colors.red,

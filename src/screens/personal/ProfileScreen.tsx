@@ -1,20 +1,28 @@
-import React from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
-import { Screen } from '../../components/Screen';
-import { Avatar } from '../../components/Avatar';
-import { Badge } from '../../components/Badge';
-import { Button } from '../../components/Button';
-import { EmptyState } from '../../components/EmptyState';
-import { colors, typography, spacing } from '../../theme';
-import { useAuth } from '../../store/AuthContext';
-import { useUnreadCounts } from '../../hooks/useUnreadCounts';
+import { enablePushNotifications } from "../../services/notifications";
+import React from "react";
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  StyleSheet,
+  Alert,
+} from "react-native";
+import { Screen } from "../../components/Screen";
+import { Avatar } from "../../components/Avatar";
+import { Badge } from "../../components/Badge";
+import { Button } from "../../components/Button";
+import { EmptyState } from "../../components/EmptyState";
+import { colors, typography, spacing } from "../../theme";
+import { useAuth } from "../../store/AuthContext";
+import { useUnreadCounts } from "../../hooks/useUnreadCounts";
 
-const MENU_ITEMS = ['Edit profile', 'Notifications', 'Privacy', 'Help'];
+const MENU_ITEMS = ["Edit profile", "Notifications", "Privacy", "Help"];
 
 const STATS = [
-  { value: '4', label: 'POSTS' },
-  { value: '12', label: 'JOINED' },
-  { value: '8', label: 'FOLLOWING' },
+  { value: "4", label: "POSTS" },
+  { value: "12", label: "JOINED" },
+  { value: "8", label: "FOLLOWING" },
 ];
 
 type Props = {
@@ -35,7 +43,10 @@ export function ProfileScreen({ navigation }: Props) {
 
   return (
     <Screen>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scroll}
+      >
         {demoMode ? (
           <View style={styles.mockRow}>
             <Badge label="DEMO MODE" tone="red" />
@@ -43,10 +54,10 @@ export function ProfileScreen({ navigation }: Props) {
         ) : null}
 
         <View style={styles.headerRow}>
-          <Avatar name={profile.displayName || 'N'} size={64} />
+          <Avatar name={profile.displayName || "N"} size={64} />
           <View style={styles.nameCol}>
             <Text style={styles.name}>{profile.displayName}</Text>
-            <Text style={styles.email}>{session?.user.email ?? ''}</Text>
+            <Text style={styles.email}>{session?.user.email ?? ""}</Text>
           </View>
         </View>
 
@@ -66,12 +77,13 @@ export function ProfileScreen({ navigation }: Props) {
               style={styles.menuRow}
               activeOpacity={0.7}
               onPress={() => {
-                if (item === 'Notifications') navigation.navigate('Notifications');
+                if (item === "Notifications")
+                  navigation.navigate("Notifications");
               }}
             >
               <View style={styles.menuLabelRow}>
                 <Text style={styles.menuLabel}>{item}</Text>
-                {item === 'Notifications' && notifications > 0 && (
+                {item === "Notifications" && notifications > 0 && (
                   <Badge label={String(notifications)} tone="red" />
                 )}
               </View>
@@ -81,10 +93,28 @@ export function ProfileScreen({ navigation }: Props) {
         </View>
 
         <Button
+          title="ENABLE NOTIFICATIONS"
+          variant="secondary"
+          onPress={() => {
+            if (profile)
+              void enablePushNotifications(profile.id).catch((e) =>
+                Alert.alert(
+                  "Notifications",
+                  e instanceof Error ? e.message : "Please retry.",
+                ),
+              );
+          }}
+        />
+        <Button
           title="LOG OUT"
           variant="danger"
           onPress={() => {
-            void signOut();
+            void signOut().catch((e) =>
+              Alert.alert(
+                "Could not sign out",
+                e instanceof Error ? e.message : "Please retry.",
+              ),
+            );
           }}
           style={styles.logout}
         />
@@ -96,26 +126,39 @@ export function ProfileScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   scroll: { paddingBottom: spacing.xl },
   mockRow: { marginTop: spacing.sm, marginBottom: spacing.sm },
-  headerRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.md, marginTop: spacing.sm },
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    marginTop: spacing.sm,
+  },
   nameCol: { flex: 1 },
   name: { ...typography.title, color: colors.text },
-  email: { ...typography.caption, color: colors.textDim, marginTop: spacing.xs },
-  statsRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg },
+  email: {
+    ...typography.caption,
+    color: colors.textDim,
+    marginTop: spacing.xs,
+  },
+  statsRow: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.lg },
   statBox: {
     flex: 1,
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: 2,
     paddingVertical: spacing.md,
-    alignItems: 'center',
+    alignItems: "center",
   },
   statValue: { ...typography.title, color: colors.text },
-  statLabel: { ...typography.caption, color: colors.textDim, marginTop: spacing.xs },
+  statLabel: {
+    ...typography.caption,
+    color: colors.textDim,
+    marginTop: spacing.xs,
+  },
   menu: { marginTop: spacing.lg },
   menuRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: 2,
@@ -124,7 +167,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   menuLabel: { ...typography.body, color: colors.text },
-  menuLabelRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  menuLabelRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   chevron: { ...typography.heading, color: colors.textDim },
   logout: { marginTop: spacing.lg },
 });

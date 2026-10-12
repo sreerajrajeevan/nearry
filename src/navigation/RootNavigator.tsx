@@ -1,17 +1,19 @@
-import React from 'react';
-import { View, ActivityIndicator, StyleSheet } from 'react-native';
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { colors } from '../theme';
-import { RootStackParamList } from './types';
-import { useAuth } from '../store/AuthContext';
-import { usePushSetup } from '../hooks/useUnreadCounts';
-import { WelcomeScreen } from '../screens/WelcomeScreen';
-import { PersonalAuthScreen } from '../screens/auth/PersonalAuthScreen';
-import { BusinessAuthScreen } from '../screens/auth/BusinessAuthScreen';
-import { PersonalOnboardingScreen } from '../screens/onboarding/PersonalOnboardingScreen';
-import { BusinessOnboardingScreen } from '../screens/onboarding/BusinessOnboardingScreen';
-import { PersonalStack } from './PersonalStack';
-import { BusinessStack } from './BusinessStack';
+import React from "react";
+import { View, ActivityIndicator, StyleSheet, Text } from "react-native";
+import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import { Button } from "../components/Button";
+import { AccountTypeScreen } from "../screens/auth/AccountTypeScreen";
+import { colors } from "../theme";
+import { RootStackParamList } from "./types";
+import { useAuth } from "../store/AuthContext";
+import { usePushSetup } from "../hooks/useUnreadCounts";
+import { WelcomeScreen } from "../screens/WelcomeScreen";
+import { PersonalAuthScreen } from "../screens/auth/PersonalAuthScreen";
+import { BusinessAuthScreen } from "../screens/auth/BusinessAuthScreen";
+import { PersonalOnboardingScreen } from "../screens/onboarding/PersonalOnboardingScreen";
+import { BusinessOnboardingScreen } from "../screens/onboarding/BusinessOnboardingScreen";
+import { PersonalStack } from "./PersonalStack";
+import { BusinessStack } from "./BusinessStack";
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -25,12 +27,23 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
  *                                 regardless of which auth screen was used
  */
 export function RootNavigator() {
-  const { session, demoMode, bootstrapping, accountType, needsOnboarding, pendingOnboarding } =
-    useAuth();
+  const {
+    session,
+    demoMode,
+    bootstrapping,
+    accountType,
+    needsOnboarding,
+    pendingOnboarding,
+    profile,
+    profileLoading,
+    profileError,
+    refreshProfile,
+    signOut,
+  } = useAuth();
 
   usePushSetup();
 
-  if (bootstrapping) {
+  if (bootstrapping || (!demoMode && profileLoading)) {
     return (
       <View style={styles.loading}>
         <ActivityIndicator color={colors.red} size="large" />
@@ -38,20 +51,44 @@ export function RootNavigator() {
     );
   }
 
+  if (!demoMode && (profileError || (session && !profile))) {
+    return (
+      <View style={[styles.loading, { padding: 24 }]}>
+        <Text style={{ color: colors.text, marginBottom: 20 }}>
+          {profileError || "Loading your profile…"}
+        </Text>
+        <Button title="RETRY" onPress={() => void refreshProfile()} />
+        <Button
+          title="SIGN OUT"
+          variant="ghost"
+          onPress={() => void signOut().catch(() => {})}
+        />
+      </View>
+    );
+  }
+  if (!demoMode && session && profile && !profile.roleSelected)
+    return <AccountTypeScreen />;
+
   return (
     <Stack.Navigator
       screenOptions={{
         headerShown: false,
         contentStyle: { backgroundColor: colors.background },
-        animation: 'fade',
+        animation: "fade",
       }}
     >
       {demoMode || (session && accountType) ? (
-        needsOnboarding && pendingOnboarding === 'personal' ? (
-          <Stack.Screen name="PersonalOnboarding" component={PersonalOnboardingScreen} />
-        ) : needsOnboarding && pendingOnboarding === 'business' ? (
-          <Stack.Screen name="BusinessOnboarding" component={BusinessOnboardingScreen} />
-        ) : accountType === 'business' ? (
+        needsOnboarding && pendingOnboarding === "personal" ? (
+          <Stack.Screen
+            name="PersonalOnboarding"
+            component={PersonalOnboardingScreen}
+          />
+        ) : needsOnboarding && pendingOnboarding === "business" ? (
+          <Stack.Screen
+            name="BusinessOnboarding"
+            component={BusinessOnboardingScreen}
+          />
+        ) : accountType === "business" ? (
           <Stack.Screen name="BusinessApp" component={BusinessStack} />
         ) : (
           <Stack.Screen name="PersonalApp" component={PersonalStack} />
@@ -68,5 +105,10 @@ export function RootNavigator() {
 }
 
 const styles = StyleSheet.create({
-  loading: { flex: 1, backgroundColor: colors.background, alignItems: 'center', justifyContent: 'center' },
+  loading: {
+    flex: 1,
+    backgroundColor: colors.background,
+    alignItems: "center",
+    justifyContent: "center",
+  },
 });

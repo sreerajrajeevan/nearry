@@ -12,11 +12,12 @@
 
 -- ── Conversations & messages ──────────────────────────────
 
--- Replace the milestone-1 thread/message/notification stubs with the real
--- M6 schema. Nothing real exists yet (fresh project), so drop + recreate.
-drop table if exists messages cascade;
-drop table if exists threads cascade;
-drop table if exists notifications cascade;
+-- On upgrades from the original schema, archive legacy records intact.
+-- Already-applied 00010 installations must NOT replay this migration.
+alter table messages rename to legacy_messages;
+alter table threads rename to legacy_threads;
+alter table notifications rename to legacy_notifications;
+revoke all on legacy_messages, legacy_threads, legacy_notifications from anon, authenticated;
 
 create table conversations (
   id uuid primary key default gen_random_uuid(),

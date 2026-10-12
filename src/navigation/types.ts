@@ -1,13 +1,16 @@
-import { CompositeNavigationProp } from '@react-navigation/native';
-import { NativeStackNavigationProp, NativeStackScreenProps } from '@react-navigation/native-stack';
-import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
+import { CompositeNavigationProp } from "@react-navigation/native";
+import {
+  NativeStackNavigationProp,
+  NativeStackScreenProps,
+} from "@react-navigation/native-stack";
+import { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 
-export type AccountType = 'personal' | 'business';
+export type AccountType = "personal" | "business";
 
 export type RootStackParamList = {
   Welcome: undefined;
-  PersonalAuth: { mode: 'login' | 'signup' } | undefined;
-  BusinessAuth: { mode: 'login' | 'signup' } | undefined;
+  PersonalAuth: { mode: "login" | "signup" } | undefined;
+  BusinessAuth: { mode: "login" | "signup" } | undefined;
   PersonalOnboarding: undefined;
   BusinessOnboarding: undefined;
   PersonalApp: undefined;
@@ -46,8 +49,14 @@ export type PersonalTabNav = CompositeNavigationProp<
   NativeStackNavigationProp<PersonalStackParamList>
 >;
 
-export type PostDetailsProps = NativeStackScreenProps<PersonalStackParamList, 'PostDetails'>;
-export type VenueDetailsProps = NativeStackScreenProps<PersonalStackParamList, 'VenueDetails'>;
+export type PostDetailsProps = NativeStackScreenProps<
+  PersonalStackParamList,
+  "PostDetails"
+>;
+export type VenueDetailsProps = NativeStackScreenProps<
+  PersonalStackParamList,
+  "VenueDetails"
+>;
 
 export type BusinessTabParamList = {
   Dashboard: undefined;
@@ -56,3 +65,8 @@ export type BusinessTabParamList = {
   Messages: undefined;
   Business: undefined;
 };
+
+export type EditPostProps = NativeStackScreenProps<
+  PersonalStackParamList,
+  "EditPost"
+>;

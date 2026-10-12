@@ -1,30 +1,53 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { Session } from '@supabase/supabase-js';
-import { AccountType } from '../navigation/types';
-import { getSupabase, isSupabaseConfigured, setDemoMode } from '../services/supabase';
-import { Profile, DbProfile, toProfile } from '../services/mappers';
-import { sendEmailOtp, verifyEmailOtp, signInWithGoogle, signOut as serviceSignOut } from '../services/auth';
-
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+import { AppState } from "react-native";
+import * as Linking from "expo-linking";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Session } from "@supabase/supabase-js";
+import { AccountType } from "../navigation/types";
+import {
+  getSupabase,
+  requireSupabase,
+  setDemoMode,
+} from "../services/supabase";
+import { Profile, DbProfile, toProfile } from "../services/mappers";
+import {
+  sendEmailOtp,
+  verifyEmailOtp,
+  signInWithGoogle,
+  completeOAuthCallback,
+  signOut as serviceSignOut,
+} from "../services/auth";
+import { unregisterPushToken } from "../services/notifications";
+import { RequestVersion } from "../utils/requestVersion";
 export type OnboardingData = {
   interests?: string[];
   businessName?: string;
   businessDetails?: Record<string, unknown>;
 };
-
 type AuthState = {
   session: Session | null;
   profile: Profile | null;
-  /** Explicit demo mode — mock data, clearly separated from real auth. */
   demoMode: boolean;
   bootstrapping: boolean;
   loading: boolean;
-  /** Resolved account type: profile wins; demo falls back to its lane. */
   accountType: AccountType | null;
-  /** True when a signed-in user still has onboarding to finish. */
   needsOnboarding: boolean;
-  /** Kept for navigator compat: the lane to onboard, when needsOnboarding. */
   pendingOnboarding: AccountType | null;
-  sendOtp: (email: string, accountType: AccountType, displayName?: string) => Promise<void>;
+  profileLoading: boolean;
+  profileError: string;
+  intendedRole: AccountType;
+  sendOtp: (
+    email: string,
+    accountType: AccountType,
+    displayName?: string,
+    signup?: boolean,
+  ) => Promise<void>;
   verifyOtp: (email: string, code: string) => Promise<void>;
   signInGoogle: (accountType: AccountType) => Promise<void>;
   signOut: () => Promise<void>;
@@ -32,194 +55,277 @@ type AuthState = {
   exitDemoMode: () => void;
   completeOnboarding: (data: OnboardingData) => Promise<void>;
   refreshProfile: () => Promise<void>;
+  selectAccountType: (role: AccountType) => Promise<void>;
 };
-
 const AuthContext = createContext<AuthState | null>(null);
-
-const DEMO_PROFILE: Profile = {
-  id: 'demo-user',
-  accountType: 'personal',
-  displayName: 'Demo User',
-  interests: ['Sports', 'Music'],
+const demoProfile: Profile = {
+  id: "demo-user",
+  accountType: "personal",
+  displayName: "Demo User",
+  interests: ["Sports", "Music"],
   businessDetails: {},
-  verificationStatus: 'unverified',
+  verificationStatus: "unverified",
   onboardingCompleted: true,
+  roleSelected: true,
   createdAt: new Date().toISOString(),
 };
-
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [session, setSession] = useState<Session | null>(null);
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [demoMode, setDemo] = useState(false);
-  const [bootstrapping, setBootstrapping] = useState(true);
-  const [loading, setLoading] = useState(false);
-
-  const loadProfile = async (userId: string): Promise<Profile | null> => {
-    const supabase = getSupabase();
-    if (!supabase) return null;
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .maybeSingle();
-    if (error) throw new Error(error.message);
-    if (!data) return null;
-    return toProfile(data as DbProfile);
-  };
-
+  const [session, setSession] = useState<Session | null>(null),
+    [profile, setProfile] = useState<Profile | null>(null);
+  const [demoMode, setDemo] = useState(false),
+    [demoRole, setDemoRole] = useState<AccountType>("personal");
+  const [bootstrapping, setBootstrapping] = useState(true),
+    [loading, setLoading] = useState(false);
+  const [profileLoading, setProfileLoading] = useState(false),
+    [profileError, setProfileError] = useState("");
+  const [intendedRole, setIntendedRole] = useState<AccountType>("personal");
+  const version = useRef(new RequestVersion()),
+    mounted = useRef(true),
+    demoRef = useRef(false),
+    sessionRef = useRef<Session | null>(null);
+  const errorText = (e: unknown) =>
+    e instanceof Error
+      ? e.message
+      : "Could not load your account. Please retry.";
+  async function hydrate(next: Session | null) {
+    const ticket = version.current.next();
+    sessionRef.current = next;
+    setSession(next);
+    setProfileError("");
+    if (!next) {
+      setProfile(null);
+      setProfileLoading(false);
+      return;
+    }
+    setProfileLoading(true);
+    try {
+      const { data, error } = await requireSupabase().rpc("get_my_profile");
+      if (error) throw error;
+      if (!data)
+        throw new Error(
+          "Your profile is missing. Ask the administrator to restore it, then retry.",
+        );
+      const saved = toProfile(data as DbProfile);
+      if (saved.id !== next.user.id)
+        throw new Error("Account changed. Please retry.");
+      if (
+        mounted.current &&
+        version.current.current(ticket) &&
+        !demoRef.current
+      )
+        setProfile(saved);
+    } catch (e) {
+      if (mounted.current && version.current.current(ticket)) {
+        setProfile(null);
+        setProfileError(errorText(e));
+      }
+    } finally {
+      if (mounted.current && version.current.current(ticket)) {
+        setProfileLoading(false);
+        setBootstrapping(false);
+      }
+    }
+  }
   useEffect(() => {
-    const supabase = getSupabase();
-    if (!supabase) {
+    mounted.current = true;
+    void AsyncStorage.getItem("nearry.pendingRole").then((role) => {
+      if (mounted.current && (role === "personal" || role === "business"))
+        setIntendedRole(role);
+    });
+    const db = getSupabase();
+    if (!db) {
       setBootstrapping(false);
       return;
     }
-    let mounted = true;
-    (async () => {
-      try {
-        const { data } = await supabase.auth.getSession();
-        if (!mounted) return;
-        setSession(data.session);
-        if (data.session) {
-          try {
-            setProfile(await loadProfile(data.session.user.id));
-          } catch {
-            setProfile(null);
-          }
-        }
-      } finally {
-        if (mounted) setBootstrapping(false);
-      }
-    })();
-    const { data: listener } = supabase.auth.onAuthStateChange(async (event, next) => {
-      if (!mounted) return;
-      setSession(next);
-      if (event === 'SIGNED_OUT' || !next) {
-        setProfile(null);
+    let alive = true;
+    const subscription = db.auth.onAuthStateChange((event, next) => {
+      // Run queries after the Supabase auth lock has been released.
+      if (event === "TOKEN_REFRESHED") {
+        sessionRef.current = next;
+        setSession(next);
         return;
       }
+      version.current.invalidate();
+      setTimeout(() => {
+        if (alive && !demoRef.current) void hydrate(next);
+      }, 0);
+    }).data.subscription;
+    void db.auth
+      .getSession()
+      .then(({ data, error }) => {
+        if (!alive) return;
+        if (error) {
+          setProfileError(error.message);
+          setBootstrapping(false);
+          return;
+        }
+        if (!sessionRef.current)
+          void hydrate(data.session).finally(() => {
+            if (alive) setBootstrapping(false);
+          });
+      })
+      .catch((e) => {
+        if (alive) {
+          setProfileError(errorText(e));
+          setBootstrapping(false);
+        }
+      });
+    const callback = async (url: string | null) => {
+      if (!url) return;
       try {
-        setProfile(await loadProfile(next.user.id));
-      } catch {
-        setProfile(null);
+        await completeOAuthCallback(url);
+      } catch (e) {
+        if (alive) setProfileError(errorText(e));
       }
+    };
+    void Linking.getInitialURL().then(callback);
+    const link = Linking.addEventListener(
+      "url",
+      ({ url }) => void callback(url),
+    );
+    const app = AppState.addEventListener("change", (state) => {
+      if (state === "active") db.auth.startAutoRefresh();
+      else db.auth.stopAutoRefresh();
     });
+    if (AppState.currentState === "active") db.auth.startAutoRefresh();
     return () => {
-      mounted = false;
-      listener.subscription.unsubscribe();
+      alive = false;
+      mounted.current = false;
+      version.current.invalidate();
+      subscription.unsubscribe();
+      link.remove();
+      app.remove();
+      db.auth.stopAutoRefresh();
     };
   }, []);
-
-  const accountType: AccountType | null =
-    demoMode ? DEMO_PROFILE.accountType : (profile?.accountType ?? null);
-  const needsOnboarding = !demoMode && !!profile && !profile.onboardingCompleted;
-  const pendingOnboarding: AccountType | null = needsOnboarding ? profile!.accountType : null;
-
-  const value = useMemo<AuthState>(
-    () => ({
-      session,
-      profile: demoMode ? DEMO_PROFILE : profile,
-      demoMode,
-      bootstrapping,
-      loading,
-      accountType,
-      needsOnboarding,
-      pendingOnboarding,
-      sendOtp: async (email, accountTypeArg, displayName) => {
-        setLoading(true);
-        try {
-          await sendEmailOtp(email, accountTypeArg, displayName);
-        } finally {
-          setLoading(false);
-        }
-      },
-      verifyOtp: async (email, code) => {
-        setLoading(true);
-        try {
-          const userId = await verifyEmailOtp(email, code);
-          // Session is set by the client; profile loads via the listener.
-          // Load it eagerly so routing doesn't flash the wrong lane.
-          const supabase = getSupabase();
-          if (supabase) {
-            const { data } = await supabase.auth.getSession();
-            setSession(data.session);
-            if (data.session) setProfile(await loadProfile(userId));
-          }
-        } finally {
-          setLoading(false);
-        }
-      },
-      signInGoogle: async (accountTypeArg) => {
-        setLoading(true);
-        try {
-          const userId = await signInWithGoogle(accountTypeArg);
-          const supabase = getSupabase();
-          if (supabase) {
-            const { data } = await supabase.auth.getSession();
-            setSession(data.session);
-            if (data.session) setProfile(await loadProfile(userId));
-          }
-        } finally {
-          setLoading(false);
-        }
-      },
-      signOut: async () => {
-        setLoading(true);
-        try {
-          if (demoMode) {
-            setDemo(false);
-            setDemoMode(false);
-          } else {
-            await serviceSignOut();
-          }
-          setSession(null);
-          setProfile(null);
-        } finally {
-          setLoading(false);
-        }
-      },
-      enterDemoMode: (lane: AccountType = 'personal') => {
-        DEMO_PROFILE.accountType = lane;
-        setDemoMode(true);
-        setDemo(true);
-        setProfile(null);
-        setSession(null);
-      },
-      exitDemoMode: () => {
-        setDemo(false);
-        setDemoMode(false);
-      },
-      completeOnboarding: async (data) => {
-        const supabase = getSupabase();
-        if (demoMode || !supabase || !profile) return;
-        setLoading(true);
-        try {
-          const patch: Record<string, unknown> = {
-            onboarding_completed: true,
-            interests: data.interests ?? profile.interests,
-          };
-          if (data.businessName !== undefined) patch.business_name = data.businessName;
-          if (data.businessDetails !== undefined) patch.business_details = data.businessDetails;
-          const { error } = await supabase.from('profiles').update(patch).eq('id', profile.id);
-          if (error) throw new Error(error.message);
-          setProfile(await loadProfile(profile.id));
-        } finally {
-          setLoading(false);
-        }
-      },
-      refreshProfile: async () => {
-        const supabase = getSupabase();
-        if (demoMode || !supabase || !session) return;
-        setProfile(await loadProfile(session.user.id));
-      },
-    }),
-    [session, profile, demoMode, bootstrapping, loading, accountType, needsOnboarding, pendingOnboarding],
+  async function remember(role: AccountType) {
+    setIntendedRole(role);
+    await AsyncStorage.setItem("nearry.pendingRole", role);
+  }
+  async function action(work: () => Promise<void>) {
+    setLoading(true);
+    try {
+      await work();
+    } finally {
+      if (mounted.current) setLoading(false);
+    }
+  }
+  async function refreshProfile() {
+    if (!demoRef.current) await hydrate(sessionRef.current);
+  }
+  async function selectAccountType(role: AccountType) {
+    await action(async () => {
+      const { error } = await requireSupabase().rpc("select_account_type", {
+        p_account_type: role,
+      });
+      if (error) throw error;
+      await refreshProfile();
+    });
+  }
+  async function signOut() {
+    await action(async () => {
+      if (!demoRef.current) {
+        await unregisterPushToken();
+        await serviceSignOut();
+      }
+      version.current.invalidate();
+      demoRef.current = false;
+      setDemo(false);
+      setDemoMode(false);
+      sessionRef.current = null;
+      setSession(null);
+      setProfile(null);
+      setProfileError("");
+      setProfileLoading(false);
+      await AsyncStorage.removeItem("nearry.pendingRole");
+    });
+  }
+  function enterDemoMode(role: AccountType = "personal") {
+    version.current.invalidate();
+    demoRef.current = true;
+    setDemoRole(role);
+    setDemo(true);
+    setDemoMode(true);
+    setProfile(null);
+    setProfileError("");
+    setProfileLoading(false);
+  }
+  async function completeOnboarding(data: OnboardingData) {
+    await action(async () => {
+      if (demoRef.current) return;
+      const id = sessionRef.current?.user.id;
+      if (!id || !profile) throw new Error("Sign in first.");
+      const ticket = version.current.next();
+      const patch: Record<string, unknown> = {
+        onboarding_completed: true,
+        interests: data.interests ?? profile.interests,
+      };
+      if (data.businessName !== undefined)
+        patch.business_name = data.businessName;
+      if (data.businessDetails !== undefined)
+        patch.business_details = data.businessDetails;
+      const { error } = await requireSupabase()
+        .from("profiles")
+        .update(patch)
+        .eq("id", id);
+      if (error) throw error;
+      if (version.current.current(ticket) && sessionRef.current?.user.id === id)
+        await refreshProfile();
+    });
+  }
+  const resolved = demoMode
+    ? { ...demoProfile, accountType: demoRole }
+    : profile;
+  const accountType = resolved?.accountType ?? null;
+  const needsOnboarding =
+    !demoMode && !!profile && !profile.onboardingCompleted;
+  return (
+    <AuthContext.Provider
+      value={{
+        session,
+        profile: resolved,
+        demoMode,
+        bootstrapping,
+        loading,
+        accountType,
+        needsOnboarding,
+        pendingOnboarding: needsOnboarding ? accountType : null,
+        profileLoading,
+        profileError,
+        intendedRole,
+        sendOtp: (email, role, name, signup = true) =>
+          action(async () => {
+            await remember(role);
+            await sendEmailOtp(email, role, name, signup);
+          }),
+        verifyOtp: (email, code) =>
+          action(async () => {
+            await verifyEmailOtp(email, code);
+          }),
+        signInGoogle: (role) =>
+          action(async () => {
+            await remember(role);
+            await signInWithGoogle(role);
+          }),
+        signOut,
+        enterDemoMode,
+        exitDemoMode: () => {
+          demoRef.current = false;
+          setDemo(false);
+          setDemoMode(false);
+          void refreshProfile();
+        },
+        completeOnboarding,
+        refreshProfile,
+        selectAccountType,
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
   );
-
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
-
-export function useAuth(): AuthState {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth must be used inside AuthProvider');
-  return ctx;
+export function useAuth() {
+  const value = useContext(AuthContext);
+  if (!value) throw new Error("useAuth must be inside AuthProvider");
+  return value;
 }
