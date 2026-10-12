@@ -1,12 +1,20 @@
-import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { Screen } from '../../components/Screen';
-import { Button } from '../../components/Button';
-import { colors, typography, spacing, radius } from '../../theme';
-import { useAuth } from '../../store/AuthContext';
-import { requestLocationPermission } from '../../services/location';
+import React, { useState } from "react";
+import { View, Text, TouchableOpacity, StyleSheet, Alert } from "react-native";
+import { Screen } from "../../components/Screen";
+import { Button } from "../../components/Button";
+import { colors, typography, spacing, radius } from "../../theme";
+import { useAuth } from "../../store/AuthContext";
+import { requestLocationPermission } from "../../services/location";
 
-const INTERESTS = ['Sports', 'Food', 'Music', 'Outdoors', 'Games', 'Culture', 'Nightlife'];
+const INTERESTS = [
+  "Sports",
+  "Food",
+  "Music",
+  "Outdoors",
+  "Games",
+  "Culture",
+  "Nightlife",
+];
 
 function Chip({
   label,
@@ -61,7 +69,9 @@ export function PersonalOnboardingScreen() {
       {step === 1 && (
         <View style={styles.body}>
           <Text style={styles.title}>What are you into?</Text>
-          <Text style={styles.sub}>Pick a few. We use this to surface your kind of people.</Text>
+          <Text style={styles.sub}>
+            Pick a few. We use this to surface your kind of people.
+          </Text>
           <View style={styles.chips}>
             {INTERESTS.map((item) => (
               <Chip
@@ -82,14 +92,23 @@ export function PersonalOnboardingScreen() {
         <View style={styles.body}>
           <Text style={styles.title}>Where are you?</Text>
           <Text style={styles.sub}>
-            Nearby runs on location. Enable it to see people and places around you.
+            Nearby runs on location. Enable it to see people and places around
+            you.
           </Text>
           <View style={styles.footer}>
-            <Button title="ENABLE LOCATION" onPress={enableLocation} loading={locating} />
+            <Button
+              title="ENABLE LOCATION"
+              onPress={enableLocation}
+              loading={locating}
+            />
             <View style={styles.gap} />
             <Button title="SKIP" variant="ghost" onPress={() => setStep(3)} />
           </View>
-          <TouchableOpacity onPress={() => setStep(1)} style={styles.back} activeOpacity={0.7}>
+          <TouchableOpacity
+            onPress={() => setStep(1)}
+            style={styles.back}
+            activeOpacity={0.7}
+          >
             <Text style={styles.backText}>← BACK</Text>
           </TouchableOpacity>
         </View>
@@ -100,11 +119,27 @@ export function PersonalOnboardingScreen() {
           <Text style={styles.doneTitle}>
             YOU'RE IN<Text style={styles.dot}>.</Text>
           </Text>
-          <Text style={styles.sub}>Your people are already out there. Go find them.</Text>
+          <Text style={styles.sub}>
+            Your people are already out there. Go find them.
+          </Text>
           <View style={styles.footer}>
-            <Button title="START EXPLORING" onPress={() => completeOnboarding({ interests: selected })} />
+            <Button
+              title="START EXPLORING"
+              onPress={() =>
+                void completeOnboarding({ interests: selected }).catch((e) =>
+                  Alert.alert(
+                    "Could not save profile",
+                    e instanceof Error ? e.message : "Please retry.",
+                  ),
+                )
+              }
+            />
           </View>
-          <TouchableOpacity onPress={() => setStep(2)} style={styles.back} activeOpacity={0.7}>
+          <TouchableOpacity
+            onPress={() => setStep(2)}
+            style={styles.back}
+            activeOpacity={0.7}
+          >
             <Text style={styles.backText}>← BACK</Text>
           </TouchableOpacity>
         </View>
@@ -134,8 +169,8 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   chips: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
   },
   chip: {
     borderWidth: 1,
@@ -158,14 +193,14 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   footer: {
-    marginTop: 'auto',
+    marginTop: "auto",
     marginBottom: spacing.md,
   },
   gap: {
     height: spacing.sm,
   },
   back: {
-    alignItems: 'center',
+    alignItems: "center",
     paddingVertical: spacing.sm,
   },
   backText: {
@@ -175,13 +210,13 @@ const styles = StyleSheet.create({
   done: {
     flex: 1,
     marginTop: spacing.xl,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   doneTitle: {
     ...typography.display,
     color: colors.text,
-    textAlign: 'center',
+    textAlign: "center",
   },
   dot: {
     color: colors.red,

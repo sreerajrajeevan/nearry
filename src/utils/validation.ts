@@ -27,24 +27,36 @@ export type PostDraft = {
 };
 
 /** Returns a human-readable error, or null when the draft is valid. */
-export function validatePostDraft(d: PostDraft, now: Date = new Date()): string | null {
-  if (d.title.trim().length < 4) return 'Give your activity a title (min 4 characters).';
-  if (d.title.trim().length > 80) return 'Title is too long (max 80 characters).';
-  if (d.description.trim().length < 10) return 'Add a few more details (min 10 characters).';
-  if (d.description.trim().length > 1000) return 'Description is too long (max 1000 characters).';
-  if (!d.startsAt || Number.isNaN(d.startsAt.getTime())) return 'Pick a date and time.';
+export function validatePostDraft(
+  d: PostDraft,
+  now: Date = new Date(),
+): string | null {
+  if (d.title.trim().length < 4)
+    return "Give your activity a title (min 4 characters).";
+  if (d.title.trim().length > 80)
+    return "Title is too long (max 80 characters).";
+  if (d.description.trim().length < 10)
+    return "Add a few more details (min 10 characters).";
+  if (d.description.trim().length > 1000)
+    return "Description is too long (max 1000 characters).";
+  if (!d.startsAt || Number.isNaN(d.startsAt.getTime()))
+    return "Pick a date and time.";
   if (d.startsAt.getTime() <= now.getTime() + 15 * 60 * 1000)
-    return 'Start time must be at least 15 minutes in the future.';
+    return "Start time must be at least 15 minutes in the future.";
   if (d.expiresAt) {
-    if (Number.isNaN(d.expiresAt.getTime())) return 'Expiry date is invalid.';
-    if (d.expiresAt.getTime() <= now.getTime()) return 'Expiry must be in the future.';
+    if (Number.isNaN(d.expiresAt.getTime())) return "Expiry date is invalid.";
+    if (d.expiresAt.getTime() <= now.getTime())
+      return "Expiry must be in the future.";
     if (d.expiresAt.getTime() >= d.startsAt.getTime())
-      return 'Expiry must be before the start time.';
+      return "Expiry must be before the start time.";
   }
   if (!Number.isInteger(d.vacancies) || d.vacancies < 1 || d.vacancies > 100)
-    return 'Vacancies must be between 1 and 100.';
-  if (d.costCents !== undefined && (!Number.isInteger(d.costCents) || d.costCents < 0))
-    return 'Cost must be a non-negative whole amount.';
+    return "Vacancies must be between 1 and 100.";
+  if (
+    d.costCents !== undefined &&
+    (!Number.isInteger(d.costCents) || d.costCents < 0)
+  )
+    return "Cost must be a non-negative whole amount.";
   return null;
 }
 
@@ -61,6 +73,8 @@ export type OfferDraft = {
   startsAt: string;
   endsAt: string;
   slotCapacity: number;
+  slotMinutes?: number;
+  resourceKey?: string;
 };
 
 /**
@@ -68,17 +82,47 @@ export type OfferDraft = {
  * future start, end after start, sane discount/price/capacity.
  */
 export function validateOfferInput(input: OfferDraft): string | null {
-  if (input.title.trim().length < 4) return 'Give the offer a title (min 4 characters).';
-  if (input.description.trim().length < 10) return 'Add a few more details (min 10 characters).';
+  if (input.title.trim().length < 4)
+    return "Give the offer a title (min 4 characters).";
+  if (input.description.trim().length < 10)
+    return "Add a few more details (min 10 characters).";
   const starts = new Date(input.startsAt).getTime();
   const ends = new Date(input.endsAt).getTime();
-  if (Number.isNaN(starts) || Number.isNaN(ends)) return 'Start/end times are invalid.';
-  if (starts <= Date.now()) return 'Start time must be in the future.';
-  if (ends <= starts) return 'End time must be after the start time.';
-  if (input.discountPct !== undefined && (input.discountPct < 0 || input.discountPct > 90))
-    return 'Discount must be between 0 and 90%.';
-  if (input.priceCents !== undefined && input.priceCents < 0) return 'Price cannot be negative.';
-  if (!Number.isInteger(input.slotCapacity) || input.slotCapacity < 1 || input.slotCapacity > 500)
-    return 'Seats per slot must be between 1 and 500.';
+  if (Number.isNaN(starts) || Number.isNaN(ends))
+    return "Start/end times are invalid.";
+  if (starts <= Date.now()) return "Start time must be in the future.";
+  if (ends <= starts) return "End time must be after the start time.";
+  if (
+    input.discountPct !== undefined &&
+    (input.discountPct < 0 || input.discountPct > 90)
+  )
+    return "Discount must be between 0 and 90%.";
+  if (
+    input.priceCents !== undefined &&
+    (!Number.isInteger(input.priceCents) || input.priceCents < 0)
+  )
+    return "Price cannot be negative.";
+  if (
+    !Number.isInteger(input.slotCapacity) ||
+    input.slotCapacity < 1 ||
+    input.slotCapacity > 500
+  )
+    return "Seats per slot must be between 1 and 500.";
+  if (
+    !Number.isInteger(input.slotMinutes ?? 60) ||
+    (input.slotMinutes ?? 60) < 15 ||
+    (input.slotMinutes ?? 60) > 480
+  )
+    return "Slot duration must be 15–480 minutes.";
+  if (
+    ends - starts < (input.slotMinutes ?? 60) * 60000 ||
+    ends - starts > 31 * 86400000
+  )
+    return "Choose a booking window between one slot and 31 days.";
+  if (
+    input.resourceKey !== undefined &&
+    (!input.resourceKey.trim() || input.resourceKey.length > 80)
+  )
+    return "Enter a resource name up to 80 characters.";
   return null;
 }

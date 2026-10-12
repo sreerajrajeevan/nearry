@@ -1,12 +1,12 @@
-import { useEffect, useState } from 'react';
-import { useAuth } from '../store/AuthContext';
-import { unreadMessageCount } from '../services/chat';
+import { useEffect, useState } from "react";
+import { useAuth } from "../store/AuthContext";
+import { unreadMessageCount } from "../services/chat";
 import {
   unreadNotificationCount,
   subscribeToNotifications,
   registerPushToken,
   presentLocal,
-} from '../services/notifications';
+} from "../services/notifications";
 
 /** Unread message + notification counts, refreshed on realtime events + poll. */
 export function useUnreadCounts() {
@@ -21,7 +21,10 @@ export function useUnreadCounts() {
     let active = true;
     const refresh = async () => {
       try {
-        const [m, n] = await Promise.all([unreadMessageCount(), unreadNotificationCount()]);
+        const [m, n] = await Promise.all([
+          unreadMessageCount(),
+          unreadNotificationCount(),
+        ]);
         if (active) setCounts({ messages: m, notifications: n });
       } catch {
         /* keep last known */
@@ -45,7 +48,7 @@ export function usePushSetup() {
   const { profile } = useAuth();
   useEffect(() => {
     if (!profile) return;
-    void registerPushToken(profile.id);
+    void registerPushToken(profile.id).catch(() => {});
     return subscribeToNotifications(profile.id, (n) => {
       void presentLocal(n.title, n.body);
     });

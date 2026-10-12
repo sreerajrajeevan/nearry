@@ -1,4 +1,4 @@
-import { AccountType } from '../navigation/types';
+import { AccountType } from "../navigation/types";
 
 /**
  * Explicit mappings between Postgres rows (snake_case) and application
@@ -17,8 +17,9 @@ export type DbProfile = {
   interests: string[] | null;
   business_name: string | null;
   business_details: Record<string, unknown> | null;
-  verification_status: 'unverified' | 'pending' | 'verified' | 'rejected';
+  verification_status: "unverified" | "pending" | "verified" | "rejected";
   onboarding_completed: boolean;
+  role_selected?: boolean;
   created_at: string;
 };
 
@@ -31,8 +32,9 @@ export type Profile = {
   interests: string[];
   businessName?: string;
   businessDetails: Record<string, unknown>;
-  verificationStatus: DbProfile['verification_status'];
+  verificationStatus: DbProfile["verification_status"];
   onboardingCompleted: boolean;
+  roleSelected?: boolean;
   createdAt: string;
 };
 
@@ -48,6 +50,7 @@ export function toProfile(row: DbProfile): Profile {
     businessDetails: row.business_details ?? {},
     verificationStatus: row.verification_status,
     onboardingCompleted: row.onboarding_completed,
+    roleSelected: row.role_selected ?? row.onboarding_completed,
     createdAt: row.created_at,
   };
 }
@@ -108,7 +111,7 @@ export type DbPost = {
   vacancies: number;
   cost_cents: number | null;
   tags: string[] | null;
-  status: 'open' | 'closed' | 'cancelled';
+  status: "open" | "closed" | "cancelled";
   created_at: string;
   // Joined aggregates (optional, present when selected):
   author?: { display_name: string } | null;
@@ -132,7 +135,7 @@ export type NeedPost = {
   spotsLeft: number;
   costCents?: number;
   tags: string[];
-  status: 'open' | 'closed' | 'cancelled';
+  status: "open" | "closed" | "cancelled";
   createdAt: string;
 };
 
@@ -141,7 +144,7 @@ export function toNeedPost(row: DbPost): NeedPost {
   return {
     id: row.id,
     authorId: row.author_id,
-    authorName: row.author?.display_name ?? 'Someone',
+    authorName: row.author?.display_name ?? "Someone",
     title: row.title,
     description: row.description,
     venueId: row.venue_id ?? undefined,
@@ -170,7 +173,10 @@ export type NewPostInput = {
   tags: string[];
 };
 
-export function toDbNewPost(authorId: string, input: NewPostInput): Record<string, unknown> {
+export function toDbNewPost(
+  authorId: string,
+  input: NewPostInput,
+): Record<string, unknown> {
   return {
     author_id: authorId,
     title: input.title,
@@ -182,7 +188,7 @@ export function toDbNewPost(authorId: string, input: NewPostInput): Record<strin
     vacancies: input.vacancies,
     cost_cents: input.costCents ?? null,
     tags: input.tags,
-    status: 'open',
+    status: "open",
   };
 }
 
@@ -192,7 +198,7 @@ export type DbJoinRequest = {
   id: string;
   post_id: string;
   requester_id: string;
-  status: 'pending' | 'approved' | 'declined' | 'withdrawn';
+  status: "pending" | "approved" | "declined" | "withdrawn";
   created_at: string;
   requester?: { display_name: string } | null;
 };
@@ -202,7 +208,7 @@ export type JoinRequest = {
   postId: string;
   requesterId: string;
   requesterName: string;
-  status: 'pending' | 'approved' | 'declined' | 'withdrawn';
+  status: "pending" | "approved" | "declined" | "withdrawn";
   createdAt: string;
 };
 
@@ -211,7 +217,7 @@ export function toJoinRequest(row: DbJoinRequest): JoinRequest {
     id: row.id,
     postId: row.post_id,
     requesterId: row.requester_id,
-    requesterName: row.requester?.display_name ?? 'Someone',
+    requesterName: row.requester?.display_name ?? "Someone",
     status: row.status,
     createdAt: row.created_at,
   };
@@ -230,9 +236,11 @@ export type DbOffer = {
   ends_at: string;
   venue_id: string | null;
   slot_capacity: number;
+  slot_minutes?: number;
+  resource_key?: string;
   max_redemptions: number | null;
   redemptions: number;
-  status: 'draft' | 'live' | 'ended' | 'cancelled';
+  status: "draft" | "live" | "ended" | "cancelled";
   created_at: string;
   business?: { display_name: string } | null;
 };
@@ -249,9 +257,11 @@ export type Offer = {
   endsAt: string;
   venueId?: string;
   slotCapacity: number;
+  slotMinutes?: number;
+  resourceKey?: string;
   maxRedemptions?: number;
   redemptions: number;
-  status: 'draft' | 'live' | 'ended' | 'cancelled';
+  status: "draft" | "live" | "ended" | "cancelled";
   createdAt: string;
 };
 
@@ -259,7 +269,7 @@ export function toOffer(row: DbOffer): Offer {
   return {
     id: row.id,
     businessId: row.business_id,
-    businessName: row.business?.display_name ?? 'Business',
+    businessName: row.business?.display_name ?? "Business",
     title: row.title,
     description: row.description,
     discountPct: row.discount_pct ?? undefined,
@@ -268,6 +278,8 @@ export function toOffer(row: DbOffer): Offer {
     endsAt: row.ends_at,
     venueId: row.venue_id ?? undefined,
     slotCapacity: row.slot_capacity,
+    slotMinutes: row.slot_minutes ?? 60,
+    resourceKey: row.resource_key ?? "default",
     maxRedemptions: row.max_redemptions ?? undefined,
     redemptions: row.redemptions,
     status: row.status,
@@ -284,7 +296,7 @@ export type DbBooking = {
   business_id?: string;
   slot: string;
   party_size: number;
-  status: 'pending' | 'confirmed' | 'cancelled';
+  status: "pending" | "confirmed" | "cancelled";
   created_at: string;
   customer?: { display_name: string } | null;
   offer?: { title: string } | null;
@@ -301,7 +313,7 @@ export type Booking = {
   offerTitle: string;
   slot: string;
   partySize: number;
-  status: 'pending' | 'confirmed' | 'cancelled';
+  status: "pending" | "confirmed" | "cancelled";
   createdAt: string;
 };
 
@@ -310,9 +322,10 @@ export function toBooking(row: DbBooking): Booking {
     id: row.id,
     offerId: row.offer_id,
     customerId: row.customer_id,
-    businessId: (row as Record<string, unknown>).business_id as string | undefined,
-    customerName: row.customer?.display_name ?? row.customer_name ?? 'Someone',
-    offerTitle: row.offer?.title ?? row.offer_title ?? 'Offer',
+    businessId: (row as Record<string, unknown>).business_id as
+      string | undefined,
+    customerName: row.customer?.display_name ?? row.customer_name ?? "Someone",
+    offerTitle: row.offer?.title ?? row.offer_title ?? "Offer",
     slot: row.slot,
     partySize: row.party_size,
     status: row.status,
@@ -338,10 +351,10 @@ export function toConversation(row: Record<string, unknown>): Conversation {
   return {
     id: row.id as string,
     otherUserId: row.other_user_id as string,
-    otherName: (row.other_name as string) ?? 'Someone',
+    otherName: (row.other_name as string) ?? "Someone",
     postId: (row.post_id as string) ?? undefined,
     bookingId: (row.booking_id as string) ?? undefined,
-    contextTitle: (row.context_title as string) ?? 'Chat',
+    contextTitle: (row.context_title as string) ?? "Chat",
     lastBody: (row.last_body as string) ?? undefined,
     lastAt: (row.last_at as string) ?? undefined,
     unreadCount: Number(row.unread_count ?? 0),
@@ -372,7 +385,7 @@ export function toChatMessage(row: DbMessage, myId: string): ChatMessage {
     id: row.id,
     conversationId: row.conversation_id,
     senderId: row.sender_id,
-    senderName: row.sender?.display_name ?? 'Someone',
+    senderName: row.sender?.display_name ?? "Someone",
     body: row.body,
     createdAt: row.created_at,
     mine: row.sender_id === myId,

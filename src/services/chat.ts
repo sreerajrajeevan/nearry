@@ -8,7 +8,7 @@ import {
   toConversation,
 } from './mappers';
 
-const useMock = () => isDemoMode() || !isSupabaseConfigured;
+const useMock = () => { if (isDemoMode()) return true; if (!isSupabaseConfigured) throw new Error('Backend not configured. Choose demo mode to preview.'); return false; };
 
 export function validateMessageBody(body: string): string | null {
   const t = body.trim();

@@ -1,8 +1,8 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
-const url = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
-const anonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
+const url = process.env.EXPO_PUBLIC_SUPABASE_URL ?? "";
+const anonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? "";
 
 /**
  * True when real Supabase credentials are present.
@@ -37,6 +37,7 @@ export function getSupabase(): SupabaseClient | null {
         // In React Native the OAuth redirect is handled manually via
         // expo-web-browser; never let the client swallow the URL.
         detectSessionInUrl: false,
+        flowType: "pkce",
       },
     });
   }
@@ -51,7 +52,7 @@ export function requireSupabase(): SupabaseClient {
   const supabase = getSupabase();
   if (!supabase) {
     throw new Error(
-      'Backend not configured. Add EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY, or use demo mode.',
+      "Backend not configured. Add EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY, or use demo mode.",
     );
   }
   return supabase;

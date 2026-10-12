@@ -25,7 +25,7 @@ Tick off what passes; anything that fails goes straight onto the M7 fix list.
 - [ ] (Optional, in the Supabase dashboard — SQL is documented in migration
       00008) flip the business to verified
 - [ ] Publish the offer → it appears in Nearby on the personal side as a live offer
-- [ ] As a personal user: OfferDetails → pick slot date/time + seats → book →
+- [ ] As a personal user: OfferDetails → select a business-defined available slot + seats → book →
       booking appears under Activity → **MY BOOKINGS**
 - [ ] Business: Bookings screen → booking shows up → confirm one, cancel a test one
 - [ ] Overbooking check: bookings can't exceed the slot's seat capacity
@@ -41,7 +41,7 @@ Tick off what passes; anything that fails goes straight onto the M7 fix list.
 - [ ] With the app open, trigger an event from the other account →
       local notification banner appears.
       **Note:** true background push needs the `send-push` edge function
-      deployed (`supabase functions deploy send-push`) — not deployed yet, so
+      deployed (`supabase functions deploy send-push --no-verify-jwt`, plus the server-only dispatch secret and scheduler documented in README) — not deployed yet, so
       only expect in-app + foreground local notifications for now.
 - [ ] Booking chat: customer ↔ business conversation from a booking works both ways
 

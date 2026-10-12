@@ -1,42 +1,71 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, RefreshControl, StyleSheet } from 'react-native';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
-import { Screen } from '../../components/Screen';
-import { Card } from '../../components/Card';
-import { Badge } from '../../components/Badge';
-import { EmptyState } from '../../components/EmptyState';
-import { Button } from '../../components/Button';
-import { PostRow } from '../../components/PostRow';
-import { colors, typography, spacing } from '../../theme';
-import { listPosts, subscribeToPosts } from '../../services/posts';
-import { listLiveOffers } from '../../services/offers';
-import { listVenues } from '../../services/venues';
-import { NeedPost, Venue, Offer } from '../../services/mappers';
-import { timeLeft } from '../../utils/format';
-import { PersonalTabNav } from '../../navigation/types';
+import React, { useCallback, useEffect, useState } from "react";
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  RefreshControl,
+  StyleSheet,
+} from "react-native";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import { Screen } from "../../components/Screen";
+import { Card } from "../../components/Card";
+import { Badge } from "../../components/Badge";
+import { EmptyState } from "../../components/EmptyState";
+import { Button } from "../../components/Button";
+import { PostRow } from "../../components/PostRow";
+import { colors, typography, spacing } from "../../theme";
+import { listPosts, subscribeToPosts } from "../../services/posts";
+import { listLiveOffers } from "../../services/offers";
+import { Input } from "../../components/Input";
+import { getCurrentPosition, LatLng } from "../../services/location";
+import { isDemoMode } from "../../services/supabase";
+import { nearbyVenues, listVenues } from "../../services/venues";
+import { NeedPost, Venue, Offer } from "../../services/mappers";
+import { timeLeft } from "../../utils/format";
+import { PersonalTabNav } from "../../navigation/types";
 
-type LoadState = 'loading' | 'error' | 'ready';
+type LoadState = "loading" | "error" | "ready";
 
 export function NearbyScreen() {
   const navigation = useNavigation<PersonalTabNav>();
   const [posts, setPosts] = useState<NeedPost[]>([]);
   const [venues, setVenues] = useState<Venue[]>([]);
   const [offers, setOffers] = useState<Offer[]>([]);
-  const [state, setState] = useState<LoadState>('loading');
+  const [state, setState] = useState<LoadState>("loading");
   const [refreshing, setRefreshing] = useState(false);
+  const [point, setPoint] = useState<LatLng | null>(null);
+  const [area, setArea] = useState("");
+  const [appliedArea, setAppliedArea] = useState("");
+  const [locating, setLocating] = useState(false);
+  const [locationError, setLocationError] = useState("");
 
-  const load = useCallback(async (silent = false) => {
-    if (!silent) setState('loading');
-    try {
-      const [p, v, o] = await Promise.all([listPosts(), listVenues(), listLiveOffers()]);
-      setPosts(p);
-      setVenues(v);
-      setOffers(o);
-      setState('ready');
-    } catch {
-      setState('error');
-    }
-  }, []);
+  const load = useCallback(
+    async (silent = false) => {
+      if (!silent) setState("loading");
+      try {
+        let v = point
+          ? await nearbyVenues(point.latitude, point.longitude, 5000)
+          : await listVenues();
+        if (appliedArea)
+          v = v.filter((venue) =>
+            venue.area.toLowerCase().includes(appliedArea.toLowerCase()),
+          );
+        const ids = point || appliedArea ? v.map((v) => v.id) : undefined;
+        const [p, o] = await Promise.all([
+          listPosts({ venueIds: ids }),
+          listLiveOffers(ids),
+        ]);
+        setPosts(p);
+        setVenues(v);
+        setOffers(o);
+        setState("ready");
+      } catch {
+        setState("error");
+      }
+    },
+    [point, appliedArea],
+  );
 
   useEffect(() => {
     load();
@@ -61,31 +90,92 @@ export function NearbyScreen() {
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scroll}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.red} />}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.red}
+          />
+        }
       >
         <Text style={styles.header}>NEARBY</Text>
-        <Text style={styles.location}>KOCHI · 2 KM</Text>
+        <Text style={styles.location}>
+          {isDemoMode()
+            ? "SAMPLE PLACES"
+            : point
+              ? "WITHIN 5 KM OF YOU"
+              : appliedArea
+                ? appliedArea.toUpperCase()
+                : "ALL PLACES · CHOOSE AN AREA"}
+        </Text>
+        <Input
+          label="AREA / CITY"
+          value={area}
+          onChangeText={setArea}
+          placeholder="e.g. Kochi"
+        />
+        <Button
+          title="USE THIS AREA"
+          variant="secondary"
+          onPress={() => {
+            setPoint(null);
+            setAppliedArea(area.trim());
+          }}
+        />
+        <Button
+          title="USE MY LOCATION · 5 KM"
+          loading={locating}
+          onPress={() => {
+            setLocating(true);
+            setLocationError("");
+            void getCurrentPosition()
+              .then((p) => {
+                if (p) {
+                  setPoint(p);
+                  setAppliedArea("");
+                } else
+                  setLocationError(
+                    "Location unavailable. Choose an area above.",
+                  );
+              })
+              .finally(() => setLocating(false));
+          }}
+        />
+        {!!locationError && (
+          <Text style={{ color: colors.red }}>{locationError}</Text>
+        )}
 
-        {state === 'loading' && posts.length === 0 ? (
+        {state === "loading" && posts.length === 0 ? (
           <Text style={styles.status}>LOADING…</Text>
-        ) : state === 'error' && posts.length === 0 ? (
+        ) : state === "error" && posts.length === 0 ? (
           <View>
-            <EmptyState title="Couldn't load" hint="Check your connection and retry." />
+            <EmptyState
+              title="Couldn't load"
+              hint="Check your connection and retry."
+            />
             <Button title="RETRY" onPress={() => load()} />
           </View>
         ) : (
           <>
             <Text style={styles.sectionLabel}>LIVE OFFERS</Text>
             {liveOffers.length > 0 ? (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.offerRow}>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.offerRow}
+              >
                 {liveOffers.map((offer) => (
                   <TouchableOpacity
                     key={offer.id}
                     activeOpacity={0.85}
-                    onPress={() => navigation.navigate('OfferDetails', { offerId: offer.id })}
+                    onPress={() =>
+                      navigation.navigate("OfferDetails", { offerId: offer.id })
+                    }
                   >
                     <Card accent style={styles.offerCard}>
-                      <Text style={styles.offerBusiness}>{offer.businessName}</Text>
+                      <Text style={styles.offerBusiness}>
+                        {offer.businessName}
+                      </Text>
                       <Text style={styles.offerTitle}>{offer.title}</Text>
                       <Badge label={timeLeft(offer.endsAt)} tone="red" />
                     </Card>
@@ -96,17 +186,24 @@ export function NearbyScreen() {
               <EmptyState title="No live offers" hint="Check back soon." />
             )}
 
-            <Text style={styles.sectionLabel}>NEED PEOPLE · {posts.length}</Text>
+            <Text style={styles.sectionLabel}>
+              NEED PEOPLE · {posts.length}
+            </Text>
             {posts.length > 0 ? (
               posts.map((post) => (
                 <PostRow
                   key={post.id}
                   post={post}
-                  onPress={() => navigation.navigate('PostDetails', { postId: post.id })}
+                  onPress={() =>
+                    navigation.navigate("PostDetails", { postId: post.id })
+                  }
                 />
               ))
             ) : (
-              <EmptyState title="No open posts" hint="Be the first to gather people nearby." />
+              <EmptyState
+                title="No open posts"
+                hint="Be the first to gather people nearby."
+              />
             )}
 
             <Text style={styles.sectionLabel}>VENUES · {venues.length}</Text>
@@ -115,7 +212,9 @@ export function NearbyScreen() {
                 <TouchableOpacity
                   key={venue.id}
                   activeOpacity={0.85}
-                  onPress={() => navigation.navigate('VenueDetails', { venueId: venue.id })}
+                  onPress={() =>
+                    navigation.navigate("VenueDetails", { venueId: venue.id })
+                  }
                 >
                   <View style={styles.venueRow}>
                     <View style={styles.venueLeft}>
@@ -123,19 +222,28 @@ export function NearbyScreen() {
                       <Text style={styles.venueMeta}>
                         {venue.category} · {venue.area}
                       </Text>
-                      {venue.liveOffer ? <Text style={styles.venueOffer}>{venue.liveOffer}</Text> : null}
+                      {venue.liveOffer ? (
+                        <Text style={styles.venueOffer}>{venue.liveOffer}</Text>
+                      ) : null}
                     </View>
                     <View style={styles.venueRight}>
-                      <Text style={styles.venueRating}>★ {venue.rating.toFixed(1)}</Text>
+                      <Text style={styles.venueRating}>
+                        ★ {venue.rating.toFixed(1)}
+                      </Text>
                       {venue.distanceKm !== undefined && (
-                        <Text style={styles.venueDist}>{venue.distanceKm.toFixed(1)} KM</Text>
+                        <Text style={styles.venueDist}>
+                          {venue.distanceKm.toFixed(1)} KM
+                        </Text>
                       )}
                     </View>
                   </View>
                 </TouchableOpacity>
               ))
             ) : (
-              <EmptyState title="No venues" hint="Nothing found in this area." />
+              <EmptyState
+                title="No venues"
+                hint="Nothing found in this area."
+              />
             )}
           </>
         )}
@@ -147,7 +255,11 @@ export function NearbyScreen() {
 const styles = StyleSheet.create({
   scroll: { paddingBottom: spacing.xl },
   header: { ...typography.title, color: colors.text, marginTop: spacing.sm },
-  location: { ...typography.caption, color: colors.textDim, marginTop: spacing.xs },
+  location: {
+    ...typography.caption,
+    color: colors.textDim,
+    marginTop: spacing.xs,
+  },
   status: { ...typography.label, color: colors.textDim, marginTop: spacing.xl },
   sectionLabel: {
     ...typography.label,
@@ -157,12 +269,20 @@ const styles = StyleSheet.create({
   },
   offerRow: { gap: spacing.sm, paddingRight: spacing.md },
   offerCard: { width: 240 },
-  offerBusiness: { ...typography.caption, color: colors.textDim, marginBottom: spacing.xs },
-  offerTitle: { ...typography.heading, color: colors.text, marginBottom: spacing.sm },
+  offerBusiness: {
+    ...typography.caption,
+    color: colors.textDim,
+    marginBottom: spacing.xs,
+  },
+  offerTitle: {
+    ...typography.heading,
+    color: colors.text,
+    marginBottom: spacing.sm,
+  },
   venueRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingVertical: spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
@@ -170,9 +290,25 @@ const styles = StyleSheet.create({
   },
   venueLeft: { flex: 1 },
   venueName: { ...typography.heading, color: colors.text },
-  venueMeta: { ...typography.caption, color: colors.textDim, marginTop: spacing.xs },
-  venueOffer: { ...typography.caption, color: colors.red, marginTop: spacing.xs },
-  venueRight: { alignItems: 'flex-end' },
-  venueRating: { ...typography.bodySmall, color: colors.text, fontWeight: '600' },
-  venueDist: { ...typography.caption, color: colors.textDim, marginTop: spacing.xs },
+  venueMeta: {
+    ...typography.caption,
+    color: colors.textDim,
+    marginTop: spacing.xs,
+  },
+  venueOffer: {
+    ...typography.caption,
+    color: colors.red,
+    marginTop: spacing.xs,
+  },
+  venueRight: { alignItems: "flex-end" },
+  venueRating: {
+    ...typography.bodySmall,
+    color: colors.text,
+    fontWeight: "600",
+  },
+  venueDist: {
+    ...typography.caption,
+    color: colors.textDim,
+    marginTop: spacing.xs,
+  },
 });
