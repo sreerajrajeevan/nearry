@@ -53,6 +53,7 @@ export function BusinessProfileScreen({ navigation }: Props) {
   const [verif, setVerif] = useState<{
     status: VerificationState;
     docPath?: string;
+    note?: string;
   }>({
     status: "unverified",
   });
@@ -185,6 +186,9 @@ export function BusinessProfileScreen({ navigation }: Props) {
             />
           </View>
           <Text style={styles.verifyDesc}>{STATUS_COPY[verif.status]}</Text>
+          {verif.status === "rejected" && verif.note ? (
+            <Text style={styles.verifyNote}>Reason: {verif.note}</Text>
+          ) : null}
           {(verif.status === "unverified" || verif.status === "rejected") &&
             !isDemoMode() && (
               <Button
@@ -308,6 +312,7 @@ const styles = StyleSheet.create({
     color: colors.textDim,
     marginTop: spacing.sm,
   },
+  verifyNote: { ...typography.body, color: colors.red, marginTop: spacing.xs },
   verifyBtn: { marginTop: spacing.md },
   venueHint: {
     ...typography.bodySmall,

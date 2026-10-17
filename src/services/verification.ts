@@ -77,6 +77,7 @@ export async function submitVerificationDoc(
 export async function getVerificationState(businessId: string): Promise<{
   status: VerificationState;
   docPath?: string;
+  note?: string;
 }> {
   if (useMock()) return { status: "unverified" };
   const supabase = getSupabase()!;
@@ -87,6 +88,7 @@ export async function getVerificationState(businessId: string): Promise<{
   return {
     status: (data?.verification_status as VerificationState) ?? "unverified",
     docPath: (data?.verification_doc_path as string) ?? undefined,
+    note: (data?.verification_note as string) ?? undefined,
   };
 }
 
