@@ -14,6 +14,7 @@ import { Card } from "../../components/Card";
 import { Button } from "../../components/Button";
 import { Badge } from "../../components/Badge";
 import { Avatar } from "../../components/Avatar";
+import { Icon } from "../../components/Icon";
 import { Input } from "../../components/Input";
 import { EmptyState } from "../../components/EmptyState";
 import { colors, typography, spacing } from "../../theme";
@@ -190,6 +191,22 @@ export function BusinessProfileScreen({ navigation }: Props) {
             )}
         </Card>
 
+        <TouchableOpacity
+          accessibilityRole="button"
+          activeOpacity={0.65}
+          style={styles.menuRow}
+          onPress={() => navigation.navigate("MyOffers")}
+        >
+          <Icon name="file-text" size={18} color={colors.accent} />
+          <View style={styles.menuCopy}>
+            <Text style={styles.menuTitle}>My offers</Text>
+            <Text style={styles.menuHint}>
+              Your live offers, drafts and past offers
+            </Text>
+          </View>
+          <Icon name="arrow-up-right" size={17} color={colors.accent} />
+        </TouchableOpacity>
+
         <Text style={styles.sectionTitle}>My venue</Text>
         {venue ? (
           <Card>
@@ -303,6 +320,18 @@ const styles = StyleSheet.create({
   },
   verifyNote: { ...typography.body, color: colors.red, marginTop: spacing.xs },
   verifyBtn: { marginTop: spacing.md },
+  menuRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    paddingVertical: spacing.lg,
+    minHeight: 52,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  menuCopy: { flex: 1, gap: 3 },
+  menuTitle: { ...typography.body, color: colors.text },
+  menuHint: { ...typography.caption, color: colors.textDim },
   venueHint: {
     ...typography.bodySmall,
     color: colors.textDim,

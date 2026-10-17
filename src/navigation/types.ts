@@ -44,9 +44,10 @@ export type PersonalStackParamList = {
 };
 
 export type BusinessStackParamList = {
-  BusinessTabs: undefined;
+  BusinessTabs: NavigatorScreenParams<BusinessTabParamList> | undefined;
   Conversation: { conversationId: string; title?: string };
   Notifications: undefined;
+  MyOffers: undefined;
 };
 
 /** Navigation available inside personal tab screens (tab + parent stack). */
