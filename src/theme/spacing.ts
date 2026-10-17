@@ -9,10 +9,11 @@ export const spacing = {
 
 export const radius = {
   none: 0,
-  sm: 2,
-  md: 4,
-  // Nothing-style: mostly sharp. Use sparingly.
-  lg: 8,
+  // Quiet minimal: mostly flat, hairlines over boxes.
+  sm: 6,
+  md: 10,
+  lg: 16,
+  xl: 24,
   full: 999,
 } as const;
 

@@ -24,11 +24,9 @@ export function Avatar({ name, size = 44 }: Props) {
 
 const styles = StyleSheet.create({
   base: {
-    backgroundColor: colors.gray800,
-    borderWidth: 1,
-    borderColor: colors.borderStrong,
+    backgroundColor: colors.hairline,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  text: { fontFamily: 'monospace', fontWeight: '700', color: colors.text },
+  text: { fontFamily: 'System', fontWeight: '700', color: colors.muted },
 });

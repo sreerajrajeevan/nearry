@@ -1,46 +1,43 @@
 import { TextStyle } from 'react-native';
 
 /**
- * Nothing-style typography: dot-matrix monospace for display + labels,
- * clean sans for body. Everything uppercase where it labels, never shouts
- * in body copy.
+ * Quiet minimal typography: bold system sans for headlines
+ * ("What are you up for?"), regular sans for body. Sentence case
+ * throughout — no shouty uppercase labels.
  */
-const MONO = 'monospace';
-
 export const fontFamily = {
-  mono: MONO,
   sans: 'System',
+  mono: 'monospace',
 } as const;
 
 export const typography: Record<string, TextStyle> = {
   display: {
-    fontFamily: MONO,
-    fontSize: 34,
+    fontFamily: 'System',
+    fontSize: 32,
     fontWeight: '700',
-    letterSpacing: 1.5,
-    lineHeight: 40,
+    letterSpacing: -0.5,
+    lineHeight: 38,
   },
   title: {
-    fontFamily: MONO,
-    fontSize: 22,
+    fontFamily: 'System',
+    fontSize: 24,
     fontWeight: '700',
-    letterSpacing: 1,
-    lineHeight: 28,
+    letterSpacing: -0.3,
+    lineHeight: 30,
   },
   heading: {
-    fontFamily: MONO,
-    fontSize: 16,
+    fontFamily: 'System',
+    fontSize: 17,
     fontWeight: '700',
-    letterSpacing: 0.8,
-    lineHeight: 22,
+    letterSpacing: -0.2,
+    lineHeight: 23,
   },
   label: {
-    fontFamily: MONO,
-    fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 2,
+    fontFamily: 'System',
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 0.3,
     lineHeight: 16,
-    textTransform: 'uppercase',
   },
   body: {
     fontFamily: 'System',
@@ -55,19 +52,18 @@ export const typography: Record<string, TextStyle> = {
     lineHeight: 18,
   },
   mono: {
-    fontFamily: MONO,
+    fontFamily: 'monospace',
     fontSize: 13,
     fontWeight: '400',
     letterSpacing: 0.5,
     lineHeight: 18,
   },
   caption: {
-    fontFamily: MONO,
-    fontSize: 10,
-    fontWeight: '400',
-    letterSpacing: 1.5,
-    lineHeight: 14,
-    textTransform: 'uppercase',
+    fontFamily: 'System',
+    fontSize: 11,
+    fontWeight: '500',
+    letterSpacing: 0.3,
+    lineHeight: 15,
   },
 };
 

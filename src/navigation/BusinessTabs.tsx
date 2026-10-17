@@ -21,19 +21,19 @@ const GLYPHS: Record<keyof BusinessTabParamList, string> = {
 };
 
 const LABELS: Record<keyof BusinessTabParamList, string> = {
-  Dashboard: 'DASHBOARD',
-  CreateOffer: 'OFFER',
-  Bookings: 'BOOKINGS',
-  Messages: 'MESSAGES',
-  Business: 'BUSINESS',
+  Dashboard: 'Dashboard',
+  CreateOffer: 'Create Offer',
+  Bookings: 'Bookings',
+  Messages: 'Messages',
+  Business: 'Business',
 };
 
 function screenOptions({ route }: { route: { name: keyof BusinessTabParamList } }) {
   return {
     headerShown: false,
     tabBarStyle: styles.bar,
-    tabBarActiveTintColor: colors.red,
-    tabBarInactiveTintColor: colors.textFaint,
+    tabBarActiveTintColor: colors.clay,
+    tabBarInactiveTintColor: colors.muted,
     tabBarLabel: ({ focused, color }: { focused: boolean; color: string }) => (
       <Text style={[styles.label, { color, fontWeight: focused ? '700' : '400' }]}>
         {LABELS[route.name]}
@@ -57,7 +57,7 @@ export function BusinessTabs() {
         component={MessagesScreen}
         options={{
           tabBarBadge: messages > 0 ? messages : undefined,
-          tabBarBadgeStyle: { backgroundColor: colors.red },
+          tabBarBadgeStyle: { backgroundColor: colors.clay },
         }}
       />
       <Tab.Screen name="Business" component={BusinessProfileScreen} />
@@ -67,11 +67,21 @@ export function BusinessTabs() {
 
 const styles = StyleSheet.create({
   bar: {
-    backgroundColor: colors.black,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    height: 64,
-    paddingTop: 6,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.hairline,
+    borderRadius: 28,
+    height: 68,
+    paddingTop: 8,
+    paddingBottom: 8,
+    marginHorizontal: 16,
+    marginBottom: 16,
+    position: 'absolute',
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
   },
   label: { ...typography.caption, fontSize: 9 },
   icon: { fontSize: 20 },

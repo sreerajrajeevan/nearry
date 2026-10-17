@@ -1,38 +1,30 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Screen } from '../../components/Screen';
-import { Card } from '../../components/Card';
-import { Button } from '../../components/Button';
-import { Badge } from '../../components/Badge';
 import { EmptyState } from '../../components/EmptyState';
 import { colors, typography, spacing } from '../../theme';
 import { BusinessTabParamList } from '../../navigation/types';
 import { useAuth } from '../../store/AuthContext';
 import { listMyOffers } from '../../services/offers';
-import { listBookingsForBusiness, subscribeToBookings } from '../../services/bookings';
+import { listBookingsForBusiness, subscribeToBookings, confirmBooking } from '../../services/bookings';
 import { Offer, Booking } from '../../services/mappers';
-import { timeLeft } from '../../utils/format';
+import { formatTime } from '../../utils/format';
 
 type Props = {
   navigation: { navigate: (screen: keyof BusinessTabParamList) => void };
 };
 
-function StatBox({ label, value }: { label: string; value: string }) {
-  return (
-    <View style={styles.statBox}>
-      <Text style={styles.statValue}>{value}</Text>
-      <Text style={styles.statLabel}>{label}</Text>
-    </View>
-  );
-}
-
-/** Dashboard — metrics derived from real offer + booking records. */
+/**
+ * Quiet-minimal business dashboard (mockups v2):
+ * greeting, big stat numbers, offer nudge, today's schedule as flat rows.
+ */
 export function DashboardScreen({ navigation }: Props) {
   const { profile } = useAuth();
   const [offers, setOffers] = useState<Offer[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [state, setState] = useState<'loading' | 'ready'>('loading');
+  const [confirming, setConfirming] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!profile) return;
@@ -54,87 +46,129 @@ export function DashboardScreen({ navigation }: Props) {
   );
   React.useEffect(() => subscribeToBookings(() => void load()), [load]);
 
-  const businessName = (profile?.businessName ?? profile?.displayName ?? 'YOUR BUSINESS').toUpperCase();
+  const businessName = profile?.businessName || profile?.displayName || 'your business';
+  const firstName = businessName.split(' ')[0];
   const liveOffers = offers.filter((o) => o.status === 'live');
   const draftOffers = offers.filter((o) => o.status === 'draft');
-  const activeBookings = bookings.filter((b) => b.status === 'pending' || b.status === 'confirmed');
-  const seatsBooked = activeBookings.reduce((sum, b) => sum + b.partySize, 0);
+  const upcoming = bookings
+    .filter((b) => b.status !== 'cancelled' && new Date(b.slot).getTime() >= Date.now() - 3600_000)
+    .sort((a, b) => new Date(a.slot).getTime() - new Date(b.slot).getTime());
   const verified = profile?.verificationStatus === 'verified';
+  const pad = (n: number) => String(n).padStart(2, '0');
+
+  const onConfirm = async (id: string) => {
+    setConfirming(id);
+    try {
+      await confirmBooking(id);
+      await load();
+    } catch {
+      /* surface stays; bookings screen shows detail */
+    } finally {
+      setConfirming(null);
+    }
+  };
 
   return (
     <Screen>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-        <Text style={styles.header}>DASHBOARD</Text>
-        <View style={styles.nameRow}>
-          <Text style={styles.businessName}>{businessName}</Text>
-          <Badge
-            label={verified ? 'VERIFIED' : (profile?.verificationStatus ?? 'UNVERIFIED').toUpperCase()}
-            tone={verified ? 'green' : 'red'}
-          />
+        {/* Header */}
+        <View style={styles.headerRow}>
+          <View style={styles.logoMark} />
+          <Text style={styles.wordmark}>nearry</Text>
+          <View style={styles.flex} />
+          <Text style={styles.headerMeta} numberOfLines={1}>{businessName}</Text>
         </View>
 
+        <Text style={styles.hello}>Hello, {firstName}.</Text>
+        <Text style={styles.headline}>Make room{"\n"}for a new face.</Text>
+
         {state === 'loading' ? (
-          <Text style={styles.status}>LOADING…</Text>
+          <Text style={styles.status}>Loading…</Text>
         ) : (
           <>
             <View style={styles.statsRow}>
-              <StatBox label="LIVE OFFERS" value={String(liveOffers.length)} />
-              <StatBox label="DRAFTS" value={String(draftOffers.length)} />
-              <StatBox label="BOOKINGS" value={String(activeBookings.length)} />
-              <StatBox label="SEATS BOOKED" value={String(seatsBooked)} />
+              <View style={styles.stat}>
+                <Text style={styles.statValue}>{pad(upcoming.length)}</Text>
+                <Text style={styles.statLabel}>Bookings today</Text>
+              </View>
+              <View style={styles.stat}>
+                <Text style={styles.statValue}>{pad(draftOffers.length)}</Text>
+                <Text style={styles.statLabel}>Openings to fill</Text>
+              </View>
             </View>
 
-            {!verified && (
-              <Card style={styles.verifyCard} accent>
-                <Text style={styles.verifyTitle}>GET VERIFIED TO PUBLISH</Text>
-                <Text style={styles.verifyDesc}>
-                  Offers stay as drafts until your business is verified. Submit your documents
-                  from the Business tab.
-                </Text>
-              </Card>
-            )}
+            <View style={styles.divider} />
 
-            <Text style={styles.sectionTitle}>LIVE OFFERS</Text>
-            {liveOffers.length === 0 ? (
-              <EmptyState
-                title="No live offers"
-                hint={verified ? 'Publish your first offer to fill empty slots.' : 'Verify your business, then publish.'}
-              />
+            {!verified ? (
+              <View style={styles.nudge}>
+                <Text style={styles.nudgeTitle}>Get verified to go live.</Text>
+                <Text style={styles.nudgeDesc}>
+                  Your offers stay as drafts until your business is verified. Submit your documents from the Business tab.
+                </Text>
+              </View>
+            ) : draftOffers.length > 0 ? (
+              <View style={styles.nudge}>
+                <Text style={styles.nudgeTitle}>Someone nearby could use that slot.</Text>
+                <Text style={styles.nudgeDesc}>
+                  Invite your neighbourhood in with a last-minute offer.
+                </Text>
+                <TouchableOpacity activeOpacity={0.7} onPress={() => navigation.navigate('CreateOffer')}>
+                  <Text style={styles.nudgeCta}>Say hello with an offer ↗</Text>
+                </TouchableOpacity>
+              </View>
+            ) : liveOffers.length === 0 ? (
+              <View style={styles.nudge}>
+                <Text style={styles.nudgeTitle}>No live offers yet.</Text>
+                <Text style={styles.nudgeDesc}>
+                  Publish your first offer to fill empty slots.
+                </Text>
+                <TouchableOpacity activeOpacity={0.7} onPress={() => navigation.navigate('CreateOffer')}>
+                  <Text style={styles.nudgeCta}>Say hello with an offer ↗</Text>
+                </TouchableOpacity>
+              </View>
+            ) : null}
+
+            <View style={styles.divider} />
+
+            <View style={styles.sectionRow}>
+              <Text style={styles.sectionTitle}>Coming through your door</Text>
+              <Text style={styles.sectionMeta}>Today</Text>
+            </View>
+
+            {upcoming.length === 0 ? (
+              <EmptyState title="Quiet today" hint="New bookings will appear here." />
             ) : (
-              liveOffers.map((offer) => (
-                <Card key={offer.id} style={styles.offerCard} accent>
-                  <View style={styles.offerHeader}>
-                    <Text style={styles.offerTitle} numberOfLines={1}>
-                      {offer.title}
+              upcoming.slice(0, 8).map((b) => (
+                <View key={b.id} style={styles.schedRow}>
+                  <Text style={styles.schedTime}>{formatTime(b.slot)}</Text>
+                  <View style={styles.schedMid}>
+                    <Text style={styles.schedName}>{b.customerName}</Text>
+                    <Text style={styles.schedDetail}>
+                      {[b.offerTitle, b.partySize > 1 ? `${b.partySize} people` : null].filter(Boolean).join(' · ')}
                     </Text>
-                    {typeof offer.discountPct === 'number' ? (
-                      <Badge label={`-${offer.discountPct}%`} tone="red" />
-                    ) : null}
                   </View>
-                  <Text style={styles.offerDesc} numberOfLines={2}>
-                    {offer.description}
-                  </Text>
-                  <View style={styles.offerFooter}>
-                    <Badge label={timeLeft(offer.endsAt)} tone="red" />
-                    <Text style={styles.claimed}>{offer.slotCapacity} SEATS/SLOT</Text>
-                  </View>
-                </Card>
+                  {b.status === 'confirmed' ? (
+                    <Text style={styles.schedDone}>Confirmed</Text>
+                  ) : (
+                    <TouchableOpacity
+                      activeOpacity={0.7}
+                      disabled={confirming === b.id}
+                      onPress={() => onConfirm(b.id)}
+                    >
+                      <Text style={styles.schedAction}>
+                        {confirming === b.id ? '…' : 'Confirm'}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
               ))
             )}
 
-            <Text style={styles.sectionTitle}>QUICK ACTIONS</Text>
-            <Button
-              title="CREATE OFFER"
-              variant="secondary"
-              onPress={() => navigation.navigate('CreateOffer')}
-              style={styles.actionBtn}
-            />
-            <Button
-              title="VIEW BOOKINGS"
-              variant="secondary"
-              onPress={() => navigation.navigate('Bookings')}
-              style={styles.actionBtn}
-            />
+            {upcoming.length > 8 && (
+              <TouchableOpacity activeOpacity={0.7} onPress={() => navigation.navigate('Bookings')}>
+                <Text style={styles.moreLink}>All bookings ↗</Text>
+              </TouchableOpacity>
+            )}
           </>
         )}
       </ScrollView>
@@ -144,37 +178,51 @@ export function DashboardScreen({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   scroll: { paddingBottom: spacing.xl },
-  header: { ...typography.title, color: colors.text, marginTop: spacing.sm },
-  nameRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, marginTop: spacing.xs },
-  businessName: { ...typography.caption, color: colors.textDim },
-  status: { ...typography.label, color: colors.textDim, marginTop: spacing.xl },
-  statsRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.lg },
-  statBox: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 2,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.sm,
-    alignItems: 'center',
-    backgroundColor: colors.surface,
+  flex: { flex: 1 },
+  headerRow: { flexDirection: 'row', alignItems: 'center', marginTop: spacing.sm },
+  logoMark: {
+    width: 30,
+    height: 30,
+    backgroundColor: colors.clay,
+    borderRadius: 9,
+    borderBottomLeftRadius: 2,
+    marginRight: spacing.sm,
   },
-  statValue: { ...typography.title, color: colors.text },
-  statLabel: { ...typography.caption, color: colors.textFaint, marginTop: spacing.xs },
-  verifyCard: { marginTop: spacing.lg },
-  verifyTitle: { ...typography.label, color: colors.red, marginBottom: spacing.xs },
-  verifyDesc: { ...typography.bodySmall, color: colors.textDim },
-  sectionTitle: { ...typography.label, color: colors.textDim, marginTop: spacing.xl, marginBottom: spacing.sm },
-  offerCard: { marginBottom: spacing.sm },
-  offerHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: spacing.sm },
-  offerTitle: { ...typography.heading, color: colors.text, flex: 1 },
-  offerDesc: { ...typography.bodySmall, color: colors.textDim, marginTop: spacing.xs },
-  offerFooter: {
+  wordmark: { ...typography.heading, fontSize: 24, color: colors.text, letterSpacing: -0.5 },
+  headerMeta: { ...typography.body, color: colors.muted, maxWidth: 140 },
+  hello: { ...typography.body, color: colors.muted, marginTop: spacing.lg },
+  headline: { ...typography.display, fontSize: 40, lineHeight: 46, color: colors.text, marginTop: spacing.xs },
+  status: { ...typography.body, color: colors.muted, marginTop: spacing.xl },
+  statsRow: { flexDirection: 'row', marginTop: spacing.lg, gap: spacing.xl },
+  stat: { flex: 1 },
+  statValue: { ...typography.display, fontSize: 44, color: colors.text },
+  statLabel: { ...typography.body, color: colors.muted, marginTop: spacing.xs },
+  divider: { height: 1, backgroundColor: colors.hairline, marginVertical: spacing.lg },
+  nudge: { paddingVertical: spacing.sm },
+  nudgeTitle: { ...typography.title, fontSize: 26, color: colors.text },
+  nudgeDesc: { ...typography.body, color: colors.muted, marginTop: spacing.sm },
+  nudgeCta: { ...typography.body, color: colors.clay, fontWeight: '600', marginTop: spacing.md },
+  sectionRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: spacing.sm,
+    alignItems: 'baseline',
+    marginBottom: spacing.sm,
   },
-  claimed: { ...typography.caption, color: colors.textDim },
-  actionBtn: { marginBottom: spacing.sm },
+  sectionTitle: { ...typography.body, color: colors.text, fontWeight: '600' },
+  sectionMeta: { ...typography.bodySmall, color: colors.muted },
+  schedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.hairline,
+    gap: spacing.md,
+  },
+  schedTime: { ...typography.body, color: colors.muted, width: 76 },
+  schedMid: { flex: 1 },
+  schedName: { ...typography.body, color: colors.text, fontWeight: '600' },
+  schedDetail: { ...typography.bodySmall, color: colors.muted, marginTop: 2 },
+  schedDone: { ...typography.body, color: colors.muted },
+  schedAction: { ...typography.body, color: colors.clay, fontWeight: '600' },
+  moreLink: { ...typography.body, color: colors.clay, fontWeight: '600', marginTop: spacing.md },
 });

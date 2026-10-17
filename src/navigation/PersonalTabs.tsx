@@ -24,11 +24,11 @@ function screenOptions({ route }: { route: { name: keyof PersonalTabParamList } 
   return {
     headerShown: false,
     tabBarStyle: styles.bar,
-    tabBarActiveTintColor: colors.red,
-    tabBarInactiveTintColor: colors.textFaint,
+    tabBarActiveTintColor: colors.clay,
+    tabBarInactiveTintColor: colors.muted,
     tabBarLabel: ({ focused, color }: { focused: boolean; color: string }) => (
       <Text style={[styles.label, { color, fontWeight: focused ? '700' : '400' }]}>
-        {route.name === 'CreatePost' ? 'POST' : route.name.toUpperCase()}
+        {route.name === 'CreatePost' ? 'Create' : route.name}
       </Text>
     ),
     tabBarIcon: ({ color }: { color: string }) => (
@@ -50,7 +50,7 @@ export function PersonalTabs() {
         component={ActivityScreen}
         options={{
           tabBarBadge: total > 0 ? total : undefined,
-          tabBarBadgeStyle: { backgroundColor: colors.red },
+          tabBarBadgeStyle: { backgroundColor: colors.clay },
         }}
       />
       <Tab.Screen name="Profile" component={ProfileScreen} />
@@ -60,11 +60,21 @@ export function PersonalTabs() {
 
 const styles = StyleSheet.create({
   bar: {
-    backgroundColor: colors.black,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    height: 64,
-    paddingTop: 6,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.hairline,
+    borderRadius: 28,
+    height: 68,
+    paddingTop: 8,
+    paddingBottom: 8,
+    marginHorizontal: 16,
+    marginBottom: 16,
+    position: 'absolute',
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
   },
   label: { ...typography.caption, fontSize: 9 },
   icon: { fontSize: 20 },
