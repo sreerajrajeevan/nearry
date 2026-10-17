@@ -1,32 +1,30 @@
-"""Generate Nearry placeholder icons (black bg, red dot-matrix N).
+"""Generate Hello Nearry's warm-white and burnt-orange app assets.
 
-Run in CI before `expo prebuild` so the repo stays binary-free:
-    pip install pillow && python3 assets/generate_icons.py
+Run before native prebuild or web export:
+    python3 -m pip install pillow
+    python3 assets/generate_icons.py
 """
+from pathlib import Path
 from PIL import Image, ImageDraw
-import os
 
-BG, FG = (0, 0, 0), (215, 25, 32)
-GLYPH = ["X.....X", "XX....X", "X.X...X", "X..X..X", "X...X.X", "X....XX", "X.....X"]
+PAPER = '#FAF9F5'
+ORANGE = '#C14D2F'
 
-def make_icon(size: int, path: str) -> None:
-    img = Image.new("RGB", (size, size), BG)
-    d = ImageDraw.Draw(img)
-    s = max(1, size // 16)
-    ox = (size - 7 * s) // 2
-    oy = (size - 7 * s) // 2 - s
-    for r, row in enumerate(GLYPH):
-        for c, ch in enumerate(row):
-            if ch == "X":
-                d.rectangle([ox + c*s, oy + r*s, ox + (c+1)*s - 2, oy + (r+1)*s - 2], fill=FG)
-    d.ellipse([ox + 7*s + s//2, oy + 6*s, ox + 8*s + s//2, oy + 7*s], fill=FG)
-    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-    img.save(path)
 
-if __name__ == "__main__":
-    here = os.path.dirname(os.path.abspath(__file__))
-    make_icon(1024, os.path.join(here, "icon.png"))
-    make_icon(1024, os.path.join(here, "adaptive-icon.png"))
-    make_icon(1024, os.path.join(here, "splash.png"))
-    make_icon(48, os.path.join(here, "favicon.png"))
-    print("icons generated")
+def make_icon(size: int, path: Path, transparent: bool = False) -> None:
+    # Draw at high resolution so even the small favicon has smooth edges.
+    scale = max(size, 1024)
+    image = Image.new('RGBA', (scale, scale), (0, 0, 0, 0) if transparent else PAPER)
+    draw = ImageDraw.Draw(image)
+    left, top, right, bottom = [round(scale * n) for n in (.27, .29, .73, .67)]
+    draw.rounded_rectangle((left, top, right, bottom), radius=round(scale * .10), fill=ORANGE)
+    draw.rectangle((left, bottom - scale * .10, left + scale * .10, bottom), fill=ORANGE)
+    draw.polygon([(left, bottom - scale * .03), (left, bottom + scale * .09), (left + scale * .12, bottom - scale * .03)], fill=ORANGE)
+    image.resize((size, size), Image.Resampling.LANCZOS).save(path)
+
+
+if __name__ == '__main__':
+    root = Path(__file__).resolve().parent
+    for name, size, transparent in [('icon.png', 1024, False), ('adaptive-icon.png', 1024, True), ('splash.png', 1024, False), ('favicon.png', 48, False)]:
+        make_icon(size, root / name, transparent)
+    print('Hello Nearry app assets generated')

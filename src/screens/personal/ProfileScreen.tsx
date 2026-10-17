@@ -1,4 +1,3 @@
-import { enablePushNotifications } from "../../services/notifications";
 import React from "react";
 import {
   View,
@@ -13,161 +12,139 @@ import { Avatar } from "../../components/Avatar";
 import { Badge } from "../../components/Badge";
 import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
+import { Icon } from "../../components/Icon";
+import { PageHeading } from "../../components/PageHeading";
 import { colors, typography, spacing } from "../../theme";
 import { useAuth } from "../../store/AuthContext";
 import { useUnreadCounts } from "../../hooks/useUnreadCounts";
+import { enablePushNotifications } from "../../services/notifications";
 
-const MENU_ITEMS = ["Edit profile", "Notifications", "Privacy", "Help"];
-
-const STATS = [
-  { value: "4", label: "POSTS" },
-  { value: "12", label: "JOINED" },
-  { value: "8", label: "FOLLOWING" },
-];
-
-type Props = {
-  navigation: { navigate: (screen: string) => void };
-};
-
+type Props = { navigation: { navigate: (screen: string) => void } };
 export function ProfileScreen({ navigation }: Props) {
-  const { profile, session, demoMode, signOut } = useAuth();
+  const { profile, session, demoMode, signOut, enterDemoMode } = useAuth();
   const { notifications } = useUnreadCounts();
-
-  if (!profile) {
+  if (!profile)
     return (
       <Screen>
         <EmptyState title="Not signed in" hint="Log in to view your profile." />
       </Screen>
     );
-  }
-
   return (
     <Screen>
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scroll}
       >
-        {demoMode ? (
-          <View style={styles.mockRow}>
-            <Badge label="DEMO MODE" tone="red" />
-          </View>
-        ) : null}
-
-        <View style={styles.headerRow}>
+        {demoMode && <Badge label="Sample personal profile" />}
+        <View style={styles.avatar}>
           <Avatar name={profile.displayName || "N"} size={64} />
-          <View style={styles.nameCol}>
-            <Text style={styles.name}>{profile.displayName}</Text>
-            <Text style={styles.email}>{session?.user.email ?? ""}</Text>
+        </View>
+        <PageHeading
+          greeting="A familiar face nearby."
+          title={`Hello,\nI’m ${profile.displayName || "a neighbour"}.`}
+        />
+        {!!profile.bio && <Text style={styles.bio}>{profile.bio}</Text>}
+        {!!session?.user.email && (
+          <View style={styles.row}>
+            <Text style={styles.label}>Your email</Text>
+            <Text style={styles.value}>{session.user.email}</Text>
           </View>
+        )}
+        <View style={styles.row}>
+          <Text style={styles.label}>Your interests</Text>
+          <Text style={styles.value}>
+            {profile.interests.length
+              ? profile.interests.join(" · ")
+              : "Good company and a new plan."}
+          </Text>
         </View>
-
-        <View style={styles.statsRow}>
-          {STATS.map((s) => (
-            <View key={s.label} style={styles.statBox}>
-              <Text style={styles.statValue}>{s.value}</Text>
-              <Text style={styles.statLabel}>{s.label}</Text>
-            </View>
-          ))}
-        </View>
-
-        <View style={styles.menu}>
-          {MENU_ITEMS.map((item) => (
-            <TouchableOpacity
-              key={item}
-              style={styles.menuRow}
-              activeOpacity={0.7}
-              onPress={() => {
-                if (item === "Notifications")
-                  navigation.navigate("Notifications");
-              }}
-            >
-              <View style={styles.menuLabelRow}>
-                <Text style={styles.menuLabel}>{item}</Text>
-                {item === "Notifications" && notifications > 0 && (
-                  <Badge label={String(notifications)} tone="red" />
-                )}
-              </View>
-              <Text style={styles.chevron}>›</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        <Button
-          title="ENABLE NOTIFICATIONS"
-          variant="secondary"
-          onPress={() => {
-            if (profile)
-              void enablePushNotifications(profile.id).catch((e) =>
+        <TouchableOpacity
+          accessibilityRole="button"
+          activeOpacity={0.65}
+          style={styles.menuRow}
+          onPress={() => navigation.navigate("Notifications")}
+        >
+          <Text style={styles.menuLabel}>Notifications</Text>
+          {notifications > 0 && (
+            <Badge label={String(notifications)} tone="red" />
+          )}
+          <Icon name="arrow-up-right" size={17} color={colors.accent} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          accessibilityRole="button"
+          activeOpacity={0.65}
+          style={styles.menuRow}
+          onPress={() => navigation.navigate("Messages")}
+        >
+          <Text style={styles.menuLabel}>Your conversations</Text>
+          <Icon name="arrow-up-right" size={17} color={colors.accent} />
+        </TouchableOpacity>
+        <View style={styles.actions}>
+          <Button
+            title="Enable notifications"
+            variant="secondary"
+            onPress={() =>
+              void enablePushNotifications(profile.id)
+                .then(() =>
+                  Alert.alert(
+                    "Notifications",
+                    "Notification setup is complete.",
+                  ),
+                )
+                .catch((error) =>
+                  Alert.alert(
+                    "Notifications",
+                    error instanceof Error
+                      ? error.message
+                      : "Please try again.",
+                  ),
+                )
+            }
+          />
+          {demoMode && (
+            <Button
+              title="Explore the business demo"
+              variant="ghost"
+              onPress={() => enterDemoMode("business")}
+            />
+          )}
+          <Button
+            title={demoMode ? "Leave demo" : "Log out"}
+            variant="ghost"
+            onPress={() =>
+              void signOut().catch((error) =>
                 Alert.alert(
-                  "Notifications",
-                  e instanceof Error ? e.message : "Please retry.",
+                  "Couldn’t sign out",
+                  error instanceof Error ? error.message : "Please try again.",
                 ),
-              );
-          }}
-        />
-        <Button
-          title="LOG OUT"
-          variant="danger"
-          onPress={() => {
-            void signOut().catch((e) =>
-              Alert.alert(
-                "Could not sign out",
-                e instanceof Error ? e.message : "Please retry.",
-              ),
-            );
-          }}
-          style={styles.logout}
-        />
+              )
+            }
+          />
+        </View>
       </ScrollView>
     </Screen>
   );
 }
-
 const styles = StyleSheet.create({
-  scroll: { paddingBottom: spacing.xl },
-  mockRow: { marginTop: spacing.sm, marginBottom: spacing.sm },
-  headerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-    marginTop: spacing.sm,
-  },
-  nameCol: { flex: 1 },
-  name: { ...typography.title, color: colors.text },
-  email: {
-    ...typography.caption,
-    color: colors.textDim,
-    marginTop: spacing.xs,
-  },
-  statsRow: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.lg },
-  statBox: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 2,
+  scroll: { paddingTop: spacing.lg, paddingBottom: spacing.xl },
+  avatar: { marginTop: spacing.lg, marginBottom: spacing.md },
+  bio: { ...typography.body, color: colors.textDim, marginBottom: spacing.lg },
+  row: {
     paddingVertical: spacing.md,
-    alignItems: "center",
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
   },
-  statValue: { ...typography.title, color: colors.text },
-  statLabel: {
-    ...typography.caption,
-    color: colors.textDim,
-    marginTop: spacing.xs,
-  },
-  menu: { marginTop: spacing.lg },
+  label: { ...typography.caption, color: colors.textDim, marginBottom: 5 },
+  value: { ...typography.body, color: colors.text },
   menuRow: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 2,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    marginBottom: spacing.sm,
+    gap: spacing.sm,
+    paddingVertical: spacing.lg,
+    minHeight: 52,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
   },
-  menuLabel: { ...typography.body, color: colors.text },
-  menuLabelRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
-  chevron: { ...typography.heading, color: colors.textDim },
-  logout: { marginTop: spacing.lg },
+  menuLabel: { ...typography.body, color: colors.text, flex: 1 },
+  actions: { gap: spacing.sm, marginTop: spacing.lg },
 });

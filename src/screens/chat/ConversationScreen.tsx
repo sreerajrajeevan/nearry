@@ -115,11 +115,11 @@ export function ConversationScreen({ route, navigation }: Props) {
           <Text style={styles.backText}>← BACK</Text>
         </TouchableOpacity>
         <Text style={styles.title} numberOfLines={1}>
-          {(title ?? "CHAT").toUpperCase()}
+          {title ?? "Conversation"}
         </Text>
 
         {state === "loading" ? (
-          <Text style={styles.status}>LOADING…</Text>
+          <Text style={styles.status}>Loading…</Text>
         ) : state === "error" ? (
           <EmptyState
             title="Couldn't load messages"
@@ -191,17 +191,19 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
+    borderRadius: 12,
+    borderBottomLeftRadius: 3,
   },
   bubbleMine: { backgroundColor: colors.red, borderColor: colors.red },
   body: { ...typography.body, color: colors.text },
-  bodyMine: { color: colors.white },
+  bodyMine: { color: colors.onAccent },
   time: {
     ...typography.caption,
     color: colors.textFaint,
     marginTop: 4,
-    fontSize: 10,
+    fontSize: 11,
   },
-  timeMine: { color: "rgba(255,255,255,0.7)" },
+  timeMine: { color: colors.onAccent },
   composer: {
     flexDirection: "row",
     alignItems: "flex-end",
@@ -219,8 +221,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     maxHeight: 110,
+    borderRadius: 8,
   },
   send: {
+    borderRadius: 10,
     width: 46,
     height: 46,
     backgroundColor: colors.red,

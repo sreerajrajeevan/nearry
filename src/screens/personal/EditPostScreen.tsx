@@ -78,7 +78,7 @@ export function EditPostScreen({ route, navigation }: EditPostProps) {
   if (loading) {
     return (
       <Screen padded>
-        <Text style={styles.status}>LOADING…</Text>
+        <Text style={styles.status}>Loading…</Text>
       </Screen>
     );
   }
@@ -90,7 +90,7 @@ export function EditPostScreen({ route, navigation }: EditPostProps) {
           hint="It may have been removed."
         />
         <Button
-          title="GO BACK"
+          title="Go back"
           variant="ghost"
           onPress={() => navigation.goBack()}
         />
@@ -152,7 +152,7 @@ export function EditPostScreen({ route, navigation }: EditPostProps) {
   };
 
   return (
-    <Screen>
+    <Screen keyboard>
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scroll}
@@ -165,7 +165,7 @@ export function EditPostScreen({ route, navigation }: EditPostProps) {
         >
           <Text style={styles.backText}>← BACK</Text>
         </TouchableOpacity>
-        <Text style={styles.header}>EDIT POST</Text>
+        <Text style={styles.header}>Edit post</Text>
         {post.joinedCount > 0 && (
           <Text style={styles.note}>
             {post.joinedCount}{" "}
@@ -173,9 +173,9 @@ export function EditPostScreen({ route, navigation }: EditPostProps) {
             joined — vacancies can't go below that.
           </Text>
         )}
-        <Input label="TITLE" value={title} onChangeText={setTitle} />
+        <Input label="Title" value={title} onChangeText={setTitle} />
         <Input
-          label="DESCRIPTION"
+          label="Description"
           value={description}
           onChangeText={setDescription}
           multiline
@@ -185,14 +185,14 @@ export function EditPostScreen({ route, navigation }: EditPostProps) {
         <View style={styles.row}>
           <View style={styles.half}>
             <Input
-              label="DATE (YYYY-MM-DD)"
+              label="Date (yyyy-mm-dd)"
               value={dateStr}
               onChangeText={setDateStr}
             />
           </View>
           <View style={styles.half}>
             <Input
-              label="TIME (HH:MM)"
+              label="Time (hh:mm)"
               value={timeStr}
               onChangeText={setTimeStr}
             />
@@ -201,14 +201,14 @@ export function EditPostScreen({ route, navigation }: EditPostProps) {
         <View style={styles.row}>
           <View style={styles.half}>
             <Input
-              label="COST (OPTIONAL)"
+              label="Cost (optional)"
               value={cost}
               onChangeText={(t: string) => setCost(t.replace(/[^0-9.]/g, ""))}
               keyboardType="decimal-pad"
             />
           </View>
           <View style={styles.half}>
-            <Text style={styles.fieldLabel}>VACANCIES</Text>
+            <Text style={styles.fieldLabel}>Vacancies</Text>
             <View style={styles.stepper}>
               <TouchableOpacity
                 style={styles.stepBtn}
@@ -228,7 +228,7 @@ export function EditPostScreen({ route, navigation }: EditPostProps) {
             </View>
           </View>
         </View>
-        <Text style={styles.fieldLabel}>TAGS</Text>
+        <Text style={styles.fieldLabel}>Tags</Text>
         <View style={styles.chips}>
           {TAG_OPTIONS.map((tag) => {
             const selected = tags.includes(tag);
@@ -250,7 +250,7 @@ export function EditPostScreen({ route, navigation }: EditPostProps) {
         </View>
         {formError ? <Text style={styles.formError}>{formError}</Text> : null}
         <Button
-          title="SAVE CHANGES"
+          title="Save changes"
           onPress={save}
           loading={saving}
           style={styles.save}

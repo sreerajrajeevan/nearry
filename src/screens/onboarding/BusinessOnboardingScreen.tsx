@@ -32,7 +32,7 @@ function Chip({
       style={[styles.chip, selected && styles.chipSelected]}
     >
       <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
-        {label.toUpperCase()}
+        {label}
       </Text>
     </TouchableOpacity>
   );
@@ -60,7 +60,7 @@ export function BusinessOnboardingScreen() {
   const progress = `0${step} / 03`;
 
   return (
-    <Screen padded>
+    <Screen padded scroll keyboard>
       <Text style={styles.progress}>{progress}</Text>
 
       {step === 1 && (
@@ -68,14 +68,14 @@ export function BusinessOnboardingScreen() {
           <Text style={styles.title}>Tell us about your place</Text>
           <Text style={styles.sub}>This is how explorers will find you.</Text>
           <Input
-            label="BUSINESS NAME"
+            label="Business name"
             placeholder="e.g. Neon Arena"
             value={businessName}
             onChangeText={setBusinessName}
             autoCapitalize="words"
             returnKeyType="next"
           />
-          <Text style={styles.sectionLabel}>CATEGORY</Text>
+          <Text style={styles.sectionLabel}>Category</Text>
           <View style={styles.chips}>
             {CATEGORIES.map((item) => (
               <Chip
@@ -88,7 +88,7 @@ export function BusinessOnboardingScreen() {
           </View>
           <View style={styles.footer}>
             <Button
-              title="CONTINUE"
+              title="Continue"
               disabled={businessName.trim().length < 2 || !category}
               onPress={() => setStep(2)}
             />
@@ -103,7 +103,7 @@ export function BusinessOnboardingScreen() {
             Set your area so nearby explorers can discover you.
           </Text>
           <Input
-            label="AREA / LOCALITY"
+            label="Area / locality"
             placeholder="e.g. Indiranagar, Bengaluru"
             value={area}
             onChangeText={setArea}
@@ -111,14 +111,14 @@ export function BusinessOnboardingScreen() {
             returnKeyType="done"
           />
           <Button
-            title="USE CURRENT LOCATION"
+            title="Use current location"
             variant="ghost"
             onPress={useCurrentLocation}
             loading={locating}
           />
           <View style={styles.footer}>
             <Button
-              title="CONTINUE"
+              title="Continue"
               disabled={!area.trim()}
               onPress={() => setStep(3)}
             />
@@ -128,7 +128,7 @@ export function BusinessOnboardingScreen() {
             style={styles.back}
             activeOpacity={0.7}
           >
-            <Text style={styles.backText}>← BACK</Text>
+            <Text style={styles.backText}>← Back</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -136,14 +136,14 @@ export function BusinessOnboardingScreen() {
       {step === 3 && (
         <View style={styles.done}>
           <Text style={styles.doneTitle}>
-            READY TO FILL TABLES<Text style={styles.dot}>.</Text>
+            Ready to meet your neighbourhood<Text style={styles.dot}>.</Text>
           </Text>
           <Text style={styles.sub}>
             Post offers, take bookings, watch footfall grow.
           </Text>
           <View style={styles.footerWide}>
             <Button
-              title="OPEN DASHBOARD"
+              title="Open dashboard"
               onPress={() =>
                 void completeOnboarding({
                   businessName: businessName.trim(),
@@ -162,7 +162,7 @@ export function BusinessOnboardingScreen() {
             style={styles.back}
             activeOpacity={0.7}
           >
-            <Text style={styles.backText}>← BACK</Text>
+            <Text style={styles.backText}>← Back</Text>
           </TouchableOpacity>
         </View>
       )}

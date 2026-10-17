@@ -1,16 +1,24 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert } from 'react-native';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
-import { Screen } from '../../components/Screen';
-import { Card } from '../../components/Card';
-import { Badge } from '../../components/Badge';
-import { Button } from '../../components/Button';
-import { EmptyState } from '../../components/EmptyState';
-import { Avatar } from '../../components/Avatar';
-import { colors, typography, spacing } from '../../theme';
-import { useAuth } from '../../store/AuthContext';
-import { PersonalTabNav } from '../../navigation/types';
-import { listPosts, subscribeToPosts } from '../../services/posts';
+import { formatWhen } from "../../utils/format";
+import React, { useCallback, useEffect, useState } from "react";
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  StyleSheet,
+  Alert,
+} from "react-native";
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import { Screen } from "../../components/Screen";
+import { Card } from "../../components/Card";
+import { Badge } from "../../components/Badge";
+import { Button } from "../../components/Button";
+import { EmptyState } from "../../components/EmptyState";
+import { Avatar } from "../../components/Avatar";
+import { colors, typography, spacing } from "../../theme";
+import { useAuth } from "../../store/AuthContext";
+import { PersonalTabNav } from "../../navigation/types";
+import { listPosts, subscribeToPosts } from "../../services/posts";
 import {
   approveRequest,
   cancelParticipation,
@@ -18,10 +26,14 @@ import {
   listMyRequests,
   listRequestsForPost,
   withdrawRequest,
-} from '../../services/joinRequests';
-import { NeedPost, JoinRequest, Booking } from '../../services/mappers';
-import { listMyBookings, cancelBooking, subscribeToBookings } from '../../services/bookings';
-import { getOrCreateConversation } from '../../services/chat';
+} from "../../services/joinRequests";
+import { NeedPost, JoinRequest, Booking } from "../../services/mappers";
+import {
+  listMyBookings,
+  cancelBooking,
+  subscribeToBookings,
+} from "../../services/bookings";
+import { getOrCreateConversation } from "../../services/chat";
 
 type IncomingItem = { post: NeedPost; requests: JoinRequest[] };
 
@@ -37,19 +49,19 @@ export function ActivityScreen() {
   const [mine, setMine] = useState<(JoinRequest & { postTitle: string })[]>([]);
   const [incoming, setIncoming] = useState<IncomingItem[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
-  const [state, setState] = useState<'loading' | 'error' | 'ready'>('loading');
+  const [state, setState] = useState<"loading" | "error" | "ready">("loading");
   const [busy, setBusy] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!myId) {
-      setState('ready');
+      setState("ready");
       return;
     }
-    setState('loading');
+    setState("loading");
     try {
       const [myReqs, myPosts, myBookings] = await Promise.all([
         listMyRequests(myId),
-        listPosts({ authorId: myId, status: 'all' }),
+        listPosts({ authorId: myId, status: "all" }),
         listMyBookings(myId),
       ]);
       setMine(myReqs);
@@ -60,9 +72,9 @@ export function ActivityScreen() {
         if (reqs.length > 0) items.push({ post, requests: reqs });
       }
       setIncoming(items);
-      setState('ready');
+      setState("ready");
     } catch {
-      setState('error');
+      setState("error");
     }
   }, [myId]);
 
@@ -83,7 +95,10 @@ export function ActivityScreen() {
       await fn();
       await load();
     } catch (e) {
-      Alert.alert('Hmm', e instanceof Error ? e.message : 'Something went wrong.');
+      Alert.alert(
+        "Hmm",
+        e instanceof Error ? e.message : "Something went wrong.",
+      );
     } finally {
       setBusy(null);
     }
@@ -93,66 +108,90 @@ export function ActivityScreen() {
     if (!myId || !b.businessId) return;
     setBusy(`m${b.id}`);
     try {
-      const conversationId = await getOrCreateConversation(b.businessId, { bookingId: b.id });
-      navigation.navigate('Conversation', { conversationId, title: b.offerTitle });
+      const conversationId = await getOrCreateConversation(b.businessId, {
+        bookingId: b.id,
+      });
+      navigation.navigate("Conversation", {
+        conversationId,
+        title: b.offerTitle,
+      });
     } catch (e) {
-      Alert.alert('Could not open chat', e instanceof Error ? e.message : 'Please try again.');
+      Alert.alert(
+        "Could not open chat",
+        e instanceof Error ? e.message : "Please try again.",
+      );
     } finally {
       setBusy(null);
     }
   };
 
-  const bookingTone = (s: Booking['status']): 'neutral' | 'green' | 'red' =>
-    s === 'confirmed' ? 'green' : s === 'pending' ? 'neutral' : 'red';
+  const bookingTone = (s: Booking["status"]): "neutral" | "green" | "red" =>
+    s === "confirmed" ? "green" : s === "pending" ? "neutral" : "red";
 
-  const statusTone = (s: JoinRequest['status']) =>
-    s === 'approved' ? 'green' : s === 'pending' ? 'neutral' : 'red';
+  const statusTone = (s: JoinRequest["status"]) =>
+    s === "approved" ? "green" : s === "pending" ? "neutral" : "red";
 
   return (
     <Screen>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-        <Text style={styles.header}>ACTIVITY</Text>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scroll}
+      >
+        <Text style={styles.header}>Activity</Text>
 
-        {state === 'loading' ? (
-          <Text style={styles.status}>LOADING…</Text>
-        ) : state === 'error' ? (
+        {state === "loading" ? (
+          <Text style={styles.status}>Loading…</Text>
+        ) : state === "error" ? (
           <View>
-            <EmptyState title="Couldn't load activity" hint="Check your connection and retry." />
-            <Button title="RETRY" onPress={() => load()} />
+            <EmptyState
+              title="Couldn't load activity"
+              hint="Check your connection and retry."
+            />
+            <Button title="Retry" onPress={() => load()} />
           </View>
         ) : (
           <>
             {incoming.length > 0 && (
               <>
-                <Text style={styles.sectionLabel}>INCOMING REQUESTS</Text>
+                <Text style={styles.sectionLabel}>Incoming requests</Text>
                 {incoming.map(({ post, requests }) => (
                   <View key={post.id} style={styles.group}>
                     <TouchableOpacity
                       activeOpacity={0.8}
-                      onPress={() => navigation.navigate('PostDetails', { postId: post.id })}
+                      onPress={() =>
+                        navigation.navigate("PostDetails", { postId: post.id })
+                      }
                     >
                       <Text style={styles.groupTitle}>{post.title}</Text>
                     </TouchableOpacity>
                     {requests
-                      .filter((r) => r.status === 'pending')
+                      .filter((r) => r.status === "pending")
                       .map((r) => (
                         <Card key={r.id} style={styles.reqCard}>
                           <View style={styles.reqRow}>
                             <Avatar name={r.requesterName} size={28} />
-                            <Text style={styles.reqName}>{r.requesterName}</Text>
+                            <Text style={styles.reqName}>
+                              {r.requesterName}
+                            </Text>
                           </View>
                           <View style={styles.reqActions}>
                             <Button
-                              title="DECLINE"
+                              title="Decline"
                               variant="ghost"
                               loading={busy === `d${r.id}`}
-                              onPress={() => run(`d${r.id}`, () => declineRequest(r.id))}
+                              onPress={() =>
+                                run(`d${r.id}`, () => declineRequest(r.id))
+                              }
                             />
                             <View style={styles.reqGap} />
                             <Button
-                              title="APPROVE"
+                              title="Approve"
                               loading={busy === `a${r.id}`}
-                              onPress={() => run(`a${r.id}`, () => approveRequest(r.id).then(() => {}))}
+                              onPress={() =>
+                                run(`a${r.id}`, () =>
+                                  approveRequest(r.id).then(() => {}),
+                                )
+                              }
                             />
                           </View>
                         </Card>
@@ -164,15 +203,19 @@ export function ActivityScreen() {
 
             {bookings.length > 0 && (
               <>
-                <Text style={styles.sectionLabel}>MY BOOKINGS</Text>
+                <Text style={styles.sectionLabel}>My bookings</Text>
                 {bookings.map((b) => (
                   <Card key={b.id} style={styles.row}>
                     <View style={styles.rowTop}>
                       <Text style={styles.postTitle}>{b.offerTitle}</Text>
-                      <Badge label={b.status.toUpperCase()} tone={bookingTone(b.status)} />
+                      <Badge
+                        label={b.status.toUpperCase()}
+                        tone={bookingTone(b.status)}
+                      />
                     </View>
                     <Text style={styles.bookMeta}>
-                      {new Date(b.slot).toLocaleString()} · {b.partySize} {b.partySize === 1 ? 'SEAT' : 'SEATS'}
+                      {formatWhen(b.slot)} · {b.partySize}{" "}
+                      {b.partySize === 1 ? "person" : "people"}
                     </Text>
                     <View style={styles.bookActions}>
                       {b.businessId && (
@@ -181,17 +224,21 @@ export function ActivityScreen() {
                           onPress={() => openBookingChat(b)}
                         >
                           <Text style={styles.messageLink}>
-                            {busy === `m${b.id}` ? '…' : 'MESSAGE'}
+                            {busy === `m${b.id}` ? "…" : "MESSAGE"}
                           </Text>
                         </TouchableOpacity>
                       )}
-                      {(b.status === 'pending' || b.status === 'confirmed') && (
+                      {(b.status === "pending" || b.status === "confirmed") && (
                         <TouchableOpacity
                           activeOpacity={0.7}
                           style={styles.cancelWrap}
-                          onPress={() => run(`bk${b.id}`, () => cancelBooking(b.id))}
+                          onPress={() =>
+                            run(`bk${b.id}`, () => cancelBooking(b.id))
+                          }
                         >
-                          <Text style={styles.withdraw}>{busy === `bk${b.id}` ? '…' : 'CANCEL BOOKING'}</Text>
+                          <Text style={styles.withdraw}>
+                            {busy === `bk${b.id}` ? "…" : "CANCEL BOOKING"}
+                          </Text>
                         </TouchableOpacity>
                       )}
                     </View>
@@ -200,37 +247,53 @@ export function ActivityScreen() {
               </>
             )}
 
-            <Text style={styles.sectionLabel}>MY REQUESTS</Text>
+            <Text style={styles.sectionLabel}>My requests</Text>
             {mine.length === 0 ? (
-              <EmptyState title="No requests yet" hint="Find a post and request to join." />
+              <EmptyState
+                title="No requests yet"
+                hint="Find a post and request to join."
+              />
             ) : (
               mine.map((r) => (
                 <Card key={r.id} style={styles.row}>
                   <View style={styles.rowTop}>
                     <Text style={styles.postTitle}>{r.postTitle}</Text>
-                    <Badge label={r.status.toUpperCase()} tone={statusTone(r.status)} />
+                    <Badge
+                      label={r.status.toUpperCase()}
+                      tone={statusTone(r.status)}
+                    />
                   </View>
                   <View style={styles.rowActions}>
                     <TouchableOpacity
                       activeOpacity={0.7}
-                      onPress={() => navigation.navigate('PostDetails', { postId: r.postId })}
+                      onPress={() =>
+                        navigation.navigate("PostDetails", { postId: r.postId })
+                      }
                     >
-                      <Text style={styles.viewPost}>VIEW POST →</Text>
+                      <Text style={styles.viewPost}>View post →</Text>
                     </TouchableOpacity>
-                    {r.status === 'pending' && (
+                    {r.status === "pending" && (
                       <TouchableOpacity
                         activeOpacity={0.7}
-                        onPress={() => run(`w${r.id}`, () => withdrawRequest(r.id))}
+                        onPress={() =>
+                          run(`w${r.id}`, () => withdrawRequest(r.id))
+                        }
                       >
-                        <Text style={styles.withdraw}>{busy === `w${r.id}` ? '…' : 'WITHDRAW'}</Text>
+                        <Text style={styles.withdraw}>
+                          {busy === `w${r.id}` ? "…" : "WITHDRAW"}
+                        </Text>
                       </TouchableOpacity>
                     )}
-                    {r.status === 'approved' && (
+                    {r.status === "approved" && (
                       <TouchableOpacity
                         activeOpacity={0.7}
-                        onPress={() => run(`l${r.id}`, () => cancelParticipation(r.id))}
+                        onPress={() =>
+                          run(`l${r.id}`, () => cancelParticipation(r.id))
+                        }
                       >
-                        <Text style={styles.withdraw}>{busy === `l${r.id}` ? '…' : 'LEAVE'}</Text>
+                        <Text style={styles.withdraw}>
+                          {busy === `l${r.id}` ? "…" : "LEAVE"}
+                        </Text>
                       </TouchableOpacity>
                     )}
                   </View>
@@ -246,24 +309,60 @@ export function ActivityScreen() {
 
 const styles = StyleSheet.create({
   scroll: { paddingBottom: spacing.xl },
-  header: { ...typography.title, color: colors.text, marginTop: spacing.sm, marginBottom: spacing.md },
+  header: {
+    ...typography.title,
+    color: colors.text,
+    marginTop: spacing.sm,
+    marginBottom: spacing.md,
+  },
   status: { ...typography.label, color: colors.textDim, marginTop: spacing.xl },
-  sectionLabel: { ...typography.label, color: colors.textDim, marginTop: spacing.lg, marginBottom: spacing.sm },
+  sectionLabel: {
+    ...typography.label,
+    color: colors.textDim,
+    marginTop: spacing.lg,
+    marginBottom: spacing.sm,
+  },
   group: { marginBottom: spacing.md },
-  groupTitle: { ...typography.heading, color: colors.text, marginBottom: spacing.sm },
+  groupTitle: {
+    ...typography.heading,
+    color: colors.text,
+    marginBottom: spacing.sm,
+  },
   reqCard: { marginBottom: spacing.sm },
-  reqRow: { flexDirection: 'row', alignItems: 'center', marginBottom: spacing.sm },
+  reqRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: spacing.sm,
+  },
   reqName: { ...typography.body, color: colors.text, marginLeft: spacing.sm },
-  reqActions: { flexDirection: 'row' },
+  reqActions: { flexDirection: "row" },
   reqGap: { width: spacing.sm },
   row: { marginBottom: spacing.sm },
-  rowTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: spacing.sm },
+  rowTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: spacing.sm,
+  },
   postTitle: { ...typography.body, color: colors.text, flex: 1 },
-  rowActions: { flexDirection: 'row', justifyContent: 'space-between', marginTop: spacing.sm },
-  bookMeta: { ...typography.caption, color: colors.textDim, marginTop: spacing.xs },
-  bookActions: { flexDirection: 'row', gap: spacing.lg, marginTop: spacing.sm, alignItems: 'center' },
+  rowActions: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: spacing.sm,
+  },
+  bookMeta: {
+    ...typography.caption,
+    color: colors.textDim,
+    marginTop: spacing.xs,
+  },
+  bookActions: {
+    flexDirection: "row",
+    gap: spacing.lg,
+    marginTop: spacing.sm,
+    alignItems: "center",
+  },
   messageLink: { ...typography.label, color: colors.red },
-  cancelWrap: { marginTop: spacing.sm, alignSelf: 'flex-start' },
+  cancelWrap: { marginTop: spacing.sm, alignSelf: "flex-start" },
   viewPost: { ...typography.label, color: colors.textDim },
   withdraw: { ...typography.label, color: colors.red },
 });

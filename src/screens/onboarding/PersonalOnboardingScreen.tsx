@@ -32,7 +32,7 @@ function Chip({
       style={[styles.chip, selected && styles.chipSelected]}
     >
       <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
-        {label.toUpperCase()}
+        {label}
       </Text>
     </TouchableOpacity>
   );
@@ -63,7 +63,7 @@ export function PersonalOnboardingScreen() {
   const progress = `0${step} / 03`;
 
   return (
-    <Screen padded>
+    <Screen padded scroll keyboard>
       <Text style={styles.progress}>{progress}</Text>
 
       {step === 1 && (
@@ -83,7 +83,7 @@ export function PersonalOnboardingScreen() {
             ))}
           </View>
           <View style={styles.footer}>
-            <Button title="CONTINUE" onPress={() => setStep(2)} />
+            <Button title="Continue" onPress={() => setStep(2)} />
           </View>
         </View>
       )}
@@ -97,19 +97,19 @@ export function PersonalOnboardingScreen() {
           </Text>
           <View style={styles.footer}>
             <Button
-              title="ENABLE LOCATION"
+              title="Enable location"
               onPress={enableLocation}
               loading={locating}
             />
             <View style={styles.gap} />
-            <Button title="SKIP" variant="ghost" onPress={() => setStep(3)} />
+            <Button title="Skip" variant="ghost" onPress={() => setStep(3)} />
           </View>
           <TouchableOpacity
             onPress={() => setStep(1)}
             style={styles.back}
             activeOpacity={0.7}
           >
-            <Text style={styles.backText}>← BACK</Text>
+            <Text style={styles.backText}>← Back</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -117,14 +117,14 @@ export function PersonalOnboardingScreen() {
       {step === 3 && (
         <View style={styles.done}>
           <Text style={styles.doneTitle}>
-            YOU'RE IN<Text style={styles.dot}>.</Text>
+            You’re in<Text style={styles.dot}>.</Text>
           </Text>
           <Text style={styles.sub}>
             Your people are already out there. Go find them.
           </Text>
           <View style={styles.footer}>
             <Button
-              title="START EXPLORING"
+              title="Start exploring"
               onPress={() =>
                 void completeOnboarding({ interests: selected }).catch((e) =>
                   Alert.alert(
@@ -140,7 +140,7 @@ export function PersonalOnboardingScreen() {
             style={styles.back}
             activeOpacity={0.7}
           >
-            <Text style={styles.backText}>← BACK</Text>
+            <Text style={styles.backText}>← Back</Text>
           </TouchableOpacity>
         </View>
       )}

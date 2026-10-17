@@ -1,53 +1,41 @@
-/**
- * Nearry theme — quiet minimal (mockups v2, 2026-10-17).
- * Near-white paper, near-black ink, terracotta accent. Flat rows with
- * hairline dividers, bold sans headlines, text-link actions. No green.
- */
+/** Hello Nearry: warm white, dark ink, and one burnt-orange accent. */
 export const colors = {
-  // Brand
-  clay: '#C05B3C',
-  clayDeep: '#A34A2F',
-  claySoft: '#F6E3D8',
-  paper: '#FCFBF8',
-  card: '#FFFFFF',
-  ink: '#1B1B1B',
-  muted: '#6F6F6F',
-  faint: '#A8A8A8',
-  hairline: '#E9E6E0',
-  lineStrong: '#D8D4CB',
-
-  // Semantic
-  background: '#FCFBF8',
-  surface: '#FFFFFF',
-  surfaceRaised: '#FFFFFF',
-  border: '#E9E6E0',
-  borderStrong: '#D8D4CB',
-  text: '#1B1B1B',
-  textDim: '#6F6F6F',
-  textFaint: '#A8A8A8',
-  accent: '#C05B3C',
-  onAccent: '#FFFFFF',
-  success: '#2E7D4F',
-  warning: '#C98A2C',
-
-  // Legacy aliases (kept so existing references keep compiling;
-  // prefer the brand/semantic tokens in new code)
-  black: '#1B1B1B',
-  white: '#FFFFFF',
-  red: '#C05B3C',
-  redDim: '#A34A2F',
-
-  // Neutral ramp
-  gray950: '#1B1B1B',
-  gray900: '#2B2B2B',
-  gray850: '#3A3A3A',
-  gray800: '#4A4A4A',
-  gray700: '#6F6F6F',
-  gray600: '#8A8A8A',
-  gray500: '#A8A8A8',
-  gray400: '#C4C4C4',
-  gray300: '#D8D4CB',
-  gray200: '#E9E6E0',
+  paper: "#FAF9F5",
+  ink: "#252A26",
+  clay: "#C14D2F",
+  clayDeep: "#A64025",
+  claySoft: "#F6E8DF",
+  card: "#FAF9F5",
+  muted: "#6F736C",
+  faint: "#6F736C",
+  hairline: "#E2E3DB",
+  lineStrong: "#C9CCC1",
+  background: "#FAF9F5",
+  surface: "#FAF9F5",
+  surfaceRaised: "#EEEFE8",
+  border: "#E2E3DB",
+  borderStrong: "#C9CCC1",
+  text: "#252A26",
+  textDim: "#6F736C",
+  textFaint: "#6F736C",
+  accent: "#C14D2F",
+  onAccent: "#FFFEFA",
+  // Status is always named in text; it does not add another brand colour.
+  success: "#252A26",
+  warning: "#A64025",
+  black: "#252A26",
+  white: "#FFFEFA",
+  red: "#C14D2F",
+  redDim: "#A64025",
+  gray950: "#252A26",
+  gray900: "#353B34",
+  gray850: "#464C44",
+  gray800: "#596052",
+  gray700: "#6F736C",
+  gray600: "#6F736C",
+  gray500: "#92978C",
+  gray400: "#B5BAAC",
+  gray300: "#C9CCC1",
+  gray200: "#E2E3DB",
 } as const;
-
 export type Colors = typeof colors;

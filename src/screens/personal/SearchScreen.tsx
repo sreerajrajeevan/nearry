@@ -1,200 +1,227 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, StyleSheet } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
-import { Screen } from '../../components/Screen';
-import { Card } from '../../components/Card';
-import { Badge } from '../../components/Badge';
-import { Input } from '../../components/Input';
-import { EmptyState } from '../../components/EmptyState';
-import { Button } from '../../components/Button';
-import { PostRow } from '../../components/PostRow';
-import { colors, typography, spacing } from '../../theme';
-import { mockOffers } from '../../data/mock';
-import { searchVenues } from '../../services/venues';
-import { listPosts } from '../../services/posts';
-import { NeedPost, Venue } from '../../services/mappers';
-import { timeLeft } from '../../utils/format';
-import { PersonalTabNav } from '../../navigation/types';
+import React, { useEffect, useState } from "react";
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  StyleSheet,
+} from "react-native";
+import { useNavigation } from "@react-navigation/native";
+import { Screen } from "../../components/Screen";
+import { PageHeading } from "../../components/PageHeading";
+import { FilterTabs } from "../../components/FilterTabs";
+import { Icon } from "../../components/Icon";
+import { Input } from "../../components/Input";
+import { EmptyState } from "../../components/EmptyState";
+import { Button } from "../../components/Button";
+import { PostRow } from "../../components/PostRow";
+import { OfferRow } from "../../components/OfferRow";
+import { colors, typography, spacing } from "../../theme";
+import { searchVenues } from "../../services/venues";
+import { listPosts } from "../../services/posts";
+import { listLiveOffers } from "../../services/offers";
+import { NeedPost, Venue, Offer } from "../../services/mappers";
+import { PersonalTabNav } from "../../navigation/types";
 
-type Filter = 'all' | 'venues' | 'posts' | 'offers';
-
-const FILTERS: { key: Filter; label: string }[] = [
-  { key: 'all', label: 'ALL' },
-  { key: 'venues', label: 'VENUES' },
-  { key: 'posts', label: 'POSTS' },
-  { key: 'offers', label: 'OFFERS' },
+type Filter = "all" | "venues" | "posts" | "offers";
+const filters: { key: Filter; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "venues", label: "Places" },
+  { key: "posts", label: "Plans" },
+  { key: "offers", label: "Offers" },
 ];
-
 export function SearchScreen() {
   const navigation = useNavigation<PersonalTabNav>();
-  const [query, setQuery] = useState('');
-  const [filter, setFilter] = useState<Filter>('all');
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<Filter>("all");
+  const [retry, setRetry] = useState(0);
   const [venues, setVenues] = useState<Venue[]>([]);
   const [posts, setPosts] = useState<NeedPost[]>([]);
-  const [state, setState] = useState<'idle' | 'loading' | 'error' | 'ready'>('idle');
-
+  const [offers, setOffers] = useState<Offer[]>([]);
+  const [state, setState] = useState<"idle" | "loading" | "error" | "ready">(
+    "idle",
+  );
   useEffect(() => {
+    let active = true;
     const q = query.trim();
+    setVenues([]);
+    setPosts([]);
+    setOffers([]);
     if (!q) {
-      setState('idle');
-      setVenues([]);
-      setPosts([]);
+      setState("idle");
       return;
     }
-    setState('loading');
-    const t = setTimeout(async () => {
+    setState("loading");
+    const timer = setTimeout(async () => {
       try {
-        const [v, p] = await Promise.all([searchVenues(q), listPosts({ search: q })]);
+        const [v, p, o] = await Promise.all([
+          searchVenues(q),
+          listPosts({ search: q }),
+          listLiveOffers(),
+        ]);
+        if (!active) return;
         setVenues(v);
         setPosts(p);
-        setState('ready');
+        setOffers(
+          o.filter((offer) =>
+            `${offer.title} ${offer.businessName} ${offer.description}`
+              .toLowerCase()
+              .includes(q.toLowerCase()),
+          ),
+        );
+        setState("ready");
       } catch {
-        setState('error');
+        if (active) setState("error");
       }
     }, 300);
-    return () => clearTimeout(t);
-  }, [query]);
-
-  const q = query.trim().toLowerCase();
-  const offers = q
-    ? mockOffers.filter(
-        (o) => o.title.toLowerCase().includes(q) || o.businessName.toLowerCase().includes(q),
-      )
-    : [];
-
-  const showVenues = filter === 'all' || filter === 'venues';
-  const showPosts = filter === 'all' || filter === 'posts';
-  const showOffers = filter === 'all' || filter === 'offers';
-  const searched = state === 'ready' || state === 'loading' || state === 'error';
-  const hasResults =
-    (showVenues && venues.length > 0) ||
-    (showPosts && posts.length > 0) ||
-    (showOffers && offers.length > 0);
-
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [query, retry]);
+  const showVenues = filter === "all" || filter === "venues";
+  const showPosts = filter === "all" || filter === "posts";
+  const showOffers = filter === "all" || filter === "offers";
+  const count =
+    (showVenues ? venues.length : 0) +
+    (showPosts ? posts.length : 0) +
+    (showOffers ? offers.length : 0);
   return (
-    <Screen>
+    <Screen keyboard>
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scroll}
         keyboardShouldPersistTaps="handled"
+        contentContainerStyle={styles.scroll}
       >
-        <Text style={styles.header}>SEARCH</Text>
-
+        <PageHeading
+          greeting="Something in mind?"
+          title={"Find your\nkind of hello."}
+        />
         <Input
-          placeholder="Venues, posts, offers…"
+          accessibilityLabel="Search nearby"
+          placeholder="Football, coffee, haircut…"
           value={query}
           onChangeText={setQuery}
           autoCapitalize="none"
-          containerStyle={styles.input}
+          returnKeyType="search"
+          clearButtonMode="while-editing"
         />
-
-        <View style={styles.chips}>
-          {FILTERS.map((f) => {
-            const active = filter === f.key;
-            return (
-              <TouchableOpacity
-                key={f.key}
-                onPress={() => setFilter(f.key)}
-                activeOpacity={0.8}
-                style={[styles.chip, active && styles.chipActive]}
-              >
-                <Text style={[styles.chipText, active && styles.chipTextActive]}>{f.label}</Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        {!searched ? (
-          <EmptyState title="Search Nearry" hint="Find venues, people and offers around you." />
-        ) : state === 'loading' ? (
-          <Text style={styles.status}>SEARCHING…</Text>
-        ) : state === 'error' ? (
-          <View>
-            <EmptyState title="Search failed" hint="Check your connection and try again." />
-            <Button title="RETRY" onPress={() => setQuery((s) => s + ' ')} />
-          </View>
-        ) : hasResults ? (
+        <FilterTabs
+          options={filters}
+          selected={filter}
+          onSelect={setFilter}
+          label="Search results"
+        />
+        {state === "idle" ? (
+          <EmptyState
+            title="What would you like to find?"
+            hint="Search for places, plans, or an opening nearby."
+          />
+        ) : state === "loading" ? (
+          <Text accessibilityLiveRegion="polite" style={styles.status}>
+            Looking around…
+          </Text>
+        ) : state === "error" ? (
           <>
-            {showVenues && venues.length > 0 ? (
+            <EmptyState
+              title="Couldn’t search right now"
+              hint="Check your connection and try again."
+            />
+            <Button
+              title="Try again"
+              variant="ghost"
+              onPress={() => setRetry((v) => v + 1)}
+            />
+          </>
+        ) : count === 0 ? (
+          <EmptyState
+            title="No hellos just yet"
+            hint="Try another place, activity, or service."
+          />
+        ) : (
+          <>
+            <Text accessibilityLiveRegion="polite" style={styles.status}>
+              {count} result{count === 1 ? "" : "s"}
+            </Text>
+            {showPosts && posts.length > 0 && (
               <>
-                <Text style={styles.sectionLabel}>VENUES</Text>
-                {venues.map((venue) => (
-                  <TouchableOpacity
-                    key={venue.id}
-                    activeOpacity={0.85}
-                    onPress={() => navigation.navigate('VenueDetails', { venueId: venue.id })}
-                  >
-                    <Card style={styles.resultCard}>
-                      <Text style={styles.resultTitle}>{venue.name}</Text>
-                      <Text style={styles.resultMeta}>
-                        {venue.category} · {venue.area}
-                      </Text>
-                    </Card>
-                  </TouchableOpacity>
-                ))}
-              </>
-            ) : null}
-
-            {showPosts && posts.length > 0 ? (
-              <>
-                <Text style={styles.sectionLabel}>POSTS</Text>
+                <Text style={styles.sectionLabel}>People & plans</Text>
                 {posts.map((post) => (
                   <PostRow
                     key={post.id}
                     post={post}
-                    onPress={() => navigation.navigate('PostDetails', { postId: post.id })}
+                    onPress={() =>
+                      navigation.navigate("PostDetails", { postId: post.id })
+                    }
                   />
                 ))}
               </>
-            ) : null}
-
-            {showOffers && offers.length > 0 ? (
+            )}
+            {showOffers && offers.length > 0 && (
               <>
-                <Text style={styles.sectionLabel}>OFFERS</Text>
+                <Text style={styles.sectionLabel}>A little opening</Text>
                 {offers.map((offer) => (
-                  <Card key={offer.id} accent style={styles.resultCard}>
-                    <Text style={styles.resultMeta}>{offer.businessName}</Text>
-                    <Text style={styles.resultTitle}>{offer.title}</Text>
-                    <View style={styles.offerFooter}>
-                      <Badge label={timeLeft(offer.endsAt)} tone="red" />
-                    </View>
-                  </Card>
+                  <OfferRow
+                    key={offer.id}
+                    offer={offer}
+                    onPress={() =>
+                      navigation.navigate("OfferDetails", { offerId: offer.id })
+                    }
+                  />
                 ))}
               </>
-            ) : null}
+            )}
+            {showVenues && venues.length > 0 && (
+              <>
+                <Text style={styles.sectionLabel}>Places to know</Text>
+                {venues.map((venue) => (
+                  <TouchableOpacity
+                    accessibilityRole="button"
+                    key={venue.id}
+                    activeOpacity={0.65}
+                    style={styles.venue}
+                    onPress={() =>
+                      navigation.navigate("VenueDetails", { venueId: venue.id })
+                    }
+                  >
+                    <View style={styles.copy}>
+                      <Text style={styles.title}>{venue.name}</Text>
+                      <Text style={styles.meta}>
+                        {venue.category} · {venue.area}
+                      </Text>
+                    </View>
+                    <Icon
+                      name="arrow-up-right"
+                      size={17}
+                      color={colors.accent}
+                    />
+                  </TouchableOpacity>
+                ))}
+              </>
+            )}
           </>
-        ) : (
-          <EmptyState title="No results" hint="Try another search." />
         )}
       </ScrollView>
     </Screen>
   );
 }
-
 const styles = StyleSheet.create({
-  scroll: { paddingBottom: spacing.xl },
-  header: { ...typography.title, color: colors.text, marginTop: spacing.sm },
-  input: { marginTop: spacing.md },
-  status: { ...typography.label, color: colors.textDim, marginTop: spacing.xl },
-  chips: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.sm, flexWrap: 'wrap' },
-  chip: {
-    borderWidth: 1,
-    borderColor: colors.borderStrong,
-    borderRadius: 2,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-  },
-  chipActive: { borderColor: colors.red },
-  chipText: { ...typography.caption, color: colors.textDim },
-  chipTextActive: { color: colors.red },
+  scroll: { paddingTop: spacing.md, paddingBottom: spacing.xl },
+  status: { ...typography.bodySmall, color: colors.textDim },
   sectionLabel: {
-    ...typography.label,
+    ...typography.bodySmall,
     color: colors.textDim,
     marginTop: spacing.lg,
-    marginBottom: spacing.sm,
   },
-  resultCard: { marginBottom: spacing.sm },
-  resultTitle: { ...typography.heading, color: colors.text },
-  resultMeta: { ...typography.caption, color: colors.textDim, marginTop: spacing.xs },
-  offerFooter: { marginTop: spacing.sm },
+  venue: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    paddingVertical: spacing.lg,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  copy: { flex: 1 },
+  title: { ...typography.heading, color: colors.text },
+  meta: { ...typography.bodySmall, color: colors.textDim, marginTop: 4 },
 });

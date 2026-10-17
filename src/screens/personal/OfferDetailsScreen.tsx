@@ -24,7 +24,7 @@ import {
   bookOffer,
 } from "../../services/bookings";
 import { Offer } from "../../services/mappers";
-import { timeLeft } from "../../utils/format";
+import { timeLeft, formatWhen, formatTime } from "../../utils/format";
 
 type Props = NativeStackScreenProps<PersonalStackParamList, "OfferDetails">;
 
@@ -54,6 +54,11 @@ export function OfferDetailsScreen({ route, navigation }: Props) {
         listOfferSlots(offerId),
       ]);
       setSlots(available);
+      setSlotId((current) =>
+        available.some((slot) => slot.id === current && slot.seats_left > 0)
+          ? current
+          : (available.find((slot) => slot.seats_left > 0)?.id ?? ""),
+      );
       if (!o) throw new Error("Offer not found.");
       setOffer(o);
       setState("ready");
@@ -99,7 +104,7 @@ export function OfferDetailsScreen({ route, navigation }: Props) {
   if (state === "loading") {
     return (
       <Screen padded>
-        <Text style={styles.status}>LOADING…</Text>
+        <Text style={styles.status}>Loading…</Text>
       </Screen>
     );
   }
@@ -111,7 +116,7 @@ export function OfferDetailsScreen({ route, navigation }: Props) {
           hint="It may have ended."
         />
         <Button
-          title="GO BACK"
+          title="Go back"
           variant="ghost"
           onPress={() => navigation.goBack()}
         />
@@ -131,7 +136,7 @@ export function OfferDetailsScreen({ route, navigation }: Props) {
           activeOpacity={0.7}
           style={styles.back}
         >
-          <Text style={styles.backText}>← BACK</Text>
+          <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>
 
         <View style={styles.header}>
@@ -140,19 +145,22 @@ export function OfferDetailsScreen({ route, navigation }: Props) {
             <Badge label={`-${offer.discountPct}%`} tone="red" />
           )}
         </View>
-        <Text style={styles.business}>{offer.businessName.toUpperCase()}</Text>
+        <Text style={styles.business}>{offer.businessName}</Text>
         <Text style={styles.desc}>{offer.description}</Text>
         <View style={styles.metaRow}>
           <Badge label={timeLeft(offer.endsAt)} tone="red" />
           {offer.priceCents !== undefined && (
             <Badge label={fmtINR(offer.priceCents)} tone="neutral" />
           )}
-          <Text style={styles.meta}>{offer.slotCapacity} SEATS/SLOT</Text>
+          <Text style={styles.meta}>
+            {offer.slotCapacity} {offer.slotCapacity === 1 ? "place" : "places"}{" "}
+            per slot
+          </Text>
         </View>
 
         {done ? (
           <View style={styles.doneBox}>
-            <Badge label="BOOKED" tone="green" />
+            <Badge label="Booked" tone="green" />
             <Text style={styles.doneText}>
               Your seats are held. The business will confirm shortly — track it
               in Activity.
@@ -165,7 +173,7 @@ export function OfferDetailsScreen({ route, navigation }: Props) {
           />
         ) : (
           <View style={styles.bookBox}>
-            <Text style={styles.sectionTitle}>BOOK SEATS</Text>
+            <Text style={styles.sectionTitle}>Choose a time</Text>
             {slots.length === 0 && (
               <Text style={{ color: colors.textDim }}>
                 No upcoming slots are available.
@@ -179,7 +187,7 @@ export function OfferDetailsScreen({ route, navigation }: Props) {
                 style={{
                   padding: 16,
                   marginBottom: 8,
-                  borderWidth: 1,
+                  borderBottomWidth: 1,
                   borderColor: slotId === slot.id ? colors.red : colors.border,
                 }}
                 accessibilityRole="button"
@@ -189,18 +197,15 @@ export function OfferDetailsScreen({ route, navigation }: Props) {
                 }}
               >
                 <Text style={{ color: colors.text }}>
-                  {new Date(slot.starts_at).toLocaleString()} –{" "}
-                  {new Date(slot.ends_at).toLocaleTimeString([], {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
+                  {formatWhen(slot.starts_at)} – {formatTime(slot.ends_at)}
                 </Text>
                 <Text style={{ color: colors.textDim }}>
-                  {slot.seats_left} seats available
+                  {slot.seats_left} {slot.seats_left === 1 ? "place" : "places"}{" "}
+                  available
                 </Text>
               </TouchableOpacity>
             ))}
-            <Text style={styles.fieldLabel}>SEATS</Text>
+            <Text style={styles.fieldLabel}>People</Text>
             <View style={styles.stepper}>
               <TouchableOpacity
                 style={styles.stepBtn}
@@ -213,7 +218,15 @@ export function OfferDetailsScreen({ route, navigation }: Props) {
               <TouchableOpacity
                 style={styles.stepBtn}
                 activeOpacity={0.8}
-                onPress={() => setPartySize((v) => Math.min(20, v + 1))}
+                onPress={() =>
+                  setPartySize((v) =>
+                    Math.min(
+                      slots.find((s) => s.id === slotId)?.seats_left ??
+                        offer.slotCapacity,
+                      v + 1,
+                    ),
+                  )
+                }
               >
                 <Text style={styles.stepText}>+</Text>
               </TouchableOpacity>
@@ -222,14 +235,18 @@ export function OfferDetailsScreen({ route, navigation }: Props) {
               <Text style={styles.formError}>{formError}</Text>
             ) : null}
             <Button
-              title="BOOK NOW"
+              title="Request this slot"
+              disabled={
+                !slotId ||
+                !slots.some((s) => s.id === slotId && s.seats_left >= partySize)
+              }
               onPress={onBook}
               loading={booking}
               style={styles.bookBtn}
             />
             <Text style={styles.note}>
-              No payment in this milestone — pending bookings hold seats for up
-              to 30 minutes awaiting confirmation.
+              Your place is held for up to 30 minutes while the business
+              confirms. No payment is collected here.
             </Text>
           </View>
         )}
@@ -241,7 +258,12 @@ export function OfferDetailsScreen({ route, navigation }: Props) {
 const styles = StyleSheet.create({
   scroll: { paddingBottom: spacing.xl * 2 },
   status: { ...typography.label, color: colors.textDim, marginTop: spacing.xl },
-  back: { marginBottom: spacing.md, alignSelf: "flex-start" },
+  back: {
+    minHeight: 44,
+    justifyContent: "center",
+    marginBottom: spacing.md,
+    alignSelf: "flex-start",
+  },
   backText: { ...typography.label, color: colors.textDim },
   header: {
     flexDirection: "row",
@@ -264,6 +286,7 @@ const styles = StyleSheet.create({
   metaRow: {
     flexDirection: "row",
     alignItems: "center",
+    flexWrap: "wrap",
     gap: spacing.sm,
     marginTop: spacing.md,
   },
@@ -288,6 +311,7 @@ const styles = StyleSheet.create({
     height: 44,
     borderWidth: 1,
     borderColor: colors.borderStrong,
+    borderRadius: 22,
     alignItems: "center",
     justifyContent: "center",
   },

@@ -3,6 +3,8 @@ import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { Screen } from "../../components/Screen";
 import { Button } from "../../components/Button";
 import { Input } from "../../components/Input";
+import { BrandHeader } from "../../components/BrandHeader";
+import { Icon } from "../../components/Icon";
 import { Badge } from "../../components/Badge";
 import { colors, typography, spacing } from "../../theme";
 import { useAuth } from "../../store/AuthContext";
@@ -19,6 +21,7 @@ type Props = {
   kicker: string;
   mode: "login" | "signup";
   onSwitchMode: () => void;
+  onBack: () => void;
 };
 
 /**
@@ -26,7 +29,13 @@ type Props = {
  * No passwords, no phone numbers. The saved profile's account type —
  * not this screen's lane — decides where the user lands after login.
  */
-export function AuthScreen({ accountType, kicker, mode, onSwitchMode }: Props) {
+export function AuthScreen({
+  accountType,
+  kicker,
+  mode,
+  onSwitchMode,
+  onBack,
+}: Props) {
   const isLogin = mode === "login";
   const { sendOtp, verifyOtp, signInGoogle, loading } = useAuth();
 
@@ -81,7 +90,17 @@ export function AuthScreen({ accountType, kicker, mode, onSwitchMode }: Props) {
   };
 
   return (
-    <Screen padded>
+    <Screen padded scroll keyboard>
+      <BrandHeader context={kicker} />
+      <TouchableOpacity
+        accessibilityRole="button"
+        accessibilityLabel="Back to welcome"
+        onPress={onBack}
+        style={styles.back}
+      >
+        <Icon name="arrow-left" size={16} />
+        <Text style={styles.linkText}>Back</Text>
+      </TouchableOpacity>
       <View style={styles.header}>
         <Text style={styles.kicker}>{kicker}</Text>
         <Text style={styles.title}>
@@ -98,11 +117,10 @@ export function AuthScreen({ accountType, kicker, mode, onSwitchMode }: Props) {
 
       {!isSupabaseConfigured && (
         <View style={styles.warn}>
-          <Badge label="BACKEND NOT CONFIGURED" />
+          <Badge label="Preview build" />
           <Text style={styles.warnText}>
-            Real sign-in needs the Supabase backend. Use the demo from the
-            welcome screen, or configure EXPO_PUBLIC_SUPABASE_URL / ANON_KEY and
-            rebuild.
+            Sign-in is not available in this build yet. Go back to explore the
+            personal or business demo.
           </Text>
         </View>
       )}
@@ -111,7 +129,7 @@ export function AuthScreen({ accountType, kicker, mode, onSwitchMode }: Props) {
         <>
           {!isLogin && (
             <Input
-              label="DISPLAY NAME"
+              label="Display name"
               placeholder="What should we call you?"
               value={displayName}
               onChangeText={setDisplayName}
@@ -120,7 +138,7 @@ export function AuthScreen({ accountType, kicker, mode, onSwitchMode }: Props) {
             />
           )}
           <Input
-            label="EMAIL"
+            label="Email"
             placeholder="you@example.com"
             value={email}
             onChangeText={setEmail}
@@ -130,12 +148,12 @@ export function AuthScreen({ accountType, kicker, mode, onSwitchMode }: Props) {
             onSubmitEditing={sendCode}
           />
           <View style={styles.gap} />
-          <Button title="SEND CODE" onPress={sendCode} loading={loading} />
+          <Button title="Send code" onPress={sendCode} loading={loading} />
         </>
       ) : (
         <>
           <Input
-            label="6-DIGIT CODE"
+            label="6-digit code"
             placeholder="123456"
             value={code}
             onChangeText={(t: string) =>
@@ -147,13 +165,13 @@ export function AuthScreen({ accountType, kicker, mode, onSwitchMode }: Props) {
             autoFocus
           />
           <View style={styles.gap} />
-          <Button title="VERIFY" onPress={confirmCode} loading={loading} />
+          <Button title="Verify" onPress={confirmCode} loading={loading} />
           <TouchableOpacity
             onPress={sendCode}
             activeOpacity={0.7}
             style={styles.link}
           >
-            <Text style={styles.linkText}>RESEND CODE</Text>
+            <Text style={styles.linkText}>Resend code</Text>
           </TouchableOpacity>
           <TouchableOpacity
             onPress={() => {
@@ -164,7 +182,7 @@ export function AuthScreen({ accountType, kicker, mode, onSwitchMode }: Props) {
             activeOpacity={0.7}
             style={styles.link}
           >
-            <Text style={styles.linkText}>USE A DIFFERENT EMAIL</Text>
+            <Text style={styles.linkText}>Use a different email</Text>
           </TouchableOpacity>
         </>
       )}
@@ -175,7 +193,7 @@ export function AuthScreen({ accountType, kicker, mode, onSwitchMode }: Props) {
         <View style={styles.line} />
       </View>
       <Button
-        title="CONTINUE WITH GOOGLE"
+        title="Continue with Google"
         variant="secondary"
         onPress={google}
         loading={loading}
@@ -187,9 +205,12 @@ export function AuthScreen({ accountType, kicker, mode, onSwitchMode }: Props) {
         onPress={onSwitchMode}
         activeOpacity={0.7}
         style={styles.switch}
+        accessibilityRole="button"
       >
         <Text style={styles.switchText}>
-          {isLogin ? "NEW HERE? CREATE AN ACCOUNT" : "ALREADY HAVE ONE? LOG IN"}
+          {isLogin
+            ? "New here? Create an account"
+            : "Already have an account? Log in"}
         </Text>
       </TouchableOpacity>
     </Screen>
@@ -197,9 +218,16 @@ export function AuthScreen({ accountType, kicker, mode, onSwitchMode }: Props) {
 }
 
 const styles = StyleSheet.create({
-  header: { marginTop: spacing.xl, marginBottom: spacing.lg },
-  kicker: { ...typography.label, color: colors.red, letterSpacing: 3 },
-  title: { ...typography.title, color: colors.text, marginTop: spacing.sm },
+  back: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    minHeight: 44,
+    alignSelf: "flex-start",
+  },
+  header: { marginTop: spacing.sm, marginBottom: spacing.lg },
+  kicker: { ...typography.label, color: colors.red, letterSpacing: 0 },
+  title: { ...typography.display, color: colors.text, marginTop: spacing.sm },
   sub: { ...typography.body, color: colors.textDim, marginTop: spacing.sm },
   warn: { marginBottom: spacing.lg, gap: spacing.sm },
   warnText: { ...typography.caption, color: colors.textDim },

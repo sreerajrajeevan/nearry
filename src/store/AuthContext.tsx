@@ -295,7 +295,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
   }
   const resolved = demoMode
-    ? { ...demoProfile, accountType: demoRole }
+    ? {
+        ...demoProfile,
+        accountType: demoRole,
+        ...(demoRole === "business"
+          ? { businessName: "Studio Nine", displayName: "Studio Nine" }
+          : {
+              displayName: "Sree",
+              interests: ["Football", "Coffee", "Walks"],
+            }),
+      }
     : profile;
   const accountType = resolved?.accountType ?? null;
   const needsOnboarding =

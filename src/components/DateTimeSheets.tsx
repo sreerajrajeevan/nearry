@@ -4,8 +4,18 @@ import { colors, typography, spacing } from "../theme";
 
 const WEEKDAYS = ["S", "M", "T", "W", "T", "F", "S"];
 const MONTHS = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December",
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
 ];
 
 function startOfDay(d: Date) {
@@ -42,7 +52,7 @@ function Sheet({
           <View style={styles.sheetHead}>
             <Text style={styles.sheetTitle}>{title}</Text>
             <TouchableOpacity onPress={onClose} hitSlop={12}>
-              <Text style={styles.doneBtn}>DONE</Text>
+              <Text style={styles.doneBtn}>Done</Text>
             </TouchableOpacity>
           </View>
           {children}
@@ -65,16 +75,17 @@ export function DateSheet({
   onClose: () => void;
 }) {
   const today = startOfDay(new Date());
-  const [cursor, setCursor] = useState(() =>
-    startOfDay(value ?? new Date()),
-  );
+  const [cursor, setCursor] = useState(() => startOfDay(value ?? new Date()));
   const year = cursor.getFullYear();
   const month = cursor.getMonth();
   const firstWeekday = new Date(year, month, 1).getDay();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const cells: (Date | null)[] = [
     ...Array<null>(firstWeekday).fill(null),
-    ...Array.from({ length: daysInMonth }, (_, i) => new Date(year, month, i + 1)),
+    ...Array.from(
+      { length: daysInMonth },
+      (_, i) => new Date(year, month, i + 1),
+    ),
   ];
   const selectedDay = value ? startOfDay(value).getTime() : null;
 
@@ -157,11 +168,19 @@ function Stepper({
   return (
     <View style={styles.stepCol}>
       <Text style={styles.stepLabel}>{label}</Text>
-      <TouchableOpacity style={styles.stepBtn} onPress={inc} activeOpacity={0.8}>
+      <TouchableOpacity
+        style={styles.stepBtn}
+        onPress={inc}
+        activeOpacity={0.8}
+      >
         <Text style={styles.stepText}>+</Text>
       </TouchableOpacity>
       <Text style={styles.stepValue}>{String(value).padStart(2, "0")}</Text>
-      <TouchableOpacity style={styles.stepBtn} onPress={dec} activeOpacity={0.8}>
+      <TouchableOpacity
+        style={styles.stepBtn}
+        onPress={dec}
+        activeOpacity={0.8}
+      >
         <Text style={styles.stepText}>-</Text>
       </TouchableOpacity>
     </View>
@@ -282,7 +301,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.red,
     borderRadius: 20,
   },
-  cellTextSelected: { color: "#fff" },
+  cellTextSelected: { color: colors.onAccent },
   timeRow: {
     flexDirection: "row",
     justifyContent: "center",
@@ -315,7 +334,7 @@ const styles = StyleSheet.create({
   },
   periodActive: { backgroundColor: colors.red, borderColor: colors.red },
   periodText: { ...typography.label, color: colors.textDim },
-  periodTextActive: { color: "#fff" },
+  periodTextActive: { color: colors.onAccent },
   hint: {
     ...typography.caption,
     color: colors.textFaint,
