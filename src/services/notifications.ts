@@ -3,6 +3,7 @@ import * as Device from "expo-device";
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 import { getSupabase, isSupabaseConfigured, isDemoMode } from "./supabase";
+import { multiplexSubscribe } from "./realtime";
 import { mockNotifications } from "../data/mock";
 import { AppNotification, DbNotification, toAppNotification } from "./mappers";
 
@@ -164,32 +165,17 @@ export async function presentLocal(title: string, body: string): Promise<void> {
 }
 
 /** Realtime subscription for my incoming notifications.
- *
- * Multiplexed: useUnreadCounts and usePushSetup both subscribe for the same
- * user, and supabase-js returns the *same* cached channel for a repeated
- * topic — calling .on() on it after .subscribe() throws
- * "cannot add postgres_changes callbacks after subscribe()".
- * So we keep one channel per user and fan events out to every subscriber.
- */
-type NotifCallback = (n: AppNotification) => void;
-const notifChannels = new Map<
-  string,
-  { remove: () => void; callbacks: Set<NotifCallback> }
->();
-
+ * Multiplexed via ./realtime: useUnreadCounts and usePushSetup both subscribe
+ * for the same user; one channel per topic is shared by all subscribers. */
 export function subscribeToNotifications(
   userId: string,
-  onInsert: NotifCallback,
+  onInsert: (n: AppNotification) => void,
 ): () => void {
   if (useMock()) return () => {};
-  const supabase = getSupabase()!;
-  const topic = `notifs-${userId}`;
-  let entry = notifChannels.get(topic);
-  if (!entry) {
-    const callbacks = new Set<NotifCallback>();
-    const ch = supabase
-      .channel(topic)
-      .on(
+  return multiplexSubscribe<AppNotification[]>(
+    `notifs-${userId}`,
+    (ch, fire) =>
+      ch.on(
         "postgres_changes",
         {
           event: "INSERT",
@@ -197,32 +183,8 @@ export function subscribeToNotifications(
           table: "notifications",
           filter: `user_id=eq.${userId}`,
         },
-        (payload) => {
-          const n = toAppNotification(payload.new as DbNotification);
-          callbacks.forEach((cb) => {
-            try {
-              cb(n);
-            } catch {
-              /* one bad listener must not break the others */
-            }
-          });
-        },
-      )
-      .subscribe();
-    entry = {
-      callbacks,
-      remove: () => {
-        notifChannels.delete(topic);
-        supabase.removeChannel(ch);
-      },
-    };
-    notifChannels.set(topic, entry);
-  }
-  entry.callbacks.add(onInsert);
-  return () => {
-    const e = notifChannels.get(topic);
-    if (!e) return;
-    e.callbacks.delete(onInsert);
-    if (e.callbacks.size === 0) e.remove();
-  };
+        (payload) => fire(toAppNotification(payload.new as DbNotification)),
+      ),
+    (n) => onInsert(n),
+  );
 }

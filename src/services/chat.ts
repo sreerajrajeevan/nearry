@@ -1,4 +1,5 @@
 import { getSupabase, isSupabaseConfigured, isDemoMode } from './supabase';
+import { multiplexSubscribe } from './realtime';
 import { mockConversations, mockMessages } from '../data/mock';
 import {
   ChatMessage,
@@ -153,10 +154,8 @@ export function subscribeToConversation(
   onChange: () => void,
 ): () => void {
   if (useMock()) return () => {};
-  const supabase = getSupabase()!;
-  const ch = supabase
-    .channel(`conv-${conversationId}`)
-    .on(
+  return multiplexSubscribe(`conv-${conversationId}`, (ch, fire) =>
+    ch.on(
       'postgres_changes',
       {
         event: 'INSERT',
@@ -164,12 +163,10 @@ export function subscribeToConversation(
         table: 'messages',
         filter: `conversation_id=eq.${conversationId}`,
       },
-      onChange,
-    )
-    .subscribe();
-  return () => {
-    supabase.removeChannel(ch);
-  };
+      () => fire(),
+    ),
+    onChange,
+  );
 }
 
 function friendlyChatError(message: string): string {

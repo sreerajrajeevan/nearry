@@ -1,4 +1,5 @@
 import { getSupabase, isSupabaseConfigured, isDemoMode } from "./supabase";
+import { multiplexSubscribe } from "./realtime";
 import { mockPosts } from "../data/mock";
 import {
   DbPost,
@@ -237,21 +238,19 @@ export async function cancelPost(postId: string): Promise<void> {
  */
 export function subscribeToPosts(onChange: () => void): () => void {
   if (useMock()) return () => {};
-  const supabase = getSupabase()!;
-  const ch = supabase
-    .channel("posts-feed")
-    .on(
-      "postgres_changes",
-      { event: "*", schema: "public", table: "posts" },
-      onChange,
-    )
-    .on(
-      "postgres_changes",
-      { event: "*", schema: "public", table: "join_requests" },
-      onChange,
-    )
-    .subscribe();
-  return () => {
-    supabase.removeChannel(ch);
-  };
+  // Multiplexed: Nearby, Activity and PostDetails can all be mounted at once.
+  return multiplexSubscribe("posts-feed", (ch, fire) =>
+    ch
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "posts" },
+        () => fire(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "join_requests" },
+        () => fire(),
+      ),
+    onChange,
+  );
 }

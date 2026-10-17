@@ -1,4 +1,5 @@
 import { getSupabase, isSupabaseConfigured, isDemoMode } from "./supabase";
+import { multiplexSubscribe } from "./realtime";
 import { mockBookings } from "../data/mock";
 import { Booking, DbBooking, toBooking } from "./mappers";
 
@@ -158,23 +159,21 @@ export async function cancelBooking(bookingId: string): Promise<void> {
 /** Realtime subscription for booking changes. No-op in demo mode. */
 export function subscribeToBookings(onChange: () => void): () => void {
   if (useMock()) return () => {};
-  const supabase = getSupabase()!;
-  const ch = supabase
-    .channel("bookings-feed")
-    .on(
-      "postgres_changes",
-      { event: "*", schema: "public", table: "bookings" },
-      onChange,
-    )
-    .on(
-      "postgres_changes",
-      { event: "*", schema: "public", table: "offers" },
-      onChange,
-    )
-    .subscribe();
-  return () => {
-    supabase.removeChannel(ch);
-  };
+  // Multiplexed: Activity, Dashboard and Bookings screens share this topic.
+  return multiplexSubscribe("bookings-feed", (ch, fire) =>
+    ch
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "bookings" },
+        () => fire(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "offers" },
+        () => fire(),
+      ),
+    onChange,
+  );
 }
 
 function friendlyBookingError(message: string): string {
