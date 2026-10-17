@@ -31,4 +31,5 @@ jobs:
       - run: npm run test:database
         env:
           TEST_DATABASE_URL: postgres://postgres:test-only@localhost:5432/nearry_test
-      - run: EXPO_NO_TELEMETRY=1 EXPO_NO_CACHE=1 npx expo export --platform android
+      - run: python3 -m pip install pillow && python3 assets/generate_icons.py
+      - run: EXPO_NO_TELEMETRY=1 EXPO_NO_CACHE=1 npx expo export --platform android --platform web

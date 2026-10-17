@@ -1,6 +1,7 @@
 import { parseDateTime } from "../../utils/dateTime";
 import React, { useState } from "react";
 import { View, Text, StyleSheet, ScrollView, Alert } from "react-native";
+import { PageHeading } from "../../components/PageHeading";
 import { Screen } from "../../components/Screen";
 import { Button } from "../../components/Button";
 import { Input } from "../../components/Input";
@@ -36,7 +37,7 @@ export function CreateOfferScreen({ navigation }: Props) {
   const [endTime, setEndTime] = useState("");
   const [capacity, setCapacity] = useState("10");
   const [duration, setDuration] = useState("60");
-  const [resource, setResource] = useState("default");
+  const [resource, setResource] = useState("Main");
   const [formError, setFormError] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -44,7 +45,7 @@ export function CreateOfferScreen({ navigation }: Props) {
 
   if (!profile) {
     return (
-      <Screen>
+      <Screen keyboard>
         <EmptyState
           title="Sign in required"
           hint="Log in as a business to create offers."
@@ -122,13 +123,16 @@ export function CreateOfferScreen({ navigation }: Props) {
   };
 
   return (
-    <Screen>
+    <Screen keyboard>
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scroll}
         keyboardShouldPersistTaps="handled"
       >
-        <Text style={styles.header}>CREATE OFFER</Text>
+        <PageHeading
+          greeting="A hello from your business."
+          title={"A good offer.\nA new face."}
+        />
         <View style={styles.statusRow}>
           <Badge
             label={
@@ -139,13 +143,13 @@ export function CreateOfferScreen({ navigation }: Props) {
         </View>
 
         <Input
-          label="TITLE"
-          placeholder="e.g. Happy Hours Flat 20% Off"
+          label="Title"
+          placeholder="A fresh haircut, just around the corner"
           value={title}
           onChangeText={setTitle}
         />
         <Input
-          label="DESCRIPTION"
+          label="Description"
           placeholder="What's included, fine print, how to redeem"
           value={description}
           onChangeText={setDescription}
@@ -156,7 +160,7 @@ export function CreateOfferScreen({ navigation }: Props) {
         <View style={styles.row}>
           <View style={styles.half}>
             <Input
-              label="DISCOUNT % (OPTIONAL)"
+              label="Discount (%)"
               placeholder="20"
               value={discount}
               onChangeText={(t: string) =>
@@ -167,7 +171,7 @@ export function CreateOfferScreen({ navigation }: Props) {
           </View>
           <View style={styles.half}>
             <Input
-              label="PRICE ₹ (OPTIONAL)"
+              label="Price (₹)"
               placeholder="499"
               value={price}
               onChangeText={(t: string) => setPrice(t.replace(/[^0-9.]/g, ""))}
@@ -175,11 +179,11 @@ export function CreateOfferScreen({ navigation }: Props) {
             />
           </View>
         </View>
-        <Text style={styles.fieldLabel}>BOOKING WINDOW</Text>
+        <Text style={styles.fieldLabel}>Booking window</Text>
         <View style={styles.row}>
           <View style={styles.half}>
             <Input
-              label="START DATE"
+              label="Start date"
               placeholder="YYYY-MM-DD"
               value={startDate}
               onChangeText={setStartDate}
@@ -187,7 +191,7 @@ export function CreateOfferScreen({ navigation }: Props) {
           </View>
           <View style={styles.half}>
             <Input
-              label="START TIME"
+              label="Start time"
               placeholder="HH:MM"
               value={startTime}
               onChangeText={setStartTime}
@@ -197,7 +201,7 @@ export function CreateOfferScreen({ navigation }: Props) {
         <View style={styles.row}>
           <View style={styles.half}>
             <Input
-              label="END DATE"
+              label="End date"
               placeholder="YYYY-MM-DD"
               value={endDate}
               onChangeText={setEndDate}
@@ -205,7 +209,7 @@ export function CreateOfferScreen({ navigation }: Props) {
           </View>
           <View style={styles.half}>
             <Input
-              label="END TIME"
+              label="End time"
               placeholder="HH:MM"
               value={endTime}
               onChangeText={setEndTime}
@@ -213,7 +217,7 @@ export function CreateOfferScreen({ navigation }: Props) {
           </View>
         </View>
         <Input
-          label="SEATS PER SLOT"
+          label="Places per slot"
           placeholder="10"
           value={capacity}
           onChangeText={(t: string) => setCapacity(t.replace(/[^0-9]/g, ""))}
@@ -221,26 +225,26 @@ export function CreateOfferScreen({ navigation }: Props) {
         />
 
         <Input
-          label="SLOT DURATION (MINUTES)"
+          label="Slot duration (minutes)"
           value={duration}
           onChangeText={setDuration}
           keyboardType="number-pad"
         />
         <Input
-          label="RESOURCE (E.G. COURT 1, STYLIST A)"
+          label="Staff member or space"
           value={resource}
           onChangeText={setResource}
         />
         {formError ? <Text style={styles.formError}>{formError}</Text> : null}
         <Button
-          title="SAVE DRAFT"
+          title="Save draft"
           variant="secondary"
           onPress={onSaveDraft}
           loading={saving}
           style={styles.btn}
         />
         <Button
-          title="PUBLISH NOW"
+          title="Publish now"
           onPress={onPublish}
           loading={saving}
           disabled={!verified}

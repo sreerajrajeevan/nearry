@@ -2,7 +2,7 @@
   "expo": {
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#000000",
+        "backgroundColor": "#FAF9F5",
         "foregroundImage": "./assets/adaptive-icon.png"
       },
       "package": "com.nearry.app"
@@ -30,16 +30,25 @@
     "scheme": "nearry",
     "slug": "nearry",
     "splash": {
-      "backgroundColor": "#000000",
+      "backgroundColor": "#FAF9F5",
       "image": "./assets/splash.png",
       "resizeMode": "contain"
     },
-    "userInterfaceStyle": "dark",
+    "userInterfaceStyle": "light",
     "version": "0.1.0",
     "web": {
       "bundler": "metro",
       "favicon": "./assets/favicon.png",
-      "output": "static"
+      "output": "single"
+    },
+    "backgroundColor": "#FAF9F5",
+    "androidStatusBar": {
+      "barStyle": "dark-content",
+      "backgroundColor": "#FAF9F5"
+    },
+    "androidNavigationBar": {
+      "barStyle": "dark-content",
+      "backgroundColor": "#FAF9F5"
     }
   }
 }

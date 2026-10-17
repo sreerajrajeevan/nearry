@@ -9,6 +9,7 @@ import {
   StyleSheet,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
+import { PageHeading } from "../../components/PageHeading";
 import { Screen } from "../../components/Screen";
 import { Input } from "../../components/Input";
 import { Button } from "../../components/Button";
@@ -114,7 +115,7 @@ export function CreatePostScreen() {
 
   if (!profile && !demoMode) {
     return (
-      <Screen>
+      <Screen keyboard>
         <EmptyState title="Sign in required" hint="Log in to create a post." />
       </Screen>
     );
@@ -195,24 +196,26 @@ export function CreatePostScreen() {
   };
 
   return (
-    <Screen>
+    <Screen keyboard>
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scroll}
         keyboardShouldPersistTaps="handled"
       >
-        <Text style={styles.header}>Make a plan.</Text>
-        <Text style={styles.caption}>Gather people nearby.</Text>
+        <PageHeading
+          greeting="Someone nearby might be up for it."
+          title={"Start with\na little hello."}
+        />
 
         <Input
-          label="Title"
-          placeholder="e.g. Need 2 more for badminton"
+          label="What’s the plan?"
+          placeholder="Anyone for badminton this evening?"
           value={title}
           onChangeText={setTitle}
         />
 
         <Input
-          label="Description"
+          label="A few details"
           placeholder="What, where, level — the details people need"
           value={description}
           onChangeText={setDescription}
@@ -312,7 +315,7 @@ export function CreatePostScreen() {
           <Text style={styles.fieldLabel}>Requests close (optional)</Text>
           {expiresAtDate && (
             <TouchableOpacity onPress={() => setExpiresAtDate(null)}>
-              <Text style={styles.clearBtn}>CLEAR</Text>
+              <Text style={styles.clearBtn}>Clear</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -385,7 +388,12 @@ export function CreatePostScreen() {
 
 const styles = StyleSheet.create({
   scroll: { paddingBottom: spacing.xl },
-  header: { ...typography.display, fontSize: 32, color: colors.text, marginTop: spacing.sm },
+  header: {
+    ...typography.display,
+    fontSize: 32,
+    color: colors.text,
+    marginTop: spacing.sm,
+  },
   caption: {
     ...typography.body,
     color: colors.textDim,
@@ -397,9 +405,9 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.textDim,
     marginBottom: spacing.sm,
-    marginTop: spacing.lg,
+    marginTop: spacing.sm,
   },
-  row: { flexDirection: "row", gap: spacing.md },
+  row: { flexDirection: "row", gap: 12, alignItems: "flex-start" },
   half: { flex: 1 },
   venuePick: {
     flexDirection: "row",
@@ -423,14 +431,19 @@ const styles = StyleSheet.create({
   },
   venueName: { ...typography.body, color: colors.text },
   venueMeta: { ...typography.caption, color: colors.textDim },
-  stepper: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  stepper: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    minHeight: 52,
+  },
   stepBtn: {
-    width: 44,
+    width: 40,
     height: 44,
     borderWidth: 1,
     borderColor: colors.hairline,
     borderRadius: 999,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.background,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -438,7 +451,7 @@ const styles = StyleSheet.create({
   stepValue: {
     ...typography.title,
     color: colors.text,
-    minWidth: 36,
+    minWidth: 24,
     textAlign: "center",
   },
   chips: {
@@ -453,11 +466,11 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.background,
   },
   chipSelected: { borderColor: colors.clay, backgroundColor: colors.claySoft },
   chipText: { ...typography.bodySmall, color: colors.textDim },
-  chipTextSelected: { color: colors.clayDeep, fontWeight: '600' },
+  chipTextSelected: { color: colors.clayDeep, fontWeight: "600" },
   formError: {
     ...typography.body,
     color: colors.red,
@@ -470,7 +483,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     borderRadius: 8,
     paddingHorizontal: spacing.md,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.background,
     justifyContent: "center",
     marginBottom: spacing.md,
   },

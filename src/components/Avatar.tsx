@@ -1,6 +1,6 @@
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import { colors, typography, radius } from '../theme';
+import React from "react";
+import { View, Text, StyleSheet } from "react-native";
+import { colors, typography, radius } from "../theme";
 
 type Props = {
   name: string;
@@ -10,13 +10,18 @@ type Props = {
 /** Initials avatar — no image dependency for the MVP. */
 export function Avatar({ name, size = 44 }: Props) {
   const initials = name
-    .split(' ')
+    .split(" ")
     .map((p) => p[0])
     .slice(0, 2)
-    .join('')
+    .join("")
     .toUpperCase();
   return (
-    <View style={[styles.base, { width: size, height: size, borderRadius: size / 2 }]}>
+    <View
+      style={[
+        styles.base,
+        { width: size, height: size, borderRadius: size / 2 },
+      ]}
+    >
       <Text style={[styles.text, { fontSize: size * 0.38 }]}>{initials}</Text>
     </View>
   );
@@ -24,9 +29,9 @@ export function Avatar({ name, size = 44 }: Props) {
 
 const styles = StyleSheet.create({
   base: {
-    backgroundColor: colors.hairline,
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: colors.surfaceRaised,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  text: { fontFamily: 'System', fontWeight: '700', color: colors.muted },
+  text: { fontFamily: "System", fontWeight: "500", color: colors.muted },
 });

@@ -31,13 +31,13 @@ export function AccountTypeScreen() {
         {intendedRole}.
       </Text>
       <Button
-        title="PERSONAL"
+        title="Personal"
         loading={loading}
         onPress={() => void choose("personal")}
       />
       <View style={{ height: spacing.md }} />
       <Button
-        title="BUSINESS"
+        title="Business"
         loading={loading}
         onPress={() => void choose("business")}
       />

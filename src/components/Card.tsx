@@ -1,6 +1,6 @@
 import React from "react";
 import { View, StyleSheet, ViewStyle, StyleProp } from "react-native";
-import { colors, radius, spacing } from "../theme";
+import { colors, spacing } from "../theme";
 
 type Props = {
   children: React.ReactNode;
@@ -8,25 +8,14 @@ type Props = {
   accent?: boolean;
 };
 
-/** Sharp-edged bordered card. `accent` adds a red left rail. */
-export function Card({ children, style, accent }: Props) {
-  return (
-    <View style={[styles.card, accent && styles.accent, style]}>
-      {children}
-    </View>
-  );
+/** Shared list surface: generous row spacing and a single quiet divider. */
+export function Card({ children, style }: Props) {
+  return <View style={[styles.row, style]}>{children}</View>;
 }
-
 const styles = StyleSheet.create({
-  card: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    padding: spacing.md,
-  },
-  accent: {
-    borderLeftWidth: 3,
-    borderLeftColor: colors.red,
+  row: {
+    paddingVertical: spacing.lg,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
   },
 });

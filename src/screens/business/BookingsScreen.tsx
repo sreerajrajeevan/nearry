@@ -1,52 +1,62 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
-import { Screen } from '../../components/Screen';
-import { Card } from '../../components/Card';
-import { Button } from '../../components/Button';
-import { Badge } from '../../components/Badge';
-import { Avatar } from '../../components/Avatar';
-import { EmptyState } from '../../components/EmptyState';
-import { colors, typography, spacing } from '../../theme';
-import { useAuth } from '../../store/AuthContext';
+import { formatWhen } from "../../utils/format";
+import React, { useCallback, useEffect, useState } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Alert,
+} from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
+import { Screen } from "../../components/Screen";
+import { Card } from "../../components/Card";
+import { Button } from "../../components/Button";
+import { Badge } from "../../components/Badge";
+import { Avatar } from "../../components/Avatar";
+import { EmptyState } from "../../components/EmptyState";
+import { colors, typography, spacing } from "../../theme";
+import { useAuth } from "../../store/AuthContext";
 import {
   listBookingsForBusiness,
   confirmBooking,
   cancelBooking,
   subscribeToBookings,
-} from '../../services/bookings';
-import { Booking } from '../../services/mappers';
-import { getOrCreateConversation } from '../../services/chat';
+} from "../../services/bookings";
+import { Booking } from "../../services/mappers";
+import { getOrCreateConversation } from "../../services/chat";
 
-const FILTERS = ['ALL', 'PENDING', 'CONFIRMED', 'CANCELLED'] as const;
+const FILTERS = ["ALL", "PENDING", "CONFIRMED", "CANCELLED"] as const;
 type Filter = (typeof FILTERS)[number];
 
-function statusTone(status: Booking['status']): 'neutral' | 'green' | 'red' {
-  if (status === 'confirmed') return 'green';
-  if (status === 'cancelled') return 'red';
-  return 'neutral';
+function statusTone(status: Booking["status"]): "neutral" | "green" | "red" {
+  if (status === "confirmed") return "green";
+  if (status === "cancelled") return "red";
+  return "neutral";
 }
 
 type Props = {
-  navigation: { navigate: (screen: string, params?: Record<string, unknown>) => void };
+  navigation: {
+    navigate: (screen: string, params?: Record<string, unknown>) => void;
+  };
 };
 
 /** Business bookings view — real records, confirm/cancel, realtime-synced. */
 export function BookingsScreen({ navigation }: Props) {
   const { profile } = useAuth();
-  const [filter, setFilter] = useState<Filter>('ALL');
+  const [filter, setFilter] = useState<Filter>("ALL");
   const [bookings, setBookings] = useState<Booking[]>([]);
-  const [state, setState] = useState<'loading' | 'error' | 'ready'>('loading');
+  const [state, setState] = useState<"loading" | "error" | "ready">("loading");
   const [busy, setBusy] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!profile) return;
-    setState('loading');
+    setState("loading");
     try {
       setBookings(await listBookingsForBusiness(profile.id));
-      setState('ready');
+      setState("ready");
     } catch {
-      setState('error');
+      setState("error");
     }
   }, [profile]);
 
@@ -60,7 +70,9 @@ export function BookingsScreen({ navigation }: Props) {
   );
   useEffect(() => subscribeToBookings(() => void load()), [load]);
 
-  const visible = bookings.filter((b) => filter === 'ALL' || b.status === filter.toLowerCase());
+  const visible = bookings.filter(
+    (b) => filter === "ALL" || b.status === filter.toLowerCase(),
+  );
 
   const openChat = async (booking: Booking) => {
     setBusy(`m${booking.id}`);
@@ -68,9 +80,15 @@ export function BookingsScreen({ navigation }: Props) {
       const conversationId = await getOrCreateConversation(booking.customerId, {
         bookingId: booking.id,
       });
-      navigation.navigate('Conversation', { conversationId, title: booking.customerName });
+      navigation.navigate("Conversation", {
+        conversationId,
+        title: booking.customerName,
+      });
     } catch (e) {
-      Alert.alert('Could not open chat', e instanceof Error ? e.message : 'Please try again.');
+      Alert.alert(
+        "Could not open chat",
+        e instanceof Error ? e.message : "Please try again.",
+      );
     } finally {
       setBusy(null);
     }
@@ -82,7 +100,10 @@ export function BookingsScreen({ navigation }: Props) {
       await fn();
       await load();
     } catch (e) {
-      Alert.alert('Hmm', e instanceof Error ? e.message : 'Something went wrong.');
+      Alert.alert(
+        "Hmm",
+        e instanceof Error ? e.message : "Something went wrong.",
+      );
     } finally {
       setBusy(null);
     }
@@ -90,9 +111,12 @@ export function BookingsScreen({ navigation }: Props) {
 
   return (
     <Screen>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
-        <Text style={styles.header}>BOOKINGS</Text>
-        <Text style={styles.caption}>MANAGE INCOMING REQUESTS</Text>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scroll}
+      >
+        <Text style={styles.header}>Bookings</Text>
+        <Text style={styles.caption}>Manage incoming requests</Text>
 
         <View style={styles.filterRow}>
           {FILTERS.map((f) => {
@@ -104,23 +128,34 @@ export function BookingsScreen({ navigation }: Props) {
                 activeOpacity={0.8}
                 style={[styles.chip, active && styles.chipSelected]}
               >
-                <Text style={[styles.chipText, active && styles.chipTextSelected]}>{f}</Text>
+                <Text
+                  style={[styles.chipText, active && styles.chipTextSelected]}
+                >
+                  {f.charAt(0) + f.slice(1).toLowerCase()}
+                </Text>
               </TouchableOpacity>
             );
           })}
         </View>
 
-        {state === 'loading' ? (
-          <Text style={styles.status}>LOADING…</Text>
-        ) : state === 'error' ? (
+        {state === "loading" ? (
+          <Text style={styles.status}>Loading…</Text>
+        ) : state === "error" ? (
           <View>
-            <EmptyState title="Couldn't load bookings" hint="Check your connection and retry." />
-            <Button title="RETRY" onPress={() => void load()} />
+            <EmptyState
+              title="Couldn't load bookings"
+              hint="Check your connection and retry."
+            />
+            <Button title="Retry" onPress={() => void load()} />
           </View>
         ) : visible.length === 0 ? (
           <EmptyState
             title="No bookings"
-            hint={filter === 'ALL' ? 'New booking requests will appear here.' : `No ${filter.toLowerCase()} bookings.`}
+            hint={
+              filter === "ALL"
+                ? "New booking requests will appear here."
+                : `No ${filter.toLowerCase()} bookings.`
+            }
           />
         ) : (
           visible.map((b) => (
@@ -131,35 +166,41 @@ export function BookingsScreen({ navigation }: Props) {
                   <Text style={styles.customer}>{b.customerName}</Text>
                   <Text style={styles.offer}>{b.offerTitle}</Text>
                 </View>
-                <Badge label={b.status.toUpperCase()} tone={statusTone(b.status)} />
+                <Badge
+                  label={b.status.toUpperCase()}
+                  tone={statusTone(b.status)}
+                />
               </View>
               <Text style={styles.meta}>
-                {new Date(b.slot).toLocaleString()} · {b.partySize} {b.partySize === 1 ? 'SEAT' : 'SEATS'}
+                {formatWhen(b.slot)} · {b.partySize}{" "}
+                {b.partySize === 1 ? "person" : "people"}
               </Text>
               <View style={styles.actions}>
                 <Button
-                  title="MESSAGE"
+                  title="Message"
                   variant="ghost"
                   loading={busy === `m${b.id}`}
                   onPress={() => openChat(b)}
                 />
                 <View style={styles.gap} />
-              {b.status === 'pending' && (
-                <>
-                  <Button
-                    title="DECLINE"
-                    variant="ghost"
-                    loading={busy === `x${b.id}`}
-                    onPress={() => run(`x${b.id}`, () => cancelBooking(b.id))}
-                  />
-                  <View style={styles.gap} />
-                  <Button
-                    title="CONFIRM"
-                    loading={busy === `c${b.id}`}
-                    onPress={() => run(`c${b.id}`, () => confirmBooking(b.id))}
-                  />
-                </>
-              )}
+                {b.status === "pending" && (
+                  <>
+                    <Button
+                      title="Decline"
+                      variant="ghost"
+                      loading={busy === `x${b.id}`}
+                      onPress={() => run(`x${b.id}`, () => cancelBooking(b.id))}
+                    />
+                    <View style={styles.gap} />
+                    <Button
+                      title="Confirm"
+                      loading={busy === `c${b.id}`}
+                      onPress={() =>
+                        run(`c${b.id}`, () => confirmBooking(b.id))
+                      }
+                    />
+                  </>
+                )}
               </View>
             </Card>
           ))
@@ -172,24 +213,40 @@ export function BookingsScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   scroll: { paddingBottom: spacing.xl },
   header: { ...typography.title, color: colors.text, marginTop: spacing.sm },
-  caption: { ...typography.caption, color: colors.textDim, marginTop: spacing.xs, marginBottom: spacing.md },
+  caption: {
+    ...typography.caption,
+    color: colors.textDim,
+    marginTop: spacing.xs,
+    marginBottom: spacing.md,
+  },
   status: { ...typography.label, color: colors.textDim, marginTop: spacing.xl },
-  filterRow: { flexDirection: 'row', gap: spacing.sm, marginBottom: spacing.md, flexWrap: 'wrap' },
+  filterRow: {
+    flexDirection: "row",
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+    flexWrap: "wrap",
+  },
   chip: {
-    borderWidth: 1,
-    borderColor: colors.borderStrong,
-    paddingHorizontal: spacing.md,
+    borderBottomWidth: 2,
+    borderBottomColor: "transparent",
+    minHeight: 44,
+    paddingHorizontal: spacing.sm,
     paddingVertical: spacing.sm,
   },
-  chipSelected: { borderColor: colors.red },
+  chipSelected: { borderBottomColor: colors.accent },
   chipText: { ...typography.caption, color: colors.textDim },
   chipTextSelected: { color: colors.red },
   card: { marginBottom: spacing.md },
-  topRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm },
+  topRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   topText: { flex: 1 },
   customer: { ...typography.body, color: colors.text },
   offer: { ...typography.caption, color: colors.textDim, marginTop: 2 },
   meta: { ...typography.caption, color: colors.textDim, marginTop: spacing.sm },
-  actions: { flexDirection: 'row', marginTop: spacing.md },
+  actions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 4,
+    marginTop: spacing.sm,
+  },
   gap: { width: spacing.sm },
 });

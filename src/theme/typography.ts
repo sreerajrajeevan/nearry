@@ -1,70 +1,61 @@
-import { TextStyle } from 'react-native';
+import { Platform, TextStyle } from "react-native";
 
-/**
- * Quiet minimal typography: bold system sans for headlines
- * ("What are you up for?"), regular sans for body. Sentence case
- * throughout — no shouty uppercase labels.
- */
 export const fontFamily = {
-  sans: 'System',
-  mono: 'monospace',
+  sans: Platform.select({ ios: "Avenir Next", default: "System" }),
+  mono: Platform.select({ ios: "Menlo", default: "monospace" }),
 } as const;
 
 export const typography: Record<string, TextStyle> = {
   display: {
-    fontFamily: 'System',
-    fontSize: 32,
-    fontWeight: '700',
-    letterSpacing: -0.5,
-    lineHeight: 38,
+    fontFamily: fontFamily.sans,
+    fontSize: 36,
+    fontWeight: "500",
+    letterSpacing: -1.4,
+    lineHeight: 41,
   },
   title: {
-    fontFamily: 'System',
-    fontSize: 24,
-    fontWeight: '700',
-    letterSpacing: -0.3,
-    lineHeight: 30,
+    fontFamily: fontFamily.sans,
+    fontSize: 23,
+    fontWeight: "500",
+    letterSpacing: -0.6,
+    lineHeight: 29,
   },
   heading: {
-    fontFamily: 'System',
+    fontFamily: fontFamily.sans,
     fontSize: 17,
-    fontWeight: '700',
+    fontWeight: "500",
     letterSpacing: -0.2,
     lineHeight: 23,
   },
   label: {
-    fontFamily: 'System',
-    fontSize: 12,
-    fontWeight: '600',
-    letterSpacing: 0.3,
-    lineHeight: 16,
+    fontFamily: fontFamily.sans,
+    fontSize: 13,
+    fontWeight: "500",
+    lineHeight: 18,
   },
   body: {
-    fontFamily: 'System',
+    fontFamily: fontFamily.sans,
     fontSize: 15,
-    fontWeight: '400',
+    fontWeight: "400",
     lineHeight: 22,
   },
   bodySmall: {
-    fontFamily: 'System',
+    fontFamily: fontFamily.sans,
     fontSize: 13,
-    fontWeight: '400',
-    lineHeight: 18,
+    fontWeight: "400",
+    lineHeight: 19,
   },
   mono: {
-    fontFamily: 'monospace',
+    fontFamily: fontFamily.mono,
     fontSize: 13,
-    fontWeight: '400',
-    letterSpacing: 0.5,
-    lineHeight: 18,
+    fontWeight: "400",
+    lineHeight: 19,
   },
   caption: {
-    fontFamily: 'System',
+    fontFamily: fontFamily.sans,
     fontSize: 11,
-    fontWeight: '500',
-    letterSpacing: 0.3,
-    lineHeight: 15,
+    fontWeight: "400",
+    lineHeight: 16,
   },
 };
-
 export type Typography = typeof typography;

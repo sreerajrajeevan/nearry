@@ -344,7 +344,7 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
 }
 
 const styles = StyleSheet.create({
-  scroll: { padding: spacing.lg, paddingBottom: spacing.xl * 2 },
+  scroll: { paddingTop: spacing.sm, paddingBottom: spacing.xl * 2 },
   status: { ...typography.label, color: colors.textDim, marginTop: spacing.xl },
   back: { marginBottom: spacing.md, alignSelf: "flex-start" },
   backText: { ...typography.label, color: colors.textDim },
@@ -358,6 +358,7 @@ const styles = StyleSheet.create({
   authorRow: {
     flexDirection: "row",
     alignItems: "center",
+    flexWrap: "wrap",
     marginTop: spacing.md,
   },
   authorName: {

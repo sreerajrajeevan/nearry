@@ -100,22 +100,12 @@ export function BusinessProfileScreen({ navigation }: Props) {
     return () => clearTimeout(t);
   }, [query]);
 
-  const name = (
-    profile?.businessName ??
-    profile?.displayName ??
-    "YOUR BUSINESS"
-  ).toUpperCase();
+  const name = profile?.businessName || profile?.displayName || "Your business";
   const details = (profile?.businessDetails ?? {}) as {
     category?: string;
     area?: string;
   };
-  const category = (
-    details.category ??
-    profile?.businessDetails?.toString() ??
-    ""
-  )
-    .toString()
-    .toUpperCase();
+  const category = details.category || "";
 
   const onSubmitDoc = async () => {
     if (!profile) return;
@@ -163,23 +153,22 @@ export function BusinessProfileScreen({ navigation }: Props) {
           <View style={styles.nameBlock}>
             <Text style={styles.name}>{name}</Text>
             <Text style={styles.category}>
-              {[category, details.area?.toUpperCase()]
-                .filter(Boolean)
-                .join(" · ") || "BUSINESS"}
+              {[category, details.area].filter(Boolean).join(" · ") ||
+                "Business"}
             </Text>
           </View>
         </View>
 
         {isDemoMode() && (
           <View style={styles.demoRow}>
-            <Badge label="DEMO MODE" tone="red" />
+            <Badge label="Demo mode" tone="red" />
           </View>
         )}
 
-        <Text style={styles.sectionTitle}>VERIFICATION</Text>
+        <Text style={styles.sectionTitle}>Verification</Text>
         <Card style={styles.verifyCard} accent={verif.status !== "verified"}>
           <View style={styles.verifyRow}>
-            <Text style={styles.verifyTitle}>BUSINESS VERIFICATION</Text>
+            <Text style={styles.verifyTitle}>Business verification</Text>
             <Badge
               label={verif.status.toUpperCase()}
               tone={statusTone(verif.status)}
@@ -192,7 +181,7 @@ export function BusinessProfileScreen({ navigation }: Props) {
           {(verif.status === "unverified" || verif.status === "rejected") &&
             !isDemoMode() && (
               <Button
-                title="SUBMIT DOCUMENT"
+                title="Submit document"
                 variant="secondary"
                 loading={busy === "doc"}
                 onPress={onSubmitDoc}
@@ -201,7 +190,7 @@ export function BusinessProfileScreen({ navigation }: Props) {
             )}
         </Card>
 
-        <Text style={styles.sectionTitle}>MY VENUE</Text>
+        <Text style={styles.sectionTitle}>My venue</Text>
         {venue ? (
           <Card>
             <Text style={styles.venueName}>{venue.name}</Text>
@@ -230,7 +219,7 @@ export function BusinessProfileScreen({ navigation }: Props) {
                   </Text>
                 </View>
                 <Button
-                  title="REVIEW REQUIRED"
+                  title="Review required"
                   variant="secondary"
                   loading={busy === `claim-${v.id}`}
                   onPress={() => onClaim(v)}
@@ -241,13 +230,13 @@ export function BusinessProfileScreen({ navigation }: Props) {
         )}
 
         <Button
-          title={`NOTIFICATIONS${notifications > 0 ? ` (${notifications})` : ""}`}
+          title={`Notifications${notifications > 0 ? ` (${notifications})` : ""}`}
           variant="secondary"
           onPress={() => navigation.navigate("Notifications")}
           style={styles.notifBtn}
         />
         <Button
-          title="ENABLE NOTIFICATIONS"
+          title="Enable notifications"
           variant="secondary"
           onPress={() => {
             if (profile)
@@ -260,7 +249,7 @@ export function BusinessProfileScreen({ navigation }: Props) {
           }}
         />
         <Button
-          title="LOG OUT"
+          title="Log out"
           variant="danger"
           onPress={() => {
             void signOut().catch((e) =>
@@ -329,6 +318,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
+    flexWrap: "wrap",
     gap: spacing.md,
     paddingVertical: spacing.sm,
     borderBottomWidth: 1,

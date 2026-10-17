@@ -1,6 +1,6 @@
 import { getSupabase, isSupabaseConfigured, isDemoMode } from "./supabase";
 import { multiplexSubscribe } from "./realtime";
-import { mockBookings } from "../data/mock";
+import { mockBookings, mockOffers } from "../data/mock";
 import { Booking, DbBooking, toBooking } from "./mappers";
 
 const useMock = () => {
@@ -19,7 +19,7 @@ function fromView(row: Record<string, unknown>): Booking {
 }
 
 /**
- * Book seats on a live offer. Atomic: create_booking() locks the offer row,
+ * Book seats in the selected business-defined slot. book_offer_slot() locks the offer row,
  * so concurrent bookings for the same slot serialize — no overbooking.
  */
 export async function bookOffer(
@@ -30,24 +30,28 @@ export async function bookOffer(
   if (!Number.isInteger(partySize) || partySize < 1)
     throw new Error("Party size must be at least 1.");
   if (useMock()) {
+    const offer = mockOffers.find((o) => o.id === offerId);
+    const slot = (await listOfferSlots(offerId)).find((s) => s.id === slotId);
+    if (!offer || !slot || slot.seats_left < partySize)
+      throw new Error("Choose an available slot with enough places.");
     const b: Booking = {
       id: `mock-bk-${Date.now()}`,
       offerId,
       customerId: "demo-user",
       customerName: "You",
-      offerTitle: "Demo offer",
-      slot: new Date().toISOString(),
+      offerTitle: offer.title,
+      businessId: offer.businessId,
+      slot: slot.starts_at,
       partySize,
       status: "pending",
       createdAt: new Date().toISOString(),
     };
     mockBookings.unshift(b);
-    return { bookingId: b.id, seatsLeft: 0 };
+    return { bookingId: b.id, seatsLeft: slot.seats_left - partySize };
   }
   const supabase = getSupabase()!;
-  const { data, error } = await supabase.rpc("create_booking", {
-    p_offer_id: offerId,
-    p_slot: new Date().toISOString(),
+  const { data, error } = await supabase.rpc("book_offer_slot", {
+    p_slot_id: slotId,
     p_party_size: partySize,
   });
   if (error) throw new Error(friendlyBookingError(error.message));
@@ -160,18 +164,20 @@ export async function cancelBooking(bookingId: string): Promise<void> {
 export function subscribeToBookings(onChange: () => void): () => void {
   if (useMock()) return () => {};
   // Multiplexed: Activity, Dashboard and Bookings screens share this topic.
-  return multiplexSubscribe("bookings-feed", (ch, fire) =>
-    ch
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "bookings" },
-        () => fire(),
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "offers" },
-        () => fire(),
-      ),
+  return multiplexSubscribe(
+    "bookings-feed",
+    (ch, fire) =>
+      ch
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "bookings" },
+          () => fire(),
+        )
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "offers" },
+          () => fire(),
+        ),
     onChange,
   );
 }
@@ -197,16 +203,36 @@ export type AvailableSlot = {
 export async function listOfferSlots(
   offerId: string,
 ): Promise<AvailableSlot[]> {
-  if (useMock())
-    return [
-      {
-        id: "demo-slot",
-        starts_at: new Date(Date.now() + 3600000).toISOString(),
-        ends_at: new Date(Date.now() + 7200000).toISOString(),
-        capacity: 10,
-        seats_left: 10,
-      },
-    ];
+  if (useMock()) {
+    const offer = mockOffers.find((o) => o.id === offerId);
+    if (!offer || offer.status !== "live") return [];
+    const duration = (offer.slotMinutes ?? 60) * 60_000;
+    const start = new Date(offer.startsAt).getTime();
+    const end = new Date(offer.endsAt).getTime();
+    const first = Math.max(0, Math.ceil((Date.now() - start) / duration));
+    const slots: AvailableSlot[] = [];
+    for (let i = first; i < first + 3; i++) {
+      const time = start + i * duration;
+      if (time + duration > end) break;
+      const starts_at = new Date(time).toISOString();
+      const occupied = mockBookings
+        .filter(
+          (b) =>
+            b.offerId === offerId &&
+            b.slot === starts_at &&
+            b.status !== "cancelled",
+        )
+        .reduce((sum, b) => sum + b.partySize, 0);
+      slots.push({
+        id: `demo-slot:${offerId}:${time}`,
+        starts_at,
+        ends_at: new Date(time + duration).toISOString(),
+        capacity: offer.slotCapacity,
+        seats_left: Math.max(0, offer.slotCapacity - occupied),
+      });
+    }
+    return slots;
+  }
   const { data, error } = await getSupabase()!.rpc("available_offer_slots", {
     p_offer_id: offerId,
   });
