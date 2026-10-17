@@ -1,7 +1,5 @@
 import React, { useEffect, useState } from "react";
-import DateTimePicker, {
-  DateTimePickerEvent,
-} from "@react-native-community/datetimepicker";
+import { DateSheet, TimeSheet } from "../../components/DateTimeSheets";
 import {
   View,
   Text,
@@ -122,27 +120,10 @@ export function CreatePostScreen() {
       prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag],
     );
 
-  const onPickerChange = (event: DateTimePickerEvent, selected?: Date) => {
-    if (event.type === "dismissed" || !selected || !picker) {
-      setPicker(null);
-      return;
-    }
-    const base =
-      (picker.field === "startsAt" ? startsAtDate : expiresAtDate) ??
-      new Date();
-    const next = new Date(base);
-    if (picker.mode === "date") {
-      next.setFullYear(
-        selected.getFullYear(),
-        selected.getMonth(),
-        selected.getDate(),
-      );
-    } else {
-      next.setHours(selected.getHours(), selected.getMinutes(), 0, 0);
-    }
-    if (picker.field === "startsAt") setStartsAtDate(next);
-    else setExpiresAtDate(next);
-    setPicker(null);
+  const applyPicked = (d: Date) => {
+    if (!picker) return;
+    if (picker.field === "startsAt") setStartsAtDate(d);
+    else setExpiresAtDate(d);
   };
 
   const handlePublish = async () => {
@@ -344,16 +325,23 @@ export function CreatePostScreen() {
             onPress={() => setPicker({ field: "expiresAt", mode: "time" })}
           />
         </View>
-        {picker && (
-          <DateTimePicker
-            value={
-              (picker.field === "startsAt" ? startsAtDate : expiresAtDate) ??
-              new Date()
-            }
-            mode={picker.mode}
-            is24Hour
-            display="default"
-            onChange={onPickerChange}
+        {picker?.mode === "date" && (
+          <DateSheet
+            visible
+            value={picker.field === "startsAt" ? startsAtDate : expiresAtDate}
+            onPick={(d) => {
+              applyPicked(d);
+              setPicker(null);
+            }}
+            onClose={() => setPicker(null)}
+          />
+        )}
+        {picker?.mode === "time" && (
+          <TimeSheet
+            visible
+            value={picker.field === "startsAt" ? startsAtDate : expiresAtDate}
+            onPick={applyPicked}
+            onClose={() => setPicker(null)}
           />
         )}
 
