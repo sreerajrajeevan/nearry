@@ -201,18 +201,18 @@ export function CreatePostScreen() {
         contentContainerStyle={styles.scroll}
         keyboardShouldPersistTaps="handled"
       >
-        <Text style={styles.header}>CREATE POST</Text>
-        <Text style={styles.caption}>NEED PEOPLE</Text>
+        <Text style={styles.header}>Make a plan.</Text>
+        <Text style={styles.caption}>Gather people nearby.</Text>
 
         <Input
-          label="TITLE"
+          label="Title"
           placeholder="e.g. Need 2 more for badminton"
           value={title}
           onChangeText={setTitle}
         />
 
         <Input
-          label="DESCRIPTION"
+          label="Description"
           placeholder="What, where, level — the details people need"
           value={description}
           onChangeText={setDescription}
@@ -221,7 +221,7 @@ export function CreatePostScreen() {
           style={styles.multiline}
         />
 
-        <Text style={styles.fieldLabel}>VENUE (OPTIONAL)</Text>
+        <Text style={styles.fieldLabel}>Venue (optional)</Text>
         {venue ? (
           <View style={styles.venuePick}>
             <Text style={styles.venuePickText}>
@@ -263,13 +263,13 @@ export function CreatePostScreen() {
 
         <View style={styles.row}>
           <DateTimeField
-            label="DATE"
+            label="Date"
             value={startsAtDate ? fmtDate(startsAtDate) : null}
             placeholder="Pick date"
             onPress={() => setPicker({ field: "startsAt", mode: "date" })}
           />
           <DateTimeField
-            label="TIME"
+            label="Time"
             value={startsAtDate ? fmtTime(startsAtDate) : null}
             placeholder="Pick time"
             onPress={() => setPicker({ field: "startsAt", mode: "time" })}
@@ -279,7 +279,7 @@ export function CreatePostScreen() {
         <View style={styles.row}>
           <View style={styles.half}>
             <Input
-              label="COST (OPTIONAL)"
+              label="Cost (optional)"
               placeholder="₹ per person"
               value={cost}
               onChangeText={(t: string) => setCost(t.replace(/[^0-9.]/g, ""))}
@@ -287,7 +287,7 @@ export function CreatePostScreen() {
             />
           </View>
           <View style={styles.half}>
-            <Text style={styles.fieldLabel}>VACANCIES</Text>
+            <Text style={styles.fieldLabel}>Spots</Text>
             <View style={styles.stepper}>
               <TouchableOpacity
                 style={styles.stepBtn}
@@ -309,7 +309,7 @@ export function CreatePostScreen() {
         </View>
 
         <View style={styles.row}>
-          <Text style={styles.fieldLabel}>REQUESTS CLOSE (OPTIONAL)</Text>
+          <Text style={styles.fieldLabel}>Requests close (optional)</Text>
           {expiresAtDate && (
             <TouchableOpacity onPress={() => setExpiresAtDate(null)}>
               <Text style={styles.clearBtn}>CLEAR</Text>
@@ -318,13 +318,13 @@ export function CreatePostScreen() {
         </View>
         <View style={styles.row}>
           <DateTimeField
-            label="DATE"
+            label="Date"
             value={expiresAtDate ? fmtDate(expiresAtDate) : null}
             placeholder="Pick date"
             onPress={() => setPicker({ field: "expiresAt", mode: "date" })}
           />
           <DateTimeField
-            label="TIME"
+            label="Time"
             value={expiresAtDate ? fmtTime(expiresAtDate) : null}
             placeholder="Pick time"
             onPress={() => setPicker({ field: "expiresAt", mode: "time" })}
@@ -350,7 +350,7 @@ export function CreatePostScreen() {
           />
         )}
 
-        <Text style={styles.fieldLabel}>TAGS</Text>
+        <Text style={styles.fieldLabel}>Tags</Text>
         <View style={styles.chips}>
           {TAG_OPTIONS.map((tag) => {
             const selected = tags.includes(tag);
@@ -364,7 +364,7 @@ export function CreatePostScreen() {
                 <Text
                   style={[styles.chipText, selected && styles.chipTextSelected]}
                 >
-                  #{tag.toUpperCase()}
+                  #{tag}
                 </Text>
               </TouchableOpacity>
             );
@@ -373,7 +373,7 @@ export function CreatePostScreen() {
 
         {formError ? <Text style={styles.formError}>{formError}</Text> : null}
         <Button
-          title="PUBLISH POST"
+          title="Publish"
           onPress={handlePublish}
           loading={publishing}
           style={styles.publish}
@@ -385,19 +385,19 @@ export function CreatePostScreen() {
 
 const styles = StyleSheet.create({
   scroll: { paddingBottom: spacing.xl },
-  header: { ...typography.title, color: colors.text, marginTop: spacing.sm },
+  header: { ...typography.display, fontSize: 32, color: colors.text, marginTop: spacing.sm },
   caption: {
-    ...typography.caption,
+    ...typography.body,
     color: colors.textDim,
     marginTop: spacing.xs,
     marginBottom: spacing.md,
   },
   multiline: { height: 110, textAlignVertical: "top", paddingTop: spacing.md },
   fieldLabel: {
-    ...typography.label,
+    ...typography.body,
     color: colors.textDim,
     marginBottom: spacing.sm,
-    marginTop: spacing.sm,
+    marginTop: spacing.lg,
   },
   row: { flexDirection: "row", gap: spacing.md },
   half: { flex: 1 },
@@ -428,7 +428,9 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderWidth: 1,
-    borderColor: colors.borderStrong,
+    borderColor: colors.hairline,
+    borderRadius: 999,
+    backgroundColor: colors.surface,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -447,13 +449,15 @@ const styles = StyleSheet.create({
   },
   chip: {
     borderWidth: 1,
-    borderColor: colors.borderStrong,
+    borderColor: colors.hairline,
+    borderRadius: 999,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
+    backgroundColor: colors.surface,
   },
-  chipSelected: { borderColor: colors.red },
-  chipText: { ...typography.caption, color: colors.textDim },
-  chipTextSelected: { color: colors.red },
+  chipSelected: { borderColor: colors.clay, backgroundColor: colors.claySoft },
+  chipText: { ...typography.bodySmall, color: colors.textDim },
+  chipTextSelected: { color: colors.clayDeep, fontWeight: '600' },
   formError: {
     ...typography.body,
     color: colors.red,

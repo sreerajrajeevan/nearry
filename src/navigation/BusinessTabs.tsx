@@ -76,7 +76,6 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
     marginHorizontal: 16,
     marginBottom: 16,
-    position: 'absolute',
     shadowColor: '#000',
     shadowOpacity: 0.06,
     shadowRadius: 12,
