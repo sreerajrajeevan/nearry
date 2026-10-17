@@ -50,10 +50,13 @@ export function multiplexSubscribe<TArgs extends unknown[]>(
     entry = e;
   }
   entry.callbacks.add(onEvent);
+  let subscribed = true;
+  const original = entry;
   return () => {
-    const e = channels.get(topic) as Entry<TArgs> | undefined;
-    if (!e) return;
-    e.callbacks.delete(onEvent);
-    if (e.callbacks.size === 0) e.remove();
+    if (!subscribed) return;
+    subscribed = false;
+    if (channels.get(topic) !== original) return;
+    original.callbacks.delete(onEvent);
+    if (original.callbacks.size === 0) original.remove();
   };
 }

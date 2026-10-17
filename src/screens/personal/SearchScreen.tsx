@@ -7,6 +7,8 @@ import {
   StyleSheet,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
+import { PlaceSuggestions } from "../../components/PlaceSuggestions";
+import { usePlaceSuggestions } from "../../hooks/usePlaceSuggestions";
 import { Screen } from "../../components/Screen";
 import { PageHeading } from "../../components/PageHeading";
 import { FilterTabs } from "../../components/FilterTabs";
@@ -34,6 +36,11 @@ export function SearchScreen() {
   const navigation = useNavigation<PersonalTabNav>();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
+  const suggestions = usePlaceSuggestions(
+    query,
+    undefined,
+    filter === "all" || filter === "venues",
+  );
   const [retry, setRetry] = useState(0);
   const [venues, setVenues] = useState<Venue[]>([]);
   const [posts, setPosts] = useState<NeedPost[]>([]);
@@ -105,6 +112,7 @@ export function SearchScreen() {
           autoCapitalize="none"
           returnKeyType="search"
           clearButtonMode="while-editing"
+          maxLength={120}
         />
         <FilterTabs
           options={filters}
@@ -112,6 +120,18 @@ export function SearchScreen() {
           onSelect={setFilter}
           label="Search results"
         />
+        {showVenues && query.trim().length >= 3 && (
+          <View style={{ marginBottom: spacing.lg }}>
+            <Text style={styles.sectionLabel}>Find a location</Text>
+            <PlaceSuggestions
+              {...suggestions}
+              onRetry={suggestions.retry}
+              onSelect={(place) =>
+                navigation.navigate("PlaceDetails", { place })
+              }
+            />
+          </View>
+        )}
         {state === "idle" ? (
           <EmptyState
             title="What would you like to find?"
@@ -135,7 +155,7 @@ export function SearchScreen() {
           </>
         ) : count === 0 ? (
           <EmptyState
-            title="No hellos just yet"
+            title="No matching Nearry plans or venues"
             hint="Try another place, activity, or service."
           />
         ) : (
@@ -173,7 +193,7 @@ export function SearchScreen() {
             )}
             {showVenues && venues.length > 0 && (
               <>
-                <Text style={styles.sectionLabel}>Places to know</Text>
+                <Text style={styles.sectionLabel}>Places on Nearry</Text>
                 {venues.map((venue) => (
                   <TouchableOpacity
                     accessibilityRole="button"

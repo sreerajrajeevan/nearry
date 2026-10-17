@@ -1,5 +1,6 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useRef, useState } from "react";
 import {
+  AppState,
   View,
   Text,
   StyleSheet,
@@ -14,6 +15,9 @@ import { Avatar } from "../../components/Avatar";
 import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
 import { colors, typography, spacing } from "../../theme";
+import { useAuth } from "../../store/AuthContext";
+import { subscribeToNotifications } from "../../services/notifications";
+import { onUnreadChanged } from "../../services/unreadEvents";
 import { listConversations } from "../../services/chat";
 import { Conversation } from "../../services/mappers";
 
@@ -35,26 +39,48 @@ function timeAgo(iso?: string): string {
 
 /** Shared chat list for personal + business lanes. */
 export function ChatListScreen({ navigation }: Props) {
+  const { profile } = useAuth();
+  const focused = useRef(false),
+    version = useRef(0);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [state, setState] = useState<"loading" | "error" | "ready">("loading");
 
-  const load = useCallback(async () => {
-    setState("loading");
+  const load = useCallback(async (silent = false) => {
+    const ticket = ++version.current;
+    if (!silent) setState("loading");
     try {
-      setConversations(await listConversations());
+      const result = await listConversations();
+      if (!focused.current || ticket !== version.current) return;
+      setConversations(result);
       setState("ready");
     } catch {
-      setState("error");
+      if (focused.current && ticket === version.current && !silent)
+        setState("error");
     }
   }, []);
 
-  useEffect(() => {
-    void load();
-  }, [load]);
   useFocusEffect(
     useCallback(() => {
+      focused.current = true;
       void load();
-    }, [load]),
+      const refresh = () => void load(true);
+      const stop = profile
+        ? subscribeToNotifications(profile.id, refresh)
+        : () => {};
+      const stopLocal = onUnreadChanged(refresh);
+      const appState = AppState.addEventListener("change", (state) => {
+        if (state === "active") refresh();
+      });
+      const timer = setInterval(refresh, 30000);
+      return () => {
+        focused.current = false;
+        ++version.current;
+        stop();
+        stopLocal();
+        appState.remove();
+        clearInterval(timer);
+      };
+    }, [load, profile?.id]),
   );
 
   return (

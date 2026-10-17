@@ -1,3 +1,5 @@
+import { Platform } from "react-native";
+import { proofImageType } from "../utils/proofImage";
 import * as ImagePicker from "expo-image-picker";
 import * as FileSystem from "expo-file-system";
 import { getSupabase, isDemoMode, isSupabaseConfigured } from "./supabase";
@@ -48,20 +50,29 @@ export async function submitVerificationDoc(
     throw new Error("No document selected.");
   const uri = picked.assets[0].uri;
 
-  const b64 = await FileSystem.readAsStringAsync(uri, {
-    encoding: FileSystem.EncodingType.Base64,
-  });
-  const bytes = base64ToBytes(b64);
-  if (bytes.length > 10 * 1024 * 1024)
+  if ((picked.assets[0].fileSize ?? 0) > 10 * 1024 * 1024)
     throw new Error("Choose a proof image smaller than 10 MB.");
-  const path = `${businessId}/proof-${Date.now()}.jpg`;
+  let bytes: Uint8Array;
+  if (Platform.OS === "web") {
+    const response = await fetch(uri);
+    if (!response.ok) throw new Error("Could not read the selected image.");
+    bytes = new Uint8Array(await response.arrayBuffer());
+  } else {
+    bytes = base64ToBytes(
+      await FileSystem.readAsStringAsync(uri, {
+        encoding: FileSystem.EncodingType.Base64,
+      }),
+    );
+  }
+  const { extension, contentType } = proofImageType(bytes);
+  const path = `${businessId}/proof-${Date.now()}-${Math.random().toString(36).slice(2)}.${extension}`;
 
   const supabase = getSupabase()!;
   const { error: upError } = await supabase.storage
     .from(BUCKET)
     .upload(path, bytes, {
-      contentType: "image/jpeg",
-      upsert: true,
+      contentType,
+      upsert: false,
     });
   if (upError) throw new Error(upError.message);
 
@@ -69,7 +80,14 @@ export async function submitVerificationDoc(
   const { error: dbError } = await supabase.rpc("submit_verification", {
     p_path: path,
   });
-  if (dbError) throw new Error(dbError.message);
+  if (dbError) {
+    // A failed submission must not leave an unused private upload behind.
+    await supabase.storage
+      .from(BUCKET)
+      .remove([path])
+      .catch(() => {});
+    throw new Error(dbError.message);
+  }
   return path;
 }
 
@@ -82,9 +100,9 @@ export async function getVerificationState(businessId: string): Promise<{
   if (useMock()) return { status: "unverified" };
   const supabase = getSupabase()!;
   const { data, error } = await supabase.rpc("get_my_profile");
+  if (error) throw new Error(error.message);
   if (data?.id !== businessId)
     throw new Error("You can only view your own verification details.");
-  if (error) throw new Error(error.message);
   return {
     status: (data?.verification_status as VerificationState) ?? "unverified",
     docPath: (data?.verification_doc_path as string) ?? undefined,

@@ -1,5 +1,6 @@
 import { getSupabase, isSupabaseConfigured, isDemoMode } from "./supabase";
-import { mockOffers } from "../data/mock";
+import { multiplexSubscribe } from "./realtime";
+import { mockBookings, mockOffers } from "../data/mock";
 import { DbOffer, Offer, toOffer } from "./mappers";
 import { OfferDraft, validateOfferInput } from "../utils/validation";
 
@@ -34,10 +35,15 @@ function toDb(
 }
 
 function withBusiness(row: Record<string, unknown>): Offer {
-  const b = row.business as { display_name?: string } | null;
+  const b = row.business as {
+    display_name?: string;
+    business_name?: string;
+  } | null;
   return toOffer({
     ...(row as unknown as DbOffer),
-    business: { display_name: b?.display_name ?? "Business" },
+    business: {
+      display_name: b?.business_name || b?.display_name || "Business",
+    },
   });
 }
 
@@ -53,7 +59,9 @@ export async function listLiveOffers(venueIds?: string[]): Promise<Offer[]> {
   const supabase = getSupabase()!;
   let query = supabase
     .from("offers")
-    .select("*, business:profiles!offers_business_id_fkey(display_name)")
+    .select(
+      "*, business:profiles!offers_business_id_fkey(display_name, business_name)",
+    )
     .eq("status", "live")
     .gt("ends_at", new Date().toISOString())
     .order("ends_at");
@@ -72,7 +80,9 @@ export async function listMyOffers(businessId: string): Promise<Offer[]> {
   const supabase = getSupabase()!;
   const { data, error } = await supabase
     .from("offers")
-    .select("*, business:profiles!offers_business_id_fkey(display_name)")
+    .select(
+      "*, business:profiles!offers_business_id_fkey(display_name, business_name)",
+    )
     .eq("business_id", businessId)
     .order("created_at", { ascending: false });
   if (error) throw new Error(error.message);
@@ -84,7 +94,9 @@ export async function getOffer(id: string): Promise<Offer | null> {
   const supabase = getSupabase()!;
   const { data, error } = await supabase
     .from("offers")
-    .select("*, business:profiles!offers_business_id_fkey(display_name)")
+    .select(
+      "*, business:profiles!offers_business_id_fkey(display_name, business_name)",
+    )
     .eq("id", id)
     .maybeSingle();
   if (error) throw new Error(error.message);
@@ -111,6 +123,8 @@ export async function createDraft(
       endsAt: input.endsAt,
       venueId: input.venueId,
       slotCapacity: input.slotCapacity,
+      slotMinutes: input.slotMinutes ?? 60,
+      resourceKey: input.resourceKey ?? "default",
       status: "draft",
       redemptions: 0,
       createdAt: new Date().toISOString(),
@@ -122,7 +136,9 @@ export async function createDraft(
   const { data, error } = await supabase
     .from("offers")
     .insert(toDb(input, businessId, "draft"))
-    .select("*, business:profiles!offers_business_id_fkey(display_name)")
+    .select(
+      "*, business:profiles!offers_business_id_fkey(display_name, business_name)",
+    )
     .single();
   if (error) throw new Error(error.message);
   return withBusiness(data as Record<string, unknown>);
@@ -136,16 +152,17 @@ export async function publishOffer(offerId: string): Promise<Offer> {
   if (useMock()) {
     const o = mockOffers.find((x) => x.id === offerId);
     if (!o) throw new Error("Offer not found.");
+    if (o.status !== "draft") throw new Error("Only drafts can be published.");
+    if (new Date(o.endsAt).getTime() <= Date.now())
+      throw new Error("Offer expired.");
     o.status = "live";
     return o;
   }
   const supabase = getSupabase()!;
-  const { data, error } = await supabase
-    .from("offers")
-    .update({ status: "live" })
-    .eq("id", offerId)
-    .select("*, business:profiles!offers_business_id_fkey(display_name)")
-    .single();
+  const { data, error } = await supabase.rpc("update_offer", {
+    p_offer_id: offerId,
+    p_patch: { status: "live" },
+  });
   if (error) throw new Error(friendlyOfferError(error.message));
   return withBusiness(data as Record<string, unknown>);
 }
@@ -182,16 +199,17 @@ export async function updateOffer(
       startsAt: input.startsAt ?? o.startsAt,
       endsAt: input.endsAt ?? o.endsAt,
       slotCapacity: input.slotCapacity ?? o.slotCapacity,
+      slotMinutes: input.slotMinutes ?? o.slotMinutes,
+      resourceKey: input.resourceKey ?? o.resourceKey,
+      venueId: input.venueId ?? o.venueId,
     });
     return o;
   }
   const supabase = getSupabase()!;
-  const { data, error } = await supabase
-    .from("offers")
-    .update(dbPatch)
-    .eq("id", offerId)
-    .select("*, business:profiles!offers_business_id_fkey(display_name)")
-    .single();
+  const { data, error } = await supabase.rpc("update_offer", {
+    p_offer_id: offerId,
+    p_patch: dbPatch,
+  });
   if (error) throw new Error(error.message);
   return withBusiness(data as Record<string, unknown>);
 }
@@ -200,14 +218,22 @@ export async function updateOffer(
 export async function cancelOffer(offerId: string): Promise<void> {
   if (useMock()) {
     const o = mockOffers.find((x) => x.id === offerId);
-    if (o) o.status = "cancelled";
+    if (!o) throw new Error("Offer not found.");
+    o.status = "cancelled";
+    for (const b of mockBookings)
+      if (
+        b.offerId === offerId &&
+        (b.status === "pending" ||
+          (b.status === "confirmed" && new Date(b.slot).getTime() > Date.now()))
+      )
+        b.status = "cancelled";
     return;
   }
   const supabase = getSupabase()!;
-  const { error } = await supabase
-    .from("offers")
-    .update({ status: "cancelled" })
-    .eq("id", offerId);
+  const { error } = await supabase.rpc("update_offer", {
+    p_offer_id: offerId,
+    p_patch: { status: "cancelled" },
+  });
   if (error) throw new Error(error.message);
 }
 
@@ -215,4 +241,23 @@ function friendlyOfferError(message: string): string {
   if (message.toLowerCase().includes("verified"))
     return "Only verified businesses can publish offers. Submit your verification documents first.";
   return message;
+}
+
+/** Live discovery changes shared by mounted consumers. */
+export function subscribeToOffers(onChange: () => void): () => void {
+  if (useMock()) return () => {};
+  return multiplexSubscribe(
+    "offers-feed",
+    (channel, fire) =>
+      channel.on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "offers",
+        },
+        () => fire(),
+      ),
+    onChange,
+  );
 }

@@ -1,5 +1,6 @@
 import { getSupabase, isSupabaseConfigured, isDemoMode } from "./supabase";
 import { mockVenues } from "../data/mock";
+import { searchLiteral } from "../utils/searchFilter";
 import { DbVenue, Venue, toVenue } from "./mappers";
 
 const useMock = () => {
@@ -36,8 +37,12 @@ export async function searchVenues(query: string): Promise<Venue[]> {
   }
   const supabase = getSupabase()!;
   let req = supabase.from("venues").select("*").order("name").limit(20);
-  if (q)
-    req = req.or(`name.ilike.%${q}%,category.ilike.%${q}%,area.ilike.%${q}%`);
+  if (q) {
+    const literal = searchLiteral(q);
+    req = req.or(
+      `name.imatch.${literal},category.imatch.${literal},area.imatch.${literal}`,
+    );
+  }
   const { data, error } = await req;
   if (error) throw new Error(error.message);
   return ((data ?? []) as DbVenue[]).map(toVenue);

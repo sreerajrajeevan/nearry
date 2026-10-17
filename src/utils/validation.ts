@@ -84,6 +84,10 @@ export type OfferDraft = {
 export function validateOfferInput(input: OfferDraft): string | null {
   if (input.title.trim().length < 4)
     return "Give the offer a title (min 4 characters).";
+  if (input.title.trim().length > 80)
+    return "Title is too long (max 80 characters).";
+  if (input.description.trim().length > 1000)
+    return "Description is too long (max 1000 characters).";
   if (input.description.trim().length < 10)
     return "Add a few more details (min 10 characters).";
   const starts = new Date(input.startsAt).getTime();
@@ -94,7 +98,9 @@ export function validateOfferInput(input: OfferDraft): string | null {
   if (ends <= starts) return "End time must be after the start time.";
   if (
     input.discountPct !== undefined &&
-    (input.discountPct < 0 || input.discountPct > 90)
+    (!Number.isInteger(input.discountPct) ||
+      input.discountPct < 0 ||
+      input.discountPct > 90)
   )
     return "Discount must be between 0 and 90%.";
   if (

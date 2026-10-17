@@ -1,4 +1,8 @@
-import { CompositeNavigationProp } from "@react-navigation/native";
+import type { Place } from "../services/places";
+import {
+  CompositeNavigationProp,
+  NavigatorScreenParams,
+} from "@react-navigation/native";
 import {
   NativeStackNavigationProp,
   NativeStackScreenProps,
@@ -18,7 +22,7 @@ export type RootStackParamList = {
 };
 
 export type PersonalTabParamList = {
-  Nearby: undefined;
+  Nearby: { place?: Place } | undefined;
   Search: undefined;
   CreatePost: undefined;
   Activity: undefined;
@@ -27,7 +31,8 @@ export type PersonalTabParamList = {
 
 /** Stack above the personal tabs: tab screens push details here. */
 export type PersonalStackParamList = {
-  PersonalTabs: undefined;
+  PersonalTabs: NavigatorScreenParams<PersonalTabParamList> | undefined;
+  PlaceDetails: { place: Place };
   PostDetails: { postId: string };
   VenueDetails: { venueId: string };
   EditPost: { postId: string };
