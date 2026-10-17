@@ -1,6 +1,13 @@
-import { parseDateTime } from "../../utils/dateTime";
+import { DateSheet, TimeSheet } from "../../components/DateTimeSheets";
 import React, { useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Alert } from "react-native";
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  Alert,
+  TouchableOpacity,
+} from "react-native";
 import { PageHeading } from "../../components/PageHeading";
 import { Screen } from "../../components/Screen";
 import { Button } from "../../components/Button";
@@ -21,6 +28,43 @@ type Props = {
   navigation: { navigate: (screen: keyof BusinessTabParamList) => void };
 };
 
+const pad = (n: number) => String(n).padStart(2, "0");
+const fmtDate = (d: Date) =>
+  `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const fmtTime = (d: Date) => {
+  const h = d.getHours();
+  const p = h < 12 ? "AM" : "PM";
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${h12}:${pad(d.getMinutes())} ${p}`;
+};
+
+function DateTimeField({
+  label,
+  value,
+  placeholder,
+  onPress,
+}: {
+  label: string;
+  value: string | null;
+  placeholder: string;
+  onPress: () => void;
+}) {
+  return (
+    <View style={styles.half}>
+      <Text style={styles.fieldLabel}>{label}</Text>
+      <TouchableOpacity
+        style={styles.pickerBox}
+        activeOpacity={0.8}
+        onPress={onPress}
+      >
+        <Text style={[styles.pickerText, !value && styles.pickerPlaceholder]}>
+          {value ?? placeholder}
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
 /**
  * Create an offer: save as draft, then publish. Publishing is gated
  * server-side — only verified businesses go live.
@@ -31,10 +75,12 @@ export function CreateOfferScreen({ navigation }: Props) {
   const [description, setDescription] = useState("");
   const [discount, setDiscount] = useState("");
   const [price, setPrice] = useState("");
-  const [startDate, setStartDate] = useState("");
-  const [startTime, setStartTime] = useState("");
-  const [endDate, setEndDate] = useState("");
-  const [endTime, setEndTime] = useState("");
+  const [startsAtDate, setStartsAtDate] = useState<Date | null>(null);
+  const [endsAtDate, setEndsAtDate] = useState<Date | null>(null);
+  const [picker, setPicker] = useState<{
+    field: "startsAt" | "endsAt";
+    mode: "date" | "time";
+  } | null>(null);
   const [capacity, setCapacity] = useState("10");
   const [duration, setDuration] = useState("60");
   const [resource, setResource] = useState("Main");
@@ -56,12 +102,12 @@ export function CreateOfferScreen({ navigation }: Props) {
 
   const buildInput = (): NewOfferInput | null => {
     setFormError("");
-    const startsAt = parseDateTime(startDate, startTime);
-    const endsAt = parseDateTime(endDate, endTime);
-    if (!startsAt || !endsAt) {
-      setFormError("Enter dates as YYYY-MM-DD and times as HH:MM (24h).");
+    if (!startsAtDate || !endsAtDate) {
+      setFormError("Pick a start and end for the booking window.");
       return null;
     }
+    const startsAt = startsAtDate;
+    const endsAt = endsAtDate;
     const discountPct = discount.trim() ? Number(discount.trim()) : undefined;
     const priceCents = price.trim()
       ? Math.round(Number(price.trim()) * 100)
@@ -120,6 +166,12 @@ export function CreateOfferScreen({ navigation }: Props) {
     } finally {
       setSaving(false);
     }
+  };
+
+  const applyPicked = (d: Date) => {
+    if (!picker) return;
+    if (picker.field === "startsAt") setStartsAtDate(d);
+    else setEndsAtDate(d);
   };
 
   return (
@@ -181,41 +233,52 @@ export function CreateOfferScreen({ navigation }: Props) {
         </View>
         <Text style={styles.fieldLabel}>Booking window</Text>
         <View style={styles.row}>
-          <View style={styles.half}>
-            <Input
-              label="Start date"
-              placeholder="YYYY-MM-DD"
-              value={startDate}
-              onChangeText={setStartDate}
-            />
-          </View>
-          <View style={styles.half}>
-            <Input
-              label="Start time"
-              placeholder="HH:MM"
-              value={startTime}
-              onChangeText={setStartTime}
-            />
-          </View>
+          <DateTimeField
+            label="Start date"
+            value={startsAtDate ? fmtDate(startsAtDate) : null}
+            placeholder="Pick date"
+            onPress={() => setPicker({ field: "startsAt", mode: "date" })}
+          />
+          <DateTimeField
+            label="Start time"
+            value={startsAtDate ? fmtTime(startsAtDate) : null}
+            placeholder="Pick time"
+            onPress={() => setPicker({ field: "startsAt", mode: "time" })}
+          />
         </View>
         <View style={styles.row}>
-          <View style={styles.half}>
-            <Input
-              label="End date"
-              placeholder="YYYY-MM-DD"
-              value={endDate}
-              onChangeText={setEndDate}
-            />
-          </View>
-          <View style={styles.half}>
-            <Input
-              label="End time"
-              placeholder="HH:MM"
-              value={endTime}
-              onChangeText={setEndTime}
-            />
-          </View>
+          <DateTimeField
+            label="End date"
+            value={endsAtDate ? fmtDate(endsAtDate) : null}
+            placeholder="Pick date"
+            onPress={() => setPicker({ field: "endsAt", mode: "date" })}
+          />
+          <DateTimeField
+            label="End time"
+            value={endsAtDate ? fmtTime(endsAtDate) : null}
+            placeholder="Pick time"
+            onPress={() => setPicker({ field: "endsAt", mode: "time" })}
+          />
         </View>
+        {picker?.mode === "date" && (
+          <DateSheet
+            visible
+            value={picker.field === "startsAt" ? startsAtDate : endsAtDate}
+            onPick={(d) => {
+              applyPicked(d);
+              setPicker(null);
+            }}
+            onClose={() => setPicker(null)}
+          />
+        )}
+        {picker?.mode === "time" && (
+          <TimeSheet
+            visible
+            value={picker.field === "startsAt" ? startsAtDate : endsAtDate}
+            onPick={applyPicked}
+            onClose={() => setPicker(null)}
+          />
+        )}
         <Input
           label="Places per slot"
           placeholder="10"
@@ -278,6 +341,18 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
     marginTop: spacing.sm,
   },
+  pickerBox: {
+    height: 52,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 8,
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.surface,
+    justifyContent: "center",
+    marginBottom: spacing.md,
+  },
+  pickerText: { color: colors.text, fontSize: 15 },
+  pickerPlaceholder: { color: colors.textFaint },
   formError: {
     ...typography.body,
     color: colors.red,
