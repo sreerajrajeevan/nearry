@@ -44,7 +44,7 @@ export async function sendEmailOtp(
       shouldCreateUser: signup,
     },
   });
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(friendlyAuthError(error.message));
 }
 
 /** Step 2: verify the 6-digit code. Returns the authenticated user id. */
@@ -153,5 +153,7 @@ function friendlyAuthError(message: string): string {
     return "Too many attempts — wait a minute and try again.";
   if (m.includes("provider") && m.includes("not enabled"))
     return "Google sign-in is not enabled yet.";
+  if (m.includes("signup") && m.includes("not allowed"))
+    return "No account found for this email. If you're new, create an account below.";
   return message;
 }
