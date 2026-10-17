@@ -98,7 +98,7 @@ The project remains on Expo SDK 52. SDK-compatible native package versions are a
 
 ## Hello Nearry design
 
-- Palette: warm white `#FAF9F5`, ink `#252A26`, burnt orange `#C34E2F`. Statuses use explicit text, with no extra brand colours.
+- Palette: warm white `#FAF9F5`, ink `#252A26`, burnt orange `#C14D2F`. Statuses use explicit text, with no extra brand colours.
 - Typography: Avenir Next on iOS, the system sans elsewhere; comfortable body text and medium-weight headlines. Native text scaling is retained.
 - Layout: 24-point screen gutters, flat rows, subtle dividers, small initials, and text actions. Orange marks selection, primary actions, and the compact speech-mark logo.
 - Navigation: five labelled outline icons for each role, automatic device bottom insets, no floating container, and a dark system status bar on the light canvas.

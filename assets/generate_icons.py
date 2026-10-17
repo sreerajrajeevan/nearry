@@ -8,7 +8,7 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 
 PAPER = '#FAF9F5'
-ORANGE = '#C34E2F'
+ORANGE = '#C14D2F'
 
 
 def make_icon(size: int, path: Path, transparent: bool = False) -> None:
