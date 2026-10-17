@@ -56,19 +56,6 @@ export async function bookOffer(
   });
   if (error) throw new Error(friendlyBookingError(error.message));
   const res = data as { booking_id: string; seats_left: number };
-  const { data: offerRow } = await supabase
-    .from("offers")
-    .select("business_id")
-    .eq("id", offerId)
-    .maybeSingle();
-  if (offerRow) {
-    const { pushToUser } = await import("./notifications");
-    void pushToUser(
-      (offerRow as { business_id: string }).business_id,
-      "New booking",
-      `${partySize} seat(s) booked`,
-    ).catch(() => {});
-  }
   return { bookingId: res.booking_id, seatsLeft: res.seats_left };
 }
 
@@ -122,24 +109,11 @@ export async function confirmBooking(bookingId: string): Promise<void> {
     return;
   }
   const supabase = getSupabase()!;
-  const { data: bkRow } = await supabase
-    .from("bookings")
-    .select("customer_id")
-    .eq("id", bookingId)
-    .maybeSingle();
   const { error } = await supabase.rpc("change_booking_status", {
     p_booking_id: bookingId,
     p_status: "confirmed",
   });
   if (error) throw new Error(error.message);
-  if (bkRow) {
-    const { pushToUser } = await import("./notifications");
-    void pushToUser(
-      (bkRow as { customer_id: string }).customer_id,
-      "Booking confirmed",
-      "Your booking was confirmed — see you there",
-    ).catch(() => {});
-  }
 }
 
 /**

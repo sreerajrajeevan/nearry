@@ -8,6 +8,7 @@ import {
   toDbNewPost,
   toNeedPost,
 } from "./mappers";
+import { searchLiteral } from "../utils/searchFilter";
 import { validatePostDraft } from "../utils/validation";
 
 const useMock = () => {
@@ -42,6 +43,14 @@ function toCard(row: Record<string, unknown>): NeedPost {
 export async function listPosts(filter: PostFilter = {}): Promise<NeedPost[]> {
   if (useMock()) {
     let posts = [...mockPosts];
+    const status = filter.status ?? "open";
+    if (status !== "all") posts = posts.filter((p) => p.status === status);
+    if (status === "open")
+      posts = posts.filter(
+        (p) =>
+          new Date(p.startsAt).getTime() > Date.now() &&
+          (!p.expiresAt || new Date(p.expiresAt).getTime() > Date.now()),
+      );
     if (filter.venueIds)
       posts = posts.filter((p) => filter.venueIds!.includes(p.venueId ?? ""));
     if (filter.authorId)
@@ -66,21 +75,27 @@ export async function listPosts(filter: PostFilter = {}): Promise<NeedPost[]> {
   if (filter.status && filter.status !== "all")
     req = req.eq("status", filter.status);
   else if (!filter.status) req = req.eq("status", "open");
-  if (!filter.status || filter.status === "open")
-    req = req
-      .or("expires_at.is.null,expires_at.gt.now()")
-      .gt("starts_at", new Date().toISOString());
+  const conditions: string[] = [];
+  if (!filter.status || filter.status === "open") {
+    const now = new Date().toISOString();
+    conditions.push(`or(expires_at.is.null,expires_at.gt.${now})`);
+    req = req.gt("starts_at", now);
+  }
   if (filter.venueIds) {
     if (!filter.venueIds.length) return [];
     req = req.in("venue_id", filter.venueIds);
   }
   if (filter.authorId) req = req.eq("author_id", filter.authorId);
-  if (filter.tag) req = req.filter("tags", "cs", `{${filter.tag}}`);
+  if (filter.tag) req = req.contains("tags", [filter.tag]);
   const q = filter.search?.trim();
-  if (q)
-    req = req.or(
-      `title.ilike.%${q}%,description.ilike.%${q}%,venue_name.ilike.%${q}%`,
+  if (q) {
+    // Quote reserved punctuation and escape regex syntax for literal search.
+    const literal = searchLiteral(q);
+    conditions.push(
+      `or(title.imatch.${literal},description.imatch.${literal},venue_name.imatch.${literal})`,
     );
+  }
+  if (conditions.length) req = req.or(`and(${conditions.join(",")})`);
   const { data, error } = await req;
   if (error) throw new Error(error.message);
   return ((data ?? []) as Record<string, unknown>[]).map(toCard);
@@ -145,18 +160,15 @@ export async function createPost(
   return toNeedPost({ ...(data as DbPost), approved_count: 0 });
 }
 
-export type PostPatch = Partial<
+export type PostPatch = {
+  venueId?: string | null;
+  venueName?: string | null;
+  expiresAt?: string | null;
+  costCents?: number | null;
+} & Partial<
   Pick<
     NewPostInput,
-    | "title"
-    | "description"
-    | "venueId"
-    | "venueName"
-    | "startsAt"
-    | "expiresAt"
-    | "vacancies"
-    | "costCents"
-    | "tags"
+    "title" | "description" | "startsAt" | "vacancies" | "tags"
   >
 >;
 
@@ -191,12 +203,22 @@ export async function updatePost(
       ...p,
       title: (patch.title ?? p.title).trim(),
       description: (patch.description ?? p.description).trim(),
-      venueId: patch.venueId ?? p.venueId,
-      venueName: patch.venueName ?? p.venueName,
+      venueId:
+        patch.venueId === undefined ? p.venueId : (patch.venueId ?? undefined),
+      venueName:
+        patch.venueName === undefined
+          ? p.venueName
+          : (patch.venueName ?? undefined),
       startsAt: patch.startsAt ?? p.startsAt,
-      expiresAt: patch.expiresAt ?? p.expiresAt,
+      expiresAt:
+        patch.expiresAt === undefined
+          ? p.expiresAt
+          : (patch.expiresAt ?? undefined),
       vacancies: patch.vacancies ?? p.vacancies,
-      costCents: patch.costCents ?? p.costCents,
+      costCents:
+        patch.costCents === undefined
+          ? p.costCents
+          : (patch.costCents ?? undefined),
       tags: patch.tags ?? p.tags,
     };
     if (next.vacancies < next.joinedCount)
@@ -239,18 +261,20 @@ export async function cancelPost(postId: string): Promise<void> {
 export function subscribeToPosts(onChange: () => void): () => void {
   if (useMock()) return () => {};
   // Multiplexed: Nearby, Activity and PostDetails can all be mounted at once.
-  return multiplexSubscribe("posts-feed", (ch, fire) =>
-    ch
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "posts" },
-        () => fire(),
-      )
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "join_requests" },
-        () => fire(),
-      ),
+  return multiplexSubscribe(
+    "posts-feed",
+    (ch, fire) =>
+      ch
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "posts" },
+          () => fire(),
+        )
+        .on(
+          "postgres_changes",
+          { event: "*", schema: "public", table: "join_requests" },
+          () => fire(),
+        ),
     onChange,
   );
 }

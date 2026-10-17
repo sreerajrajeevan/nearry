@@ -1,5 +1,8 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import {
+  createClient,
+  SupabaseClient,
+  SupportedStorage,
+} from "@supabase/supabase-js";
 
 const url = process.env.EXPO_PUBLIC_SUPABASE_URL ?? "";
 const anonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? "";
@@ -11,6 +14,16 @@ const anonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? "";
 export const isSupabaseConfigured = url.length > 0 && anonKey.length > 0;
 
 let client: SupabaseClient | null = null;
+let authStorage: SupportedStorage | undefined;
+/** Set the platform storage adapter before the first auth/data operation. */
+export function configureAuthStorage(storage: SupportedStorage) {
+  if (authStorage === storage) return;
+  if (client)
+    throw new Error(
+      "Auth storage must be configured before creating the client.",
+    );
+  authStorage = storage;
+}
 
 /**
  * Explicit demo mode. When on, services serve mock data. This is only ever
@@ -31,7 +44,7 @@ export function getSupabase(): SupabaseClient | null {
   if (!client) {
     client = createClient(url, anonKey, {
       auth: {
-        storage: AsyncStorage,
+        storage: authStorage,
         persistSession: true,
         autoRefreshToken: true,
         // In React Native the OAuth redirect is handled manually via

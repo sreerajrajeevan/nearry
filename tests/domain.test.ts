@@ -94,3 +94,20 @@ test("profile mapper preserves explicit first-time role selection", () => {
   assert.equal(p.roleSelected, false);
   assert.equal(p.accountType, "business");
 });
+
+test("offer validation rejects nonfinite discounts and oversized text", () => {
+  const offer = {
+    title: "Haircut",
+    description: "Friendly salon haircut",
+    startsAt: new Date(Date.now() + 3600000).toISOString(),
+    endsAt: new Date(Date.now() + 7200000).toISOString(),
+    slotCapacity: 1,
+  };
+  for (const patch of [
+    { discountPct: NaN },
+    { discountPct: 0.5 },
+    { title: "x".repeat(81) },
+    { description: "x".repeat(1001) },
+  ])
+    assert.ok(validateOfferInput({ ...offer, ...patch }));
+});

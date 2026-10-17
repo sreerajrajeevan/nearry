@@ -1,15 +1,16 @@
-import React from 'react';
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { colors } from '../theme';
-import { PersonalStackParamList } from './types';
-import { PersonalTabs } from './PersonalTabs';
-import { PostDetailsScreen } from '../screens/personal/PostDetailsScreen';
-import { VenueDetailsScreen } from '../screens/personal/VenueDetailsScreen';
-import { EditPostScreen } from '../screens/personal/EditPostScreen';
-import { OfferDetailsScreen } from '../screens/personal/OfferDetailsScreen';
-import { ChatListScreen } from '../screens/chat/ChatListScreen';
-import { ConversationScreen } from '../screens/chat/ConversationScreen';
-import { NotificationCenterScreen } from '../screens/NotificationCenterScreen';
+import React from "react";
+import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import { colors } from "../theme";
+import { PersonalStackParamList } from "./types";
+import { PersonalTabs } from "./PersonalTabs";
+import { PostDetailsScreen } from "../screens/personal/PostDetailsScreen";
+import { PlaceDetailsScreen } from "../screens/personal/PlaceDetailsScreen";
+import { VenueDetailsScreen } from "../screens/personal/VenueDetailsScreen";
+import { EditPostScreen } from "../screens/personal/EditPostScreen";
+import { OfferDetailsScreen } from "../screens/personal/OfferDetailsScreen";
+import { ChatListScreen } from "../screens/chat/ChatListScreen";
+import { ConversationScreen } from "../screens/chat/ConversationScreen";
+import { NotificationCenterScreen } from "../screens/NotificationCenterScreen";
 
 const Stack = createNativeStackNavigator<PersonalStackParamList>();
 
@@ -20,11 +21,12 @@ export function PersonalStack() {
       screenOptions={{
         headerShown: false,
         contentStyle: { backgroundColor: colors.background },
-        animation: 'slide_from_right',
+        animation: "slide_from_right",
       }}
     >
       <Stack.Screen name="PersonalTabs" component={PersonalTabs} />
       <Stack.Screen name="PostDetails" component={PostDetailsScreen} />
+      <Stack.Screen name="PlaceDetails" component={PlaceDetailsScreen} />
       <Stack.Screen name="VenueDetails" component={VenueDetailsScreen} />
       <Stack.Screen name="EditPost" component={EditPostScreen} />
       <Stack.Screen name="OfferDetails" component={OfferDetailsScreen} />

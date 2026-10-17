@@ -12,6 +12,7 @@ import { Session } from "@supabase/supabase-js";
 import { AccountType } from "../navigation/types";
 import {
   getSupabase,
+  configureAuthStorage,
   requireSupabase,
   setDemoMode,
 } from "../services/supabase";
@@ -25,6 +26,8 @@ import {
 } from "../services/auth";
 import { unregisterPushToken } from "../services/notifications";
 import { RequestVersion } from "../utils/requestVersion";
+configureAuthStorage(AsyncStorage);
+
 export type OnboardingData = {
   interests?: string[];
   businessName?: string;
@@ -147,10 +150,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
   useEffect(() => {
     mounted.current = true;
-    void AsyncStorage.getItem("nearry.pendingRole").then((role) => {
-      if (mounted.current && (role === "personal" || role === "business"))
-        setIntendedRole(role);
-    });
+    const roleRestored = AsyncStorage.getItem("nearry.pendingRole")
+      .then((role) => {
+        if (mounted.current && (role === "personal" || role === "business")) {
+          intendedRoleRef.current = role;
+          setIntendedRole(role);
+        }
+      })
+      .catch(() => {});
     const db = getSupabase();
     if (!db) {
       setBootstrapping(false);
@@ -166,13 +173,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       version.current.invalidate();
       if (event === "SIGNED_IN") freshLoginRef.current = true;
-      setTimeout(() => {
+      setTimeout(async () => {
+        await roleRestored;
         if (alive && !demoRef.current) void hydrate(next);
       }, 0);
     }).data.subscription;
     void db.auth
       .getSession()
-      .then(({ data, error }) => {
+      .then(async ({ data, error }) => {
+        await roleRestored;
         if (!alive) return;
         if (error) {
           setProfileError(error.message);

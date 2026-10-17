@@ -7,7 +7,18 @@ import {
   RefreshControl,
   StyleSheet,
 } from "react-native";
-import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import {
+  useFocusEffect,
+  useNavigation,
+  useRoute,
+  RouteProp,
+} from "@react-navigation/native";
+import {
+  PlaceSuggestions,
+  PlaceAttributions,
+} from "../../components/PlaceSuggestions";
+import { usePlaceSuggestions } from "../../hooks/usePlaceSuggestions";
+import { Place, validPlace } from "../../services/places";
 import { Screen } from "../../components/Screen";
 import { BrandHeader } from "../../components/BrandHeader";
 import { PageHeading } from "../../components/PageHeading";
@@ -20,7 +31,7 @@ import { PostRow } from "../../components/PostRow";
 import { OfferRow } from "../../components/OfferRow";
 import { colors, typography, spacing } from "../../theme";
 import { listPosts, subscribeToPosts } from "../../services/posts";
-import { listLiveOffers } from "../../services/offers";
+import { listLiveOffers, subscribeToOffers } from "../../services/offers";
 import { getCurrentPosition, LatLng } from "../../services/location";
 import { nearbyVenues, listVenues } from "../../services/venues";
 import { NeedPost, Venue, Offer } from "../../services/mappers";
@@ -31,7 +42,7 @@ import {
   venueCategory,
 } from "../../utils/discovery";
 import { useAuth } from "../../store/AuthContext";
-import { PersonalTabNav } from "../../navigation/types";
+import { PersonalTabNav, PersonalTabParamList } from "../../navigation/types";
 
 const categories: { key: DiscoveryCategory; label: string; icon: IconName }[] =
   [
@@ -42,6 +53,7 @@ const categories: { key: DiscoveryCategory; label: string; icon: IconName }[] =
 
 export function NearbyScreen() {
   const navigation = useNavigation<PersonalTabNav>();
+  const route = useRoute<RouteProp<PersonalTabParamList, "Nearby">>();
   const { profile, demoMode } = useAuth();
   const [posts, setPosts] = useState<NeedPost[]>([]);
   const [venues, setVenues] = useState<Venue[]>([]);
@@ -49,6 +61,7 @@ export function NearbyScreen() {
   const [state, setState] = useState<"loading" | "error" | "ready">("loading");
   const [refreshing, setRefreshing] = useState(false);
   const [point, setPoint] = useState<LatLng | null>(null);
+  const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
   const [area, setArea] = useState("");
   const [appliedArea, setAppliedArea] = useState("");
   const [editingLocation, setEditingLocation] = useState(false);
@@ -56,6 +69,21 @@ export function NearbyScreen() {
   const [locationError, setLocationError] = useState("");
   const [category, setCategory] = useState<DiscoveryCategory | null>(null);
   const request = useRef(0);
+  const suggestions = usePlaceSuggestions(area, point, editingLocation);
+  const choosePlace = (place: Place) => {
+    setSelectedPlace(place);
+    setPoint({ latitude: place.latitude, longitude: place.longitude });
+    setArea("");
+    setAppliedArea("");
+    setLocationError("");
+    setEditingLocation(false);
+  };
+  useEffect(() => {
+    if (route.params?.place) {
+      if (validPlace(route.params.place)) choosePlace(route.params.place);
+      navigation.setParams({ place: undefined });
+    }
+  }, [route.params?.place, navigation]);
 
   const load = useCallback(
     async (silent = false) => {
@@ -95,6 +123,7 @@ export function NearbyScreen() {
     }, [load]),
   );
   useEffect(() => subscribeToPosts(() => void load(true)), [load]);
+  useEffect(() => subscribeToOffers(() => void load(true)), [load]);
   const onRefresh = async () => {
     setRefreshing(true);
     await load(true);
@@ -102,6 +131,7 @@ export function NearbyScreen() {
   };
   const applyArea = () => {
     setPoint(null);
+    setSelectedPlace(null);
     setAppliedArea(area.trim());
     setEditingLocation(false);
     setLocationError("");
@@ -112,6 +142,7 @@ export function NearbyScreen() {
     try {
       const position = await getCurrentPosition();
       if (position) {
+        setSelectedPlace(null);
         setPoint(position);
         setAppliedArea("");
         setArea("");
@@ -136,6 +167,7 @@ export function NearbyScreen() {
     (v) => !category || venueCategory(v) === category,
   );
   const areaLabel =
+    selectedPlace?.name ||
     appliedArea ||
     (demoMode ? "Demo places" : point ? "Near you" : "Choose area");
   const scope = demoMode
@@ -179,10 +211,18 @@ export function NearbyScreen() {
               label="Your area or city"
               value={area}
               onChangeText={setArea}
-              placeholder="Try Kakkanad"
+              placeholder="Try Infopark or Kakkanad"
+              maxLength={120}
               returnKeyType="search"
               onSubmitEditing={applyArea}
             />
+            {area.trim().length >= 3 && (
+              <PlaceSuggestions
+                {...suggestions}
+                onRetry={suggestions.retry}
+                onSelect={choosePlace}
+              />
+            )}
             <View style={styles.locationActions}>
               <Button
                 title={area.trim() ? "Apply area" : "All locations"}
@@ -205,6 +245,7 @@ export function NearbyScreen() {
             )}
           </View>
         )}
+        {selectedPlace && <PlaceAttributions places={[selectedPlace]} />}
         <PageHeading
           greeting={`Hello, ${firstName}.`}
           title={"What are\nyou up for?"}

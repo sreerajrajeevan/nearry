@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -21,6 +21,7 @@ import {
   markConversationRead,
   subscribeToConversation,
 } from "../../services/chat";
+import { mergeMessages } from "../../utils/chatMessages";
 import { ChatMessage } from "../../services/mappers";
 
 type Props = {
@@ -57,28 +58,41 @@ export function ConversationScreen({ route, navigation }: Props) {
   const [sending, setSending] = useState(false);
   const listRef = useRef<FlatList<ChatMessage> | null>(null);
 
+  const focused = useRef(false);
+  const generation = useRef(0);
   const load = useCallback(async () => {
+    const ticket = ++generation.current;
     try {
       const msgs = await listMessages(conversationId, myId);
-      setMessages(msgs);
+      if (!focused.current || ticket !== generation.current) return;
+      setMessages((previous) => mergeMessages(previous, msgs));
       setState("ready");
-      void markConversationRead(conversationId).catch(() => {});
+      // Only acknowledge the messages in this displayed snapshot.
+      void markConversationRead(
+        conversationId,
+        msgs[msgs.length - 1]?.id,
+      ).catch(() => {});
     } catch {
-      setState("error");
+      if (focused.current && ticket === generation.current) setState("error");
     }
   }, [conversationId, myId]);
 
-  useEffect(() => {
-    void load();
-  }, [load]);
   useFocusEffect(
     useCallback(() => {
+      focused.current = true;
+      setMessages([]);
+      setState("loading");
+      const unsubscribe = subscribeToConversation(
+        conversationId,
+        () => void load(),
+      );
       void load();
-    }, [load]),
-  );
-  useEffect(
-    () => subscribeToConversation(conversationId, () => void load()),
-    [conversationId, load],
+      return () => {
+        focused.current = false;
+        ++generation.current;
+        unsubscribe();
+      };
+    }, [conversationId, load]),
   );
 
   const onSend = async () => {
@@ -88,7 +102,11 @@ export function ConversationScreen({ route, navigation }: Props) {
     try {
       const msg = await sendMessage(conversationId, myId, text);
       setDraft("");
-      setMessages((prev) => [...prev, msg]);
+      if (focused.current) {
+        setMessages((prev) => mergeMessages(prev, [msg]));
+        setState("ready");
+        void markConversationRead(conversationId, msg.id).catch(() => {});
+      }
       listRef.current?.scrollToEnd({ animated: true });
     } catch (e) {
       Alert.alert(
