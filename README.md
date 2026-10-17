@@ -24,9 +24,9 @@ For a native Google login test, use a development/standalone build with the `nea
 
 ## Backend installation / upgrade
 
-Follow [migration instructions](supabase/migrations/README.md). New installs use migrations `00001`–`00014`; existing installations apply only missing migrations. `run-all.sql` is fresh-database-only and refuses to run when profiles already exist. No production database is automatically modified by the application or CI.
+Follow [migration instructions](supabase/migrations/README.md). New installs use migrations `00001`–`00018`; existing installations apply only missing migrations. `run-all.sql` is fresh-database-only and refuses to run when profiles already exist. No production database is automatically modified by the application or CI.
 
-Migrations `00011`–`00014` introduce required RPCs, so deploy migrations and the matching app version together. Older app versions relying on raw join/booking writes will need to update.
+Migrations `00011`–`00018` introduce required RPCs, so deploy migrations and the matching app version together. Older app versions relying on raw join/booking writes will need to update.
 
 ## Authentication
 
@@ -43,7 +43,7 @@ Migrations `00011`–`00014` introduce required RPCs, so deploy migrations and t
 - Upcoming full activities can still be cancelled by the host; accepted participants can leave a full activity. Withdrawal only reopens eligible fill-closed posts.
 - Businesses define a booking window, duration, resource name and capacity. Slots are generated on the server; customers select a slot ID. Direct booking writes and customer self-confirmation are denied.
 - New pending bookings hold seats for up to 30 minutes. The business confirms through `change_booking_status`; expired/cancelled bookings cannot be revived. Cancellation releases capacity. Existing legacy bookings keep their original timestamps and allocations.
-- Business verification is a private upload plus `submit_verification` RPC. Approval and venue associations require a trusted administrator. Clients cannot change verification status or claim a venue directly.
+- Business verification is a private image upload plus `submit_verification` RPC and a durable review queue. See [server setup](supabase/functions/README.md) for the mail worker, signed review links, and scheduler. Approval and venue associations require a trusted administrator. Clients cannot change verification status or claim a venue directly.
 - Profile column grants expose only public identity fields. Onboarding, business details and verification-document paths are accessed through the owner-only profile RPC.
 - Nearby supports manual area filtering and opt-in GPS within 5 km. Sample distances are labelled in demo mode.
 
@@ -89,12 +89,17 @@ TEST_DATABASE_URL=postgres://postgres:password@localhost:5432/nearry_test npm ru
 
 The suite creates test schemas and roles; never point it at a real project. CI runs this against a disposable PostGIS service, including simultaneous last-spot approvals and bookings. A committed lockfile and `npm ci` make checks repeatable.
 
-Before rollout, test Google/OTP delivery, app restart, both account types, denied location permission, proof upload, a three-account join journey, bookings, chat and notifications on real devices. No README claim substitutes for a live test. Payments and an admin review UI remain outside this milestone.
+Before rollout, test Google/OTP delivery, app restart, both account types, denied location permission, proof upload, a three-account join journey, bookings, chat and notifications on real devices. No README claim substitutes for a live test. Payments and a full administrator dashboard remain outside this milestone; business proof review uses the protected email review page.
+
+## Backend audit
+
+See [audit scope, fixes, and remaining live checks](docs/backend-audit.md). Offer editing/publishing/cancellation now uses `update_offer`; cancelling an offer also cancels its future reservations. Customers keep the offer context in booking history. Chat loads the newest 200 messages, merges concurrent send/realtime results, and acknowledges only displayed messages while the conversation is focused. Older-message pagination remains future work.
+
+Search treats punctuation and pattern characters as literal text, and keeps expiry and text conditions together. Optional post fields can be explicitly cleared. Badges refresh after local read actions; chat and notification lists refresh on incoming events and app resume. Remote push is owned by the server worker, avoiding duplicate local banners from the same database event.
 
 ## Dependency maintenance
 
 The project remains on Expo SDK 52. SDK-compatible native package versions are aligned and the lockfile is committed. `npm audit fix` could not resolve all inherited dependency advisories within this SDK's supported ranges. An Expo SDK upgrade and its native/device regression pass remain separate release work; do not use `npm audit fix --force` to change the framework blindly.
-
 
 ## Hello Nearry design
 

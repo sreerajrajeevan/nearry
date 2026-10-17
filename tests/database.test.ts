@@ -491,3 +491,609 @@ test(
     assert.equal(bookings.filter((r) => r.status === "fulfilled").length, 1);
   },
 );
+
+async function auditBusiness(verified = true) {
+  const id = (await db.query("select gen_random_uuid() as id")).rows[0].id;
+  await db.query(
+    "insert into auth.users(id,email,raw_user_meta_data) values($1,$2,$3)",
+    [
+      id,
+      `${id}@test.example`,
+      JSON.stringify({ account_type: "business", display_name: "Audit Salon" }),
+    ],
+  );
+  await db.query(
+    'update profiles set onboarding_completed=true,business_name=\'Audit Salon\',business_details=\'{"category":"Salon","area":"Kakkanad"}\',verification_status=$2 where id=$1',
+    [id, verified ? "verified" : "unverified"],
+  );
+  return id;
+}
+async function auditOffer(owner: string) {
+  const id = (
+    await db.query(
+      "insert into offers(business_id,title,description,starts_at,ends_at,slot_capacity,slot_minutes,resource_key,status) values($1,'Audit haircut','A friendly haircut service',date_trunc('minute',now())+interval '2 hours',date_trunc('minute',now())+interval '4 hours',1,30,gen_random_uuid()::text,'live') returning id",
+      [owner],
+    )
+  ).rows[0].id;
+  const slot = (
+    await db.query(
+      "select id from offer_slots where offer_id=$1 order by starts_at limit 1",
+      [id],
+    )
+  ).rows[0].id;
+  return { id, slot };
+}
+
+test("audit: proof submission works without pg_net and queues a private review job", async () => {
+  const owner = await auditBusiness(false);
+  const path = `${owner}/proof.jpg`;
+  await asUser(owner, (tx) =>
+    tx.query(
+      "insert into storage.objects(bucket_id,name) values('verification_docs',$1)",
+      [path],
+    ),
+  );
+  await asUser(owner, (tx) =>
+    tx.query("select submit_verification($1)", [path]),
+  );
+  assert.equal(
+    (
+      await db.query("select verification_status from profiles where id=$1", [
+        owner,
+      ])
+    ).rows[0].verification_status,
+    "pending",
+  );
+  assert.equal(
+    (
+      await db.query(
+        "select count(*)::int n from verification_review_jobs where user_id=$1 and document_path=$2",
+        [owner, path],
+      )
+    ).rows[0].n,
+    1,
+  );
+});
+
+test("audit: an offer cannot have a window shorter than one bookable slot", async () => {
+  const owner = await auditBusiness();
+  await assert.rejects(
+    asUser(owner, (tx) =>
+      tx.query(
+        "insert into offers(business_id,title,description,starts_at,ends_at,slot_minutes,status) values($1,'Short offer','A test offer description',now()+interval '2 hours',now()+interval '2 hours 5 minutes',60,'live')",
+        [owner],
+      ),
+    ),
+    /slot|window|invalid/,
+  );
+});
+
+test("audit: customer retains offer context after an offer is cancelled; outsider cannot read drafts", async () => {
+  const owner = await auditBusiness();
+  const offer = await auditOffer(owner);
+  await asUser(b, (tx) =>
+    tx.query("select book_offer_slot($1,1)", [offer.slot]),
+  );
+  await db.query("update offers set status='cancelled' where id=$1", [
+    offer.id,
+  ]);
+  const visible = await asUser(b, (tx) =>
+    tx.query("select title,business_id from offers where id=$1", [offer.id]),
+  );
+  assert.equal(visible.rows.length, 1);
+  assert.equal(visible.rows[0].business_id, owner);
+  assert.equal(
+    (
+      await asUser(outsider, (tx) =>
+        tx.query("select id from offers where id=$1", [offer.id]),
+      )
+    ).rows.length,
+    0,
+  );
+});
+
+test("audit: chat members cannot forge message timestamps or direct read watermarks", async () => {
+  const p = await post();
+  const r = await request(b, p);
+  await asUser(host, (tx) => tx.query("select approve_join_request($1)", [r]));
+  const conversation = (
+    await asUser(b, (tx) =>
+      tx.query("select get_or_create_conversation($1,$2,null) id", [host, p]),
+    )
+  ).rows[0].id;
+  await assert.rejects(
+    asUser(b, (tx) =>
+      tx.query(
+        "insert into messages(conversation_id,sender_id,body,created_at) values($1,$2,'Forged future message',now()+interval '1 year')",
+        [conversation, b],
+      ),
+    ),
+    /permission denied/,
+  );
+  await assert.rejects(
+    asUser(b, (tx) =>
+      tx.query(
+        "insert into conversation_reads(conversation_id,user_id,last_read_at) values($1,$2,now()+interval '1 year')",
+        [conversation, b],
+      ),
+    ),
+    /permission denied/,
+  );
+});
+
+test("audit: resubmitting a declined request notifies the host again", async () => {
+  const p = await post();
+  const r = await request(b, p);
+  await asUser(host, (tx) => tx.query("select decline_join_request($1)", [r]));
+  await request(b, p);
+  const count = (
+    await db.query(
+      "select count(*)::int n from notifications where user_id=$1 and ref_id=$2 and kind='join_request'",
+      [host, p],
+    )
+  ).rows[0].n;
+  assert.equal(count, 2);
+});
+
+test("audit: owner offer RPC publishes and cancels reservations atomically; foreign and raw writes fail", async () => {
+  const owner = await auditBusiness();
+  const offer = await auditOffer(owner);
+  const booking = (
+    await asUser(b, (tx) =>
+      tx.query("select book_offer_slot($1,1) result", [offer.slot]),
+    )
+  ).rows[0].result.booking_id;
+  await assert.rejects(
+    asUser(owner, (tx) =>
+      tx.query("update offers set title='Raw edit' where id=$1", [offer.id]),
+    ),
+    /permission denied/,
+  );
+  await assert.rejects(
+    asUser(outsider, (tx) =>
+      tx.query("select update_offer($1,$2)", [
+        offer.id,
+        JSON.stringify({ status: "cancelled" }),
+      ]),
+    ),
+    /not yours/,
+  );
+  await assert.rejects(
+    asUser(owner, (tx) =>
+      tx.query("select update_offer($1,$2)", [
+        offer.id,
+        JSON.stringify({ business_id: outsider }),
+      ]),
+    ),
+    /protected/,
+  );
+  await asUser(owner, (tx) =>
+    tx.query("select update_offer($1,$2)", [
+      offer.id,
+      JSON.stringify({ title: "Updated haircut" }),
+    ]),
+  );
+  await asUser(owner, (tx) =>
+    tx.query("select change_booking_status($1,'confirmed')", [booking]),
+  );
+  await asUser(owner, (tx) =>
+    tx.query("select update_offer($1,$2)", [
+      offer.id,
+      JSON.stringify({ status: "cancelled" }),
+    ]),
+  );
+  assert.equal(
+    (await db.query("select status from bookings where id=$1", [booking]))
+      .rows[0].status,
+    "cancelled",
+  );
+  assert.equal(
+    (
+      await db.query(
+        "select count(*)::int n from notifications where user_id=$1 and kind='booking_cancelled' and ref_id=$2",
+        [b, offer.id],
+      )
+    ).rows[0].n,
+    1,
+  );
+  assert.deepEqual(
+    (
+      await asUser(b, (tx) =>
+        tx.query("select available_offer_slots($1) slots", [offer.id]),
+      )
+    ).rows[0].slots,
+    [],
+  );
+  await assert.rejects(
+    asUser(owner, (tx) =>
+      tx.query("select update_offer($1,$2)", [
+        offer.id,
+        JSON.stringify({ status: "live" }),
+      ]),
+    ),
+    /reopen/,
+  );
+});
+
+test("audit: read cursors acknowledge only displayed messages and reject another conversation", async () => {
+  const p = await post();
+  const r = await request(b, p);
+  await asUser(host, (tx) => tx.query("select approve_join_request($1)", [r]));
+  const conversation = (
+    await asUser(b, (tx) =>
+      tx.query("select get_or_create_conversation($1,$2,null) id", [host, p]),
+    )
+  ).rows[0].id;
+  const first = (
+    await asUser(host, (tx) =>
+      tx.query(
+        "insert into messages(conversation_id,sender_id,body) values($1,$2,'First message') returning id",
+        [conversation, host],
+      ),
+    )
+  ).rows[0].id;
+  const second = (
+    await asUser(host, (tx) =>
+      tx.query(
+        "insert into messages(conversation_id,sender_id,body) values($1,$2,'Arrived after snapshot') returning id",
+        [conversation, host],
+      ),
+    )
+  ).rows[0].id;
+  await asUser(b, (tx) =>
+    tx.query("select mark_conversation_read($1,$2)", [conversation, first]),
+  );
+  const list = (
+    await asUser(b, (tx) => tx.query("select list_my_conversations() result"))
+  ).rows[0].result;
+  assert.equal(
+    list.find((row: any) => row.id === conversation)?.unread_count,
+    1,
+  );
+  await assert.rejects(
+    asUser(outsider, (tx) =>
+      tx.query("select mark_conversation_read($1,$2)", [conversation, second]),
+    ),
+    /not a conversation member/,
+  );
+  await assert.rejects(
+    asUser(b, (tx) =>
+      tx.query("select mark_conversation_read($1,$2)", [
+        conversation,
+        "00000000-0000-0000-0000-000000000099",
+      ]),
+    ),
+    /does not belong/,
+  );
+  await assert.rejects(
+    asUser(b, (tx) =>
+      tx.query(
+        "insert into messages(conversation_id,sender_id,body) values($1,$2,'   ')",
+        [conversation, b],
+      ),
+    ),
+    /messages_nonblank/,
+  );
+  await asUser(b, (tx) =>
+    tx.query("select mark_conversation_read($1,$2)", [conversation, second]),
+  );
+  await asUser(b, (tx) =>
+    tx.query("select mark_conversation_read($1,$2)", [conversation, first]),
+  );
+  assert.equal(
+    (
+      await db.query(
+        "select count(*)::int n from messages m join conversation_reads r on r.conversation_id=m.conversation_id and r.user_id=$2 where m.conversation_id=$1 and m.created_at>r.last_read_at",
+        [conversation, b],
+      )
+    ).rows[0].n,
+    0,
+  );
+});
+
+test("audit: review jobs are private and reviews are atomic, single-use, and bound to the proof", async () => {
+  const owner = await auditBusiness(false);
+  async function submit(filename: string) {
+    const path = `${owner}/${filename}`;
+    await asUser(owner, (tx) =>
+      tx.query(
+        "insert into storage.objects(bucket_id,name) values('verification_docs',$1)",
+        [path],
+      ),
+    );
+    await asUser(owner, (tx) =>
+      tx.query("select submit_verification($1)", [path]),
+    );
+    return (
+      await db.query(
+        "select id from verification_review_jobs where user_id=$1 and document_path=$2",
+        [owner, path],
+      )
+    ).rows[0].id;
+  }
+  const old = await submit("first.png");
+  await assert.rejects(
+    asUser(owner, (tx) => tx.query("select * from verification_review_jobs")),
+    /permission denied/,
+  );
+  await assert.rejects(
+    asUser(owner, (tx) => tx.query("select claim_verification_jobs()")),
+    /permission denied/,
+  );
+  await assert.rejects(
+    asUser(owner, (tx) =>
+      tx.query("select review_verification($1,'approved',null)", [old]),
+    ),
+    /permission denied/,
+  );
+  await db.query(
+    "select review_verification($1,'rejected','Need a clearer photo')",
+    [old],
+  );
+  assert.equal(
+    (
+      await db.query("select verification_note from profiles where id=$1", [
+        owner,
+      ])
+    ).rows[0].verification_note,
+    "Need a clearer photo",
+  );
+  await assert.rejects(
+    db.query("select review_verification($1,'approved',null)", [old]),
+    /stale|completed/,
+  );
+  const current = await submit("new.png");
+  assert.equal(
+    (
+      await db.query("select verification_note from profiles where id=$1", [
+        owner,
+      ])
+    ).rows[0].verification_note,
+    null,
+  );
+  await assert.rejects(
+    db.query("select review_verification($1,'approved',null)", [old]),
+    /stale|completed/,
+  );
+  await assert.rejects(
+    db.query("select review_verification($1,'bogus',null)", [current]),
+    /invalid decision/,
+  );
+  await db.query("select review_verification($1,'approved',null)", [current]);
+  assert.equal(
+    (
+      await db.query("select verification_status from profiles where id=$1", [
+        owner,
+      ])
+    ).rows[0].verification_status,
+    "verified",
+  );
+  await assert.rejects(
+    db.query("select review_verification($1,'rejected','Changed mind')", [
+      current,
+    ]),
+    /stale|completed/,
+  );
+  assert.equal(
+    (
+      await db.query(
+        "select count(*)::int n from notifications where user_id=$1 and kind='verification_approved'",
+        [owner],
+      )
+    ).rows[0].n,
+    1,
+  );
+});
+
+test(
+  "audit: concurrent offer cancellation and reservation cannot leave active seats",
+  { skip: !process.env.TEST_DATABASE_URL },
+  async () => {
+    const owner = await auditBusiness(),
+      offer = await auditOffer(owner);
+    await Promise.allSettled([
+      asUser(b, (tx) => tx.query("select book_offer_slot($1,1)", [offer.slot])),
+      asUser(owner, (tx) =>
+        tx.query("select update_offer($1,$2)", [
+          offer.id,
+          JSON.stringify({ status: "cancelled" }),
+        ]),
+      ),
+    ]);
+    assert.equal(
+      (await db.query("select status from offers where id=$1", [offer.id]))
+        .rows[0].status,
+      "cancelled",
+    );
+    assert.equal(
+      (
+        await db.query(
+          "select count(*)::int n from bookings where offer_id=$1 and status in ('pending','confirmed')",
+          [offer.id],
+        )
+      ).rows[0].n,
+      0,
+    );
+  },
+);
+
+test(
+  "audit: concurrent reviewers save one decision and workers lease distinct review jobs",
+  { skip: !process.env.TEST_DATABASE_URL },
+  async () => {
+    const owner = await auditBusiness(false),
+      path = `${owner}/proof.png`;
+    await asUser(owner, (tx) =>
+      tx.query(
+        "insert into storage.objects(bucket_id,name) values('verification_docs',$1)",
+        [path],
+      ),
+    );
+    await asUser(owner, (tx) =>
+      tx.query("select submit_verification($1)", [path]),
+    );
+    const job = (
+      await db.query(
+        "select id from verification_review_jobs where user_id=$1",
+        [owner],
+      )
+    ).rows[0].id;
+    const leases = await Promise.all([
+      asUser(
+        null,
+        (tx) => tx.query("select * from claim_verification_jobs()"),
+        "service_role",
+      ),
+      asUser(
+        null,
+        (tx) => tx.query("select * from claim_verification_jobs()"),
+        "service_role",
+      ),
+    ]);
+    const ids = leases.flatMap((result) =>
+      result.rows.map((row: any) => row.id),
+    );
+    assert.equal(new Set(ids).size, ids.length);
+    assert.ok(ids.includes(job));
+    const decisions = await Promise.allSettled([
+      asUser(
+        null,
+        (tx) =>
+          tx.query("select review_verification($1,'approved',null)", [job]),
+        "service_role",
+      ),
+      asUser(
+        null,
+        (tx) =>
+          tx.query(
+            "select review_verification($1,'rejected','Unclear proof')",
+            [job],
+          ),
+        "service_role",
+      ),
+    ]);
+    assert.equal(
+      decisions.filter((result) => result.status === "fulfilled").length,
+      1,
+    );
+    assert.equal(
+      (
+        await db.query(
+          "select count(*)::int n from notifications where user_id=$1 and kind in ('verification_approved','verification_rejected')",
+          [owner],
+        )
+      ).rows[0].n,
+      1,
+    );
+  },
+);
+
+test("audit: offers inherit reviewed venue ownership, and unverified drafts cannot publish through RPC", async () => {
+  const owner = await auditBusiness(false);
+  const venue = (
+    await db.query(
+      "insert into venues(business_id,name,category,area) values($1,'Audit Salon','Salon','Kakkanad') returning id",
+      [owner],
+    )
+  ).rows[0].id;
+  const offer = (
+    await asUser(owner, (tx) =>
+      tx.query(
+        "insert into offers(business_id,title,description,starts_at,ends_at,status) values($1,'Draft haircut','Friendly salon haircut',now()+interval '2 hours',now()+interval '4 hours','draft') returning id,venue_id",
+        [owner],
+      ),
+    )
+  ).rows[0];
+  assert.equal(offer.venue_id, venue);
+  await assert.rejects(
+    asUser(owner, (tx) =>
+      tx.query("select update_offer($1,$2)", [
+        offer.id,
+        JSON.stringify({ status: "live" }),
+      ]),
+    ),
+    /verified/,
+  );
+  await db.query(
+    "update profiles set verification_status='verified' where id=$1",
+    [owner],
+  );
+  await asUser(owner, (tx) =>
+    tx.query("select update_offer($1,$2)", [
+      offer.id,
+      JSON.stringify({ status: "live" }),
+    ]),
+  );
+  assert.equal(
+    (
+      await asUser(outsider, (tx) =>
+        tx.query("select id from offers where id=$1", [offer.id]),
+      )
+    ).rows.length,
+    1,
+  );
+  await db.query(
+    "update profiles set verification_status='rejected' where id=$1",
+    [owner],
+  );
+  assert.equal(
+    (
+      await asUser(outsider, (tx) =>
+        tx.query("select id from offers where id=$1", [offer.id]),
+      )
+    ).rows.length,
+    0,
+  );
+  assert.deepEqual(
+    (
+      await asUser(b, (tx) =>
+        tx.query("select available_offer_slots($1) slots", [offer.id]),
+      )
+    ).rows[0].slots,
+    [],
+  );
+  const other = await auditBusiness();
+  await assert.rejects(
+    asUser(other, (tx) =>
+      tx.query(
+        "insert into offers(business_id,venue_id,title,description,starts_at,ends_at,status) values($1,$2,'Foreign venue','Friendly salon haircut',now()+interval '2 hours',now()+interval '4 hours','draft')",
+        [other, venue],
+      ),
+    ),
+    /associated with your business/,
+  );
+});
+
+test("audit: search metacharacters match literal text rather than broad patterns", async () => {
+  const { searchLiteral } = await import("../src/utils/searchFilter");
+  for (const term of [
+    "50%",
+    "a_b",
+    "*",
+    "(coffee)",
+    "a.b",
+    "back\\slash",
+    "a|b",
+    "[x]",
+  ]) {
+    const pattern = JSON.parse(searchLiteral(term));
+    assert.equal(
+      (
+        await db.query("select $1::text ~* $2::text as matches", [
+          `before ${term} after`,
+          pattern,
+        ])
+      ).rows[0].matches,
+      true,
+    );
+    assert.equal(
+      (
+        await db.query("select $1::text ~* $2::text as matches", [
+          "unrelated text",
+          pattern,
+        ])
+      ).rows[0].matches,
+      false,
+    );
+  }
+});

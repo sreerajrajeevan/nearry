@@ -111,7 +111,10 @@ export async function completeOAuthCallback(
   if (url.split("?")[0].split("#")[0] !== expected) return null;
   const detail =
     extractParam(url, "error_description") || extractParam(url, "error");
-  if (detail) throw new Error(`Google sign-in failed: ${detail}`);
+  if (detail) {
+    clearWebCallback(url);
+    throw new Error(`Google sign-in failed: ${detail}`);
+  }
   const code = extractParam(url, "code");
   if (!code) return null;
   if (!exchanges.has(code)) {
@@ -125,7 +128,11 @@ export async function completeOAuthCallback(
     exchanges.set(code, promise);
     void promise.catch(() => exchanges.delete(code));
   }
-  return exchanges.get(code)!;
+  try {
+    return await exchanges.get(code)!;
+  } finally {
+    clearWebCallback(url);
+  }
 }
 
 export async function signOut(): Promise<void> {
@@ -156,4 +163,18 @@ function friendlyAuthError(message: string): string {
   if (m.includes("signup") && m.includes("not allowed"))
     return "No account found for this email. If you're new, create an account below.";
   return message;
+}
+
+/** Remove consumed credentials so a browser reload cannot replay the callback. */
+function clearWebCallback(callbackUrl: string) {
+  if (Platform.OS !== "web" || typeof window === "undefined") return;
+  const current = new URL(window.location.href);
+  if (current.href !== callbackUrl) return;
+  for (const name of ["code", "error", "error_description", "error_code"])
+    current.searchParams.delete(name);
+  window.history.replaceState(
+    window.history.state,
+    "",
+    current.pathname + current.search + current.hash,
+  );
 }

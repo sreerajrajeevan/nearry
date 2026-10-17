@@ -1,5 +1,7 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useRef, useState } from "react";
 import {
+  Alert,
+  AppState,
   View,
   Text,
   StyleSheet,
@@ -14,10 +16,12 @@ import { Badge } from "../components/Badge";
 import { EmptyState } from "../components/EmptyState";
 import { colors, typography, spacing } from "../theme";
 import {
+  subscribeToNotifications,
   listNotifications,
   markNotificationRead,
   markAllNotificationsRead,
 } from "../services/notifications";
+import { useAuth } from "../store/AuthContext";
 import { AppNotification } from "../services/mappers";
 
 function kindTone(kind: string): "neutral" | "green" | "red" {
@@ -32,27 +36,51 @@ function kindLabel(kind: string): string {
 }
 
 /** In-app notification center with read/unread states. Shared by both lanes. */
-export function NotificationCenterScreen() {
+export function NotificationCenterScreen({
+  navigation,
+}: {
+  navigation: { goBack: () => void };
+}) {
+  const { profile } = useAuth();
+  const focused = useRef(false),
+    version = useRef(0);
   const [items, setItems] = useState<AppNotification[]>([]);
   const [state, setState] = useState<"loading" | "error" | "ready">("loading");
 
-  const load = useCallback(async () => {
-    setState("loading");
+  const load = useCallback(async (silent = false) => {
+    const ticket = ++version.current;
+    if (!silent) setState("loading");
     try {
-      setItems(await listNotifications());
+      const result = await listNotifications();
+      if (!focused.current || ticket !== version.current) return;
+      setItems(result);
       setState("ready");
     } catch {
-      setState("error");
+      if (focused.current && ticket === version.current && !silent)
+        setState("error");
     }
   }, []);
 
-  useEffect(() => {
-    void load();
-  }, [load]);
   useFocusEffect(
     useCallback(() => {
+      focused.current = true;
       void load();
-    }, [load]),
+      const refresh = () => void load(true);
+      const stop = profile
+        ? subscribeToNotifications(profile.id, refresh)
+        : () => {};
+      const appState = AppState.addEventListener("change", (state) => {
+        if (state === "active") refresh();
+      });
+      const timer = setInterval(refresh, 30000);
+      return () => {
+        focused.current = false;
+        ++version.current;
+        stop();
+        appState.remove();
+        clearInterval(timer);
+      };
+    }, [load, profile?.id]),
   );
 
   const onOpen = async (n: AppNotification) => {
@@ -63,7 +91,10 @@ export function NotificationCenterScreen() {
           prev.map((x) => (x.id === n.id ? { ...x, read: true } : x)),
         );
       } catch {
-        /* keep unread */
+        Alert.alert(
+          "Could not mark as read",
+          "Check your connection and try again.",
+        );
       }
     }
   };
@@ -71,9 +102,12 @@ export function NotificationCenterScreen() {
   const onMarkAll = async () => {
     try {
       await markAllNotificationsRead();
-      setItems((prev) => prev.map((x) => ({ ...x, read: true })));
+      await load(true);
     } catch {
-      /* ignore */
+      Alert.alert(
+        "Could not mark all as read",
+        "Check your connection and try again.",
+      );
     }
   };
 
@@ -85,6 +119,15 @@ export function NotificationCenterScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scroll}
       >
+        <TouchableOpacity
+          accessibilityRole="button"
+          onPress={() => navigation.goBack()}
+          style={{ marginBottom: spacing.md }}
+        >
+          <Text style={{ ...typography.label, color: colors.textDim }}>
+            ← Back
+          </Text>
+        </TouchableOpacity>
         <View style={styles.headerRow}>
           <Text style={styles.header}>Notifications</Text>
           {unread > 0 && (

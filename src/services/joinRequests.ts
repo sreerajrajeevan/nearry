@@ -1,4 +1,5 @@
 import { getSupabase, isSupabaseConfigured, isDemoMode } from "./supabase";
+import { mockPosts } from "../data/mock";
 import { DbJoinRequest, JoinRequest, toJoinRequest } from "./mappers";
 
 const useMock = () => {
@@ -39,14 +40,25 @@ export async function requestToJoin(
   requesterId: string,
 ): Promise<JoinRequest> {
   if (useMock()) {
+    const post = mockPosts.find((p) => p.id === postId);
+    if (!post) throw new Error("Post not found.");
+    if (post.authorId === requesterId)
+      throw new Error("You can't join your own post.");
+    if (
+      post.status !== "open" ||
+      post.spotsLeft < 1 ||
+      new Date(post.startsAt).getTime() <= Date.now() ||
+      (post.expiresAt && new Date(post.expiresAt).getTime() <= Date.now())
+    )
+      throw new Error("Post is full, closed or expired.");
     const existing = mockRequests.find(
       (r) => r.postId === postId && r.requesterId === requesterId,
     );
-    if (existing?.status === "pending")
+    if (existing?.status === "pending" || existing?.status === "approved")
       throw new Error("You have already requested to join this post.");
     if (existing) mockRequests.splice(mockRequests.indexOf(existing), 1);
     const req: JoinRequest = {
-      id: `mock-jr-${Date.now()}`,
+      id: `mock-jr-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       postId,
       requesterId,
       requesterName: "You",
@@ -70,29 +82,13 @@ export async function requestToJoin(
         req?.display_name ?? (await requesterName(supabase, requesterId)),
     },
   });
-  // Best-effort remote push to the post author.
-  const { data: post } = await supabase
-    .from("posts")
-    .select("author_id")
-    .eq("id", postId)
-    .maybeSingle();
-  if (post) {
-    const { pushToUser } = await import("./notifications");
-    void pushToUser(
-      (post as { author_id: string }).author_id,
-      "New join request",
-      `${created.requesterName} wants to join your post`,
-    ).catch(() => {});
-  }
   return created;
 }
 
 /** Withdraw my pending request. Approved joins are released via cancelParticipation. */
 export async function withdrawRequest(requestId: string): Promise<void> {
   if (useMock()) {
-    const i = mockRequests.findIndex((r) => r.id === requestId);
-    if (i >= 0) mockRequests.splice(i, 1);
-    return;
+    return cancelParticipation(requestId);
   }
   const supabase = getSupabase()!;
   const { error } = await supabase.rpc("withdraw_join_request", {
@@ -108,7 +104,21 @@ export async function withdrawRequest(requestId: string): Promise<void> {
 export async function cancelParticipation(requestId: string): Promise<void> {
   if (useMock()) {
     const r = mockRequests.find((x) => x.id === requestId);
-    if (r) r.status = "withdrawn";
+    if (!r || !["pending", "approved"].includes(r.status))
+      throw new Error("Request cannot be withdrawn.");
+    const p = mockPosts.find((p) => p.id === r.postId);
+    if (r.status === "approved" && p) {
+      p.joinedCount = Math.max(0, p.joinedCount - 1);
+      p.spotsLeft = Math.max(0, p.vacancies - p.joinedCount);
+      if (
+        p.status === "closed" &&
+        p.spotsLeft > 0 &&
+        new Date(p.expiresAt ?? p.startsAt).getTime() > Date.now() &&
+        new Date(p.startsAt).getTime() > Date.now()
+      )
+        p.status = "open";
+    }
+    r.status = "withdrawn";
     return;
   }
   const supabase = getSupabase()!;
@@ -128,8 +138,20 @@ export async function approveRequest(
   if (useMock()) {
     const r = mockRequests.find((x) => x.id === requestId);
     if (!r) throw new Error("Request not found.");
+    const p = mockPosts.find((p) => p.id === r.postId);
+    if (
+      !p ||
+      p.status !== "open" ||
+      p.spotsLeft < 1 ||
+      new Date(p.expiresAt ?? p.startsAt).getTime() <= Date.now()
+    )
+      throw new Error("Post is full, closed or expired.");
+    if (r.status !== "pending") throw new Error("Request is not pending.");
     r.status = "approved";
-    return { spotsLeft: 0, postClosed: false };
+    p.joinedCount++;
+    p.spotsLeft = Math.max(0, p.vacancies - p.joinedCount);
+    if (p.spotsLeft === 0) p.status = "closed";
+    return { spotsLeft: p.spotsLeft, postClosed: p.status === "closed" };
   }
   const supabase = getSupabase()!;
   const { data, error } = await supabase.rpc("approve_join_request", {
@@ -137,27 +159,16 @@ export async function approveRequest(
   });
   if (error) throw new Error(friendlyRequestError(error.message));
   const res = data as { spots_left: number; post_closed: boolean };
-  const { data: reqRow } = await supabase
-    .from("join_requests")
-    .select("requester_id")
-    .eq("id", requestId)
-    .maybeSingle();
-  if (reqRow) {
-    const { pushToUser } = await import("./notifications");
-    void pushToUser(
-      (reqRow as { requester_id: string }).requester_id,
-      "Request approved",
-      "You're in! Check Activity for details",
-    ).catch(() => {});
-  }
   return { spotsLeft: res.spots_left, postClosed: res.post_closed };
 }
 
-/** Host declines a request. Direct update allowed (RLS blocks 'approved'). */
+/** Host declines a pending request through the authorized RPC. */
 export async function declineRequest(requestId: string): Promise<void> {
   if (useMock()) {
     const r = mockRequests.find((x) => x.id === requestId);
-    if (r) r.status = "declined";
+    if (!r || r.status !== "pending")
+      throw new Error("Request is not pending.");
+    r.status = "declined";
     return;
   }
   const supabase = getSupabase()!;
@@ -197,7 +208,10 @@ export async function listMyRequests(
   if (useMock())
     return mockRequests
       .filter((r) => r.requesterId === requesterId)
-      .map((r) => ({ ...r, postTitle: "Demo post" }));
+      .map((r) => ({
+        ...r,
+        postTitle: mockPosts.find((p) => p.id === r.postId)?.title ?? "Post",
+      }));
   const supabase = getSupabase()!;
   const { data, error } = await supabase
     .from("join_requests")
