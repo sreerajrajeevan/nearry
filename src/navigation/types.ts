@@ -48,6 +48,7 @@ export type BusinessStackParamList = {
   Conversation: { conversationId: string; title?: string };
   Notifications: undefined;
   MyOffers: undefined;
+  EditOffer: { offerId: string };
 };
 
 /** Navigation available inside personal tab screens (tab + parent stack). */

@@ -133,6 +133,17 @@ export async function createDraft(
     return created;
   }
   const supabase = getSupabase()!;
+  // One draft per title: reuse an existing draft instead of duplicating it
+  // (e.g. after a failed publish attempt).
+  const { data: existing } = await supabase
+    .from("offers")
+    .select("id")
+    .eq("business_id", businessId)
+    .eq("status", "draft")
+    .ilike("title", input.title.trim())
+    .limit(1)
+    .maybeSingle();
+  if (existing) return updateOffer(existing.id as string, input);
   const { data, error } = await supabase
     .from("offers")
     .insert(toDb(input, businessId, "draft"))
@@ -212,6 +223,23 @@ export async function updateOffer(
   });
   if (error) throw new Error(error.message);
   return withBusiness(data as Record<string, unknown>);
+}
+
+/** Delete a draft offer. Only drafts with no bookings can be deleted. */
+export async function deleteOffer(offerId: string): Promise<void> {
+  if (useMock()) {
+    const i = mockOffers.findIndex((x) => x.id === offerId);
+    if (i < 0) throw new Error("Offer not found.");
+    if (mockOffers[i].status !== "draft")
+      throw new Error("Only drafts can be deleted.");
+    mockOffers.splice(i, 1);
+    return;
+  }
+  const supabase = getSupabase()!;
+  const { error } = await supabase.rpc("delete_offer", {
+    p_offer_id: offerId,
+  });
+  if (error) throw new Error(error.message);
 }
 
 /** End an offer early. Terminal for customers; business keeps history. */

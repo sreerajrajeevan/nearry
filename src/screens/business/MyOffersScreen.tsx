@@ -18,7 +18,7 @@ import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
 import { Icon } from "../../components/Icon";
 import { useAuth } from "../../store/AuthContext";
-import { listMyOffers, cancelOffer } from "../../services/offers";
+import { listMyOffers, cancelOffer, deleteOffer } from "../../services/offers";
 import { Offer } from "../../services/mappers";
 import { formatWhen } from "../../utils/format";
 import { colors, typography, spacing } from "../../theme";
@@ -100,6 +100,34 @@ export function MyOffersScreen({ navigation }: Props) {
             } catch (e) {
               Alert.alert(
                 "Could not cancel",
+                e instanceof Error ? e.message : "Please try again.",
+              );
+            } finally {
+              setBusy(null);
+            }
+          },
+        },
+      ],
+    );
+  };
+
+  const onDelete = (offer: Offer) => {
+    Alert.alert(
+      "Delete this draft?",
+      "It will be removed permanently. This cannot be undone.",
+      [
+        { text: "Keep it", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            setBusy(offer.id);
+            try {
+              await deleteOffer(offer.id);
+              await load(true);
+            } catch (e) {
+              Alert.alert(
+                "Could not delete",
                 e instanceof Error ? e.message : "Please try again.",
               );
             } finally {
@@ -206,20 +234,48 @@ export function MyOffersScreen({ navigation }: Props) {
                 {offer.redemptions} booking
                 {offer.redemptions === 1 ? "" : "s"}
               </Text>
-              {offer.status === "live" ? (
-                <TouchableOpacity
-                  accessibilityRole="button"
-                  activeOpacity={0.7}
-                  disabled={busy === offer.id}
-                  onPress={() => onCancel(offer)}
-                  style={styles.link}
-                >
-                  <Text style={styles.cancelText}>
-                    {busy === offer.id ? "Cancelling…" : "Cancel offer"}
-                  </Text>
-                  <Icon name="arrow-up-right" size={15} color={colors.accent} />
-                </TouchableOpacity>
-              ) : null}
+              <View style={styles.actions}>
+                {(offer.status === "live" || offer.status === "draft") && (
+                  <TouchableOpacity
+                    accessibilityRole="button"
+                    activeOpacity={0.7}
+                    onPress={() =>
+                      navigation.navigate("EditOffer", { offerId: offer.id })
+                    }
+                    style={styles.link}
+                  >
+                    <Text style={styles.actionText}>Edit</Text>
+                    <Icon name="arrow-up-right" size={15} color={colors.accent} />
+                  </TouchableOpacity>
+                )}
+                {offer.status === "live" ? (
+                  <TouchableOpacity
+                    accessibilityRole="button"
+                    activeOpacity={0.7}
+                    disabled={busy === offer.id}
+                    onPress={() => onCancel(offer)}
+                    style={styles.link}
+                  >
+                    <Text style={styles.actionText}>
+                      {busy === offer.id ? "Cancelling…" : "Cancel offer"}
+                    </Text>
+                    <Icon name="arrow-up-right" size={15} color={colors.accent} />
+                  </TouchableOpacity>
+                ) : null}
+                {offer.status === "draft" ? (
+                  <TouchableOpacity
+                    accessibilityRole="button"
+                    activeOpacity={0.7}
+                    disabled={busy === offer.id}
+                    onPress={() => onDelete(offer)}
+                    style={styles.link}
+                  >
+                    <Text style={[styles.actionText, styles.deleteText]}>
+                      {busy === offer.id ? "Deleting…" : "Delete"}
+                    </Text>
+                  </TouchableOpacity>
+                ) : null}
+              </View>
             </View>
           </View>
         )}
@@ -271,5 +327,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
   },
   link: { flexDirection: "row", alignItems: "center", gap: 4 },
-  cancelText: { ...typography.bodySmall, color: colors.accent },
+  actions: { flexDirection: "row", alignItems: "center", gap: spacing.md },
+  actionText: { ...typography.bodySmall, color: colors.accent },
+  deleteText: { color: colors.red },
 });

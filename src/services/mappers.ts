@@ -298,6 +298,7 @@ export type DbBooking = {
   party_size: number;
   status: "pending" | "confirmed" | "cancelled";
   created_at: string;
+  hold_expires_at?: string;
   customer?: { display_name: string } | null;
   offer?: { title: string } | null;
   customer_name?: string;
@@ -315,6 +316,7 @@ export type Booking = {
   partySize: number;
   status: "pending" | "confirmed" | "cancelled";
   createdAt: string;
+  holdExpiresAt?: string;
 };
 
 export function toBooking(row: DbBooking): Booking {
@@ -330,7 +332,17 @@ export function toBooking(row: DbBooking): Booking {
     partySize: row.party_size,
     status: row.status,
     createdAt: row.created_at,
+    holdExpiresAt: row.hold_expires_at ?? undefined,
   };
+}
+
+/** True when a pending booking's 30-minute confirmation hold has lapsed. */
+export function isHoldExpired(b: Booking, now = new Date()): boolean {
+  return (
+    b.status === "pending" &&
+    !!b.holdExpiresAt &&
+    new Date(b.holdExpiresAt).getTime() <= now.getTime()
+  );
 }
 
 // ── Chat ──────────────────────────────────────────────────

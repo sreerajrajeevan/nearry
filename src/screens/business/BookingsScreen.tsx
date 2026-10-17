@@ -23,7 +23,7 @@ import {
   cancelBooking,
   subscribeToBookings,
 } from "../../services/bookings";
-import { Booking } from "../../services/mappers";
+import { Booking, isHoldExpired } from "../../services/mappers";
 import { getOrCreateConversation } from "../../services/chat";
 
 const FILTERS = ["ALL", "PENDING", "CONFIRMED", "CANCELLED"] as const;
@@ -183,24 +183,29 @@ export function BookingsScreen({ navigation }: Props) {
                   onPress={() => openChat(b)}
                 />
                 <View style={styles.gap} />
-                {b.status === "pending" && (
-                  <>
-                    <Button
-                      title="Decline"
-                      variant="ghost"
-                      loading={busy === `x${b.id}`}
-                      onPress={() => run(`x${b.id}`, () => cancelBooking(b.id))}
-                    />
-                    <View style={styles.gap} />
-                    <Button
-                      title="Confirm"
-                      loading={busy === `c${b.id}`}
-                      onPress={() =>
-                        run(`c${b.id}`, () => confirmBooking(b.id))
-                      }
-                    />
-                  </>
-                )}
+                {b.status === "pending" &&
+                  (isHoldExpired(b) ? (
+                    <Text style={styles.expiredNote}>
+                      Hold expired — seats released
+                    </Text>
+                  ) : (
+                    <>
+                      <Button
+                        title="Decline"
+                        variant="ghost"
+                        loading={busy === `x${b.id}`}
+                        onPress={() => run(`x${b.id}`, () => cancelBooking(b.id))}
+                      />
+                      <View style={styles.gap} />
+                      <Button
+                        title="Confirm"
+                        loading={busy === `c${b.id}`}
+                        onPress={() =>
+                          run(`c${b.id}`, () => confirmBooking(b.id))
+                        }
+                      />
+                    </>
+                  ))}
               </View>
             </Card>
           ))
@@ -249,4 +254,9 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
   gap: { width: spacing.sm },
+  expiredNote: {
+    ...typography.caption,
+    color: colors.textFaint,
+    fontStyle: "italic",
+  },
 });
