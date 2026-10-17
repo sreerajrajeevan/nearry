@@ -10,7 +10,7 @@ type Props = {
 export function Badge({ label, tone = 'neutral' }: Props) {
   return (
     <View style={[styles.base, styles[tone]]}>
-      <Text style={[styles.text, tone === 'red' && styles.redText]}>{label.toUpperCase()}</Text>
+      <Text style={[styles.text, tone === 'red' && styles.redText, tone === 'green' && styles.greenText]}>{label}</Text>
     </View>
   );
 }
@@ -18,14 +18,14 @@ export function Badge({ label, tone = 'neutral' }: Props) {
 const styles = StyleSheet.create({
   base: {
     alignSelf: 'flex-start',
-    paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
-    borderRadius: radius.sm,
-    borderWidth: 1,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 6,
+    borderRadius: radius.full,
   },
-  neutral: { borderColor: colors.borderStrong, backgroundColor: 'transparent' },
-  red: { borderColor: colors.red, backgroundColor: colors.red },
-  green: { borderColor: colors.success, backgroundColor: 'transparent' },
-  text: { ...typography.caption, color: colors.textDim },
+  neutral: { backgroundColor: colors.hairline },
+  red: { backgroundColor: colors.clay },
+  green: { backgroundColor: colors.hairline },
+  text: { ...typography.bodySmall, color: colors.textDim, fontWeight: '600' },
   redText: { color: colors.onAccent },
+  greenText: { color: colors.success },
 });

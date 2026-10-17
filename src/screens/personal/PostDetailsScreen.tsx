@@ -11,7 +11,6 @@ import { useFocusEffect } from "@react-navigation/native";
 import { Screen } from "../../components/Screen";
 import { Button } from "../../components/Button";
 import { Badge } from "../../components/Badge";
-import { Card } from "../../components/Card";
 import { EmptyState } from "../../components/EmptyState";
 import { Avatar } from "../../components/Avatar";
 import { colors, typography, spacing } from "../../theme";
@@ -30,7 +29,7 @@ import {
 } from "../../services/joinRequests";
 import { NeedPost } from "../../services/mappers";
 import { JoinRequest } from "../../services/mappers";
-import { timeLeft, vacanciesLeft } from "../../utils/format";
+import { timeLeft, formatWhen } from "../../utils/format";
 
 /**
  * Post details: host manages requests, participants request/withdraw.
@@ -122,9 +121,9 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
       "Cancel this post?",
       "Approved participants will see it as cancelled. This cannot be undone.",
       [
-        { text: "KEEP IT", style: "cancel" },
+        { text: "Keep it", style: "cancel" },
         {
-          text: "CANCEL POST",
+          text: "Cancel post",
           style: "destructive",
           onPress: () => run("cancel", () => cancelPost(postId)),
         },
@@ -135,7 +134,7 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
   if (state === "loading") {
     return (
       <Screen padded>
-        <Text style={styles.status}>LOADING…</Text>
+        <Text style={styles.status}>Loading…</Text>
       </Screen>
     );
   }
@@ -143,10 +142,10 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
     return (
       <Screen padded>
         <EmptyState title="Couldn't load this post" hint={errorMsg} />
-        <Button title="RETRY" onPress={load} />
+        <Button title="Retry" onPress={load} />
         <View style={styles.gap} />
         <Button
-          title="GO BACK"
+          title="Go back"
           variant="ghost"
           onPress={() => navigation.goBack()}
         />
@@ -156,8 +155,10 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
 
   const spotsBadge =
     post.status === "open"
-      ? vacanciesLeft(post.vacancies, post.joinedCount)
-      : post.status.toUpperCase();
+      ? post.spotsLeft > 0
+        ? `${post.spotsLeft} spot${post.spotsLeft === 1 ? "" : "s"} left`
+        : "Full"
+      : post.status;
 
   return (
     <Screen>
@@ -170,7 +171,7 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
           activeOpacity={0.7}
           style={styles.back}
         >
-          <Text style={styles.backText}>← BACK</Text>
+          <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>
 
         <View style={styles.header}>
@@ -189,7 +190,7 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
             <Text style={styles.meta}> · {post.venueName}</Text>
           )}
         </View>
-        <Text style={styles.meta}>{post.startsAt}</Text>
+        <Text style={styles.meta}>{formatWhen(post.startsAt)}</Text>
         {post.expiresAt && (
           <Text style={styles.meta}>
             Requests close {timeLeft(post.expiresAt)}
@@ -199,7 +200,7 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
         {post.tags.length > 0 && (
           <View style={styles.tags}>
             {post.tags.map((t) => (
-              <Badge key={t} label={t.toUpperCase()} />
+              <Badge key={t} label={`#${t}`} />
             ))}
           </View>
         )}
@@ -207,7 +208,7 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
         {isHost ? (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>
-              REQUESTS · {pending.length} PENDING · {approved.length} IN
+              Requests · {pending.length} pending · {approved.length} in
             </Text>
             {pending.length === 0 && approved.length === 0 && (
               <EmptyState
@@ -216,39 +217,43 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
               />
             )}
             {pending.map((r) => (
-              <Card key={r.id} style={styles.reqCard}>
-                <View style={styles.reqRow}>
-                  <Avatar name={r.requesterName} size={32} />
-                  <Text style={styles.reqName}>{r.requesterName}</Text>
-                </View>
-                <View style={styles.reqActions}>
-                  <Button
-                    title="DECLINE"
-                    variant="ghost"
-                    loading={busy === `d${r.id}`}
-                    onPress={() => run(`d${r.id}`, () => declineRequest(r.id))}
-                  />
-                  <View style={styles.reqGap} />
-                  <Button
-                    title="APPROVE"
-                    loading={busy === `a${r.id}`}
-                    onPress={() =>
-                      run(`a${r.id}`, () => approveRequest(r.id).then(() => {}))
-                    }
-                  />
-                </View>
-              </Card>
+              <View key={r.id} style={styles.reqRow2}>
+                <Avatar name={r.requesterName} size={32} />
+                <Text style={styles.reqName}>{r.requesterName}</Text>
+                <View style={styles.flex} />
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  disabled={busy === `d${r.id}`}
+                  onPress={() => run(`d${r.id}`, () => declineRequest(r.id))}
+                >
+                  <Text style={styles.declineLink}>
+                    {busy === `d${r.id}` ? "…" : "Decline"}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  disabled={busy === `a${r.id}`}
+                  onPress={() =>
+                    run(`a${r.id}`, () => approveRequest(r.id).then(() => {}))
+                  }
+                  style={styles.approvePill}
+                >
+                  <Text style={styles.approveText}>
+                    {busy === `a${r.id}` ? "…" : "Approve"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             ))}
             {approved.map((r) => (
               <View key={r.id} style={styles.approvedRow}>
                 <Avatar name={r.requesterName} size={24} />
                 <Text style={styles.approvedName}>{r.requesterName}</Text>
-                <Badge label="IN" tone="green" />
+                <Badge label="In" tone="green" />
                 <TouchableOpacity
                   activeOpacity={0.7}
                   onPress={() => openChat(r.requesterId, r.requesterName)}
                 >
-                  <Text style={styles.messageLink}>MESSAGE</Text>
+                  <Text style={styles.messageLink}>Message</Text>
                 </TouchableOpacity>
               </View>
             ))}
@@ -258,7 +263,7 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
                   {post.status === "open" && (
                     <>
                       <Button
-                        title="EDIT POST"
+                        title="Edit post"
                         variant="secondary"
                         onPress={() =>
                           navigation.navigate("EditPost", { postId: post.id })
@@ -268,7 +273,7 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
                     </>
                   )}
                   <Button
-                    title="CANCEL POST"
+                    title="Cancel post"
                     variant="danger"
                     loading={busy === "cancel"}
                     onPress={onCancelPost}
@@ -290,7 +295,7 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
               myRequest.status === "declined" ||
               myRequest.status === "withdrawn" ? (
               <Button
-                title="REQUEST TO JOIN"
+                title="Request to join"
                 loading={busy === "join"}
                 onPress={() =>
                   myId &&
@@ -299,10 +304,10 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
               />
             ) : myRequest.status === "pending" ? (
               <>
-                <Badge label="REQUEST PENDING" tone="neutral" />
+                <Badge label="Request pending" tone="neutral" />
                 <View style={styles.gap} />
                 <Button
-                  title="WITHDRAW REQUEST"
+                  title="Withdraw request"
                   variant="ghost"
                   loading={busy === "wd"}
                   onPress={() => run("wd", () => withdrawRequest(myRequest.id))}
@@ -310,10 +315,10 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
               </>
             ) : (
               <>
-                <Badge label="YOU'RE IN" tone="green" />
+                <Badge label="You're in" tone="green" />
                 <View style={styles.gap} />
                 <Button
-                  title="MESSAGE HOST"
+                  title="Message host"
                   variant="secondary"
                   loading={busy === "msg"}
                   onPress={() =>
@@ -322,7 +327,7 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
                 />
                 <View style={styles.gap} />
                 <Button
-                  title="LEAVE ACTIVITY"
+                  title="Leave activity"
                   variant="danger"
                   loading={busy === "lv"}
                   onPress={() =>
@@ -349,7 +354,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     gap: spacing.md,
   },
-  title: { ...typography.h1, color: colors.text, flex: 1 },
+  title: { ...typography.title, color: colors.text, flex: 1 },
   authorRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -379,15 +384,7 @@ const styles = StyleSheet.create({
     color: colors.textDim,
     marginBottom: spacing.md,
   },
-  reqCard: { marginBottom: spacing.md },
-  reqRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: spacing.md,
-  },
   reqName: { ...typography.body, color: colors.text, marginLeft: spacing.sm },
-  reqActions: { flexDirection: "row" },
-  reqGap: { width: spacing.sm },
   approvedRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -395,7 +392,28 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   approvedName: { ...typography.body, color: colors.text, flex: 1 },
-  messageLink: { ...typography.label, color: colors.red },
+  messageLink: { ...typography.body, color: colors.clay, fontWeight: "600" },
+  flex: { flex: 1 },
+  reqRow2: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.hairline,
+  },
+  declineLink: { ...typography.body, color: colors.textDim },
+  approvePill: {
+    backgroundColor: colors.clay,
+    borderRadius: 999,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  approveText: {
+    ...typography.body,
+    color: colors.onAccent,
+    fontWeight: "600",
+  },
   hostActions: { marginTop: spacing.lg },
   gap: { height: spacing.md },
 });

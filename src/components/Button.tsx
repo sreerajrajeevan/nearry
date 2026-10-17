@@ -42,7 +42,7 @@ export function Button({ title, onPress, variant = 'primary', loading, disabled,
 const styles = StyleSheet.create({
   base: {
     height: 52,
-    borderRadius: radius.sm,
+    borderRadius: radius.md,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.lg,
@@ -52,7 +52,7 @@ const styles = StyleSheet.create({
   ghost: { backgroundColor: 'transparent' },
   danger: { backgroundColor: 'transparent', borderWidth: 1, borderColor: colors.red },
   disabled: { opacity: 0.4 },
-  text: { ...typography.label, color: colors.text },
+  text: { ...typography.body, fontWeight: '600', color: colors.text },
   primaryText: { color: colors.onAccent },
   secondaryText: { color: colors.text },
   ghostText: { color: colors.textDim },

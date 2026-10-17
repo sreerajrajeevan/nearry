@@ -107,11 +107,11 @@ const styles = StyleSheet.create({
   back: { marginBottom: spacing.md, alignSelf: 'flex-start' },
   backText: { ...typography.label, color: colors.textDim },
   header: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: spacing.md },
-  title: { ...typography.h1, color: colors.text, flex: 1 },
+  title: { ...typography.title, color: colors.text, flex: 1 },
   meta: { ...typography.caption, color: colors.textDim, marginTop: spacing.xs },
   sectionTitle: { ...typography.label, color: colors.textDim, marginTop: spacing.xl, marginBottom: spacing.md },
   postCard: { marginBottom: spacing.md },
-  postTitle: { ...typography.h2, color: colors.text, marginBottom: spacing.xs },
+  postTitle: { ...typography.heading, color: colors.text, marginBottom: spacing.xs },
   postMeta: { ...typography.caption, color: colors.textDim, marginBottom: spacing.sm },
   gap: { height: spacing.md },
 });

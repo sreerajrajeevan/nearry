@@ -199,7 +199,7 @@ export function AuthScreen({ accountType, kicker, mode, onSwitchMode }: Props) {
 const styles = StyleSheet.create({
   header: { marginTop: spacing.xl, marginBottom: spacing.lg },
   kicker: { ...typography.label, color: colors.red, letterSpacing: 3 },
-  title: { ...typography.h1, color: colors.text, marginTop: spacing.sm },
+  title: { ...typography.title, color: colors.text, marginTop: spacing.sm },
   sub: { ...typography.body, color: colors.textDim, marginTop: spacing.sm },
   warn: { marginBottom: spacing.lg, gap: spacing.sm },
   warnText: { ...typography.caption, color: colors.textDim },
