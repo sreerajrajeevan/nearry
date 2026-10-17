@@ -1620,4 +1620,13 @@ select b.id,b.offer_id,b.customer_id,b.slot,b.party_size,b.status,b.created_at,
 from bookings b join offers o on o.id=b.offer_id join profiles c on c.id=b.customer_id;
 
 
+-- 00015_profile_trigger_grants.sql
+-- 00015: the guard_post_edit() trigger (00011) runs as the invoking
+-- authenticated user and reads profiles.account_type + onboarding_completed,
+-- but 00011 granted only (id, display_name, avatar_url, bio, business_name,
+-- verification_status) -> post publish failed with
+-- "permission denied for table profiles". Grant the two trigger columns.
+grant select (account_type, onboarding_completed) on profiles to authenticated;
+
+
 commit;
