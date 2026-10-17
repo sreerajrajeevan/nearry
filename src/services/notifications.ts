@@ -163,29 +163,66 @@ export async function presentLocal(title: string, body: string): Promise<void> {
   }
 }
 
-/** Realtime subscription for my incoming notifications. */
+/** Realtime subscription for my incoming notifications.
+ *
+ * Multiplexed: useUnreadCounts and usePushSetup both subscribe for the same
+ * user, and supabase-js returns the *same* cached channel for a repeated
+ * topic — calling .on() on it after .subscribe() throws
+ * "cannot add postgres_changes callbacks after subscribe()".
+ * So we keep one channel per user and fan events out to every subscriber.
+ */
+type NotifCallback = (n: AppNotification) => void;
+const notifChannels = new Map<
+  string,
+  { remove: () => void; callbacks: Set<NotifCallback> }
+>();
+
 export function subscribeToNotifications(
   userId: string,
-  onInsert: (n: AppNotification) => void,
+  onInsert: NotifCallback,
 ): () => void {
   if (useMock()) return () => {};
   const supabase = getSupabase()!;
-  const ch = supabase
-    .channel(`notifs-${userId}`)
-    .on(
-      "postgres_changes",
-      {
-        event: "INSERT",
-        schema: "public",
-        table: "notifications",
-        filter: `user_id=eq.${userId}`,
+  const topic = `notifs-${userId}`;
+  let entry = notifChannels.get(topic);
+  if (!entry) {
+    const callbacks = new Set<NotifCallback>();
+    const ch = supabase
+      .channel(topic)
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "notifications",
+          filter: `user_id=eq.${userId}`,
+        },
+        (payload) => {
+          const n = toAppNotification(payload.new as DbNotification);
+          callbacks.forEach((cb) => {
+            try {
+              cb(n);
+            } catch {
+              /* one bad listener must not break the others */
+            }
+          });
+        },
+      )
+      .subscribe();
+    entry = {
+      callbacks,
+      remove: () => {
+        notifChannels.delete(topic);
+        supabase.removeChannel(ch);
       },
-      (payload) => {
-        onInsert(toAppNotification(payload.new as DbNotification));
-      },
-    )
-    .subscribe();
+    };
+    notifChannels.set(topic, entry);
+  }
+  entry.callbacks.add(onInsert);
   return () => {
-    supabase.removeChannel(ch);
+    const e = notifChannels.get(topic);
+    if (!e) return;
+    e.callbacks.delete(onInsert);
+    if (e.callbacks.size === 0) e.remove();
   };
 }
