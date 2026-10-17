@@ -68,7 +68,7 @@ export function EditPostScreen({ route, navigation }: EditPostProps) {
         setDateStr(toDateInput(p.startsAt));
         setTimeStr(toTimeInput(p.startsAt));
         setVacancies(p.vacancies);
-        setCost(p.costCents ? String(p.costCents / 100) : "");
+        setCost(p.costCents !== undefined ? String(p.costCents / 100) : "");
         setTags(p.tags);
       })
       .catch(() => setPost(null))
@@ -137,7 +137,7 @@ export function EditPostScreen({ route, navigation }: EditPostProps) {
         description: description.trim(),
         startsAt: startsAt.toISOString(),
         vacancies,
-        costCents,
+        costCents: costCents ?? null,
         tags,
       });
       navigation.goBack();

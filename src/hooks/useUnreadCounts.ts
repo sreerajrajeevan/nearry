@@ -1,3 +1,5 @@
+import { AppState } from "react-native";
+import { onUnreadChanged } from "../services/unreadEvents";
 import { useEffect, useState } from "react";
 import { useAuth } from "../store/AuthContext";
 import { unreadMessageCount } from "../services/chat";
@@ -5,7 +7,6 @@ import {
   unreadNotificationCount,
   subscribeToNotifications,
   registerPushToken,
-  presentLocal,
 } from "../services/notifications";
 
 /** Unread message + notification counts, refreshed on realtime events + poll. */
@@ -32,25 +33,28 @@ export function useUnreadCounts() {
     };
     void refresh();
     const unsub = subscribeToNotifications(profile.id, () => void refresh());
+    const stopLocal = onUnreadChanged(() => void refresh());
+    const appState = AppState.addEventListener("change", (state) => {
+      if (state === "active") void refresh();
+    });
     const timer = setInterval(refresh, 30000);
     return () => {
       active = false;
       clearInterval(timer);
       unsub();
+      stopLocal();
+      appState.remove();
     };
   }, [profile]);
 
   return counts;
 }
 
-/** Register push token + surface incoming notifications as local notifications. */
+/** The server delivers push; realtime updates the in-app center and badges. */
 export function usePushSetup() {
   const { profile } = useAuth();
   useEffect(() => {
     if (!profile) return;
     void registerPushToken(profile.id).catch(() => {});
-    return subscribeToNotifications(profile.id, (n) => {
-      void presentLocal(n.title, n.body);
-    });
   }, [profile]);
 }

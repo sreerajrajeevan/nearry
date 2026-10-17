@@ -20,7 +20,7 @@ import { PostRow } from "../../components/PostRow";
 import { OfferRow } from "../../components/OfferRow";
 import { colors, typography, spacing } from "../../theme";
 import { listPosts, subscribeToPosts } from "../../services/posts";
-import { listLiveOffers } from "../../services/offers";
+import { listLiveOffers, subscribeToOffers } from "../../services/offers";
 import { getCurrentPosition, LatLng } from "../../services/location";
 import { nearbyVenues, listVenues } from "../../services/venues";
 import { NeedPost, Venue, Offer } from "../../services/mappers";
@@ -95,6 +95,7 @@ export function NearbyScreen() {
     }, [load]),
   );
   useEffect(() => subscribeToPosts(() => void load(true)), [load]);
+  useEffect(() => subscribeToOffers(() => void load(true)), [load]);
   const onRefresh = async () => {
     setRefreshing(true);
     await load(true);

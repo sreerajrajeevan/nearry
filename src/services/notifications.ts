@@ -3,6 +3,7 @@ import * as Device from "expo-device";
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 import { getSupabase, isSupabaseConfigured, isDemoMode } from "./supabase";
+import { notifyUnreadChanged } from "./unreadEvents";
 import { multiplexSubscribe } from "./realtime";
 import { mockNotifications } from "../data/mock";
 import { AppNotification, DbNotification, toAppNotification } from "./mappers";
@@ -101,18 +102,19 @@ export async function listNotifications(): Promise<AppNotification[]> {
 export async function unreadNotificationCount(): Promise<number> {
   if (useMock()) return mockNotifications.filter((n) => !n.read).length;
   const supabase = getSupabase()!;
-  const { data, error } = await supabase
+  const { count, error } = await supabase
     .from("notifications")
-    .select("id")
+    .select("id", { count: "exact", head: true })
     .is("read_at", null);
   if (error) throw new Error(error.message);
-  return data?.length ?? 0;
+  return count ?? 0;
 }
 
 export async function markNotificationRead(id: string): Promise<void> {
   if (useMock()) {
     const n = mockNotifications.find((x) => x.id === id);
     if (n) n.read = true;
+    notifyUnreadChanged();
     return;
   }
   const supabase = getSupabase()!;
@@ -122,6 +124,7 @@ export async function markNotificationRead(id: string): Promise<void> {
     .eq("id", id)
     .is("read_at", null);
   if (error) throw new Error(error.message);
+  notifyUnreadChanged();
 }
 
 export async function markAllNotificationsRead(): Promise<void> {
@@ -129,6 +132,7 @@ export async function markAllNotificationsRead(): Promise<void> {
     mockNotifications.forEach((n) => {
       n.read = true;
     });
+    notifyUnreadChanged();
     return;
   }
   const supabase = getSupabase()!;
@@ -137,6 +141,7 @@ export async function markAllNotificationsRead(): Promise<void> {
     .update({ read_at: new Date().toISOString() })
     .is("read_at", null);
   if (error) throw new Error(error.message);
+  notifyUnreadChanged();
 }
 
 /**
