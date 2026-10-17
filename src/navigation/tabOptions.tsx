@@ -1,8 +1,26 @@
 import React from "react";
-import { StyleSheet } from "react-native";
+import { StyleSheet, useWindowDimensions } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BottomTabNavigationOptions } from "@react-navigation/bottom-tabs";
 import { Icon, IconName } from "../components/Icon";
 import { colors, typography } from "../theme";
+
+/** Reserve room for both the labels and the device's gesture/navigation area. */
+export function useTabBarLayout(): BottomTabNavigationOptions {
+  const { bottom } = useSafeAreaInsets();
+  const { fontScale } = useWindowDimensions();
+  const paddingBottom = Math.max(bottom, 8);
+  return {
+    tabBarStyle: [
+      styles.bar,
+      {
+        height: 60 + Math.ceil(16 * Math.max(0, fontScale - 1)) + paddingBottom,
+        paddingTop: 6,
+        paddingBottom,
+      },
+    ],
+  };
+}
 
 export function tabOptions(
   icon: IconName,
@@ -14,7 +32,7 @@ export function tabOptions(
     tabBarHideOnKeyboard: true,
     tabBarActiveTintColor: colors.accent,
     tabBarInactiveTintColor: colors.textDim,
-    tabBarStyle: styles.bar,
+    tabBarLabelPosition: "below-icon",
     tabBarItemStyle: styles.item,
     tabBarLabelStyle: styles.label,
     tabBarIcon: ({ color }) => <Icon name={icon} size={21} color={color} />,
@@ -25,7 +43,6 @@ export function tabOptions(
   };
 }
 const styles = StyleSheet.create({
-  // Keep React Navigation's automatic height and bottom inset for each device.
   bar: {
     backgroundColor: colors.background,
     borderTopColor: colors.border,
@@ -33,7 +50,7 @@ const styles = StyleSheet.create({
     elevation: 0,
     shadowOpacity: 0,
   },
-  item: { paddingTop: 5, paddingBottom: 3 },
+  item: { paddingVertical: 0 },
   label: {
     ...typography.caption,
     fontSize: 11,

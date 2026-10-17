@@ -2,7 +2,7 @@ import React from "react";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { useUnreadCounts } from "../hooks/useUnreadCounts";
 import { BusinessTabParamList } from "./types";
-import { tabOptions } from "./tabOptions";
+import { tabOptions, useTabBarLayout } from "./tabOptions";
 import { DashboardScreen } from "../screens/business/DashboardScreen";
 import { CreateOfferScreen } from "../screens/business/CreateOfferScreen";
 import { BookingsScreen } from "../screens/business/BookingsScreen";
@@ -11,9 +11,10 @@ import { BusinessProfileScreen } from "../screens/business/BusinessProfileScreen
 
 const Tab = createBottomTabNavigator<BusinessTabParamList>();
 export function BusinessTabs() {
+  const tabBarLayout = useTabBarLayout();
   const { messages } = useUnreadCounts();
   return (
-    <Tab.Navigator>
+    <Tab.Navigator screenOptions={tabBarLayout}>
       <Tab.Screen
         name="Dashboard"
         component={DashboardScreen}

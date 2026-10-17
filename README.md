@@ -110,7 +110,8 @@ The project remains on Expo SDK 52. SDK-compatible native package versions are a
 - Palette: warm white `#FAF9F5`, ink `#252A26`, burnt orange `#C14D2F`. Statuses use explicit text, with no extra brand colours.
 - Typography: Avenir Next on iOS, the system sans elsewhere; comfortable body text and medium-weight headlines. Native text scaling is retained.
 - Layout: 24-point screen gutters, flat rows, subtle dividers, small initials, and text actions. Orange marks selection, primary actions, and the compact speech-mark logo.
-- Navigation: five labelled outline icons for each role, automatic device bottom insets, no floating container, and a dark system status bar on the light canvas.
+- Navigation: five labelled outline icons for each role, space reserved for device bottom insets and scaled labels, no floating container, and a dark system status bar on the light canvas.
+- Personal listings: Profile → My posts (also linked from Activity) includes every post you created, even with no join requests. Filter All, Upcoming, Past or Cancelled; open a row to manage requests, edit or cancel an eligible post. The list refreshes on return, on live post/request changes and when pulled down. No additional database setup is needed.
 - Shared pieces live in `src/components`; palette/type tokens live in `src/theme`. Reuse `BrandHeader`, `PageHeading`, `FilterTabs`, `PostRow`, and `OfferRow` instead of adding another screen-specific design.
 - Nearby area controls open from the header. GPS alone enables the “Within 5 km” label; demo and unfiltered results are labelled honestly. Play, Meet, and Explore filter posts and places.
 - Search uses the data services in both real and explicit demo modes. Stale requests cannot replace a newer query, and offers open their real detail route.
