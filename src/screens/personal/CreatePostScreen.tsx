@@ -35,7 +35,12 @@ const TAG_OPTIONS = [
 const pad = (n: number) => String(n).padStart(2, "0");
 const fmtDate = (d: Date) =>
   `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-const fmtTime = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+const fmtTime = (d: Date) => {
+  const h = d.getHours();
+  const p = h < 12 ? "AM" : "PM";
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${h12}:${pad(d.getMinutes())} ${p}`;
+};
 
 function DateTimeField({
   label,

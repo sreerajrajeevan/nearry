@@ -168,7 +168,7 @@ function Stepper({
   );
 }
 
-/** Time bottom sheet: hour + minute steppers, 24h. */
+/** Time bottom sheet: 12-hour clock with AM/PM. */
 export function TimeSheet({
   visible,
   value,
@@ -181,21 +181,27 @@ export function TimeSheet({
   onClose: () => void;
 }) {
   const base = value ?? new Date();
-  const [hour, setHour] = useState(base.getHours());
+  const h24 = base.getHours();
+  const [hour12, setHour12] = useState(h24 % 12 === 0 ? 12 : h24 % 12);
+  const [period, setPeriod] = useState<"AM" | "PM">(h24 < 12 ? "AM" : "PM");
   const [minute, setMinute] = useState(base.getMinutes());
+  const confirm = () => {
+    const h = period === "AM" ? hour12 % 12 : (hour12 % 12) + 12;
+    const next = new Date(base);
+    next.setHours(h, minute, 0, 0);
+    onPick(next);
+    onClose();
+  };
   return (
-    <Sheet
-      visible={visible}
-      title="Pick a time"
-      onClose={() => {
-        const next = new Date(base);
-        next.setHours(hour, minute, 0, 0);
-        onPick(next);
-        onClose();
-      }}
-    >
+    <Sheet visible={visible} title="Pick a time" onClose={confirm}>
       <View style={styles.timeRow}>
-        <Stepper label="HOUR" value={hour} onChange={setHour} min={0} max={23} />
+        <Stepper
+          label="HOUR"
+          value={hour12}
+          onChange={setHour12}
+          min={1}
+          max={12}
+        />
         <Text style={styles.colon}>:</Text>
         <Stepper
           label="MIN"
@@ -205,8 +211,28 @@ export function TimeSheet({
           max={59}
           step={5}
         />
+        <View style={styles.periodCol}>
+          <Text style={styles.stepLabel}> </Text>
+          {(["AM", "PM"] as const).map((p) => (
+            <TouchableOpacity
+              key={p}
+              style={[styles.periodBtn, period === p && styles.periodActive]}
+              onPress={() => setPeriod(p)}
+              activeOpacity={0.8}
+            >
+              <Text
+                style={[
+                  styles.periodText,
+                  period === p && styles.periodTextActive,
+                ]}
+              >
+                {p}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
       </View>
-      <Text style={styles.hint}>24-hour time. Tap DONE when set.</Text>
+      <Text style={styles.hint}>Tap DONE when set.</Text>
     </Sheet>
   );
 }
@@ -278,6 +304,18 @@ const styles = StyleSheet.create({
   stepText: { color: colors.text, fontSize: 22 },
   stepValue: { ...typography.title, color: colors.text, fontSize: 28 },
   colon: { ...typography.title, color: colors.textDim, fontSize: 28 },
+  periodCol: { alignItems: "center", marginLeft: spacing.lg },
+  periodBtn: {
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    marginVertical: 4,
+  },
+  periodActive: { backgroundColor: colors.red, borderColor: colors.red },
+  periodText: { ...typography.label, color: colors.textDim },
+  periodTextActive: { color: "#fff" },
   hint: {
     ...typography.caption,
     color: colors.textFaint,
