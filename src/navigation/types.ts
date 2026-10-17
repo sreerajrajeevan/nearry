@@ -36,6 +36,7 @@ export type PersonalStackParamList = {
   PostDetails: { postId: string };
   VenueDetails: { venueId: string };
   EditPost: { postId: string };
+  MyPosts: undefined;
   OfferDetails: { offerId: string };
   Messages: undefined;
   Conversation: { conversationId: string; title?: string };

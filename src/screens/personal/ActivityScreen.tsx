@@ -138,6 +138,14 @@ export function ActivityScreen() {
         contentContainerStyle={styles.scroll}
       >
         <Text style={styles.header}>Activity</Text>
+        <TouchableOpacity
+          accessibilityRole="button"
+          style={styles.myPosts}
+          onPress={() => navigation.navigate("MyPosts")}
+        >
+          <Text style={styles.myPostsTitle}>My posts</Text>
+          <Text style={styles.myPostsLink}>View and manage →</Text>
+        </TouchableOpacity>
 
         {state === "loading" ? (
           <Text style={styles.status}>Loading…</Text>
@@ -308,6 +316,19 @@ export function ActivityScreen() {
 }
 
 const styles = StyleSheet.create({
+  myPosts: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: spacing.sm,
+    minHeight: 52,
+    paddingVertical: spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  myPostsTitle: { ...typography.body, color: colors.text },
+  myPostsLink: { ...typography.bodySmall, color: colors.accent },
   scroll: { paddingBottom: spacing.xl },
   header: {
     ...typography.title,

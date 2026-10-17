@@ -45,6 +45,33 @@ test("open-post search keeps expiry and text filters together and quotes punctua
   assert.ok(!filter.includes("now()"));
 });
 
+test("My posts requests only the host's posts without hiding past or cancelled listings", async () => {
+  handler = () =>
+    ["open", "closed", "cancelled"].map((status, index) => ({
+      id: `own-${index}`,
+      author_id: "host",
+      author_name: "Host",
+      title: "My plan",
+      description: "A past or current plan",
+      starts_at: "2020-01-01T12:00:00Z",
+      expires_at: "2019-12-31T12:00:00Z",
+      vacancies: 2,
+      tags: [],
+      status,
+      created_at: "2019-12-01T12:00:00Z",
+    }));
+  const result = await posts.listPosts({ authorId: "host", status: "all" });
+  const url = calls[0].url;
+  assert.equal(url.searchParams.get("author_id"), "eq.host");
+  assert.equal(url.searchParams.get("status"), null);
+  assert.equal(url.searchParams.get("starts_at"), null);
+  assert.equal(url.searchParams.get("or"), null);
+  assert.deepEqual(
+    result.map((post) => post.status),
+    ["open", "closed", "cancelled"],
+  );
+});
+
 test("long conversations fetch the newest page and display it chronologically", async () => {
   handler = () => [
     {

@@ -7,6 +7,7 @@ import { PostDetailsScreen } from "../screens/personal/PostDetailsScreen";
 import { PlaceDetailsScreen } from "../screens/personal/PlaceDetailsScreen";
 import { VenueDetailsScreen } from "../screens/personal/VenueDetailsScreen";
 import { EditPostScreen } from "../screens/personal/EditPostScreen";
+import { MyPostsScreen } from "../screens/personal/MyPostsScreen";
 import { OfferDetailsScreen } from "../screens/personal/OfferDetailsScreen";
 import { ChatListScreen } from "../screens/chat/ChatListScreen";
 import { ConversationScreen } from "../screens/chat/ConversationScreen";
@@ -29,6 +30,7 @@ export function PersonalStack() {
       <Stack.Screen name="PlaceDetails" component={PlaceDetailsScreen} />
       <Stack.Screen name="VenueDetails" component={VenueDetailsScreen} />
       <Stack.Screen name="EditPost" component={EditPostScreen} />
+      <Stack.Screen name="MyPosts" component={MyPostsScreen} />
       <Stack.Screen name="OfferDetails" component={OfferDetailsScreen} />
       <Stack.Screen name="Messages" component={ChatListScreen} />
       <Stack.Screen name="Conversation" component={ConversationScreen} />

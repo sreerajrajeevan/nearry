@@ -2,7 +2,7 @@ import React from "react";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { useUnreadCounts } from "../hooks/useUnreadCounts";
 import { PersonalTabParamList } from "./types";
-import { tabOptions } from "./tabOptions";
+import { tabOptions, useTabBarLayout } from "./tabOptions";
 import { NearbyScreen } from "../screens/personal/NearbyScreen";
 import { SearchScreen } from "../screens/personal/SearchScreen";
 import { CreatePostScreen } from "../screens/personal/CreatePostScreen";
@@ -11,10 +11,11 @@ import { ProfileScreen } from "../screens/personal/ProfileScreen";
 
 const Tab = createBottomTabNavigator<PersonalTabParamList>();
 export function PersonalTabs() {
+  const tabBarLayout = useTabBarLayout();
   const { messages, notifications } = useUnreadCounts();
   const total = messages + notifications;
   return (
-    <Tab.Navigator>
+    <Tab.Navigator screenOptions={tabBarLayout}>
       <Tab.Screen
         name="Nearby"
         component={NearbyScreen}

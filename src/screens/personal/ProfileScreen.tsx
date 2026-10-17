@@ -18,8 +18,9 @@ import { colors, typography, spacing } from "../../theme";
 import { useAuth } from "../../store/AuthContext";
 import { useUnreadCounts } from "../../hooks/useUnreadCounts";
 import { enablePushNotifications } from "../../services/notifications";
+import { PersonalTabNav } from "../../navigation/types";
 
-type Props = { navigation: { navigate: (screen: string) => void } };
+type Props = { navigation: PersonalTabNav };
 export function ProfileScreen({ navigation }: Props) {
   const { profile, session, demoMode, signOut, enterDemoMode } = useAuth();
   const { notifications } = useUnreadCounts();
@@ -58,6 +59,21 @@ export function ProfileScreen({ navigation }: Props) {
               : "Good company and a new plan."}
           </Text>
         </View>
+        <TouchableOpacity
+          accessibilityRole="button"
+          activeOpacity={0.65}
+          style={styles.menuRow}
+          onPress={() => navigation.navigate("MyPosts")}
+        >
+          <Icon name="file-text" size={18} color={colors.accent} />
+          <View style={styles.menuCopy}>
+            <Text style={styles.menuTitle}>My posts</Text>
+            <Text style={styles.menuHint}>
+              Your plans, requests and past posts
+            </Text>
+          </View>
+          <Icon name="arrow-up-right" size={17} color={colors.accent} />
+        </TouchableOpacity>
         <TouchableOpacity
           accessibilityRole="button"
           activeOpacity={0.65}
@@ -146,5 +162,8 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   menuLabel: { ...typography.body, color: colors.text, flex: 1 },
+  menuCopy: { flex: 1, gap: 3 },
+  menuTitle: { ...typography.body, color: colors.text },
+  menuHint: { ...typography.caption, color: colors.textDim },
   actions: { gap: spacing.sm, marginTop: spacing.lg },
 });
