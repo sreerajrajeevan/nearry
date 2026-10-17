@@ -1,5 +1,7 @@
-import { parseDateTime } from "../../utils/dateTime";
 import React, { useEffect, useState } from "react";
+import DateTimePicker, {
+  DateTimePickerEvent,
+} from "@react-native-community/datetimepicker";
 import {
   View,
   Text,
@@ -32,6 +34,38 @@ const TAG_OPTIONS = [
   "culture",
 ];
 
+const pad = (n: number) => String(n).padStart(2, "0");
+const fmtDate = (d: Date) =>
+  `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const fmtTime = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+
+function DateTimeField({
+  label,
+  value,
+  placeholder,
+  onPress,
+}: {
+  label: string;
+  value: string | null;
+  placeholder: string;
+  onPress: () => void;
+}) {
+  return (
+    <View style={styles.half}>
+      <Text style={styles.fieldLabel}>{label}</Text>
+      <TouchableOpacity
+        style={styles.pickerBox}
+        activeOpacity={0.8}
+        onPress={onPress}
+      >
+        <Text style={[styles.pickerText, !value && styles.pickerPlaceholder]}>
+          {value ?? placeholder}
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
 export function CreatePostScreen() {
   const { profile, demoMode } = useAuth();
   const navigation = useNavigation<PersonalTabNav>();
@@ -41,12 +75,15 @@ export function CreatePostScreen() {
   const [venueQuery, setVenueQuery] = useState("");
   const [venueResults, setVenueResults] = useState<Venue[]>([]);
   const [venue, setVenue] = useState<Venue | null>(null);
-  const [dateStr, setDateStr] = useState("");
-  const [timeStr, setTimeStr] = useState("");
+  const [startsAtDate, setStartsAtDate] = useState<Date | null>(null);
+  const [expiresAtDate, setExpiresAtDate] = useState<Date | null>(null);
+  const [picker, setPicker] = useState<{
+    field: "startsAt" | "expiresAt";
+    mode: "date" | "time";
+  } | null>(null);
   const [vacancies, setVacancies] = useState(2);
   const [cost, setCost] = useState("");
-  const [expiryDate, setExpiryDate] = useState("");
-  const [expiryTime, setExpiryTime] = useState("");
+
   const [tags, setTags] = useState<string[]>([]);
   const [formError, setFormError] = useState("");
   const [publishing, setPublishing] = useState(false);
@@ -85,17 +122,37 @@ export function CreatePostScreen() {
       prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag],
     );
 
-  const handlePublish = async () => {
-    setFormError("");
-    const startsAt = parseDateTime(dateStr, timeStr);
-    const expiresAt =
-      expiryDate.trim() || expiryTime.trim()
-        ? parseDateTime(expiryDate || dateStr, expiryTime || "00:00")
-        : null;
-    if (!startsAt) {
-      setFormError("Enter date as YYYY-MM-DD and time as HH:MM (24h).");
+  const onPickerChange = (event: DateTimePickerEvent, selected?: Date) => {
+    if (event.type === "dismissed" || !selected || !picker) {
+      setPicker(null);
       return;
     }
+    const base =
+      (picker.field === "startsAt" ? startsAtDate : expiresAtDate) ??
+      new Date();
+    const next = new Date(base);
+    if (picker.mode === "date") {
+      next.setFullYear(
+        selected.getFullYear(),
+        selected.getMonth(),
+        selected.getDate(),
+      );
+    } else {
+      next.setHours(selected.getHours(), selected.getMinutes(), 0, 0);
+    }
+    if (picker.field === "startsAt") setStartsAtDate(next);
+    else setExpiresAtDate(next);
+    setPicker(null);
+  };
+
+  const handlePublish = async () => {
+    setFormError("");
+    if (!startsAtDate) {
+      setFormError("Pick a date and time for your post.");
+      return;
+    }
+    const startsAt = startsAtDate;
+    const expiresAt = expiresAtDate;
     const costCents = cost.trim()
       ? Math.round(Number(cost.trim()) * 100)
       : undefined;
@@ -135,12 +192,10 @@ export function CreatePostScreen() {
       setDescription("");
       setVenue(null);
       setVenueQuery("");
-      setDateStr("");
-      setTimeStr("");
+      setStartsAtDate(null);
+      setExpiresAtDate(null);
       setVacancies(2);
       setCost("");
-      setExpiryDate("");
-      setExpiryTime("");
       setTags([]);
       navigation.navigate("PostDetails", { postId: post.id });
     } catch (e) {
@@ -221,22 +276,18 @@ export function CreatePostScreen() {
         )}
 
         <View style={styles.row}>
-          <View style={styles.half}>
-            <Input
-              label="DATE (YYYY-MM-DD)"
-              placeholder="2026-10-18"
-              value={dateStr}
-              onChangeText={setDateStr}
-            />
-          </View>
-          <View style={styles.half}>
-            <Input
-              label="TIME (HH:MM)"
-              placeholder="19:00"
-              value={timeStr}
-              onChangeText={setTimeStr}
-            />
-          </View>
+          <DateTimeField
+            label="DATE"
+            value={startsAtDate ? fmtDate(startsAtDate) : null}
+            placeholder="Pick date"
+            onPress={() => setPicker({ field: "startsAt", mode: "date" })}
+          />
+          <DateTimeField
+            label="TIME"
+            value={startsAtDate ? fmtTime(startsAtDate) : null}
+            placeholder="Pick time"
+            onPress={() => setPicker({ field: "startsAt", mode: "time" })}
+          />
         </View>
 
         <View style={styles.row}>
@@ -271,25 +322,40 @@ export function CreatePostScreen() {
           </View>
         </View>
 
-        <Text style={styles.fieldLabel}>REQUESTS CLOSE (OPTIONAL)</Text>
         <View style={styles.row}>
-          <View style={styles.half}>
-            <Input
-              label=""
-              placeholder="YYYY-MM-DD"
-              value={expiryDate}
-              onChangeText={setExpiryDate}
-            />
-          </View>
-          <View style={styles.half}>
-            <Input
-              label=""
-              placeholder="HH:MM"
-              value={expiryTime}
-              onChangeText={setExpiryTime}
-            />
-          </View>
+          <Text style={styles.fieldLabel}>REQUESTS CLOSE (OPTIONAL)</Text>
+          {expiresAtDate && (
+            <TouchableOpacity onPress={() => setExpiresAtDate(null)}>
+              <Text style={styles.clearBtn}>CLEAR</Text>
+            </TouchableOpacity>
+          )}
         </View>
+        <View style={styles.row}>
+          <DateTimeField
+            label="DATE"
+            value={expiresAtDate ? fmtDate(expiresAtDate) : null}
+            placeholder="Pick date"
+            onPress={() => setPicker({ field: "expiresAt", mode: "date" })}
+          />
+          <DateTimeField
+            label="TIME"
+            value={expiresAtDate ? fmtTime(expiresAtDate) : null}
+            placeholder="Pick time"
+            onPress={() => setPicker({ field: "expiresAt", mode: "time" })}
+          />
+        </View>
+        {picker && (
+          <DateTimePicker
+            value={
+              (picker.field === "startsAt" ? startsAtDate : expiresAtDate) ??
+              new Date()
+            }
+            mode={picker.mode}
+            is24Hour
+            display="default"
+            onChange={onPickerChange}
+          />
+        )}
 
         <Text style={styles.fieldLabel}>TAGS</Text>
         <View style={styles.chips}>
@@ -401,4 +467,17 @@ const styles = StyleSheet.create({
     marginVertical: spacing.sm,
   },
   publish: { marginTop: spacing.md },
+  pickerBox: {
+    height: 52,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 8,
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.surface,
+    justifyContent: "center",
+    marginBottom: spacing.md,
+  },
+  pickerText: { color: colors.text, fontSize: 15 },
+  pickerPlaceholder: { color: colors.textFaint },
+  clearBtn: { ...typography.label, color: colors.red, marginLeft: spacing.md },
 });

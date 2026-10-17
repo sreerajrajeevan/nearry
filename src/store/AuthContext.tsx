@@ -42,6 +42,9 @@ type AuthState = {
   profileLoading: boolean;
   profileError: string;
   intendedRole: AccountType;
+  /** Set when the login lane differed from the account's saved type. */
+  roleMismatch: AccountType | null;
+  clearRoleMismatch: () => void;
   sendOtp: (
     email: string,
     accountType: AccountType,
@@ -79,6 +82,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profileLoading, setProfileLoading] = useState(false),
     [profileError, setProfileError] = useState("");
   const [intendedRole, setIntendedRole] = useState<AccountType>("personal");
+  const [roleMismatch, setRoleMismatch] = useState<AccountType | null>(null);
+  // Mirrors intendedRole for the auth callback (which closes over first render).
+  const intendedRoleRef = useRef<AccountType>("personal");
+  // True only for a fresh SIGNED_IN, not session restore / token refresh.
+  const freshLoginRef = useRef(false);
   const version = useRef(new RequestVersion()),
     mounted = useRef(true),
     demoRef = useRef(false),
@@ -112,8 +120,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         mounted.current &&
         version.current.current(ticket) &&
         !demoRef.current
-      )
+      ) {
         setProfile(saved);
+        // Existing account, fresh login, lane != saved type: tell the user
+        // instead of silently landing them in the other app.
+        if (
+          freshLoginRef.current &&
+          saved.roleSelected &&
+          intendedRoleRef.current !== saved.accountType
+        ) {
+          setRoleMismatch(saved.accountType);
+        }
+        freshLoginRef.current = false;
+      }
     } catch (e) {
       if (mounted.current && version.current.current(ticket)) {
         setProfile(null);
@@ -146,6 +165,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
       version.current.invalidate();
+      if (event === "SIGNED_IN") freshLoginRef.current = true;
       setTimeout(() => {
         if (alive && !demoRef.current) void hydrate(next);
       }, 0);
@@ -200,6 +220,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
   async function remember(role: AccountType) {
     setIntendedRole(role);
+    intendedRoleRef.current = role;
     await AsyncStorage.setItem("nearry.pendingRole", role);
   }
   async function action(work: () => Promise<void>) {
@@ -293,6 +314,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         profileLoading,
         profileError,
         intendedRole,
+        roleMismatch,
+        clearRoleMismatch: () => setRoleMismatch(null),
         sendOtp: (email, role, name, signup = true) =>
           action(async () => {
             await remember(role);
