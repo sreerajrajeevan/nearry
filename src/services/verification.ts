@@ -50,8 +50,6 @@ export async function submitVerificationDoc(
     throw new Error("No document selected.");
   const uri = picked.assets[0].uri;
 
-  if ((picked.assets[0].fileSize ?? 0) > 10 * 1024 * 1024)
-    throw new Error("Choose a proof image smaller than 10 MB.");
   let bytes: Uint8Array;
   if (Platform.OS === "web") {
     const response = await fetch(uri);
@@ -64,6 +62,8 @@ export async function submitVerificationDoc(
       }),
     );
   }
+  if (bytes.length > 10 * 1024 * 1024)
+    throw new Error("Choose a proof image smaller than 10 MB.");
   const { extension, contentType } = proofImageType(bytes);
   const path = `${businessId}/proof-${Date.now()}-${Math.random().toString(36).slice(2)}.${extension}`;
 

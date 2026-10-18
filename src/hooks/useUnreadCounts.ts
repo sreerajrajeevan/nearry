@@ -7,6 +7,7 @@ import {
   unreadNotificationCount,
   subscribeToNotifications,
   registerPushToken,
+  presentLocal,
 } from "../services/notifications";
 
 /** Unread message + notification counts, refreshed on realtime events + poll. */
@@ -32,7 +33,11 @@ export function useUnreadCounts() {
       }
     };
     void refresh();
-    const unsub = subscribeToNotifications(profile.id, () => void refresh());
+    const unsub = subscribeToNotifications(profile.id, (n) => {
+      void refresh();
+      // Foreground banner for incoming notifications.
+      if (n.title) void presentLocal(n.title, n.body ?? "");
+    });
     const stopLocal = onUnreadChanged(() => void refresh());
     const appState = AppState.addEventListener("change", (state) => {
       if (state === "active") void refresh();

@@ -9,7 +9,6 @@ import {
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { Screen } from "../../components/Screen";
-import { Card } from "../../components/Card";
 import { Badge } from "../../components/Badge";
 import { Avatar } from "../../components/Avatar";
 import { Button } from "../../components/Button";
@@ -117,30 +116,28 @@ export function ChatListScreen({ navigation }: Props) {
                 })
               }
             >
-              <Card style={styles.card}>
-                <View style={styles.row}>
-                  <Avatar name={c.otherName} size={40} />
-                  <View style={styles.text}>
-                    <View style={styles.topRow}>
-                      <Text style={styles.name} numberOfLines={1}>
-                        {c.otherName}
-                      </Text>
-                      <Text style={styles.time}>{timeAgo(c.lastAt)}</Text>
-                    </View>
-                    <Text style={styles.context} numberOfLines={1}>
-                      {c.contextTitle}
+              <View style={styles.chatRow}>
+                <Avatar name={c.otherName} size={40} />
+                <View style={styles.text}>
+                  <View style={styles.topRow}>
+                    <Text style={styles.name} numberOfLines={1}>
+                      {c.otherName}
                     </Text>
-                    <View style={styles.bottomRow}>
-                      <Text style={styles.preview} numberOfLines={1}>
-                        {c.lastBody ?? "Say hello…"}
-                      </Text>
-                      {c.unreadCount > 0 && (
-                        <Badge label={String(c.unreadCount)} tone="red" />
-                      )}
-                    </View>
+                    <Text style={styles.time}>{timeAgo(c.lastAt)}</Text>
+                  </View>
+                  <Text style={styles.context} numberOfLines={1}>
+                    {c.contextTitle}
+                  </Text>
+                  <View style={styles.bottomRow}>
+                    <Text style={styles.preview} numberOfLines={1}>
+                      {c.lastBody ?? "Say hello…"}
+                    </Text>
+                    {c.unreadCount > 0 && (
+                      <Badge label={String(c.unreadCount)} tone="red" />
+                    )}
                   </View>
                 </View>
-              </Card>
+              </View>
             </TouchableOpacity>
           ))
         )}
@@ -158,8 +155,14 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   status: { ...typography.label, color: colors.textDim, marginTop: spacing.xl },
-  card: { marginBottom: spacing.sm },
-  row: { flexDirection: "row", gap: spacing.md, alignItems: "center" },
+  chatRow: {
+    flexDirection: "row",
+    gap: spacing.md,
+    alignItems: "center",
+    paddingVertical: spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
   text: { flex: 1 },
   topRow: {
     flexDirection: "row",

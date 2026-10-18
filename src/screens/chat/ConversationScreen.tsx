@@ -12,6 +12,7 @@ import {
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { Screen } from "../../components/Screen";
+import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
 import { colors, typography, spacing } from "../../theme";
 import { useAuth } from "../../store/AuthContext";
@@ -139,10 +140,13 @@ export function ConversationScreen({ route, navigation }: Props) {
         {state === "loading" ? (
           <Text style={styles.status}>Loading…</Text>
         ) : state === "error" ? (
-          <EmptyState
-            title="Couldn't load messages"
-            hint="Check your connection and retry."
-          />
+          <>
+            <EmptyState
+              title="Couldn't load messages"
+              hint="Check your connection and retry."
+            />
+            <Button title="Retry" variant="ghost" onPress={() => void load()} />
+          </>
         ) : (
           <FlatList
             ref={listRef}

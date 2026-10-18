@@ -37,6 +37,7 @@ export type PersonalStackParamList = {
   VenueDetails: { venueId: string };
   EditPost: { postId: string };
   MyPosts: undefined;
+  EditProfile: undefined;
   OfferDetails: { offerId: string };
   Messages: undefined;
   Conversation: { conversationId: string; title?: string };
@@ -49,6 +50,7 @@ export type BusinessStackParamList = {
   Notifications: undefined;
   MyOffers: undefined;
   EditOffer: { offerId: string };
+  EditBusinessProfile: undefined;
 };
 
 /** Navigation available inside personal tab screens (tab + parent stack). */

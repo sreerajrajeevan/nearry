@@ -68,8 +68,8 @@ export function isValidBusinessName(name: string): boolean {
 export type OfferDraft = {
   title: string;
   description: string;
-  discountPct?: number;
-  priceCents?: number;
+  discountPct?: number | null;
+  priceCents?: number | null;
   startsAt: string;
   endsAt: string;
   slotCapacity: number;
@@ -97,14 +97,14 @@ export function validateOfferInput(input: OfferDraft): string | null {
   if (starts <= Date.now()) return "Start time must be in the future.";
   if (ends <= starts) return "End time must be after the start time.";
   if (
-    input.discountPct !== undefined &&
+    input.discountPct != null &&
     (!Number.isInteger(input.discountPct) ||
       input.discountPct < 0 ||
       input.discountPct > 90)
   )
     return "Discount must be between 0 and 90%.";
   if (
-    input.priceCents !== undefined &&
+    input.priceCents != null &&
     (!Number.isInteger(input.priceCents) || input.priceCents < 0)
   )
     return "Price cannot be negative.";
@@ -130,5 +130,39 @@ export function validateOfferInput(input: OfferDraft): string | null {
     (!input.resourceKey.trim() || input.resourceKey.length > 80)
   )
     return "Enter a resource name up to 80 characters.";
+  return null;
+}
+
+/**
+ * Validate the fields a live offer may change (title, description, price).
+ * Skips start/end checks — the booking window is immutable once live and may
+ * already be in the past.
+ */
+export function validateLiveOfferPatch(input: {
+  title: string;
+  description: string;
+  discountPct?: number | null;
+  priceCents?: number | null;
+}): string | null {
+  if (input.title.trim().length < 4)
+    return "Give the offer a title (min 4 characters).";
+  if (input.title.trim().length > 80)
+    return "Title is too long (max 80 characters).";
+  if (input.description.trim().length > 1000)
+    return "Description is too long (max 1000 characters).";
+  if (input.description.trim().length < 10)
+    return "Add a few more details (min 10 characters).";
+  if (
+    input.discountPct != null &&
+    (!Number.isInteger(input.discountPct) ||
+      input.discountPct < 0 ||
+      input.discountPct > 90)
+  )
+    return "Discount must be between 0 and 90%.";
+  if (
+    input.priceCents != null &&
+    (!Number.isInteger(input.priceCents) || input.priceCents < 0)
+  )
+    return "Price cannot be negative.";
   return null;
 }
