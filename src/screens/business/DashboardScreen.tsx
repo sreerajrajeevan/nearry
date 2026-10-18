@@ -25,7 +25,7 @@ import {
   subscribeToBookings,
   confirmBooking,
 } from "../../services/bookings";
-import { Offer, Booking } from "../../services/mappers";
+import { Offer, Booking, isHoldExpired, isBookingStale } from "../../services/mappers";
 import { formatTime } from "../../utils/format";
 import { businessDay } from "../../utils/businessDay";
 
@@ -187,6 +187,10 @@ export function DashboardScreen({ navigation }: Props) {
                   </View>
                   {booking.status === "confirmed" ? (
                     <Text style={styles.confirmed}>Confirmed</Text>
+                  ) : isBookingStale(booking) ? (
+                    <Text style={styles.stale}>
+                      {isHoldExpired(booking) ? "Expired" : "Missed"}
+                    </Text>
                   ) : (
                     <TouchableOpacity
                       accessibilityRole="button"
@@ -287,6 +291,12 @@ const styles = StyleSheet.create({
   name: { ...typography.bodySmall, color: colors.text },
   detail: { ...typography.caption, color: colors.textDim, marginTop: 3 },
   confirmed: { ...typography.caption, color: colors.textDim, flexShrink: 1 },
+  stale: {
+    ...typography.caption,
+    color: colors.textFaint,
+    fontStyle: "italic",
+    flexShrink: 1,
+  },
   confirmButton: { minHeight: 44, justifyContent: "center", paddingLeft: 4 },
   allBookings: {
     flexDirection: "row",
