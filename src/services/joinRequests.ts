@@ -63,6 +63,7 @@ export async function requestToJoin(
       requesterId,
       requesterName: "You",
       status: "pending",
+      declineCount: 0,
       createdAt: new Date().toISOString(),
     };
     mockRequests.unshift(req);

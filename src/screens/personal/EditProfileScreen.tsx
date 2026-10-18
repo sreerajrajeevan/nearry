@@ -12,10 +12,12 @@ import { Screen } from "../../components/Screen";
 import { Button } from "../../components/Button";
 import { Input } from "../../components/Input";
 import { EmptyState } from "../../components/EmptyState";
+import { Avatar } from "../../components/Avatar";
 import { colors, typography, spacing } from "../../theme";
 import { PersonalStackParamList } from "../../navigation/types";
 import { useAuth } from "../../store/AuthContext";
 import { updateProfile } from "../../services/profile";
+import { pickAvatar, uploadAvatar } from "../../services/avatars";
 
 type Props = NativeStackScreenProps<PersonalStackParamList, "EditProfile">;
 
@@ -29,13 +31,27 @@ const INTERESTS = [
   "Nightlife",
 ];
 
-/** Edit display name, bio and interests. */
+const GENDERS = [
+  { value: "male", label: "Male" },
+  { value: "female", label: "Female" },
+  { value: "other", label: "Other" },
+] as const;
+
+/** Edit photo, name, bio, gender and interests. */
 export function EditProfileScreen({ navigation }: Props) {
   const { profile, refreshProfile } = useAuth();
   const [name, setName] = useState(profile?.displayName ?? "");
   const [bio, setBio] = useState(profile?.bio ?? "");
   const [interests, setInterests] = useState<string[]>(profile?.interests ?? []);
+  const [gender, setGender] = useState<"male" | "female" | "other" | undefined>(
+    profile?.gender,
+  );
+  const [avatarUri, setAvatarUri] = useState<string | undefined>(
+    profile?.avatarUrl,
+  );
+  const [newPhoto, setNewPhoto] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [formError, setFormError] = useState("");
 
   if (!profile) {
@@ -51,6 +67,21 @@ export function EditProfileScreen({ navigation }: Props) {
       prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag],
     );
 
+  const onPickPhoto = async () => {
+    try {
+      const uri = await pickAvatar();
+      if (uri) {
+        setNewPhoto(uri);
+        setAvatarUri(uri);
+      }
+    } catch (e) {
+      Alert.alert(
+        "Could not pick photo",
+        e instanceof Error ? e.message : "Please try again.",
+      );
+    }
+  };
+
   const onSave = async () => {
     setFormError("");
     const trimmed = name.trim();
@@ -64,10 +95,18 @@ export function EditProfileScreen({ navigation }: Props) {
     }
     setSaving(true);
     try {
+      let avatarUrl = profile.avatarUrl;
+      if (newPhoto) {
+        setUploading(true);
+        avatarUrl = await uploadAvatar(profile.id, newPhoto);
+        setUploading(false);
+      }
       await updateProfile(profile.id, {
         displayName: trimmed,
+        avatarUrl,
         bio: bio.trim(),
         interests,
+        gender: gender ?? null,
       });
       await refreshProfile();
       navigation.goBack();
@@ -78,6 +117,7 @@ export function EditProfileScreen({ navigation }: Props) {
       );
     } finally {
       setSaving(false);
+      setUploading(false);
     }
   };
 
@@ -97,6 +137,19 @@ export function EditProfileScreen({ navigation }: Props) {
         </TouchableOpacity>
         <Text style={styles.header}>Edit profile.</Text>
 
+        <TouchableOpacity
+          onPress={() => void onPickPhoto()}
+          activeOpacity={0.7}
+          style={styles.photoRow}
+          accessibilityRole="button"
+          accessibilityLabel="Change profile photo"
+        >
+          <Avatar name={name || "You"} size={72} uri={avatarUri} />
+          <Text style={styles.photoLink}>
+            {uploading ? "Uploading…" : "Change photo"}
+          </Text>
+        </TouchableOpacity>
+
         <Input label="Your name" value={name} onChangeText={setName} />
         <Input
           label="Bio"
@@ -107,6 +160,27 @@ export function EditProfileScreen({ navigation }: Props) {
           style={styles.multiline}
           placeholder="A line about you"
         />
+
+        <Text style={styles.fieldLabel}>Gender</Text>
+        <View style={styles.chips}>
+          {GENDERS.map((g) => {
+            const sel = gender === g.value;
+            return (
+              <TouchableOpacity
+                key={g.value}
+                activeOpacity={0.7}
+                onPress={() => setGender(sel ? undefined : g.value)}
+                style={[styles.chip, sel && styles.chipSel]}
+                accessibilityRole="button"
+                accessibilityState={{ selected: sel }}
+              >
+                <Text style={[styles.chipText, sel && styles.chipTextSel]}>
+                  {g.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
 
         <Text style={styles.fieldLabel}>Interests</Text>
         <View style={styles.chips}>
@@ -152,6 +226,13 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
     marginBottom: spacing.md,
   },
+  photoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    marginBottom: spacing.md,
+  },
+  photoLink: { ...typography.label, color: colors.accent },
   multiline: { height: 88, textAlignVertical: "top", paddingTop: spacing.md },
   fieldLabel: {
     ...typography.body,

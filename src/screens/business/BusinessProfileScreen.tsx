@@ -15,6 +15,7 @@ import { Card } from "../../components/Card";
 import { Button } from "../../components/Button";
 import { Badge } from "../../components/Badge";
 import { Avatar } from "../../components/Avatar";
+import { VerifiedWelcome } from "../../components/VerifiedWelcome";
 import { Icon } from "../../components/Icon";
 import { colors, typography, spacing } from "../../theme";
 import { useAuth } from "../../store/AuthContext";
@@ -127,7 +128,7 @@ export function BusinessProfileScreen({ navigation }: Props) {
           onPress={() => navigation.navigate("MyOffers")}
         />
         <View style={styles.headerRow}>
-          <Avatar name={name} size={64} />
+          <Avatar name={name} size={64} uri={profile?.avatarUrl} />
           <View style={styles.nameBlock}>
             <Text style={styles.name}>{name}</Text>
             <Text style={styles.category}>
@@ -144,7 +145,10 @@ export function BusinessProfileScreen({ navigation }: Props) {
         )}
 
         <Text style={styles.sectionTitle}>Verification</Text>
-        <Card style={styles.verifyCard} accent={verif.status !== "verified"}>
+        {verif.status === "verified" ? (
+          <VerifiedWelcome businessName={name} />
+        ) : (
+        <Card style={styles.verifyCard} accent={true}>
           <View style={styles.verifyRow}>
             <Text style={styles.verifyTitle}>Business verification</Text>
             <Badge
@@ -167,6 +171,7 @@ export function BusinessProfileScreen({ navigation }: Props) {
               />
             )}
         </Card>
+        )}
 
         <TouchableOpacity
           accessibilityRole="button"

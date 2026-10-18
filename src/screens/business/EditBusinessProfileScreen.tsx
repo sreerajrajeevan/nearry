@@ -11,10 +11,12 @@ import { Screen } from "../../components/Screen";
 import { Button } from "../../components/Button";
 import { Input } from "../../components/Input";
 import { EmptyState } from "../../components/EmptyState";
+import { Avatar } from "../../components/Avatar";
 import { colors, typography, spacing } from "../../theme";
 import { BusinessStackParamList } from "../../navigation/types";
 import { useAuth } from "../../store/AuthContext";
 import { updateProfile } from "../../services/profile";
+import { pickAvatar, uploadAvatar } from "../../services/avatars";
 
 type Props = NativeStackScreenProps<BusinessStackParamList, "EditBusinessProfile">;
 
@@ -30,7 +32,12 @@ export function EditBusinessProfileScreen({ navigation }: Props) {
   );
   const [category, setCategory] = useState(details.category || "");
   const [area, setArea] = useState(details.area || "");
+  const [avatarUri, setAvatarUri] = useState<string | undefined>(
+    profile?.avatarUrl,
+  );
+  const [newPhoto, setNewPhoto] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [formError, setFormError] = useState("");
 
   if (!profile) {
@@ -41,6 +48,21 @@ export function EditBusinessProfileScreen({ navigation }: Props) {
     );
   }
 
+  const onPickPhoto = async () => {
+    try {
+      const uri = await pickAvatar();
+      if (uri) {
+        setNewPhoto(uri);
+        setAvatarUri(uri);
+      }
+    } catch (e) {
+      Alert.alert(
+        "Could not pick photo",
+        e instanceof Error ? e.message : "Please try again.",
+      );
+    }
+  };
+
   const onSave = async () => {
     setFormError("");
     const trimmed = name.trim();
@@ -50,9 +72,16 @@ export function EditBusinessProfileScreen({ navigation }: Props) {
     }
     setSaving(true);
     try {
+      let avatarUrl = profile.avatarUrl;
+      if (newPhoto) {
+        setUploading(true);
+        avatarUrl = await uploadAvatar(profile.id, newPhoto);
+        setUploading(false);
+      }
       await updateProfile(profile.id, {
         businessName: trimmed,
         displayName: trimmed,
+        avatarUrl,
         businessDetails: {
           ...details,
           category: category.trim(),
@@ -68,6 +97,7 @@ export function EditBusinessProfileScreen({ navigation }: Props) {
       );
     } finally {
       setSaving(false);
+      setUploading(false);
     }
   };
 
@@ -86,6 +116,19 @@ export function EditBusinessProfileScreen({ navigation }: Props) {
           <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>
         <Text style={styles.header}>Edit profile.</Text>
+
+        <TouchableOpacity
+          onPress={() => void onPickPhoto()}
+          activeOpacity={0.7}
+          style={styles.photoRow}
+          accessibilityRole="button"
+          accessibilityLabel="Change business photo"
+        >
+          <Avatar name={name || "Business"} size={72} uri={avatarUri} />
+          <Text style={styles.photoLink}>
+            {uploading ? "Uploading…" : "Change photo"}
+          </Text>
+        </TouchableOpacity>
 
         <Input
           label="Business name"
@@ -121,6 +164,13 @@ const styles = StyleSheet.create({
   scroll: { paddingBottom: spacing.xl },
   back: { marginBottom: spacing.md, alignSelf: "flex-start" },
   backText: { ...typography.label, color: colors.textDim },
+  photoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    marginBottom: spacing.md,
+  },
+  photoLink: { ...typography.label, color: colors.accent },
   header: {
     ...typography.display,
     fontSize: 32,

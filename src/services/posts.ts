@@ -168,7 +168,7 @@ export type PostPatch = {
 } & Partial<
   Pick<
     NewPostInput,
-    "title" | "description" | "startsAt" | "vacancies" | "tags"
+    "title" | "description" | "startsAt" | "vacancies" | "tags" | "genderPreference"
   >
 >;
 
@@ -194,6 +194,8 @@ export async function updatePost(
   if (patch.costCents !== undefined)
     dbPatch.cost_cents = patch.costCents ?? null;
   if (patch.tags !== undefined) dbPatch.tags = patch.tags;
+  if (patch.genderPreference !== undefined)
+    dbPatch.gender_preference = patch.genderPreference ?? null;
 
   if (useMock()) {
     const i = mockPosts.findIndex((p) => p.id === postId);

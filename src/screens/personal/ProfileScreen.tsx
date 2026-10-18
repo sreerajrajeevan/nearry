@@ -40,7 +40,7 @@ export function ProfileScreen({ navigation }: Props) {
         <PersonalHeader />
         {demoMode && <Badge label="Sample personal profile" />}
         <View style={styles.avatar}>
-          <Avatar name={profile.displayName || "N"} size={64} />
+          <Avatar name={profile.displayName || "N"} size={64} uri={profile.avatarUrl} />
         </View>
         <PageHeading
           greeting="A familiar face nearby."
