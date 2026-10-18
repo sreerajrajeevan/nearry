@@ -1,27 +1,36 @@
 import React, { useEffect, useRef } from "react";
-import { Animated, View, Text, StyleSheet } from "react-native";
+import { Animated, View, Text, StyleSheet, Platform } from "react-native";
 import { colors, typography, spacing } from "../theme";
+import { useReducedMotion } from "../store/MotionContext";
 
 /** Celebratory card shown when a business becomes verified. */
 export function VerifiedWelcome({ businessName }: { businessName: string }) {
+  const reduced = useReducedMotion();
   const scale = useRef(new Animated.Value(0.6)).current;
   const fade = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    Animated.parallel([
+    if (reduced) {
+      scale.setValue(1);
+      fade.setValue(1);
+      return;
+    }
+    const animation = Animated.parallel([
       Animated.spring(scale, {
         toValue: 1,
         friction: 5,
         tension: 60,
-        useNativeDriver: true,
+        useNativeDriver: Platform.OS !== "web",
       }),
       Animated.timing(fade, {
         toValue: 1,
         duration: 500,
-        useNativeDriver: true,
+        useNativeDriver: Platform.OS !== "web",
       }),
-    ]).start();
-  }, [scale, fade]);
+    ]);
+    animation.start();
+    return () => animation.stop();
+  }, [scale, fade, reduced]);
 
   return (
     <Animated.View
@@ -32,8 +41,8 @@ export function VerifiedWelcome({ businessName }: { businessName: string }) {
       </View>
       <Text style={styles.title}>Welcome aboard, {businessName}!</Text>
       <Text style={styles.body}>
-        You're verified. Your offers can now go live and customers can book
-        with confidence.
+        You're verified. Your offers can now go live and customers can book with
+        confidence.
       </Text>
     </Animated.View>
   );

@@ -3,6 +3,7 @@ import { StyleSheet, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BottomTabNavigationOptions } from "@react-navigation/bottom-tabs";
 import { Icon, IconName } from "../components/Icon";
+import { MotionPressable } from "../components/Motion";
 import { colors, typography } from "../theme";
 
 /** Reserve room for both the labels and the device's gesture/navigation area. */
@@ -30,10 +31,19 @@ export function tabOptions(
     title,
     headerShown: false,
     tabBarHideOnKeyboard: true,
-    tabBarActiveTintColor: colors.accent,
-    tabBarInactiveTintColor: colors.textDim,
+    tabBarActiveTintColor: colors.onAccent,
+    tabBarInactiveTintColor: colors.gray300,
+    tabBarActiveBackgroundColor: colors.accent,
     tabBarLabelPosition: "below-icon",
     tabBarItemStyle: styles.item,
+    // Keep tab switches inside the app on web as well; an anchor reload loses drafts.
+    tabBarButton: ({ style, disabled, href: _href, ...props }) => (
+      <MotionPressable
+        {...props}
+        disabled={disabled ?? undefined}
+        style={[style, styles.tabButton]}
+      />
+    ),
     tabBarLabelStyle: styles.label,
     tabBarIcon: ({ color }) => <Icon name={icon} size={21} color={color} />,
     tabBarBadgeStyle: {
@@ -44,13 +54,18 @@ export function tabOptions(
 }
 const styles = StyleSheet.create({
   bar: {
-    backgroundColor: colors.background,
+    backgroundColor: colors.ink,
     borderTopColor: colors.border,
-    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopWidth: 0,
+    borderRadius: 26,
+    marginHorizontal: 12,
+    marginBottom: 8,
+    paddingHorizontal: 6,
     elevation: 0,
     shadowOpacity: 0,
   },
-  item: { paddingVertical: 0 },
+  item: { paddingVertical: 0, marginHorizontal: 2, borderRadius: 19 },
+  tabButton: { borderRadius: 19 },
   label: {
     ...typography.caption,
     fontSize: 11,

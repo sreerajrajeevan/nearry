@@ -1,6 +1,7 @@
 import React from "react";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { colors } from "../theme";
+import { useReducedMotion } from "../store/MotionContext";
 import { PersonalStackParamList } from "./types";
 import { PersonalTabs } from "./PersonalTabs";
 import { PostDetailsScreen } from "../screens/personal/PostDetailsScreen";
@@ -18,12 +19,14 @@ const Stack = createNativeStackNavigator<PersonalStackParamList>();
 
 /** Personal experience: tab bar + pushable detail screens above it. */
 export function PersonalStack() {
+  const reduced = useReducedMotion();
   return (
     <Stack.Navigator
       screenOptions={{
         headerShown: false,
         contentStyle: { backgroundColor: colors.background },
-        animation: "slide_from_right",
+        animation: reduced ? "none" : "slide_from_right",
+        animationDuration: 240,
       }}
     >
       <Stack.Screen name="PersonalTabs" component={PersonalTabs} />

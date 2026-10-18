@@ -4,6 +4,7 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { Button } from "../components/Button";
 import { AccountTypeScreen } from "../screens/auth/AccountTypeScreen";
 import { colors } from "../theme";
+import { useReducedMotion } from "../store/MotionContext";
 import { RootStackParamList } from "./types";
 import { useAuth } from "../store/AuthContext";
 import { usePushSetup } from "../hooks/useUnreadCounts";
@@ -27,6 +28,7 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
  *                                 regardless of which auth screen was used
  */
 export function RootNavigator() {
+  const reduced = useReducedMotion();
   const {
     session,
     demoMode,
@@ -91,7 +93,7 @@ export function RootNavigator() {
       screenOptions={{
         headerShown: false,
         contentStyle: { backgroundColor: colors.background },
-        animation: "fade",
+        animation: reduced ? "none" : "fade",
       }}
     >
       {demoMode || (session && accountType) ? (

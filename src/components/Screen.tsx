@@ -11,6 +11,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { BottomTabBarHeightContext } from "@react-navigation/bottom-tabs";
 import { colors, spacing } from "../theme";
+import { ScreenReveal } from "./Motion";
 
 type Props = {
   children: React.ReactNode;
@@ -38,29 +39,31 @@ export function Screen({
           : ["top", "left", "right"]
       }
     >
-      <KeyboardAvoidingView
-        style={styles.flex}
-        enabled={keyboard}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
-      >
-        {scroll ? (
-          <ScrollView
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={[
-              styles.scroll,
-              padded && styles.padded,
-              style,
-            ]}
-          >
-            {children}
-          </ScrollView>
-        ) : (
-          <View style={[styles.flex, padded && styles.padded, style]}>
-            {children}
-          </View>
-        )}
-      </KeyboardAvoidingView>
+      <ScreenReveal style={styles.flex}>
+        <KeyboardAvoidingView
+          style={styles.flex}
+          enabled={keyboard}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+        >
+          {scroll ? (
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={[
+                styles.scroll,
+                padded && styles.padded,
+                style,
+              ]}
+            >
+              {children}
+            </ScrollView>
+          ) : (
+            <View style={[styles.flex, padded && styles.padded, style]}>
+              {children}
+            </View>
+          )}
+        </KeyboardAvoidingView>
+      </ScreenReveal>
     </SafeAreaView>
   );
 }

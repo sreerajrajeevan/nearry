@@ -1,6 +1,7 @@
 import React from "react";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { colors } from "../theme";
+import { useReducedMotion } from "../store/MotionContext";
 import { BusinessStackParamList } from "./types";
 import { BusinessTabs } from "./BusinessTabs";
 import { ConversationScreen } from "../screens/chat/ConversationScreen";
@@ -14,12 +15,14 @@ const Stack = createNativeStackNavigator<BusinessStackParamList>();
 
 /** Business experience: tab bar + pushable chat/notification screens above it. */
 export function BusinessStack() {
+  const reduced = useReducedMotion();
   return (
     <Stack.Navigator
       screenOptions={{
         headerShown: false,
         contentStyle: { backgroundColor: colors.background },
-        animation: "slide_from_right",
+        animation: reduced ? "none" : "slide_from_right",
+        animationDuration: 240,
       }}
     >
       <Stack.Screen name="BusinessTabs" component={BusinessTabs} />
