@@ -1,12 +1,12 @@
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { getSupabase } from "./supabase";
 
-type Entry<TArgs extends unknown[]> = {
-  callbacks: Set<(...args: TArgs) => void>;
+type Entry = {
+  callbacks: Set<() => void>;
   remove: () => void;
 };
 
-const channels = new Map<string, Entry<any[]>>();
+const channels = new Map<string, Entry>();
 
 /**
  * One realtime channel per topic, shared by every subscriber.
@@ -17,36 +17,36 @@ const channels = new Map<string, Entry<any[]>>();
  * So we subscribe once per topic and fan events out to all callbacks;
  * the channel is removed when the last subscriber unsubscribes.
  */
-export function multiplexSubscribe<TArgs extends unknown[]>(
+export function multiplexSubscribe(
   topic: string,
-  setup: (
-    ch: RealtimeChannel,
-    fire: (...args: TArgs) => void,
-  ) => RealtimeChannel,
-  onEvent: (...args: TArgs) => void,
+  setup: (ch: RealtimeChannel, fire: () => void) => RealtimeChannel,
+  onEvent: () => void,
 ): () => void {
   const supabase = getSupabase()!;
-  let entry = channels.get(topic) as Entry<TArgs> | undefined;
+  let entry = channels.get(topic);
   if (!entry) {
-    const callbacks = new Set<(...args: TArgs) => void>();
-    const fire = (...args: TArgs) => {
+    const callbacks = new Set<() => void>();
+    const fire = () => {
       callbacks.forEach((cb) => {
         try {
-          cb(...args);
+          cb();
         } catch {
           /* one bad listener must not break the others */
         }
       });
     };
-    const ch = setup(supabase.channel(topic), fire).subscribe();
-    const e: Entry<TArgs> = {
+    const ch = setup(supabase.channel(topic), fire).subscribe((status) => {
+      // Also reload after reconnect: events during a disconnect are not replayed.
+      if (status === "SUBSCRIBED") fire();
+    });
+    const e: Entry = {
       callbacks,
       remove: () => {
         channels.delete(topic);
         supabase.removeChannel(ch);
       },
     };
-    channels.set(topic, e as Entry<any[]>);
+    channels.set(topic, e);
     entry = e;
   }
   entry.callbacks.add(onEvent);

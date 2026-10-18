@@ -1,10 +1,12 @@
-import React from 'react';
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { colors } from '../theme';
-import { BusinessStackParamList } from './types';
-import { BusinessTabs } from './BusinessTabs';
-import { ConversationScreen } from '../screens/chat/ConversationScreen';
-import { NotificationCenterScreen } from '../screens/NotificationCenterScreen';
+import React from "react";
+import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import { colors } from "../theme";
+import { BusinessStackParamList } from "./types";
+import { BusinessTabs } from "./BusinessTabs";
+import { ConversationScreen } from "../screens/chat/ConversationScreen";
+import { NotificationCenterScreen } from "../screens/NotificationCenterScreen";
+import { MyOffersScreen } from "../screens/business/MyOffersScreen";
+import { EditOfferScreen } from "../screens/business/CreateOfferScreen";
 
 const Stack = createNativeStackNavigator<BusinessStackParamList>();
 
@@ -15,10 +17,12 @@ export function BusinessStack() {
       screenOptions={{
         headerShown: false,
         contentStyle: { backgroundColor: colors.background },
-        animation: 'slide_from_right',
+        animation: "slide_from_right",
       }}
     >
       <Stack.Screen name="BusinessTabs" component={BusinessTabs} />
+      <Stack.Screen name="MyOffers" component={MyOffersScreen} />
+      <Stack.Screen name="EditOffer" component={EditOfferScreen} />
       <Stack.Screen name="Conversation" component={ConversationScreen} />
       <Stack.Screen name="Notifications" component={NotificationCenterScreen} />
     </Stack.Navigator>

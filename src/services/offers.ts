@@ -167,10 +167,19 @@ export async function publishOffer(offerId: string): Promise<Offer> {
   return withBusiness(data as Record<string, unknown>);
 }
 
+export type OfferPatch = Omit<
+  Partial<NewOfferInput>,
+  "priceCents" | "discountPct" | "venueId"
+> & {
+  priceCents?: number | null;
+  discountPct?: number | null;
+  venueId?: string | null;
+};
+
 /** Edit a draft (or a live offer's non-status fields). */
 export async function updateOffer(
   offerId: string,
-  input: Partial<NewOfferInput>,
+  input: OfferPatch,
 ): Promise<Offer> {
   const dbPatch: Record<string, unknown> = {};
   if (input.title !== undefined) dbPatch.title = input.title.trim();
@@ -194,14 +203,21 @@ export async function updateOffer(
     Object.assign(o, {
       title: input.title?.trim() ?? o.title,
       description: input.description?.trim() ?? o.description,
-      discountPct: input.discountPct ?? o.discountPct,
-      priceCents: input.priceCents ?? o.priceCents,
+      discountPct:
+        input.discountPct === undefined
+          ? o.discountPct
+          : (input.discountPct ?? undefined),
+      priceCents:
+        input.priceCents === undefined
+          ? o.priceCents
+          : (input.priceCents ?? undefined),
       startsAt: input.startsAt ?? o.startsAt,
       endsAt: input.endsAt ?? o.endsAt,
       slotCapacity: input.slotCapacity ?? o.slotCapacity,
       slotMinutes: input.slotMinutes ?? o.slotMinutes,
       resourceKey: input.resourceKey ?? o.resourceKey,
-      venueId: input.venueId ?? o.venueId,
+      venueId:
+        input.venueId === undefined ? o.venueId : (input.venueId ?? undefined),
     });
     return o;
   }

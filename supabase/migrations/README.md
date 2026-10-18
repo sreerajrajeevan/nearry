@@ -33,3 +33,5 @@ Venue ownership changes require administrative review. After checking submitted 
 For projects already on `00016`, apply only `00017` and `00018` after taking a backup and reviewing the future-booking cancellation above. Run the app and worker changes together in staging before production. Applied migrations are not edited by these fixes.
 
 `00019`: private server-only place-search quota counters and an atomic reservation RPC. This does not import, replace or claim venues. Deploy the `place-search` function with its server-only Geoapify secret; see [place search setup](../../docs/place-search.md). Projects at `00018` apply only `00019`.
+
+`00020`: core journeys: atomic unread counts, message notice read tracking, participant notifications on post cancellation, and safe reservation retries. Apply after `00019`; use the matching app for the new badge RPC. Existing records are retained.

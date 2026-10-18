@@ -1,5 +1,5 @@
 import { formatWhen } from "../../utils/format";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -8,7 +8,8 @@ import {
   TouchableOpacity,
   Alert,
 } from "react-native";
-import { useFocusEffect } from "@react-navigation/native";
+import { useLiveQuery } from "../../hooks/useLiveQuery";
+import { bookingState } from "../../utils/flowState";
 import { Screen } from "../../components/Screen";
 import { Card } from "../../components/Card";
 import { Button } from "../../components/Button";
@@ -26,7 +27,13 @@ import {
 import { Booking } from "../../services/mappers";
 import { getOrCreateConversation } from "../../services/chat";
 
-const FILTERS = ["ALL", "PENDING", "CONFIRMED", "CANCELLED"] as const;
+const FILTERS = [
+  "ALL",
+  "PENDING",
+  "CONFIRMED",
+  "CANCELLED",
+  "EXPIRED",
+] as const;
 type Filter = (typeof FILTERS)[number];
 
 function statusTone(status: Booking["status"]): "neutral" | "green" | "red" {
@@ -45,33 +52,19 @@ type Props = {
 export function BookingsScreen({ navigation }: Props) {
   const { profile } = useAuth();
   const [filter, setFilter] = useState<Filter>("ALL");
-  const [bookings, setBookings] = useState<Booking[]>([]);
-  const [state, setState] = useState<"loading" | "error" | "ready">("loading");
   const [busy, setBusy] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    if (!profile) return;
-    setState("loading");
-    try {
-      setBookings(await listBookingsForBusiness(profile.id));
-      setState("ready");
-    } catch {
-      setState("error");
-    }
-  }, [profile]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-  useFocusEffect(
-    useCallback(() => {
-      void load();
-    }, [load]),
+  const {
+    data: bookings = [],
+    state,
+    refresh: load,
+  } = useLiveQuery(
+    `business-bookings:${profile?.id}`,
+    () => (profile ? listBookingsForBusiness(profile.id) : Promise.resolve([])),
+    subscribeToBookings,
   );
-  useEffect(() => subscribeToBookings(() => void load()), [load]);
 
   const visible = bookings.filter(
-    (b) => filter === "ALL" || b.status === filter.toLowerCase(),
+    (b) => filter === "ALL" || bookingState(b).label.toUpperCase() === filter,
   );
 
   const openChat = async (booking: Booking) => {
@@ -95,6 +88,7 @@ export function BookingsScreen({ navigation }: Props) {
   };
 
   const run = async (key: string, fn: () => Promise<void>) => {
+    if (busy) return;
     setBusy(key);
     try {
       await fn();
@@ -167,7 +161,7 @@ export function BookingsScreen({ navigation }: Props) {
                   <Text style={styles.offer}>{b.offerTitle}</Text>
                 </View>
                 <Badge
-                  label={b.status.toUpperCase()}
+                  label={bookingState(b).label}
                   tone={statusTone(b.status)}
                 />
               </View>
@@ -183,10 +177,11 @@ export function BookingsScreen({ navigation }: Props) {
                   onPress={() => openChat(b)}
                 />
                 <View style={styles.gap} />
-                {b.status === "pending" && (
+                {bookingState(b).canConfirm && (
                   <>
                     <Button
                       title="Decline"
+                      disabled={busy !== null}
                       variant="ghost"
                       loading={busy === `x${b.id}`}
                       onPress={() => run(`x${b.id}`, () => cancelBooking(b.id))}
@@ -194,12 +189,36 @@ export function BookingsScreen({ navigation }: Props) {
                     <View style={styles.gap} />
                     <Button
                       title="Confirm"
+                      disabled={busy !== null}
                       loading={busy === `c${b.id}`}
                       onPress={() =>
                         run(`c${b.id}`, () => confirmBooking(b.id))
                       }
                     />
                   </>
+                )}
+                {b.status === "confirmed" && bookingState(b).canCancel && (
+                  <Button
+                    title="Cancel booking"
+                    variant="danger"
+                    disabled={busy !== null}
+                    loading={busy === `x${b.id}`}
+                    onPress={() =>
+                      Alert.alert(
+                        "Cancel this booking?",
+                        "The customer will be notified and the places will become available again.",
+                        [
+                          { text: "Keep booking", style: "cancel" },
+                          {
+                            text: "Cancel booking",
+                            style: "destructive",
+                            onPress: () =>
+                              void run(`x${b.id}`, () => cancelBooking(b.id)),
+                          },
+                        ],
+                      )
+                    }
+                  />
                 )}
               </View>
             </Card>

@@ -12,8 +12,7 @@ import { ProfileScreen } from "../screens/personal/ProfileScreen";
 const Tab = createBottomTabNavigator<PersonalTabParamList>();
 export function PersonalTabs() {
   const tabBarLayout = useTabBarLayout();
-  const { messages, notifications } = useUnreadCounts();
-  const total = messages + notifications;
+  const { activity: total } = useUnreadCounts();
   return (
     <Tab.Navigator screenOptions={tabBarLayout}>
       <Tab.Screen

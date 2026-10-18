@@ -16,7 +16,8 @@ import { Icon } from "../../components/Icon";
 import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
 import { colors, typography, spacing } from "../../theme";
-import { BusinessTabParamList } from "../../navigation/types";
+import { BusinessTabNav } from "../../navigation/types";
+import { useLiveQuery } from "../../hooks/useLiveQuery";
 import { useAuth } from "../../store/AuthContext";
 import { listMyOffers } from "../../services/offers";
 import {
@@ -29,41 +30,30 @@ import { formatTime } from "../../utils/format";
 import { businessDay } from "../../utils/businessDay";
 
 type Props = {
-  navigation: { navigate: (screen: keyof BusinessTabParamList) => void };
+  navigation: BusinessTabNav;
 };
 export function DashboardScreen({ navigation }: Props) {
   const { profile } = useAuth();
-  const [offers, setOffers] = useState<Offer[]>([]);
-  const [bookings, setBookings] = useState<Booking[]>([]);
-  const [state, setState] = useState<"loading" | "ready" | "error">("loading");
-  const [refreshing, setRefreshing] = useState(false);
   const [confirming, setConfirming] = useState<string | null>(null);
-  const request = useRef(0);
-  const load = useCallback(async () => {
-    if (!profile) return;
-    const version = ++request.current;
-    try {
-      const [o, b] = await Promise.all([
+  const {
+    data,
+    state,
+    refreshing,
+    refresh: load,
+  } = useLiveQuery(
+    `dashboard:${profile?.id}`,
+    async () => {
+      if (!profile) return { offers: [], bookings: [] };
+      const [offers, bookings] = await Promise.all([
         listMyOffers(profile.id),
         listBookingsForBusiness(profile.id),
       ]);
-      if (request.current !== version) return;
-      setOffers(o);
-      setBookings(b);
-      setState("ready");
-    } catch {
-      if (request.current === version) setState("error");
-    }
-  }, [profile]);
-  useFocusEffect(
-    useCallback(() => {
-      void load();
-      return () => {
-        request.current++;
-      };
-    }, [load]),
+      return { offers, bookings };
+    },
+    subscribeToBookings,
   );
-  useEffect(() => subscribeToBookings(() => void load()), [load]);
+  const offers = data?.offers ?? [],
+    bookings = data?.bookings ?? [];
   const { today, liveOffers, drafts } = businessDay(bookings, offers);
   const name = profile?.businessName || profile?.displayName || "your business";
   const verified = profile?.verificationStatus === "verified";
@@ -93,9 +83,7 @@ export function DashboardScreen({ navigation }: Props) {
             tintColor={colors.accent}
             colors={[colors.accent]}
             onRefresh={async () => {
-              setRefreshing(true);
-              await load();
-              setRefreshing(false);
+              await load(true);
             }}
           />
         }
@@ -165,6 +153,11 @@ export function DashboardScreen({ navigation }: Props) {
                 </Text>
                 <Icon name="arrow-up-right" size={15} color={colors.accent} />
               </TouchableOpacity>
+              <Button
+                title="My offers"
+                variant="secondary"
+                onPress={() => navigation.navigate("MyOffers")}
+              />
             </View>
             <View style={styles.sectionRow}>
               <Text style={styles.sectionTitle}>Coming through your door</Text>

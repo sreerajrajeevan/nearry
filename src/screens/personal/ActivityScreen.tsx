@@ -1,5 +1,5 @@
 import { formatWhen } from "../../utils/format";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -8,7 +8,9 @@ import {
   StyleSheet,
   Alert,
 } from "react-native";
-import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import { useNavigation } from "@react-navigation/native";
+import { useLiveQuery } from "../../hooks/useLiveQuery";
+import { bookingState, postState } from "../../utils/flowState";
 import { Screen } from "../../components/Screen";
 import { Card } from "../../components/Card";
 import { Badge } from "../../components/Badge";
@@ -46,50 +48,51 @@ export function ActivityScreen() {
   const navigation = useNavigation<PersonalTabNav>();
   const myId = profile?.id;
 
-  const [mine, setMine] = useState<(JoinRequest & { postTitle: string })[]>([]);
-  const [incoming, setIncoming] = useState<IncomingItem[]>([]);
-  const [bookings, setBookings] = useState<Booking[]>([]);
-  const [state, setState] = useState<"loading" | "error" | "ready">("loading");
   const [busy, setBusy] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    if (!myId) {
-      setState("ready");
-      return;
-    }
-    setState("loading");
-    try {
+  const {
+    data,
+    state,
+    refresh: load,
+  } = useLiveQuery(
+    `activity:${myId}`,
+    async () => {
+      if (!myId) return { mine: [], incoming: [], bookings: [] };
       const [myReqs, myPosts, myBookings] = await Promise.all([
         listMyRequests(myId),
         listPosts({ authorId: myId, status: "all" }),
         listMyBookings(myId),
       ]);
-      setMine(myReqs);
-      setBookings(myBookings);
-      const items: IncomingItem[] = [];
-      for (const post of myPosts) {
-        const reqs = await listRequestsForPost(post.id);
-        if (reqs.length > 0) items.push({ post, requests: reqs });
-      }
-      setIncoming(items);
-      setState("ready");
-    } catch {
-      setState("error");
-    }
-  }, [myId]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
-  useFocusEffect(
-    useCallback(() => {
-      void load();
-    }, [load]),
+      const incoming = await Promise.all(
+        myPosts
+          .filter((p) => postState(p).canCancel)
+          .map(async (post) => ({
+            post,
+            requests: (await listRequestsForPost(post.id)).filter(
+              (r) => r.status === "pending",
+            ),
+          })),
+      );
+      return {
+        mine: myReqs,
+        incoming: incoming.filter((item) => item.requests.length),
+        bookings: myBookings,
+      };
+    },
+    (refresh) => {
+      const stopPosts = subscribeToPosts(refresh),
+        stopBookings = subscribeToBookings(refresh);
+      return () => {
+        stopPosts();
+        stopBookings();
+      };
+    },
   );
-  useEffect(() => subscribeToPosts(() => void load()), [load]);
-  useEffect(() => subscribeToBookings(() => void load()), [load]);
+  const mine = data?.mine ?? [],
+    incoming = data?.incoming ?? [],
+    bookings = data?.bookings ?? [];
 
   const run = async (key: string, fn: () => Promise<void>) => {
+    if (busy) return;
     setBusy(key);
     try {
       await fn();
@@ -194,6 +197,9 @@ export function ActivityScreen() {
                             <View style={styles.reqGap} />
                             <Button
                               title="Approve"
+                              disabled={
+                                busy !== null || !postState(post).accepting
+                              }
                               loading={busy === `a${r.id}`}
                               onPress={() =>
                                 run(`a${r.id}`, () =>
@@ -217,7 +223,7 @@ export function ActivityScreen() {
                     <View style={styles.rowTop}>
                       <Text style={styles.postTitle}>{b.offerTitle}</Text>
                       <Badge
-                        label={b.status.toUpperCase()}
+                        label={bookingState(b).label}
                         tone={bookingTone(b.status)}
                       />
                     </View>
@@ -236,7 +242,7 @@ export function ActivityScreen() {
                           </Text>
                         </TouchableOpacity>
                       )}
-                      {(b.status === "pending" || b.status === "confirmed") && (
+                      {bookingState(b).canCancel && (
                         <TouchableOpacity
                           activeOpacity={0.7}
                           style={styles.cancelWrap}
@@ -267,7 +273,11 @@ export function ActivityScreen() {
                   <View style={styles.rowTop}>
                     <Text style={styles.postTitle}>{r.postTitle}</Text>
                     <Badge
-                      label={r.status.toUpperCase()}
+                      label={
+                        r.postStatus === "cancelled"
+                          ? "Plan cancelled"
+                          : r.status.toUpperCase()
+                      }
                       tone={statusTone(r.status)}
                     />
                   </View>
@@ -280,7 +290,7 @@ export function ActivityScreen() {
                     >
                       <Text style={styles.viewPost}>View post →</Text>
                     </TouchableOpacity>
-                    {r.status === "pending" && (
+                    {r.status === "pending" && r.postStatus !== "cancelled" && (
                       <TouchableOpacity
                         activeOpacity={0.7}
                         onPress={() =>
@@ -292,18 +302,21 @@ export function ActivityScreen() {
                         </Text>
                       </TouchableOpacity>
                     )}
-                    {r.status === "approved" && (
-                      <TouchableOpacity
-                        activeOpacity={0.7}
-                        onPress={() =>
-                          run(`l${r.id}`, () => cancelParticipation(r.id))
-                        }
-                      >
-                        <Text style={styles.withdraw}>
-                          {busy === `l${r.id}` ? "…" : "LEAVE"}
-                        </Text>
-                      </TouchableOpacity>
-                    )}
+                    {r.status === "approved" &&
+                      r.postStatus !== "cancelled" &&
+                      !!r.postStartsAt &&
+                      new Date(r.postStartsAt).getTime() > Date.now() && (
+                        <TouchableOpacity
+                          activeOpacity={0.7}
+                          onPress={() =>
+                            run(`l${r.id}`, () => cancelParticipation(r.id))
+                          }
+                        >
+                          <Text style={styles.withdraw}>
+                            {busy === `l${r.id}` ? "…" : "LEAVE"}
+                          </Text>
+                        </TouchableOpacity>
+                      )}
                   </View>
                 </Card>
               ))

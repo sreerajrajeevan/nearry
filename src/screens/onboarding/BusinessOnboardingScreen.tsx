@@ -5,7 +5,8 @@ import { Button } from "../../components/Button";
 import { Input } from "../../components/Input";
 import { colors, typography, spacing, radius } from "../../theme";
 import { useAuth } from "../../store/AuthContext";
-import { requestLocationPermission } from "../../services/location";
+import { getCurrentPosition, LatLng } from "../../services/location";
+import { isValidBusinessName } from "../../utils/validation";
 
 const CATEGORIES = [
   "Café",
@@ -40,18 +41,24 @@ function Chip({
 
 /** 3-step business onboarding: profile → location → done. */
 export function BusinessOnboardingScreen() {
-  const { completeOnboarding } = useAuth();
+  const { completeOnboarding, loading } = useAuth();
   const [step, setStep] = useState(1);
   const [businessName, setBusinessName] = useState("");
   const [category, setCategory] = useState<string | null>(null);
   const [area, setArea] = useState("");
   const [locating, setLocating] = useState(false);
+  const [point, setPoint] = useState<LatLng | null>(null);
 
   const useCurrentLocation = async () => {
     setLocating(true);
     try {
-      const granted = await requestLocationPermission();
-      if (granted) setArea("Current location");
+      const found = await getCurrentPosition();
+      if (found) setPoint(found);
+      else
+        Alert.alert(
+          "Location unavailable",
+          "Enter your area manually to continue.",
+        );
     } finally {
       setLocating(false);
     }
@@ -89,7 +96,7 @@ export function BusinessOnboardingScreen() {
           <View style={styles.footer}>
             <Button
               title="Continue"
-              disabled={businessName.trim().length < 2 || !category}
+              disabled={!isValidBusinessName(businessName) || !category}
               onPress={() => setStep(2)}
             />
           </View>
@@ -111,7 +118,7 @@ export function BusinessOnboardingScreen() {
             returnKeyType="done"
           />
           <Button
-            title="Use current location"
+            title={point ? "Location added" : "Use current location"}
             variant="ghost"
             onPress={useCurrentLocation}
             loading={locating}
@@ -144,10 +151,15 @@ export function BusinessOnboardingScreen() {
           <View style={styles.footerWide}>
             <Button
               title="Open dashboard"
+              loading={loading}
               onPress={() =>
                 void completeOnboarding({
                   businessName: businessName.trim(),
-                  businessDetails: { category, area: area.trim() },
+                  businessDetails: {
+                    category,
+                    area: area.trim(),
+                    ...(point ?? {}),
+                  },
                 }).catch((e) =>
                   Alert.alert(
                     "Could not save profile",

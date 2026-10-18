@@ -81,7 +81,10 @@ export type OfferDraft = {
  * Mirrors the offers CHECK constraints + guard rules:
  * future start, end after start, sane discount/price/capacity.
  */
-export function validateOfferInput(input: OfferDraft): string | null {
+export function validateOfferInput(
+  input: OfferDraft,
+  options: { allowStarted?: boolean } = {},
+): string | null {
   if (input.title.trim().length < 4)
     return "Give the offer a title (min 4 characters).";
   if (input.title.trim().length > 80)
@@ -94,7 +97,9 @@ export function validateOfferInput(input: OfferDraft): string | null {
   const ends = new Date(input.endsAt).getTime();
   if (Number.isNaN(starts) || Number.isNaN(ends))
     return "Start/end times are invalid.";
-  if (starts <= Date.now()) return "Start time must be in the future.";
+  if (!options.allowStarted && starts <= Date.now())
+    return "Start time must be in the future.";
+  if (ends <= Date.now()) return "This offer has ended.";
   if (ends <= starts) return "End time must be after the start time.";
   if (
     input.discountPct !== undefined &&

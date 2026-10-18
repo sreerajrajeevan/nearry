@@ -1,4 +1,5 @@
 import type { Booking, Offer } from "../services/mappers";
+import { bookingState } from "./flowState";
 
 /** Local calendar days, including short/long days at daylight-saving changes. */
 export function businessDay(
@@ -20,6 +21,7 @@ export function businessDay(
     .filter(
       (b) =>
         b.status !== "cancelled" &&
+        !bookingState(b, now.getTime()).expired &&
         new Date(b.slot).getTime() >= start &&
         new Date(b.slot).getTime() < end,
     )

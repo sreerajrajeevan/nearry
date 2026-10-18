@@ -50,6 +50,7 @@ export function AuthScreen({
     setError(e instanceof Error ? e.message : "Something went wrong.");
 
   const sendCode = async () => {
+    if (loading) return;
     setError(null);
     const clean = email.trim();
     if (!isValidEmail(clean)) return setError("Enter a valid email address.");
@@ -63,6 +64,7 @@ export function AuthScreen({
         !isLogin,
       );
       setSentTo(clean);
+      setCode("");
       setStep("code");
     } catch (e) {
       fail(e);
@@ -70,6 +72,7 @@ export function AuthScreen({
   };
 
   const confirmCode = async () => {
+    if (loading) return;
     setError(null);
     if (!isValidOtp(code)) return setError("Enter the 6-digit code.");
     try {
@@ -81,6 +84,7 @@ export function AuthScreen({
   };
 
   const google = async () => {
+    if (loading) return;
     setError(null);
     try {
       await signInGoogle(accountType);
@@ -96,6 +100,7 @@ export function AuthScreen({
         accessibilityRole="button"
         accessibilityLabel="Back to welcome"
         onPress={onBack}
+        disabled={loading}
         style={styles.back}
       >
         <Icon name="arrow-left" size={16} />
@@ -168,12 +173,14 @@ export function AuthScreen({
           <Button title="Verify" onPress={confirmCode} loading={loading} />
           <TouchableOpacity
             onPress={sendCode}
+            disabled={loading}
             activeOpacity={0.7}
             style={styles.link}
           >
             <Text style={styles.linkText}>Resend code</Text>
           </TouchableOpacity>
           <TouchableOpacity
+            disabled={loading}
             onPress={() => {
               setStep("email");
               setCode("");
@@ -203,6 +210,7 @@ export function AuthScreen({
 
       <TouchableOpacity
         onPress={onSwitchMode}
+        disabled={loading}
         activeOpacity={0.7}
         style={styles.switch}
         accessibilityRole="button"

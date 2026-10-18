@@ -1,6 +1,6 @@
 import { getSupabase, isSupabaseConfigured, isDemoMode } from "./supabase";
 import { mockPosts } from "../data/mock";
-import { DbJoinRequest, JoinRequest, toJoinRequest } from "./mappers";
+import { DbJoinRequest, JoinRequest, NeedPost, toJoinRequest } from "./mappers";
 
 const useMock = () => {
   if (isDemoMode()) return true;
@@ -202,26 +202,42 @@ export async function listRequestsForPost(
 }
 
 /** My requests across posts, with post titles for context. */
+export type MyJoinRequest = JoinRequest & {
+  postTitle: string;
+  postStatus?: NeedPost["status"];
+  postStartsAt?: string;
+};
 export async function listMyRequests(
   requesterId: string,
-): Promise<(JoinRequest & { postTitle: string })[]> {
+): Promise<MyJoinRequest[]> {
   if (useMock())
     return mockRequests
       .filter((r) => r.requesterId === requesterId)
       .map((r) => ({
         ...r,
         postTitle: mockPosts.find((p) => p.id === r.postId)?.title ?? "Post",
+        postStatus: mockPosts.find((p) => p.id === r.postId)?.status,
+        postStartsAt: mockPosts.find((p) => p.id === r.postId)?.startsAt,
       }));
   const supabase = getSupabase()!;
   const { data, error } = await supabase
     .from("join_requests")
-    .select("*, post:posts!join_requests_post_id_fkey(title)")
+    .select("*, post:posts!join_requests_post_id_fkey(title,status,starts_at)")
     .eq("requester_id", requesterId)
     .order("created_at", { ascending: false });
   if (error) throw new Error(error.message);
   return ((data ?? []) as Record<string, unknown>[]).map((row) => {
-    const post = row.post as { title?: string } | null;
-    return { ...withRequester(row), postTitle: post?.title ?? "Post" };
+    const post = row.post as {
+      title?: string;
+      status?: NeedPost["status"];
+      starts_at?: string;
+    } | null;
+    return {
+      ...withRequester(row),
+      postTitle: post?.title ?? "Post",
+      postStatus: post?.status,
+      postStartsAt: post?.starts_at,
+    };
   });
 }
 

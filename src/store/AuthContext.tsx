@@ -94,21 +94,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     mounted = useRef(true),
     demoRef = useRef(false),
     sessionRef = useRef<Session | null>(null);
+  const profileRef = useRef<Profile | null>(null);
+  const actionPending = useRef(false);
   const errorText = (e: unknown) =>
     e instanceof Error
       ? e.message
       : "Could not load your account. Please retry.";
-  async function hydrate(next: Session | null) {
+  async function hydrate(next: Session | null, throwOnError = false) {
     const ticket = version.current.next();
     sessionRef.current = next;
     setSession(next);
     setProfileError("");
     if (!next) {
+      freshLoginRef.current = false;
+      setRoleMismatch(null);
+      setBootstrapping(false);
+      profileRef.current = null;
       setProfile(null);
       setProfileLoading(false);
       return;
     }
-    setProfileLoading(true);
+    const alreadyLoaded = profileRef.current?.id === next.user.id;
+    if (!alreadyLoaded) {
+      profileRef.current = null;
+      setProfile(null);
+      setProfileLoading(true);
+    }
     try {
       const { data, error } = await requireSupabase().rpc("get_my_profile");
       if (error) throw error;
@@ -124,6 +135,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         version.current.current(ticket) &&
         !demoRef.current
       ) {
+        profileRef.current = saved;
         setProfile(saved);
         // Existing account, fresh login, lane != saved type: tell the user
         // instead of silently landing them in the other app.
@@ -138,9 +150,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     } catch (e) {
       if (mounted.current && version.current.current(ticket)) {
-        setProfile(null);
+        if (!alreadyLoaded) {
+          profileRef.current = null;
+          setProfile(null);
+        }
         setProfileError(errorText(e));
       }
+      if (throwOnError) throw e;
     } finally {
       if (mounted.current && version.current.current(ticket)) {
         setProfileLoading(false);
@@ -164,9 +180,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     let alive = true;
+    let eventSeen = false;
+    let eventVersion = 0;
     const subscription = db.auth.onAuthStateChange((event, next) => {
+      eventSeen = true;
+      const eventTicket = ++eventVersion;
       // Run queries after the Supabase auth lock has been released.
-      if (event === "TOKEN_REFRESHED") {
+      if (
+        (event === "TOKEN_REFRESHED" || event === "SIGNED_IN") &&
+        next?.user.id &&
+        next.user.id === profileRef.current?.id
+      ) {
         sessionRef.current = next;
         setSession(next);
         return;
@@ -175,7 +199,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (event === "SIGNED_IN") freshLoginRef.current = true;
       setTimeout(async () => {
         await roleRestored;
-        if (alive && !demoRef.current) void hydrate(next);
+        if (alive && eventTicket === eventVersion && !demoRef.current)
+          void hydrate(next);
       }, 0);
     }).data.subscription;
     void db.auth
@@ -188,7 +213,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setBootstrapping(false);
           return;
         }
-        if (!sessionRef.current)
+        if (!eventSeen && !demoRef.current)
           void hydrate(data.session).finally(() => {
             if (alive) setBootstrapping(false);
           });
@@ -233,15 +258,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await AsyncStorage.setItem("nearry.pendingRole", role);
   }
   async function action(work: () => Promise<void>) {
+    if (actionPending.current)
+      throw new Error("Please wait for the current action to finish.");
+    actionPending.current = true;
     setLoading(true);
     try {
       await work();
     } finally {
+      actionPending.current = false;
       if (mounted.current) setLoading(false);
     }
   }
   async function refreshProfile() {
-    if (!demoRef.current) await hydrate(sessionRef.current);
+    if (!demoRef.current) await hydrate(sessionRef.current, true);
   }
   async function selectAccountType(role: AccountType) {
     await action(async () => {
@@ -263,6 +292,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setDemo(false);
       setDemoMode(false);
       sessionRef.current = null;
+      profileRef.current = null;
       setSession(null);
       setProfile(null);
       setProfileError("");
@@ -277,6 +307,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setDemo(true);
     setDemoMode(true);
     setProfile(null);
+    profileRef.current = null;
     setProfileError("");
     setProfileLoading(false);
   }

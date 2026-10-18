@@ -2,9 +2,9 @@ import { AppState } from "react-native";
 import { onUnreadChanged } from "../services/unreadEvents";
 import { useEffect, useState } from "react";
 import { useAuth } from "../store/AuthContext";
-import { unreadMessageCount } from "../services/chat";
+import { getUnreadCounts, UnreadCounts } from "../services/unread";
+import { RequestVersion } from "../utils/requestVersion";
 import {
-  unreadNotificationCount,
   subscribeToNotifications,
   registerPushToken,
 } from "../services/notifications";
@@ -12,21 +12,22 @@ import {
 /** Unread message + notification counts, refreshed on realtime events + poll. */
 export function useUnreadCounts() {
   const { profile } = useAuth();
-  const [counts, setCounts] = useState({ messages: 0, notifications: 0 });
+  const [counts, setCounts] = useState<UnreadCounts>({
+    messages: 0,
+    notifications: 0,
+    activity: 0,
+  });
 
   useEffect(() => {
-    if (!profile) {
-      setCounts({ messages: 0, notifications: 0 });
-      return;
-    }
+    setCounts({ messages: 0, notifications: 0, activity: 0 });
+    if (!profile) return;
     let active = true;
+    const version = new RequestVersion();
     const refresh = async () => {
+      const ticket = version.next();
       try {
-        const [m, n] = await Promise.all([
-          unreadMessageCount(),
-          unreadNotificationCount(),
-        ]);
-        if (active) setCounts({ messages: m, notifications: n });
+        const result = await getUnreadCounts();
+        if (active && version.current(ticket)) setCounts(result);
       } catch {
         /* keep last known */
       }
@@ -45,7 +46,7 @@ export function useUnreadCounts() {
       stopLocal();
       appState.remove();
     };
-  }, [profile]);
+  }, [profile?.id]);
 
   return counts;
 }
@@ -56,5 +57,5 @@ export function usePushSetup() {
   useEffect(() => {
     if (!profile) return;
     void registerPushToken(profile.id).catch(() => {});
-  }, [profile]);
+  }, [profile?.id]);
 }

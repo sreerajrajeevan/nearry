@@ -1,5 +1,6 @@
 import React, { useCallback, useRef, useState } from "react";
 import {
+  AppState,
   View,
   Text,
   StyleSheet,
@@ -12,6 +13,7 @@ import {
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { Screen } from "../../components/Screen";
+import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
 import { colors, typography, spacing } from "../../theme";
 import { useAuth } from "../../store/AuthContext";
@@ -60,7 +62,14 @@ export function ConversationScreen({ route, navigation }: Props) {
 
   const focused = useRef(false);
   const generation = useRef(0);
+  const room = useRef("");
+  room.current = `${conversationId}:${myId}`;
+  const stickToBottom = useRef(true);
+  const isForeground = () =>
+    AppState.currentState !== "background" &&
+    AppState.currentState !== "inactive";
   const load = useCallback(async () => {
+    if (!isForeground()) return;
     const ticket = ++generation.current;
     try {
       const msgs = await listMessages(conversationId, myId);
@@ -80,6 +89,9 @@ export function ConversationScreen({ route, navigation }: Props) {
   useFocusEffect(
     useCallback(() => {
       focused.current = true;
+      setDraft("");
+      setSending(false);
+      stickToBottom.current = true;
       setMessages([]);
       setState("loading");
       const unsubscribe = subscribeToConversation(
@@ -87,7 +99,13 @@ export function ConversationScreen({ route, navigation }: Props) {
         () => void load(),
       );
       void load();
+      const app = AppState.addEventListener("change", (state) => {
+        if (state === "active") void load();
+      });
+      const timer = setInterval(() => void load(), 30_000);
       return () => {
+        app.remove();
+        clearInterval(timer);
         focused.current = false;
         ++generation.current;
         unsubscribe();
@@ -98,11 +116,14 @@ export function ConversationScreen({ route, navigation }: Props) {
   const onSend = async () => {
     const text = draft.trim();
     if (!text || sending) return;
+    const sendingRoom = `${conversationId}:${myId}`;
     setSending(true);
     try {
       const msg = await sendMessage(conversationId, myId, text);
+      if (room.current !== sendingRoom || !focused.current) return;
       setDraft("");
-      if (focused.current) {
+      stickToBottom.current = true;
+      if (focused.current && isForeground()) {
         setMessages((prev) => mergeMessages(prev, [msg]));
         setState("ready");
         void markConversationRead(conversationId, msg.id).catch(() => {});
@@ -114,7 +135,7 @@ export function ConversationScreen({ route, navigation }: Props) {
         e instanceof Error ? e.message : "Please try again.",
       );
     } finally {
-      setSending(false);
+      if (room.current === sendingRoom) setSending(false);
     }
   };
 
@@ -139,10 +160,13 @@ export function ConversationScreen({ route, navigation }: Props) {
         {state === "loading" ? (
           <Text style={styles.status}>Loading…</Text>
         ) : state === "error" ? (
-          <EmptyState
-            title="Couldn't load messages"
-            hint="Check your connection and retry."
-          />
+          <View>
+            <EmptyState
+              title="Couldn’t load messages"
+              hint="Check your connection and retry."
+            />
+            <Button title="Retry" onPress={() => void load()} />
+          </View>
         ) : (
           <FlatList
             ref={listRef}
@@ -152,9 +176,18 @@ export function ConversationScreen({ route, navigation }: Props) {
               <Bubble msg={item} />
             )}
             contentContainerStyle={styles.list}
-            onContentSizeChange={() =>
-              listRef.current?.scrollToEnd({ animated: false })
-            }
+            onScroll={({ nativeEvent }) => {
+              stickToBottom.current =
+                nativeEvent.contentSize.height -
+                  nativeEvent.layoutMeasurement.height -
+                  nativeEvent.contentOffset.y <
+                120;
+            }}
+            scrollEventThrottle={100}
+            onContentSizeChange={() => {
+              if (stickToBottom.current)
+                listRef.current?.scrollToEnd({ animated: false });
+            }}
             ListEmptyComponent={
               <EmptyState
                 title="No messages yet"

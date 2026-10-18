@@ -23,6 +23,7 @@ import {
 } from "../services/notifications";
 import { useAuth } from "../store/AuthContext";
 import { AppNotification } from "../services/mappers";
+import { notificationTarget } from "../utils/notificationTarget";
 
 function kindTone(kind: string): "neutral" | "green" | "red" {
   if (kind === "request_approved" || kind === "booking_confirmed")
@@ -39,7 +40,10 @@ function kindLabel(kind: string): string {
 export function NotificationCenterScreen({
   navigation,
 }: {
-  navigation: { goBack: () => void };
+  navigation: {
+    goBack: () => void;
+    navigate: (screen: string, params?: Record<string, unknown>) => void;
+  };
 }) {
   const { profile } = useAuth();
   const focused = useRef(false),
@@ -96,6 +100,10 @@ export function NotificationCenterScreen({
           "Check your connection and try again.",
         );
       }
+    }
+    if (profile) {
+      const target = notificationTarget(n, profile.accountType);
+      navigation.navigate(target.screen, target.params);
     }
   };
 

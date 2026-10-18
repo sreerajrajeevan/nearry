@@ -296,6 +296,7 @@ export type DbBooking = {
   business_id?: string;
   slot: string;
   party_size: number;
+  hold_expires_at?: string | null;
   status: "pending" | "confirmed" | "cancelled";
   created_at: string;
   customer?: { display_name: string } | null;
@@ -313,6 +314,7 @@ export type Booking = {
   offerTitle: string;
   slot: string;
   partySize: number;
+  holdExpiresAt?: string;
   status: "pending" | "confirmed" | "cancelled";
   createdAt: string;
 };
@@ -328,6 +330,7 @@ export function toBooking(row: DbBooking): Booking {
     offerTitle: row.offer?.title ?? row.offer_title ?? "Offer",
     slot: row.slot,
     partySize: row.party_size,
+    holdExpiresAt: row.hold_expires_at ?? undefined,
     status: row.status,
     createdAt: row.created_at,
   };
