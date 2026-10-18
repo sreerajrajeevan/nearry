@@ -5,6 +5,7 @@ import {
   Text,
   StyleSheet,
   ScrollView,
+  RefreshControl,
   TouchableOpacity,
   Alert,
 } from "react-native";
@@ -14,18 +15,16 @@ import { Card } from "../../components/Card";
 import { Button } from "../../components/Button";
 import { Badge } from "../../components/Badge";
 import { Avatar } from "../../components/Avatar";
-import { Input } from "../../components/Input";
-import { EmptyState } from "../../components/EmptyState";
+import { Icon } from "../../components/Icon";
 import { colors, typography, spacing } from "../../theme";
 import { useAuth } from "../../store/AuthContext";
 import { useUnreadCounts } from "../../hooks/useUnreadCounts";
 import {
   getVerificationState,
   submitVerificationDoc,
-  claimVenue,
   VerificationState,
 } from "../../services/verification";
-import { searchVenues, listVenues } from "../../services/venues";
+import { listVenues } from "../../services/venues";
 import { Venue } from "../../services/mappers";
 import { isDemoMode } from "../../services/supabase";
 
@@ -58,9 +57,8 @@ export function BusinessProfileScreen({ navigation }: Props) {
     status: "unverified",
   });
   const [venue, setVenue] = useState<Venue | null>(null);
-  const [query, setQuery] = useState("");
-  const [results, setResults] = useState<Venue[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
     if (!profile || isDemoMode()) return;
@@ -81,24 +79,6 @@ export function BusinessProfileScreen({ navigation }: Props) {
       void load();
     }, [load]),
   );
-
-  useEffect(() => {
-    const q = query.trim();
-    if (!q) {
-      setResults([]);
-      return;
-    }
-    const t = setTimeout(async () => {
-      try {
-        setResults(
-          (await searchVenues(q)).filter((v) => !v.businessId).slice(0, 5),
-        );
-      } catch {
-        setResults([]);
-      }
-    }, 250);
-    return () => clearTimeout(t);
-  }, [query]);
 
   const name = profile?.businessName || profile?.displayName || "Your business";
   const details = (profile?.businessDetails ?? {}) as {
@@ -125,28 +105,21 @@ export function BusinessProfileScreen({ navigation }: Props) {
     }
   };
 
-  const onClaim = async (v: Venue) => {
-    setBusy(`claim-${v.id}`);
-    try {
-      await claimVenue(v.id);
-      setQuery("");
-      setResults([]);
-      await load();
-    } catch (e) {
-      Alert.alert(
-        "Could not claim",
-        e instanceof Error ? e.message : "Please try again.",
-      );
-    } finally {
-      setBusy(null);
-    }
-  };
-
   return (
     <Screen>
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scroll}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={async () => {
+              setRefreshing(true);
+              await load();
+              setRefreshing(false);
+            }}
+          />
+        }
       >
         <Button
           title="My offers"
@@ -195,6 +168,37 @@ export function BusinessProfileScreen({ navigation }: Props) {
             )}
         </Card>
 
+        <TouchableOpacity
+          accessibilityRole="button"
+          activeOpacity={0.65}
+          style={styles.menuRow}
+          onPress={() => navigation.navigate("EditBusinessProfile")}
+        >
+          <Icon name="edit" size={18} color={colors.accent} />
+          <View style={styles.menuCopy}>
+            <Text style={styles.menuTitle}>Edit profile</Text>
+            <Text style={styles.menuHint}>
+              Business name, category and area
+            </Text>
+          </View>
+          <Icon name="arrow-up-right" size={17} color={colors.accent} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          accessibilityRole="button"
+          activeOpacity={0.65}
+          style={styles.menuRow}
+          onPress={() => navigation.navigate("MyOffers")}
+        >
+          <Icon name="file-text" size={18} color={colors.accent} />
+          <View style={styles.menuCopy}>
+            <Text style={styles.menuTitle}>My offers</Text>
+            <Text style={styles.menuHint}>
+              Your live offers, drafts and past offers
+            </Text>
+          </View>
+          <Icon name="arrow-up-right" size={17} color={colors.accent} />
+        </TouchableOpacity>
+
         <Text style={styles.sectionTitle}>My venue</Text>
         {venue ? (
           <Card>
@@ -204,34 +208,10 @@ export function BusinessProfileScreen({ navigation }: Props) {
             </Text>
           </Card>
         ) : (
-          <>
-            <Text style={styles.venueHint}>
-              Venue ownership is reviewed with your business proof. Contact the
-              reviewer to associate your venue.
-            </Text>
-            <Input
-              label=""
-              placeholder="Search your venue…"
-              value={query}
-              onChangeText={setQuery}
-            />
-            {results.map((v) => (
-              <View key={v.id} style={styles.claimRow}>
-                <View style={styles.claimText}>
-                  <Text style={styles.venueName}>{v.name}</Text>
-                  <Text style={styles.venueMeta}>
-                    {v.category} · {v.area}
-                  </Text>
-                </View>
-                <Button
-                  title="Review required"
-                  variant="secondary"
-                  loading={busy === `claim-${v.id}`}
-                  onPress={() => onClaim(v)}
-                />
-              </View>
-            ))}
-          </>
+          <Text style={styles.venueHint}>
+            Your venue is linked by the reviewer alongside your business
+            verification — nothing to do here.
+          </Text>
         )}
 
         <Button
@@ -308,6 +288,18 @@ const styles = StyleSheet.create({
   },
   verifyNote: { ...typography.body, color: colors.red, marginTop: spacing.xs },
   verifyBtn: { marginTop: spacing.md },
+  menuRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    paddingVertical: spacing.lg,
+    minHeight: 52,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  menuCopy: { flex: 1, gap: 3 },
+  menuTitle: { ...typography.body, color: colors.text },
+  menuHint: { ...typography.caption, color: colors.textDim },
   venueHint: {
     ...typography.bodySmall,
     color: colors.textDim,
@@ -319,17 +311,6 @@ const styles = StyleSheet.create({
     color: colors.textDim,
     marginTop: spacing.xs,
   },
-  claimRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    flexWrap: "wrap",
-    gap: spacing.md,
-    paddingVertical: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  claimText: { flex: 1 },
   notifBtn: { marginTop: spacing.xl },
   logoutBtn: { marginTop: spacing.md },
 });

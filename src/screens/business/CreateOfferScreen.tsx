@@ -1,6 +1,13 @@
-import { parseDateTime } from "../../utils/dateTime";
-import React, { useEffect, useRef, useState } from "react";
-import { View, Text, StyleSheet, ScrollView, Alert } from "react-native";
+import { DateSheet, TimeSheet } from "../../components/DateTimeSheets";
+import React, { useRef, useState } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  Alert,
+  TouchableOpacity,
+} from "react-native";
 import { PageHeading } from "../../components/PageHeading";
 import { Screen } from "../../components/Screen";
 import { Button } from "../../components/Button";
@@ -12,142 +19,78 @@ import { useAuth } from "../../store/AuthContext";
 import {
   createDraft,
   publishOffer,
-  NewOfferInput,
-  getOffer,
   updateOffer,
+  NewOfferInput,
 } from "../../services/offers";
 import { validateOfferInput } from "../../utils/validation";
-import { BusinessStackParamList, BusinessTabNav } from "../../navigation/types";
-import { NativeStackScreenProps } from "@react-navigation/native-stack";
+import { BusinessTabParamList } from "../../navigation/types";
 
-type Props = { navigation: BusinessTabNav };
+type Props = {
+  navigation: { navigate: (screen: keyof BusinessTabParamList) => void };
+};
+
+const pad = (n: number) => String(n).padStart(2, "0");
+const fmtDate = (d: Date) =>
+  `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const fmtTime = (d: Date) => {
+  const h = d.getHours();
+  const p = h < 12 ? "AM" : "PM";
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${h12}:${pad(d.getMinutes())} ${p}`;
+};
+
+function DateTimeField({
+  label,
+  value,
+  placeholder,
+  onPress,
+}: {
+  label: string;
+  value: string | null;
+  placeholder: string;
+  onPress: () => void;
+}) {
+  return (
+    <View style={styles.half}>
+      <Text style={styles.fieldLabel}>{label}</Text>
+      <TouchableOpacity
+        style={styles.pickerBox}
+        activeOpacity={0.8}
+        onPress={onPress}
+      >
+        <Text style={[styles.pickerText, !value && styles.pickerPlaceholder]}>
+          {value ?? placeholder}
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
 
 /**
  * Create an offer: save as draft, then publish. Publishing is gated
  * server-side — only verified businesses go live.
  */
 export function CreateOfferScreen({ navigation }: Props) {
-  return <OfferForm onDone={() => navigation.navigate("MyOffers")} />;
-}
-
-export function EditOfferScreen({
-  route,
-  navigation,
-}: NativeStackScreenProps<BusinessStackParamList, "EditOffer">) {
-  return (
-    <OfferForm
-      key={route.params.offerId}
-      offerId={route.params.offerId}
-      onDone={() => navigation.goBack()}
-      onBack={() => navigation.goBack()}
-    />
-  );
-}
-
-function OfferForm({
-  offerId,
-  onDone,
-  onBack,
-}: {
-  offerId?: string;
-  onDone: () => void;
-  onBack?: () => void;
-}) {
-  const { profile, demoMode } = useAuth();
+  const { profile } = useAuth();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [discount, setDiscount] = useState("");
   const [price, setPrice] = useState("");
-  const [startDate, setStartDate] = useState("");
-  const [startTime, setStartTime] = useState("");
-  const [endDate, setEndDate] = useState("");
-  const [endTime, setEndTime] = useState("");
+  const [startsAtDate, setStartsAtDate] = useState<Date | null>(null);
+  const [endsAtDate, setEndsAtDate] = useState<Date | null>(null);
+  const [picker, setPicker] = useState<{
+    field: "startsAt" | "endsAt";
+    mode: "date" | "time";
+  } | null>(null);
   const [capacity, setCapacity] = useState("10");
   const [duration, setDuration] = useState("60");
   const [resource, setResource] = useState("Main");
   const [formError, setFormError] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const savedDraftId = useRef<string | undefined>(offerId);
-  const savingRef = useRef(false);
-  const [live, setLive] = useState(false);
-  const [loading, setLoading] = useState(!!offerId);
-  const [loadError, setLoadError] = useState("");
-  const [retry, setRetry] = useState(0);
-  useEffect(() => {
-    if (!offerId) return;
-    let active = true;
-    setLoading(true);
-    setLoadError("");
-    void getOffer(offerId)
-      .then((offer) => {
-        if (!active) return;
-        if (
-          !offer ||
-          (offer.businessId !== profile?.id &&
-            !(demoMode && offer.businessId === "b1"))
-        )
-          throw new Error("Offer not found.");
-        if (
-          !["draft", "live"].includes(offer.status) ||
-          (offer.status === "live" &&
-            new Date(offer.endsAt).getTime() <= Date.now())
-        )
-          throw new Error("This offer has ended and can no longer be edited.");
-        setTitle(offer.title);
-        setDescription(offer.description);
-        setDiscount(offer.discountPct == null ? "" : String(offer.discountPct));
-        setPrice(
-          offer.priceCents == null ? "" : String(offer.priceCents / 100),
-        );
-        const fields = (iso: string) => {
-          const d = new Date(iso),
-            pad = (n: number) => String(n).padStart(2, "0");
-          return [
-            `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`,
-            `${pad(d.getHours())}:${pad(d.getMinutes())}`,
-          ];
-        };
-        const start = fields(offer.startsAt),
-          end = fields(offer.endsAt);
-        setStartDate(start[0]);
-        setStartTime(start[1]);
-        setEndDate(end[0]);
-        setEndTime(end[1]);
-        setCapacity(String(offer.slotCapacity));
-        setDuration(String(offer.slotMinutes ?? 60));
-        setResource(offer.resourceKey ?? "default");
-        setLive(offer.status === "live");
-        savedDraftId.current = offer.id;
-      })
-      .catch((e) => {
-        if (active)
-          setLoadError(
-            e instanceof Error ? e.message : "Could not load offer.",
-          );
-      })
-      .finally(() => {
-        if (active) setLoading(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, [offerId, profile?.id, retry, demoMode]);
-  const reset = () => {
-    if (offerId) return;
-    savedDraftId.current = undefined;
-    setTitle("");
-    setDescription("");
-    setDiscount("");
-    setPrice("");
-    setStartDate("");
-    setStartTime("");
-    setEndDate("");
-    setEndTime("");
-    setCapacity("10");
-    setDuration("60");
-    setResource("Main");
-  };
+  const draftId = useRef<string>();
+  const savingLock = useRef(false);
+
   const verified = profile?.verificationStatus === "verified";
 
   if (!profile) {
@@ -161,29 +104,14 @@ function OfferForm({
     );
   }
 
-  if (loading || loadError)
-    return (
-      <Screen scroll>
-        {loading ? (
-          <Text style={styles.note}>Loading offer…</Text>
-        ) : (
-          <>
-            <EmptyState title="Couldn’t open this offer" hint={loadError} />
-            <Button title="Retry" onPress={() => setRetry((n) => n + 1)} />
-          </>
-        )}
-        {onBack && <Button title="Go back" variant="ghost" onPress={onBack} />}
-      </Screen>
-    );
-
   const buildInput = (): NewOfferInput | null => {
     setFormError("");
-    const startsAt = parseDateTime(startDate, startTime);
-    const endsAt = parseDateTime(endDate, endTime);
-    if (!startsAt || !endsAt) {
-      setFormError("Enter dates as YYYY-MM-DD and times as HH:MM (24h).");
+    if (!startsAtDate || !endsAtDate) {
+      setFormError("Pick a start and end for the booking window.");
       return null;
     }
+    const startsAt = startsAtDate;
+    const endsAt = endsAtDate;
     const discountPct = discount.trim() ? Number(discount.trim()) : undefined;
     const priceCents = price.trim()
       ? Math.round(Number(price.trim()) * 100)
@@ -199,7 +127,7 @@ function OfferForm({
       slotMinutes: Number(duration),
       resourceKey: resource.trim(),
     };
-    const err = validateOfferInput(input, { allowStarted: live });
+    const err = validateOfferInput(input);
     if (err) {
       setFormError(err);
       return null;
@@ -208,49 +136,48 @@ function OfferForm({
   };
 
   const persist = async (input: NewOfferInput) => {
-    if (savedDraftId.current)
-      return updateOffer(
-        savedDraftId.current,
-        live
-          ? {
-              title: input.title,
-              description: input.description,
-              discountPct: input.discountPct ?? null,
-              priceCents: input.priceCents ?? null,
-            }
-          : {
-              ...input,
-              discountPct: input.discountPct ?? null,
-              priceCents: input.priceCents ?? null,
-            },
-      );
+    if (draftId.current) return updateOffer(draftId.current, input);
     const draft = await createDraft(profile.id, input);
-    // Retain this ID if publishing fails, so retry updates the same draft.
-    savedDraftId.current = draft.id;
+    draftId.current = draft.id;
     return draft;
   };
   const save = async (publish: boolean) => {
-    if (savingRef.current) return;
+    if (savingLock.current) return;
     const input = buildInput();
     if (!input) return;
-    savingRef.current = true;
+    savingLock.current = true;
     setSaving(true);
     try {
       const draft = await persist(input);
       if (publish) await publishOffer(draft.id);
-      reset();
-      onDone();
+      draftId.current = undefined;
+      setTitle("");
+      setDescription("");
+      setDiscount("");
+      setPrice("");
+      setStartsAtDate(null);
+      setEndsAtDate(null);
+      setCapacity("10");
+      setDuration("60");
+      setResource("Main");
+      navigation.navigate("Dashboard");
     } catch (e) {
       setFormError(
-        (e instanceof Error ? e.message : "Please try again.") +
-          (publish && savedDraftId.current
+        (e instanceof Error ? e.message : "Please retry.") +
+          (publish && draftId.current
             ? " Your draft is saved; retry here or open My offers."
             : ""),
       );
     } finally {
-      savingRef.current = false;
+      savingLock.current = false;
       setSaving(false);
     }
+  };
+
+  const applyPicked = (d: Date) => {
+    if (!picker) return;
+    if (picker.field === "startsAt") setStartsAtDate(d);
+    else setEndsAtDate(d);
   };
 
   return (
@@ -260,10 +187,9 @@ function OfferForm({
         contentContainerStyle={styles.scroll}
         keyboardShouldPersistTaps="handled"
       >
-        {onBack && <Button title="← Back" variant="ghost" onPress={onBack} />}
         <PageHeading
           greeting="A hello from your business."
-          title={offerId ? "Edit offer" : "A good offer.\nA new face."}
+          title={"A good offer.\nA new face."}
         />
         <View style={styles.statusRow}>
           <Badge
@@ -312,57 +238,57 @@ function OfferForm({
           </View>
         </View>
         <Text style={styles.fieldLabel}>Booking window</Text>
-        {live && (
-          <Text style={styles.note}>
-            This offer is live. Its time slots and capacity stay fixed; you can
-            update the title, description and price.
-          </Text>
+        <View style={styles.row}>
+          <DateTimeField
+            label="Start date"
+            value={startsAtDate ? fmtDate(startsAtDate) : null}
+            placeholder="Pick date"
+            onPress={() => setPicker({ field: "startsAt", mode: "date" })}
+          />
+          <DateTimeField
+            label="Start time"
+            value={startsAtDate ? fmtTime(startsAtDate) : null}
+            placeholder="Pick time"
+            onPress={() => setPicker({ field: "startsAt", mode: "time" })}
+          />
+        </View>
+        <View style={styles.row}>
+          <DateTimeField
+            label="End date"
+            value={endsAtDate ? fmtDate(endsAtDate) : null}
+            placeholder="Pick date"
+            onPress={() => setPicker({ field: "endsAt", mode: "date" })}
+          />
+          <DateTimeField
+            label="End time"
+            value={endsAtDate ? fmtTime(endsAtDate) : null}
+            placeholder="Pick time"
+            onPress={() => setPicker({ field: "endsAt", mode: "time" })}
+          />
+        </View>
+        {picker?.mode === "date" && (
+          <DateSheet
+            visible
+            value={picker.field === "startsAt" ? startsAtDate : endsAtDate}
+            onPick={(d) => {
+              applyPicked(d);
+              setPicker(null);
+            }}
+            onClose={() => setPicker(null)}
+          />
         )}
-        <View style={styles.row}>
-          <View style={styles.half}>
-            <Input
-              label="Start date"
-              placeholder="YYYY-MM-DD"
-              value={startDate}
-              editable={!live && !saving}
-              onChangeText={setStartDate}
-            />
-          </View>
-          <View style={styles.half}>
-            <Input
-              label="Start time"
-              placeholder="HH:MM"
-              value={startTime}
-              editable={!live && !saving}
-              onChangeText={setStartTime}
-            />
-          </View>
-        </View>
-        <View style={styles.row}>
-          <View style={styles.half}>
-            <Input
-              label="End date"
-              placeholder="YYYY-MM-DD"
-              value={endDate}
-              editable={!live && !saving}
-              onChangeText={setEndDate}
-            />
-          </View>
-          <View style={styles.half}>
-            <Input
-              label="End time"
-              placeholder="HH:MM"
-              value={endTime}
-              editable={!live && !saving}
-              onChangeText={setEndTime}
-            />
-          </View>
-        </View>
+        {picker?.mode === "time" && (
+          <TimeSheet
+            visible
+            value={picker.field === "startsAt" ? startsAtDate : endsAtDate}
+            onPick={applyPicked}
+            onClose={() => setPicker(null)}
+          />
+        )}
         <Input
           label="Places per slot"
           placeholder="10"
           value={capacity}
-          editable={!live && !saving}
           onChangeText={(t: string) => setCapacity(t.replace(/[^0-9]/g, ""))}
           keyboardType="number-pad"
         />
@@ -370,39 +296,29 @@ function OfferForm({
         <Input
           label="Slot duration (minutes)"
           value={duration}
-          editable={!live && !saving}
           onChangeText={setDuration}
           keyboardType="number-pad"
         />
         <Input
           label="Staff member or space"
           value={resource}
-          editable={!live && !saving}
           onChangeText={setResource}
         />
         {formError ? <Text style={styles.formError}>{formError}</Text> : null}
         <Button
-          title={
-            live
-              ? "Save changes"
-              : offerId
-                ? "Save draft changes"
-                : "Save draft"
-          }
+          title="Save draft"
           variant="secondary"
           onPress={() => void save(false)}
           loading={saving}
           style={styles.btn}
         />
-        {!live && (
-          <Button
-            title="Publish now"
-            onPress={() => void save(true)}
-            loading={saving}
-            disabled={!verified}
-            style={styles.btn}
-          />
-        )}
+        <Button
+          title="Publish now"
+          onPress={() => void save(true)}
+          loading={saving}
+          disabled={!verified}
+          style={styles.btn}
+        />
         {!verified && (
           <Text style={styles.note}>
             Publishing needs a verified business. Drafts are safe to create
@@ -431,6 +347,18 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
     marginTop: spacing.sm,
   },
+  pickerBox: {
+    height: 52,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 8,
+    paddingHorizontal: spacing.md,
+    backgroundColor: colors.surface,
+    justifyContent: "center",
+    marginBottom: spacing.md,
+  },
+  pickerText: { color: colors.text, fontSize: 15 },
+  pickerPlaceholder: { color: colors.textFaint },
   formError: {
     ...typography.body,
     color: colors.red,

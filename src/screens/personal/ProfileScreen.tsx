@@ -63,6 +63,19 @@ export function ProfileScreen({ navigation }: Props) {
           accessibilityRole="button"
           activeOpacity={0.65}
           style={styles.menuRow}
+          onPress={() => navigation.navigate("EditProfile")}
+        >
+          <Icon name="edit" size={18} color={colors.accent} />
+          <View style={styles.menuCopy}>
+            <Text style={styles.menuTitle}>Edit profile</Text>
+            <Text style={styles.menuHint}>Your name, bio and interests</Text>
+          </View>
+          <Icon name="arrow-up-right" size={17} color={colors.accent} />
+        </TouchableOpacity>
+        <TouchableOpacity
+          accessibilityRole="button"
+          activeOpacity={0.65}
+          style={styles.menuRow}
           onPress={() => navigation.navigate("MyPosts")}
         >
           <Icon name="file-text" size={18} color={colors.accent} />

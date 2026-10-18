@@ -115,4 +115,20 @@ begin
 end;
 $$ language plpgsql security definer set search_path=public;
 
+-- A narrow delete path for empty posts. Preserve participation and chat history.
+create or replace function delete_post(p_post_id uuid) returns void as $$
+declare p posts;
+begin
+ if auth.uid() is null then raise exception 'not authenticated'; end if;
+ select * into p from posts where id=p_post_id and author_id=auth.uid() for update;
+ if not found then raise exception 'post not found or not yours'; end if;
+ if exists(select 1 from join_requests where post_id=p.id) then
+  raise exception 'This post has requests. Cancel it to retain participation history.';
+ end if;
+ delete from posts where id=p.id;
+end;
+$$ language plpgsql security definer set search_path=public;
+revoke all on function delete_post(uuid) from public,anon;
+grant execute on function delete_post(uuid) to authenticated;
+
 commit;

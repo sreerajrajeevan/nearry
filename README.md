@@ -24,7 +24,7 @@ For a native Google login test, use a development/standalone build with the `nea
 
 ## Backend installation / upgrade
 
-Follow [migration instructions](supabase/migrations/README.md). New installs use migrations `00001`–`00020`; existing installations apply only missing migrations. `run-all.sql` is fresh-database-only and refuses to run when profiles already exist. No production database is automatically modified by the application or CI.
+Follow [migration instructions](supabase/migrations/README.md). New installs use migrations `00001`–`00021`; existing installations apply only missing migrations. `run-all.sql` is fresh-database-only and refuses to run when profiles already exist. No production database is automatically modified by the application or CI.
 
 Migrations `00011`–`00018` introduce required RPCs, so deploy migrations and the matching app version together. Older app versions relying on raw join/booking writes will need to update.
 
@@ -97,7 +97,7 @@ Before rollout, test Google/OTP delivery, app restart, both account types, denie
 
 ## Core journey checks
 
-See the [core journey changes and phone checklist](docs/core-journey-checklist.md). Existing projects at `00019` need only `00020_core_journeys.sql` before the matching app update. Business users can manage saved offers from Dashboard → My offers; notifications open their relevant workflow.
+See the [core journey changes and phone checklist](docs/core-journey-checklist.md). Existing projects at `00020` need only `00021_core_journeys.sql` before the matching app update. Business users can manage saved offers from Dashboard → My offers; notifications open their relevant workflow.
 
 ## Backend audit
 

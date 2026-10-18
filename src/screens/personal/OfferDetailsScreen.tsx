@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -27,7 +27,7 @@ import {
   subscribeToBookings,
 } from "../../services/bookings";
 import { Offer } from "../../services/mappers";
-import { timeLeft, formatWhen, formatTime } from "../../utils/format";
+import { timeLeft, formatTime } from "../../utils/format";
 
 type Props = NativeStackScreenProps<PersonalStackParamList, "OfferDetails">;
 
@@ -40,6 +40,7 @@ function fmtINR(cents?: number): string {
 export function OfferDetailsScreen({ route, navigation }: Props) {
   const { offerId } = route.params;
   const { profile } = useAuth();
+  const [daySel, setDaySel] = useState("");
   const [slotId, setSlotId] = useState("");
   const [partySize, setPartySize] = useState(1);
   const [formError, setFormError] = useState("");
@@ -65,18 +66,65 @@ export function OfferDetailsScreen({ route, navigation }: Props) {
   const offer = data?.offer,
     slots = data?.slots ?? [];
   const requestedBooking = data?.bookings.find((b) => b.id === bookingId);
+
+  const dayKey = (iso: string) => {
+    const d = new Date(iso);
+    return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+  };
+
+  /** Slots grouped by local calendar day, earliest first. */
+  const days = useMemo(() => {
+    const map = new Map<
+      string,
+      { key: string; date: Date; slots: AvailableSlot[] }
+    >();
+    for (const s of [...slots].sort(
+      (a, b) =>
+        new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime(),
+    )) {
+      const k = dayKey(s.starts_at);
+      let g = map.get(k);
+      if (!g) {
+        const d = new Date(s.starts_at);
+        g = {
+          key: k,
+          date: new Date(d.getFullYear(), d.getMonth(), d.getDate()),
+          slots: [],
+        };
+        map.set(k, g);
+      }
+      g.slots.push(s);
+    }
+    return [...map.values()];
+  }, [slots]);
+
+  const activeDay = days.find((d) => d.key === daySel) ?? days[0];
+
+  const onSelectDay = (key: string) => {
+    setDaySel(key);
+    const g = days.find((d) => d.key === key);
+    setSlotId(g?.slots.find((s) => s.seats_left > 0)?.id ?? "");
+    setPartySize(1);
+  };
+
   useEffect(() => {
     setBookingId(null);
     setPartySize(1);
     setSlotId("");
+    setDaySel("");
   }, [offerId]);
   useEffect(() => {
     if (!data) return;
-    setSlotId((current) =>
-      data.slots.some((s) => s.id === current && s.seats_left > 0)
-        ? current
-        : (data.slots.find((s) => s.seats_left > 0)?.id ?? ""),
-    );
+    const selected =
+      data.slots.find((s) => s.id === slotId && s.seats_left > 0) ??
+      data.slots.find((s) => s.seats_left > 0);
+    setSlotId(selected?.id ?? "");
+    if (selected) {
+      setDaySel(dayKey(selected.starts_at));
+      setPartySize((size) =>
+        Math.max(1, Math.min(size, selected.seats_left, 50)),
+      );
+    }
   }, [data]);
 
   const onBook = async () => {
@@ -208,43 +256,91 @@ export function OfferDetailsScreen({ route, navigation }: Props) {
           />
         ) : (
           <View style={styles.bookBox}>
-            <Text style={styles.sectionTitle}>Choose a time</Text>
-            {slots.length === 0 && (
+            <Text style={styles.sectionTitle}>Choose a day</Text>
+            {days.length === 0 && (
               <Text style={{ color: colors.textDim }}>
                 No upcoming slots are available.
               </Text>
             )}
-            {slots.map((slot) => (
-              <TouchableOpacity
-                key={slot.id}
-                disabled={slot.seats_left < 1}
-                onPress={() => {
-                  setSlotId(slot.id);
-                  setPartySize((size) =>
-                    Math.max(1, Math.min(size, slot.seats_left, 50)),
-                  );
-                }}
-                style={{
-                  padding: 16,
-                  marginBottom: 8,
-                  borderBottomWidth: 1,
-                  borderColor: slotId === slot.id ? colors.red : colors.border,
-                }}
-                accessibilityRole="button"
-                accessibilityState={{
-                  selected: slotId === slot.id,
-                  disabled: slot.seats_left < 1,
-                }}
-              >
-                <Text style={{ color: colors.text }}>
-                  {formatWhen(slot.starts_at)} – {formatTime(slot.ends_at)}
-                </Text>
-                <Text style={{ color: colors.textDim }}>
-                  {slot.seats_left} {slot.seats_left === 1 ? "place" : "places"}{" "}
-                  available
-                </Text>
-              </TouchableOpacity>
-            ))}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.dayStrip}
+            >
+              {days.map((d) => {
+                const sel = d.key === activeDay?.key;
+                const open = d.slots.some((s) => s.seats_left > 0);
+                return (
+                  <TouchableOpacity
+                    key={d.key}
+                    activeOpacity={0.8}
+                    onPress={() => onSelectDay(d.key)}
+                    style={[styles.dayPill, sel && styles.dayPillSel]}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: sel }}
+                  >
+                    <Text style={[styles.dayDow, sel && styles.dayTextSel]}>
+                      {d.date.toLocaleDateString("en-US", { weekday: "short" })}
+                    </Text>
+                    <Text style={[styles.dayNum, sel && styles.dayTextSel]}>
+                      {d.date.getDate()}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.daySub,
+                        sel && styles.dayTextSel,
+                        !open && styles.dayFull,
+                      ]}
+                    >
+                      {open ? "" : "Full"}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+            <Text style={styles.sectionTitle}>Choose a time</Text>
+            <View style={styles.slotGrid}>
+              {(activeDay?.slots ?? []).map((slot) => {
+                const sel = slot.id === slotId;
+                const out = slot.seats_left < 1;
+                return (
+                  <TouchableOpacity
+                    key={slot.id}
+                    disabled={out}
+                    onPress={() => {
+                      setSlotId(slot.id);
+                      setPartySize(1);
+                    }}
+                    style={[
+                      styles.slotChip,
+                      sel && styles.slotChipSel,
+                      out && styles.slotChipOut,
+                    ]}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: sel, disabled: out }}
+                  >
+                    <Text
+                      style={[
+                        styles.slotTime,
+                        sel && styles.slotTextSel,
+                        out && styles.slotTextOut,
+                      ]}
+                    >
+                      {formatTime(slot.starts_at)}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.slotSeats,
+                        sel && styles.slotTextSel,
+                        out && styles.slotTextOut,
+                      ]}
+                    >
+                      {out ? "Full" : `${slot.seats_left} left`}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
             <Text style={styles.fieldLabel}>People</Text>
             <View style={styles.stepper}>
               <TouchableOpacity
@@ -338,6 +434,46 @@ const styles = StyleSheet.create({
     color: colors.textDim,
     marginBottom: spacing.md,
   },
+  dayStrip: { gap: spacing.sm, paddingBottom: spacing.md },
+  dayPill: {
+    alignItems: "center",
+    justifyContent: "center",
+    minWidth: 64,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.hairline,
+    borderRadius: 16,
+    backgroundColor: colors.surface,
+  },
+  dayPillSel: { backgroundColor: colors.clay, borderColor: colors.clay },
+  dayDow: { ...typography.caption, color: colors.textDim },
+  dayNum: { ...typography.title, color: colors.text },
+  daySub: { ...typography.caption, color: colors.textFaint, minHeight: 14 },
+  dayTextSel: { color: colors.onAccent },
+  dayFull: { color: colors.textFaint },
+  slotGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  slotChip: {
+    minWidth: "30%",
+    flexGrow: 1,
+    alignItems: "center",
+    paddingVertical: spacing.sm,
+    borderWidth: 1,
+    borderColor: colors.hairline,
+    borderRadius: 12,
+    backgroundColor: colors.surface,
+  },
+  slotChipSel: { backgroundColor: colors.clay, borderColor: colors.clay },
+  slotChipOut: { opacity: 0.45 },
+  slotTime: { ...typography.body, fontWeight: "600", color: colors.text },
+  slotSeats: { ...typography.caption, color: colors.textDim },
+  slotTextSel: { color: colors.onAccent },
+  slotTextOut: { color: colors.textFaint },
   row: { flexDirection: "row", gap: spacing.md },
   half: { flex: 1 },
   fieldLabel: {

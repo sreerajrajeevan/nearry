@@ -1969,7 +1969,26 @@ revoke all on function reserve_place_search(uuid) from public,anon,authenticated
 grant execute on function reserve_place_search(uuid) to service_role;
 
 
--- 00020_core_journeys.sql
+-- 00020_offer_delete.sql
+-- Draft-only hard delete for offers. Drafts with bookings must be cancelled, not deleted.
+
+create or replace function delete_offer(p_offer_id uuid) returns void as $$
+declare o offers;
+begin
+ if auth.uid() is null then raise exception 'not authenticated'; end if;
+ select * into o from offers where id = p_offer_id and business_id = auth.uid() for update;
+ if not found then raise exception 'offer not found or not yours'; end if;
+ if o.status <> 'draft' then raise exception 'only drafts can be deleted'; end if;
+ if exists (select 1 from bookings where offer_id = o.id) then raise exception 'offer has bookings'; end if;
+ delete from offer_slots where offer_id = o.id;
+ delete from offers where id = o.id;
+end;
+$$ language plpgsql security definer set search_path=public;
+revoke all on function delete_offer(uuid) from public, anon;
+grant execute on function delete_offer(uuid) to authenticated;
+
+
+-- 00021_core_journeys.sql
 -- Forward-only core journey fixes. Existing posts, bookings and messages remain intact.
 
 alter table notifications drop constraint if exists notifications_kind_check;
@@ -2085,6 +2104,22 @@ begin
  return json_build_object('booking_id',booking_id,'seats_left',s.capacity-taken-p_party_size);
 end;
 $$ language plpgsql security definer set search_path=public;
+
+-- A narrow delete path for empty posts. Preserve participation and chat history.
+create or replace function delete_post(p_post_id uuid) returns void as $$
+declare p posts;
+begin
+ if auth.uid() is null then raise exception 'not authenticated'; end if;
+ select * into p from posts where id=p_post_id and author_id=auth.uid() for update;
+ if not found then raise exception 'post not found or not yours'; end if;
+ if exists(select 1 from join_requests where post_id=p.id) then
+  raise exception 'This post has requests. Cancel it to retain participation history.';
+ end if;
+ delete from posts where id=p.id;
+end;
+$$ language plpgsql security definer set search_path=public;
+revoke all on function delete_post(uuid) from public,anon;
+grant execute on function delete_post(uuid) to authenticated;
 
 
 

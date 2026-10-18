@@ -1438,3 +1438,55 @@ test("core journey: a booking retry returns its active reservation, and business
   ).rows[0].result;
   assert.notEqual(next.booking_id, first.booking_id);
 });
+
+test("core journey: deletion works only for owned empty posts and draft offers without history", async () => {
+  const owner = await corePersonal(),
+    other = await corePersonal();
+  const make = async () =>
+    (
+      await asUser(owner, (tx) =>
+        tx.query(
+          "insert into posts(author_id,title,description,starts_at,vacancies) values($1,'Empty plan','A friendly plan without any requests',now()+interval '4 hours',2) returning id",
+          [owner],
+        ),
+      )
+    ).rows[0].id;
+  const empty = await make();
+  await assert.rejects(
+    asUser(other, (tx) => tx.query("select delete_post($1)", [empty])),
+    /not yours|not found/,
+  );
+  await assert.rejects(
+    asUser(owner, (tx) => tx.query("delete from posts where id=$1", [empty])),
+    /permission denied/,
+  );
+  await asUser(owner, (tx) => tx.query("select delete_post($1)", [empty]));
+  assert.equal(
+    (await db.query("select id from posts where id=$1", [empty])).rows.length,
+    0,
+  );
+  const withHistory = await make();
+  await request(other, withHistory);
+  await assert.rejects(
+    asUser(owner, (tx) => tx.query("select delete_post($1)", [withHistory])),
+    /has requests/,
+  );
+  const business = await auditBusiness();
+  const draft = (
+    await asUser(business, (tx) =>
+      tx.query(
+        "insert into offers(business_id,title,description,starts_at,ends_at,status) values($1,'Draft deletion','A friendly draft without bookings',now()+interval '4 hours',now()+interval '6 hours','draft') returning id",
+        [business],
+      ),
+    )
+  ).rows[0].id;
+  await assert.rejects(
+    asUser(other, (tx) => tx.query("select delete_offer($1)", [draft])),
+    /not yours|not found/,
+  );
+  await asUser(business, (tx) => tx.query("select delete_offer($1)", [draft]));
+  assert.equal(
+    (await db.query("select id from offers where id=$1", [draft])).rows.length,
+    0,
+  );
+});

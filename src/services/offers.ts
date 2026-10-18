@@ -117,8 +117,8 @@ export async function createDraft(
       businessName: "Your Business",
       title: input.title.trim(),
       description: input.description.trim(),
-      discountPct: input.discountPct,
-      priceCents: input.priceCents,
+      discountPct: input.discountPct ?? undefined,
+      priceCents: input.priceCents ?? undefined,
       startsAt: input.startsAt,
       endsAt: input.endsAt,
       venueId: input.venueId,
@@ -167,19 +167,14 @@ export async function publishOffer(offerId: string): Promise<Offer> {
   return withBusiness(data as Record<string, unknown>);
 }
 
-export type OfferPatch = Omit<
-  Partial<NewOfferInput>,
-  "priceCents" | "discountPct" | "venueId"
-> & {
-  priceCents?: number | null;
-  discountPct?: number | null;
-  venueId?: string | null;
-};
-
 /** Edit a draft (or a live offer's non-status fields). */
+/** Edit a draft (or a live offer's non-status fields). Pass null to clear discount/price. */
 export async function updateOffer(
   offerId: string,
-  input: OfferPatch,
+  input: Omit<Partial<NewOfferInput>, "discountPct" | "priceCents"> & {
+    discountPct?: number | null;
+    priceCents?: number | null;
+  },
 ): Promise<Offer> {
   const dbPatch: Record<string, unknown> = {};
   if (input.title !== undefined) dbPatch.title = input.title.trim();
@@ -216,8 +211,7 @@ export async function updateOffer(
       slotCapacity: input.slotCapacity ?? o.slotCapacity,
       slotMinutes: input.slotMinutes ?? o.slotMinutes,
       resourceKey: input.resourceKey ?? o.resourceKey,
-      venueId:
-        input.venueId === undefined ? o.venueId : (input.venueId ?? undefined),
+      venueId: input.venueId ?? o.venueId,
     });
     return o;
   }
@@ -228,6 +222,23 @@ export async function updateOffer(
   });
   if (error) throw new Error(error.message);
   return withBusiness(data as Record<string, unknown>);
+}
+
+/** Delete a draft offer. Only drafts with no bookings can be deleted. */
+export async function deleteOffer(offerId: string): Promise<void> {
+  if (useMock()) {
+    const i = mockOffers.findIndex((x) => x.id === offerId);
+    if (i < 0) throw new Error("Offer not found.");
+    if (mockOffers[i].status !== "draft")
+      throw new Error("Only drafts can be deleted.");
+    mockOffers.splice(i, 1);
+    return;
+  }
+  const supabase = getSupabase()!;
+  const { error } = await supabase.rpc("delete_offer", {
+    p_offer_id: offerId,
+  });
+  if (error) throw new Error(error.message);
 }
 
 /** End an offer early. Terminal for customers; business keeps history. */

@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Device from "expo-device";
 import * as Notifications from "expo-notifications";
-import { Platform } from "react-native";
+import { AppState, Platform } from "react-native";
 import { getSupabase, isSupabaseConfigured, isDemoMode } from "./supabase";
 import { notifyUnreadChanged } from "./unreadEvents";
 import { multiplexSubscribe } from "./realtime";
@@ -188,7 +188,17 @@ export function subscribeToNotifications(
           table: "notifications",
           filter: `user_id=eq.${userId}`,
         },
-        () => fire(),
+        (payload) => {
+          fire();
+          // One foreground banner per shared channel, never once per mounted badge.
+          if (
+            payload.eventType === "INSERT" &&
+            AppState.currentState === "active"
+          ) {
+            const notice = toAppNotification(payload.new as DbNotification);
+            void presentLocal(notice.title, notice.body);
+          }
+        },
       ),
     onChange,
   );

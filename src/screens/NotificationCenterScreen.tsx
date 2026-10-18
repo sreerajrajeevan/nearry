@@ -10,7 +10,6 @@ import {
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { Screen } from "../components/Screen";
-import { Card } from "../components/Card";
 import { Button } from "../components/Button";
 import { Badge } from "../components/Badge";
 import { EmptyState } from "../components/EmptyState";
@@ -164,20 +163,21 @@ export function NotificationCenterScreen({
           items.map((n) => (
             <TouchableOpacity
               key={n.id}
-              activeOpacity={0.9}
+              activeOpacity={0.7}
               onPress={() => onOpen(n)}
+              style={styles.row}
             >
-              <Card style={[styles.card, !n.read && styles.unreadCard]}>
-                <View style={styles.topRow}>
-                  <Badge label={kindLabel(n.kind)} tone={kindTone(n.kind)} />
-                  {!n.read && <View style={styles.dot} />}
-                </View>
+              <View style={styles.topRow}>
                 <Text style={styles.title}>{n.title}</Text>
-                <Text style={styles.body}>{n.body}</Text>
+                {!n.read && <View style={styles.dot} />}
+              </View>
+              <Text style={styles.body}>{n.body}</Text>
+              <View style={styles.metaRow}>
+                <Badge label={kindLabel(n.kind)} tone={kindTone(n.kind)} />
                 <Text style={styles.time}>
                   {new Date(n.createdAt).toLocaleString()}
                 </Text>
-              </Card>
+              </View>
             </TouchableOpacity>
           ))
         )}
@@ -196,25 +196,34 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   header: { ...typography.title, color: colors.text },
-  markAll: { ...typography.label, color: colors.red },
+  markAll: { ...typography.label, color: colors.accent },
   status: { ...typography.label, color: colors.textDim, marginTop: spacing.xl },
-  card: { marginBottom: spacing.sm },
-  unreadCard: { borderColor: colors.borderStrong },
+  row: {
+    paddingVertical: spacing.lg,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
   topRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    gap: spacing.sm,
   },
-  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.red },
-  title: { ...typography.heading, color: colors.text, marginTop: spacing.sm },
+  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.accent },
+  title: { ...typography.body, color: colors.text, flex: 1 },
   body: {
     ...typography.bodySmall,
     color: colors.textDim,
     marginTop: spacing.xs,
   },
+  metaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+  },
   time: {
     ...typography.caption,
     color: colors.textFaint,
-    marginTop: spacing.sm,
   },
 });

@@ -18,7 +18,12 @@ import { colors, typography, spacing } from "../../theme";
 import { getOrCreateConversation } from "../../services/chat";
 import { PostDetailsProps } from "../../navigation/types";
 import { useAuth } from "../../store/AuthContext";
-import { getPost, cancelPost, subscribeToPosts } from "../../services/posts";
+import {
+  getPost,
+  cancelPost,
+  deletePost,
+  subscribeToPosts,
+} from "../../services/posts";
 import {
   approveRequest,
   cancelParticipation,
@@ -260,6 +265,29 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
                   variant="danger"
                   loading={busy === "cancel"}
                   onPress={onCancelPost}
+                />
+                <Button
+                  title="Delete post"
+                  variant="ghost"
+                  disabled={busy !== null || requests.length > 0}
+                  onPress={() =>
+                    Alert.alert(
+                      "Delete this post?",
+                      "Posts without requests can be permanently deleted. Cancel plans with requests to retain their history.",
+                      [
+                        { text: "Keep it", style: "cancel" },
+                        {
+                          text: "Delete",
+                          style: "destructive",
+                          onPress: () =>
+                            void run("delete", async () => {
+                              await deletePost(postId);
+                              navigation.goBack();
+                            }),
+                        },
+                      ],
+                    )
+                  }
                 />
               </View>
             )}

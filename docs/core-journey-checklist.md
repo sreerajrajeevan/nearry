@@ -13,7 +13,7 @@
 
 ## Database rollout
 
-Apply **only `00020_core_journeys.sql`** to an existing project already at `00019`, after the checks pass and following the existing backup procedure. Never run `run-all.sql` against an existing database. It is an additive migration plus replacements of authorized functions, preserving existing records. The matching app requires `unread_counts()` for badges. No Edge Function changes or mail/push delivery setup are part of this step.
+Apply **only `00021_core_journeys.sql`** to an existing project already at `00020`, after the checks pass and following the existing backup procedure. Never run `run-all.sql` against an existing database. It is an additive migration plus replacements of authorized functions, preserving existing records. The matching app requires `unread_counts()` for badges. No Edge Function changes or mail/push delivery setup are part of this step.
 
 ## Phone checks
 

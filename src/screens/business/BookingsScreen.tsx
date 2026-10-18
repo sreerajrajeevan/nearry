@@ -1,17 +1,17 @@
 import { formatWhen } from "../../utils/format";
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
+  RefreshControl,
   TouchableOpacity,
   Alert,
 } from "react-native";
 import { useLiveQuery } from "../../hooks/useLiveQuery";
 import { bookingState } from "../../utils/flowState";
 import { Screen } from "../../components/Screen";
-import { Card } from "../../components/Card";
 import { Button } from "../../components/Button";
 import { Badge } from "../../components/Badge";
 import { Avatar } from "../../components/Avatar";
@@ -24,7 +24,7 @@ import {
   cancelBooking,
   subscribeToBookings,
 } from "../../services/bookings";
-import { Booking } from "../../services/mappers";
+import { Booking, isHoldExpired, isBookingStale } from "../../services/mappers";
 import { getOrCreateConversation } from "../../services/chat";
 
 const FILTERS = [
@@ -56,6 +56,7 @@ export function BookingsScreen({ navigation }: Props) {
   const {
     data: bookings = [],
     state,
+    refreshing,
     refresh: load,
   } = useLiveQuery(
     `business-bookings:${profile?.id}`,
@@ -108,6 +109,14 @@ export function BookingsScreen({ navigation }: Props) {
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scroll}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={async () => {
+              await load(true);
+            }}
+          />
+        }
       >
         <Text style={styles.header}>Bookings</Text>
         <Text style={styles.caption}>Manage incoming requests</Text>
@@ -153,7 +162,7 @@ export function BookingsScreen({ navigation }: Props) {
           />
         ) : (
           visible.map((b) => (
-            <Card key={b.id} style={styles.card}>
+            <View key={b.id} style={styles.row}>
               <View style={styles.topRow}>
                 <Avatar name={b.customerName} size={36} />
                 <View style={styles.topText}>
@@ -170,43 +179,57 @@ export function BookingsScreen({ navigation }: Props) {
                 {b.partySize === 1 ? "person" : "people"}
               </Text>
               <View style={styles.actions}>
-                <Button
-                  title="Message"
-                  variant="ghost"
-                  loading={busy === `m${b.id}`}
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  disabled={busy === `m${b.id}`}
                   onPress={() => openChat(b)}
-                />
-                <View style={styles.gap} />
-                {bookingState(b).canConfirm && (
-                  <>
-                    <Button
-                      title="Decline"
-                      disabled={busy !== null}
-                      variant="ghost"
-                      loading={busy === `x${b.id}`}
-                      onPress={() => run(`x${b.id}`, () => cancelBooking(b.id))}
-                    />
-                    <View style={styles.gap} />
-                    <Button
-                      title="Confirm"
-                      disabled={busy !== null}
-                      loading={busy === `c${b.id}`}
-                      onPress={() =>
-                        run(`c${b.id}`, () => confirmBooking(b.id))
-                      }
-                    />
-                  </>
-                )}
+                >
+                  <Text style={styles.actionLink}>
+                    {busy === `m${b.id}` ? "…" : "Message"}
+                  </Text>
+                </TouchableOpacity>
+                {b.status === "pending" &&
+                  (isBookingStale(b) ? (
+                    <Text style={styles.expiredNote}>
+                      {isHoldExpired(b)
+                        ? "Hold expired — seats released"
+                        : "Slot passed — no longer confirmable"}
+                    </Text>
+                  ) : (
+                    <>
+                      <TouchableOpacity
+                        activeOpacity={0.7}
+                        disabled={busy === `x${b.id}`}
+                        onPress={() =>
+                          run(`x${b.id}`, () => cancelBooking(b.id))
+                        }
+                      >
+                        <Text style={styles.actionLink}>
+                          {busy === `x${b.id}` ? "…" : "Decline"}
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        activeOpacity={0.7}
+                        disabled={busy === `c${b.id}`}
+                        onPress={() =>
+                          run(`c${b.id}`, () => confirmBooking(b.id))
+                        }
+                      >
+                        <Text style={[styles.actionLink, styles.confirmLink]}>
+                          {busy === `c${b.id}` ? "…" : "Confirm"}
+                        </Text>
+                      </TouchableOpacity>
+                    </>
+                  ))}
                 {b.status === "confirmed" && bookingState(b).canCancel && (
                   <Button
                     title="Cancel booking"
                     variant="danger"
                     disabled={busy !== null}
-                    loading={busy === `x${b.id}`}
                     onPress={() =>
                       Alert.alert(
                         "Cancel this booking?",
-                        "The customer will be notified and the places will become available again.",
+                        "The customer will be notified and the places released.",
                         [
                           { text: "Keep booking", style: "cancel" },
                           {
@@ -221,7 +244,7 @@ export function BookingsScreen({ navigation }: Props) {
                   />
                 )}
               </View>
-            </Card>
+            </View>
           ))
         )}
       </ScrollView>
@@ -254,8 +277,12 @@ const styles = StyleSheet.create({
   },
   chipSelected: { borderBottomColor: colors.accent },
   chipText: { ...typography.caption, color: colors.textDim },
-  chipTextSelected: { color: colors.red },
-  card: { marginBottom: spacing.md },
+  chipTextSelected: { color: colors.accent },
+  row: {
+    paddingVertical: spacing.lg,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
   topRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
   topText: { flex: 1 },
   customer: { ...typography.body, color: colors.text },
@@ -264,8 +291,16 @@ const styles = StyleSheet.create({
   actions: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 4,
-    marginTop: spacing.sm,
+    alignItems: "center",
+    gap: spacing.lg,
+    marginTop: spacing.md,
   },
+  actionLink: { ...typography.bodySmall, color: colors.textDim },
+  confirmLink: { color: colors.accent, fontWeight: "600" },
   gap: { width: spacing.sm },
+  expiredNote: {
+    ...typography.caption,
+    color: colors.textFaint,
+    fontStyle: "italic",
+  },
 });

@@ -37,6 +37,7 @@ export type PersonalStackParamList = {
   VenueDetails: { venueId: string };
   EditPost: { postId: string };
   MyPosts: undefined;
+  EditProfile: undefined;
   OfferDetails: { offerId: string };
   Messages: undefined;
   Conversation: { conversationId: string; title?: string };
@@ -45,11 +46,13 @@ export type PersonalStackParamList = {
 
 export type BusinessStackParamList = {
   BusinessTabs: NavigatorScreenParams<BusinessTabParamList> | undefined;
-  MyOffers: undefined;
-  EditOffer: { offerId: string };
   Conversation: { conversationId: string; title?: string };
   Notifications: undefined;
+  MyOffers: undefined;
+  EditOffer: { offerId: string };
+  EditBusinessProfile: undefined;
 };
+
 export type BusinessTabNav = CompositeNavigationProp<
   BottomTabNavigationProp<BusinessTabParamList>,
   NativeStackNavigationProp<BusinessStackParamList>

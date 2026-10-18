@@ -83,7 +83,10 @@ export async function completeOAuthCallback(
         return data.user.id;
       });
     exchanges.set(code, promise);
-    void promise.catch(() => exchanges.delete(code));
+    void promise.then(
+      () => exchanges.delete(code),
+      () => exchanges.delete(code),
+    );
   }
   try {
     return await exchanges.get(code)!;
