@@ -9,8 +9,9 @@ import {
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { Screen } from "../../components/Screen";
-import { Badge } from "../../components/Badge";
 import { Avatar } from "../../components/Avatar";
+import { PageHeading } from "../../components/PageHeading";
+import { Icon } from "../../components/Icon";
 import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
 import { colors, typography, spacing } from "../../theme";
@@ -91,13 +92,18 @@ export function ChatListScreen({ navigation }: Props) {
         contentContainerStyle={styles.scroll}
       >
         {navigation.canGoBack?.() && (
-          <Button
-            title="← Back"
-            variant="ghost"
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Back"
+            style={styles.back}
             onPress={() => navigation.goBack?.()}
-          />
+          >
+            <Icon name="arrow-left" size={16} />
+            <Text style={styles.backText}>Back</Text>
+          </TouchableOpacity>
         )}
-        <Text style={styles.header}>Messages</Text>
+        <PageHeading compact title="Your conversations" />
+        <Text style={styles.subtitle}>About your plans and bookings</Text>
         {state === "loading" ? (
           <Text style={styles.status}>Loading…</Text>
         ) : state === "error" ? (
@@ -117,6 +123,8 @@ export function ChatListScreen({ navigation }: Props) {
           conversations.map((c) => (
             <TouchableOpacity
               key={c.id}
+              accessibilityRole="button"
+              accessibilityLabel={`${c.otherName}. ${c.contextTitle}${c.unreadCount > 0 ? `. ${c.unreadCount} unread message${c.unreadCount === 1 ? "" : "s"}` : ""}`}
               activeOpacity={0.85}
               onPress={() =>
                 navigation.navigate("Conversation", {
@@ -126,7 +134,7 @@ export function ChatListScreen({ navigation }: Props) {
               }
             >
               <View style={styles.chatRow}>
-                <Avatar name={c.otherName} size={40} />
+                <Avatar name={c.otherName} size={44} tone="clay" />
                 <View style={styles.text}>
                   <View style={styles.topRow}>
                     <Text style={styles.name} numberOfLines={1}>
@@ -142,7 +150,11 @@ export function ChatListScreen({ navigation }: Props) {
                       {c.lastBody ?? "Say hello…"}
                     </Text>
                     {c.unreadCount > 0 && (
-                      <Badge label={String(c.unreadCount)} tone="red" />
+                      <View style={styles.unreadBadge}>
+                        <Text style={styles.unreadText}>
+                          {c.unreadCount > 99 ? "99+" : c.unreadCount}
+                        </Text>
+                      </View>
                     )}
                   </View>
                 </View>
@@ -157,22 +169,29 @@ export function ChatListScreen({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   scroll: { paddingBottom: spacing.xl },
-  header: {
-    ...typography.title,
-    color: colors.text,
-    marginTop: spacing.sm,
-    marginBottom: spacing.md,
+  back: {
+    flexDirection: "row",
+    gap: 5,
+    minHeight: 44,
+    alignItems: "center",
+    alignSelf: "flex-start",
+  },
+  backText: { ...typography.bodySmall, color: colors.textDim },
+  subtitle: {
+    ...typography.bodySmall,
+    color: colors.textDim,
+    marginBottom: spacing.sm,
   },
   status: { ...typography.label, color: colors.textDim, marginTop: spacing.xl },
   chatRow: {
     flexDirection: "row",
-    gap: spacing.md,
+    gap: 12,
     alignItems: "center",
-    paddingVertical: spacing.md,
+    paddingVertical: 20,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
   },
-  text: { flex: 1 },
+  text: { flex: 1, minWidth: 0 },
   topRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -181,7 +200,7 @@ const styles = StyleSheet.create({
   },
   name: { ...typography.heading, color: colors.text, flex: 1 },
   time: { ...typography.caption, color: colors.textFaint },
-  context: { ...typography.caption, color: colors.textDim, marginTop: 2 },
+  context: { ...typography.caption, color: colors.accent, marginTop: 2 },
   bottomRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -190,4 +209,18 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   preview: { ...typography.bodySmall, color: colors.textDim, flex: 1 },
+  unreadBadge: {
+    minWidth: 22,
+    minHeight: 22,
+    paddingHorizontal: 5,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.accent,
+  },
+  unreadText: {
+    ...typography.caption,
+    color: colors.onAccent,
+    fontWeight: "600",
+  },
 });

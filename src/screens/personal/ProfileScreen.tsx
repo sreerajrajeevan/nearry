@@ -8,6 +8,7 @@ import {
   Alert,
 } from "react-native";
 import { Screen } from "../../components/Screen";
+import { PersonalHeader } from "../../components/PersonalHeader";
 import { Avatar } from "../../components/Avatar";
 import { Badge } from "../../components/Badge";
 import { Button } from "../../components/Button";
@@ -36,6 +37,7 @@ export function ProfileScreen({ navigation }: Props) {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scroll}
       >
+        <PersonalHeader />
         {demoMode && <Badge label="Sample personal profile" />}
         <View style={styles.avatar}>
           <Avatar name={profile.displayName || "N"} size={64} />

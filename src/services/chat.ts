@@ -65,7 +65,9 @@ export async function getOrCreateConversation(
 
 /** Chat list with last message + unread counts, newest first. */
 export async function listConversations(): Promise<Conversation[]> {
-  if (useMock()) return mockConversations;
+  // Return snapshots, as the live RPC does, so read/sent mutations refresh lists.
+  if (useMock())
+    return mockConversations.map((conversation) => ({ ...conversation }));
   const supabase = getSupabase()!;
   const { data, error } = await supabase.rpc("list_my_conversations");
   if (error) throw new Error(error.message);

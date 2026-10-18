@@ -19,7 +19,7 @@ import {
 import { usePlaceSuggestions } from "../../hooks/usePlaceSuggestions";
 import { Place, validPlace } from "../../services/places";
 import { Screen } from "../../components/Screen";
-import { BrandHeader } from "../../components/BrandHeader";
+import { PersonalHeader } from "../../components/PersonalHeader";
 import { PageHeading } from "../../components/PageHeading";
 import { FilterTabs } from "../../components/FilterTabs";
 import { IconName } from "../../components/Icon";
@@ -209,7 +209,7 @@ export function NearbyScreen() {
           />
         }
       >
-        <BrandHeader
+        <PersonalHeader
           context={areaLabel}
           location
           onContextPress={() => setEditingLocation((v) => !v)}

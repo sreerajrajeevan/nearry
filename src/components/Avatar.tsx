@@ -5,10 +5,11 @@ import { colors, typography, radius } from "../theme";
 type Props = {
   name: string;
   size?: number;
+  tone?: "neutral" | "clay";
 };
 
 /** Initials avatar — no image dependency for the MVP. */
-export function Avatar({ name, size = 44 }: Props) {
+export function Avatar({ name, size = 44, tone = "neutral" }: Props) {
   const initials = name
     .split(" ")
     .map((p) => p[0])
@@ -19,10 +20,19 @@ export function Avatar({ name, size = 44 }: Props) {
     <View
       style={[
         styles.base,
+        tone === "clay" && styles.clay,
         { width: size, height: size, borderRadius: size / 2 },
       ]}
     >
-      <Text style={[styles.text, { fontSize: size * 0.38 }]}>{initials}</Text>
+      <Text
+        style={[
+          styles.text,
+          tone === "clay" && styles.clayText,
+          { fontSize: size * 0.38 },
+        ]}
+      >
+        {initials}
+      </Text>
     </View>
   );
 }
@@ -34,4 +44,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   text: { fontFamily: "System", fontWeight: "500", color: colors.muted },
+  clay: { backgroundColor: colors.claySoft },
+  clayText: { color: colors.accent },
 });

@@ -15,6 +15,8 @@ import { useFocusEffect } from "@react-navigation/native";
 import { Screen } from "../../components/Screen";
 import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
+import { Avatar } from "../../components/Avatar";
+import { Icon } from "../../components/Icon";
 import { colors, typography, spacing } from "../../theme";
 import { useAuth } from "../../store/AuthContext";
 import {
@@ -147,15 +149,21 @@ export function ConversationScreen({ route, navigation }: Props) {
         keyboardVerticalOffset={8}
       >
         <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel="Back"
           onPress={() => navigation.goBack()}
           activeOpacity={0.7}
           style={styles.back}
         >
-          <Text style={styles.backText}>← BACK</Text>
+          <Icon name="arrow-left" size={16} />
+          <Text style={styles.backText}>Back</Text>
         </TouchableOpacity>
-        <Text style={styles.title} numberOfLines={1}>
-          {title ?? "Conversation"}
-        </Text>
+        <View style={styles.heading}>
+          <Avatar name={title ?? "Conversation"} size={44} tone="clay" />
+          <Text style={styles.title} numberOfLines={1}>
+            {title ?? "Conversation"}
+          </Text>
+        </View>
 
         {state === "loading" ? (
           <Text style={styles.status}>Loading…</Text>
@@ -199,8 +207,9 @@ export function ConversationScreen({ route, navigation }: Props) {
 
         <View style={styles.composer}>
           <TextInput
+            accessibilityLabel="Message"
             style={styles.input}
-            placeholder="Message…"
+            placeholder="Write a message…"
             placeholderTextColor={colors.textFaint}
             value={draft}
             onChangeText={setDraft}
@@ -210,6 +219,12 @@ export function ConversationScreen({ route, navigation }: Props) {
             onSubmitEditing={onSend}
           />
           <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Send message"
+            accessibilityState={{
+              disabled: !draft.trim() || sending,
+              busy: sending,
+            }}
             style={[
               styles.send,
               (!draft.trim() || sending) && styles.sendDisabled,
@@ -218,7 +233,11 @@ export function ConversationScreen({ route, navigation }: Props) {
             onPress={onSend}
             disabled={!draft.trim() || sending}
           >
-            <Text style={styles.sendText}>{sending ? "…" : "↑"}</Text>
+            {sending ? (
+              <Text style={styles.sendText}>…</Text>
+            ) : (
+              <Icon name="arrow-up" size={20} color={colors.onAccent} />
+            )}
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -228,24 +247,39 @@ export function ConversationScreen({ route, navigation }: Props) {
 
 const styles = StyleSheet.create({
   flex: { flex: 1 },
-  back: { marginBottom: spacing.sm, alignSelf: "flex-start" },
+  back: {
+    marginBottom: spacing.sm,
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    minHeight: 44,
+  },
   backText: { ...typography.label, color: colors.textDim },
-  title: { ...typography.title, color: colors.text, marginBottom: spacing.md },
+  heading: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginBottom: spacing.lg,
+  },
+  title: { ...typography.title, color: colors.text, flex: 1 },
   status: { ...typography.label, color: colors.textDim, marginTop: spacing.xl },
   list: { paddingBottom: spacing.md, flexGrow: 1 },
   bubbleRow: { alignItems: "flex-start", marginBottom: spacing.sm },
   bubbleRowMine: { alignItems: "flex-end" },
   bubble: {
     maxWidth: "80%",
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
+    backgroundColor: colors.claySoft,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    borderRadius: 12,
+    borderRadius: 16,
     borderBottomLeftRadius: 3,
   },
-  bubbleMine: { backgroundColor: colors.red, borderColor: colors.red },
+  bubbleMine: {
+    backgroundColor: colors.ink,
+    borderBottomLeftRadius: 16,
+    borderBottomRightRadius: 3,
+  },
   body: { ...typography.body, color: colors.text },
   bodyMine: { color: colors.onAccent },
   time: {
@@ -260,22 +294,23 @@ const styles = StyleSheet.create({
     alignItems: "flex-end",
     gap: spacing.sm,
     paddingTop: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
+    paddingBottom: spacing.sm,
   },
   input: {
     flex: 1,
     ...typography.body,
+    fontSize: 16,
+    minHeight: 48,
     color: colors.text,
     borderWidth: 1,
     borderColor: colors.borderStrong,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     maxHeight: 110,
-    borderRadius: 8,
+    borderRadius: 24,
   },
   send: {
-    borderRadius: 10,
+    borderRadius: 23,
     width: 46,
     height: 46,
     backgroundColor: colors.red,

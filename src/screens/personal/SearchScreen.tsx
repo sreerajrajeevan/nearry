@@ -4,6 +4,7 @@ import { useNavigation } from "@react-navigation/native";
 import { PlaceSuggestions } from "../../components/PlaceSuggestions";
 import { usePlaceSuggestions } from "../../hooks/usePlaceSuggestions";
 import { Screen } from "../../components/Screen";
+import { PersonalHeader } from "../../components/PersonalHeader";
 import { PageHeading } from "../../components/PageHeading";
 import { FilterTabs } from "../../components/FilterTabs";
 import { DiscoverySearch } from "../../components/DiscoverySearch";
@@ -94,6 +95,7 @@ export function SearchScreen() {
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={styles.scroll}
       >
+        <PersonalHeader />
         <PageHeading
           compact
           greeting="Something in mind?"
