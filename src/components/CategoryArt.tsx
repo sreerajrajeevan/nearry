@@ -2,15 +2,17 @@ import React from "react";
 import { Image, View } from "react-native";
 import { DiscoveryCategory } from "../utils/discovery";
 
-const atlas = require("../../assets/discovery/clay-categories.png");
-const positions: Record<DiscoveryCategory, [number, number]> = {
-  Play: [0, 0],
-  Meet: [1, 0],
-  Explore: [0, 1],
-  Unwind: [1, 1],
+const atlas = require("../../assets/discovery/category-scenes.png");
+const atlasSize = 1254;
+// Scene bounds include their transparent gutters; keep neighbouring art out.
+const regions: Record<DiscoveryCategory, [number, number, number, number]> = {
+  Play: [0, 0, 680, 560],
+  Meet: [680, 0, 574, 625],
+  Explore: [0, 560, 660, 694],
+  Unwind: [660, 625, 594, 629],
 };
 
-/** Render a quadrant of the shared art atlas without duplicating image files. */
+/** Fit one scene from the shared atlas without stretching its proportions. */
 export function CategoryArt({
   category,
   size = 88,
@@ -18,25 +20,37 @@ export function CategoryArt({
   category: DiscoveryCategory;
   size?: number;
 }) {
-  const [x, y] = positions[category];
+  const [x, y, width, height] = regions[category];
+  const scale = size / Math.max(width, height);
   return (
     <View
       accessible={false}
       pointerEvents="none"
       style={{ width: size, height: size, overflow: "hidden" }}
     >
-      <Image
-        source={atlas}
-        resizeMode="stretch"
-        fadeDuration={0}
+      <View
         style={{
           position: "absolute",
-          width: size * 2,
-          height: size * 2,
-          left: -x * size,
-          top: -y * size,
+          left: (size - width * scale) / 2,
+          top: (size - height * scale) / 2,
+          width: width * scale,
+          height: height * scale,
+          overflow: "hidden",
         }}
-      />
+      >
+        <Image
+          source={atlas}
+          resizeMode="stretch"
+          fadeDuration={0}
+          style={{
+            position: "absolute",
+            width: atlasSize * scale,
+            height: atlasSize * scale,
+            left: -x * scale,
+            top: -y * scale,
+          }}
+        />
+      </View>
     </View>
   );
 }

@@ -36,7 +36,7 @@ export function CategoryGrid({
           style={[styles.tile, selected === key && styles.selected]}
         >
           <View style={styles.art}>
-            <CategoryArt category={key} size={96} />
+            <CategoryArt category={key} size={112} />
           </View>
           <View style={styles.arrow}>
             <Icon
@@ -57,9 +57,9 @@ const styles = StyleSheet.create({
   tile: {
     flexBasis: "46%",
     flexGrow: 1,
-    minHeight: 154,
+    minHeight: 166,
     padding: 15,
-    paddingTop: 100,
+    paddingTop: 112,
     backgroundColor: colors.onAccent,
     borderWidth: 1,
     borderColor: colors.border,
@@ -67,7 +67,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   selected: { borderColor: colors.accent, backgroundColor: colors.claySoft },
-  art: { position: "absolute", top: 0, right: 14 },
+  art: { position: "absolute", top: 0, right: 8 },
   arrow: { position: "absolute", left: 14, top: 17 },
   label: {
     ...typography.heading,
