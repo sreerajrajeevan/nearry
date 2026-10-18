@@ -160,6 +160,7 @@ export function OfferDetailsScreen({ route, navigation }: Props) {
           title="Couldn't load this offer"
           hint="It may have ended."
         />
+        <Button title="Retry" onPress={() => void load()} />
         <Button
           title="Go back"
           variant="ghost"

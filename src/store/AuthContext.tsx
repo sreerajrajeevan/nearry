@@ -2,6 +2,7 @@ import React, {
   createContext,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -133,6 +134,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           intendedRoleRef.current !== saved.accountType
         ) {
           setRoleMismatch(saved.accountType);
+        } else if (freshLoginRef.current) {
+          setRoleMismatch(null);
         }
         freshLoginRef.current = false;
       }
@@ -260,6 +263,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       version.current.invalidate();
       demoRef.current = false;
+      setRoleMismatch(null);
       setDemo(false);
       setDemoMode(false);
       sessionRef.current = null;
@@ -303,18 +307,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await refreshProfile();
     });
   }
-  const resolved = demoMode
-    ? {
-        ...demoProfile,
-        accountType: demoRole,
-        ...(demoRole === "business"
-          ? { businessName: "Studio Nine", displayName: "Studio Nine" }
-          : {
-              displayName: "Sree",
-              interests: ["Football", "Coffee", "Walks"],
-            }),
-      }
-    : profile;
+  const resolved = useMemo(
+    () =>
+      demoMode
+        ? {
+            ...demoProfile,
+            accountType: demoRole,
+            ...(demoRole === "business"
+              ? { businessName: "Studio Nine", displayName: "Studio Nine" }
+              : {
+                  displayName: "Sree",
+                  interests: ["Football", "Coffee", "Walks"],
+                }),
+          }
+        : profile,
+    [demoMode, demoRole, profile],
+  );
   const accountType = resolved?.accountType ?? null;
   const needsOnboarding =
     !demoMode && !!profile && !profile.onboardingCompleted;
@@ -337,7 +345,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         sendOtp: (email, role, name, signup = true) =>
           action(async () => {
             await remember(role);
-            await sendEmailOtp(email, role, name, signup);
+            try {
+              await sendEmailOtp(email, role, name, signup);
+            } catch (e) {
+              await AsyncStorage.removeItem("nearry.pendingRole");
+              throw e;
+            }
           }),
         verifyOtp: (email, code) =>
           action(async () => {
@@ -346,7 +359,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signInGoogle: (role) =>
           action(async () => {
             await remember(role);
-            await signInWithGoogle(role);
+            try {
+              await signInWithGoogle(role);
+            } catch (e) {
+              await AsyncStorage.removeItem("nearry.pendingRole");
+              throw e;
+            }
           }),
         signOut,
         enterDemoMode,

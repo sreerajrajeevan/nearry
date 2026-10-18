@@ -161,7 +161,10 @@ export function NearbyScreen() {
     (p) => !category || postCategory(p) === category,
   );
   const visibleOffers = offers.filter(
-    (o) => !category || postCategory({ title: o.title, tags: [] }) === category,
+    (o) =>
+      !category ||
+      postCategory({ title: `${o.title} ${o.description}`, tags: [] }) ===
+        category,
   );
   const visibleVenues = venues.filter(
     (v) => !category || venueCategory(v) === category,

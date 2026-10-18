@@ -17,7 +17,7 @@ import { colors, typography, spacing } from "../../theme";
 import { getOrCreateConversation } from "../../services/chat";
 import { PostDetailsProps } from "../../navigation/types";
 import { useAuth } from "../../store/AuthContext";
-import { getPost, cancelPost, subscribeToPosts } from "../../services/posts";
+import { getPost, cancelPost, deletePost, subscribeToPosts } from "../../services/posts";
 import {
   approveRequest,
   cancelParticipation,
@@ -47,9 +47,11 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
   const [errorMsg, setErrorMsg] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    setState("loading");
-    setErrorMsg("");
+  const load = useCallback(async (silent = false) => {
+    if (!silent) {
+      setState("loading");
+      setErrorMsg("");
+    }
     try {
       const p = await getPost(postId);
       if (!p) throw new Error("Post not found.");
@@ -77,7 +79,7 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
       void load();
     }, [load]),
   );
-  useEffect(() => subscribeToPosts(load), [load]);
+  useEffect(() => subscribeToPosts(() => void load(true)), [load]);
 
   const isHost = !!myId && post?.authorId === myId;
   const pending = requests.filter((r) => r.status === "pending");
@@ -278,6 +280,30 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
                     loading={busy === "cancel"}
                     onPress={onCancelPost}
                   />
+                  <View style={styles.gap} />
+                  <Button
+                    title="Delete post"
+                    variant="ghost"
+                    loading={busy === "delete"}
+                    onPress={() =>
+                      Alert.alert(
+                        "Delete this post?",
+                        "It will be permanently removed for everyone. This cannot be undone.",
+                        [
+                          { text: "Keep it", style: "cancel" },
+                          {
+                            text: "Delete",
+                            style: "destructive",
+                            onPress: () =>
+                              run("delete", async () => {
+                                await deletePost(postId);
+                                navigation.goBack();
+                              }),
+                          },
+                        ],
+                      )
+                    }
+                  />
                 </View>
               )}
           </View>
@@ -312,6 +338,13 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
                   loading={busy === "wd"}
                   onPress={() => run("wd", () => withdrawRequest(myRequest.id))}
                 />
+              </>
+            ) : post.status === "cancelled" ? (
+              <>
+                <Badge label="Post cancelled" tone="red" />
+                <Text style={styles.cancelledNote}>
+                  The host cancelled this activity.
+                </Text>
               </>
             ) : (
               <>
@@ -416,5 +449,10 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   hostActions: { marginTop: spacing.lg },
+  cancelledNote: {
+    ...typography.bodySmall,
+    color: colors.textDim,
+    marginTop: spacing.sm,
+  },
   gap: { height: spacing.md },
 });

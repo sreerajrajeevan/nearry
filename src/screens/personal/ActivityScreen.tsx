@@ -27,7 +27,7 @@ import {
   listRequestsForPost,
   withdrawRequest,
 } from "../../services/joinRequests";
-import { NeedPost, JoinRequest, Booking } from "../../services/mappers";
+import { NeedPost, JoinRequest, Booking, isHoldExpired } from "../../services/mappers";
 import {
   listMyBookings,
   cancelBooking,
@@ -52,42 +52,45 @@ export function ActivityScreen() {
   const [state, setState] = useState<"loading" | "error" | "ready">("loading");
   const [busy, setBusy] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    if (!myId) {
-      setState("ready");
-      return;
-    }
-    setState("loading");
-    try {
-      const [myReqs, myPosts, myBookings] = await Promise.all([
-        listMyRequests(myId),
-        listPosts({ authorId: myId, status: "all" }),
-        listMyBookings(myId),
-      ]);
-      setMine(myReqs);
-      setBookings(myBookings);
-      const items: IncomingItem[] = [];
-      for (const post of myPosts) {
-        const reqs = await listRequestsForPost(post.id);
-        if (reqs.length > 0) items.push({ post, requests: reqs });
+  const load = useCallback(
+    async (silent = false) => {
+      if (!myId) {
+        setState("ready");
+        return;
       }
-      setIncoming(items);
-      setState("ready");
-    } catch {
-      setState("error");
-    }
-  }, [myId]);
+      if (!silent) setState("loading");
+      try {
+        const [myReqs, myPosts, myBookings] = await Promise.all([
+          listMyRequests(myId),
+          listPosts({ authorId: myId, status: "all" }),
+          listMyBookings(myId),
+        ]);
+        setMine(myReqs);
+        setBookings(myBookings);
+        const allReqs = await Promise.all(
+          myPosts.map((post) => listRequestsForPost(post.id)),
+        );
+        const items: IncomingItem[] = [];
+        myPosts.forEach((post, i) => {
+          const pending = allReqs[i].filter((r) => r.status === "pending");
+          if (pending.length > 0) items.push({ post, requests: pending });
+        });
+        setIncoming(items);
+        setState("ready");
+      } catch {
+        if (!silent) setState("error");
+      }
+    },
+    [myId],
+  );
 
-  useEffect(() => {
-    load();
-  }, [load]);
   useFocusEffect(
     useCallback(() => {
       void load();
     }, [load]),
   );
-  useEffect(() => subscribeToPosts(() => void load()), [load]);
-  useEffect(() => subscribeToBookings(() => void load()), [load]);
+  useEffect(() => subscribeToPosts(() => void load(true)), [load]);
+  useEffect(() => subscribeToBookings(() => void load(true)), [load]);
 
   const run = async (key: string, fn: () => Promise<void>) => {
     setBusy(key);
@@ -196,9 +199,15 @@ export function ActivityScreen() {
                               title="Approve"
                               loading={busy === `a${r.id}`}
                               onPress={() =>
-                                run(`a${r.id}`, () =>
-                                  approveRequest(r.id).then(() => {}),
-                                )
+                                run(`a${r.id}`, async () => {
+                                  const res = await approveRequest(r.id);
+                                  if (res.postClosed) {
+                                    Alert.alert(
+                                      "Post is now full",
+                                      "All spots are taken.",
+                                    );
+                                  }
+                                })
                               }
                             />
                           </View>
@@ -217,14 +226,21 @@ export function ActivityScreen() {
                     <View style={styles.rowTop}>
                       <Text style={styles.postTitle}>{b.offerTitle}</Text>
                       <Badge
-                        label={b.status.toUpperCase()}
-                        tone={bookingTone(b.status)}
+                        label={
+                          isHoldExpired(b) ? "EXPIRED" : b.status.toUpperCase()
+                        }
+                        tone={isHoldExpired(b) ? "neutral" : bookingTone(b.status)}
                       />
                     </View>
                     <Text style={styles.bookMeta}>
                       {formatWhen(b.slot)} · {b.partySize}{" "}
                       {b.partySize === 1 ? "person" : "people"}
                     </Text>
+                    {isHoldExpired(b) && (
+                      <Text style={styles.expiredNote}>
+                        The confirmation window passed — the hold was released.
+                      </Text>
+                    )}
                     <View style={styles.bookActions}>
                       {b.businessId && (
                         <TouchableOpacity
@@ -236,7 +252,8 @@ export function ActivityScreen() {
                           </Text>
                         </TouchableOpacity>
                       )}
-                      {(b.status === "pending" || b.status === "confirmed") && (
+                      {(b.status === "pending" || b.status === "confirmed") &&
+                        !isHoldExpired(b) && (
                         <TouchableOpacity
                           activeOpacity={0.7}
                           style={styles.cancelWrap}
@@ -374,6 +391,12 @@ const styles = StyleSheet.create({
   bookMeta: {
     ...typography.caption,
     color: colors.textDim,
+    marginTop: spacing.xs,
+  },
+  expiredNote: {
+    ...typography.caption,
+    color: colors.textFaint,
+    fontStyle: "italic",
     marginTop: spacing.xs,
   },
   bookActions: {

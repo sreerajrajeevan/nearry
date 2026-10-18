@@ -17,7 +17,7 @@ import { colors, typography, spacing } from "../../theme";
 import { BusinessStackParamList } from "../../navigation/types";
 import { getOffer, updateOffer, publishOffer } from "../../services/offers";
 import { Offer } from "../../services/mappers";
-import { validateOfferInput } from "../../utils/validation";
+import { validateOfferInput, validateLiveOfferPatch } from "../../utils/validation";
 
 type Props = NativeStackScreenProps<BusinessStackParamList, "EditOffer">;
 
@@ -137,18 +137,27 @@ export function EditOfferScreen({ route, navigation }: Props) {
     const patch: {
       title: string;
       description: string;
-      discountPct?: number;
-      priceCents?: number;
+      discountPct?: number | null;
+      priceCents?: number | null;
       startsAt?: string;
       endsAt?: string;
       slotCapacity?: number;
       slotMinutes?: number;
       resourceKey?: string;
     } = { title: title.trim(), description: description.trim() };
-    patch.discountPct = discount.trim() ? Number(discount.trim()) : undefined;
-    patch.priceCents = price.trim()
-      ? Math.round(Number(price.trim()) * 100)
-      : undefined;
+    // Empty + previously set → null (clear). Empty + never set → skip.
+    const d = discount.trim();
+    patch.discountPct = d
+      ? Number(d)
+      : typeof offer.discountPct === "number"
+        ? null
+        : undefined;
+    const pr = price.trim();
+    patch.priceCents = pr
+      ? Math.round(Number(pr) * 100)
+      : typeof offer.priceCents === "number"
+        ? null
+        : undefined;
     if (!isLive) {
       if (!startsAtDate || !endsAtDate) {
         setFormError("Pick a start and end for the booking window.");
@@ -160,17 +169,24 @@ export function EditOfferScreen({ route, navigation }: Props) {
       patch.slotMinutes = Number(duration) || 60;
       patch.resourceKey = resource.trim() || "Main";
     }
-    const err = validateOfferInput({
-      title: patch.title,
-      description: patch.description,
-      discountPct: patch.discountPct,
-      priceCents: patch.priceCents,
-      startsAt: patch.startsAt ?? offer.startsAt,
-      endsAt: patch.endsAt ?? offer.endsAt,
-      slotCapacity: patch.slotCapacity ?? offer.slotCapacity,
-      slotMinutes: patch.slotMinutes ?? offer.slotMinutes ?? 60,
-      resourceKey: patch.resourceKey ?? offer.resourceKey ?? "Main",
-    });
+    const err = isLive
+      ? validateLiveOfferPatch({
+          title: patch.title,
+          description: patch.description,
+          discountPct: patch.discountPct,
+          priceCents: patch.priceCents,
+        })
+      : validateOfferInput({
+          title: patch.title,
+          description: patch.description,
+          discountPct: patch.discountPct,
+          priceCents: patch.priceCents,
+          startsAt: patch.startsAt ?? offer.startsAt,
+          endsAt: patch.endsAt ?? offer.endsAt,
+          slotCapacity: patch.slotCapacity ?? offer.slotCapacity,
+          slotMinutes: patch.slotMinutes ?? offer.slotMinutes ?? 60,
+          resourceKey: patch.resourceKey ?? offer.resourceKey ?? "Main",
+        });
     if (err) {
       setFormError(err);
       return null;
@@ -188,6 +204,15 @@ export function EditOfferScreen({ route, navigation }: Props) {
     setFormError("");
     const patch = buildPatch();
     if (!patch) return;
+    if (andPublish) {
+      const endsAt = patch.endsAt ?? offer.endsAt;
+      if (new Date(endsAt).getTime() <= Date.now()) {
+        setFormError(
+          "This draft's booking window has passed. Pick new dates before publishing.",
+        );
+        return;
+      }
+    }
     setSaving(true);
     try {
       await updateOffer(offer.id, patch);
