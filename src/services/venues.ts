@@ -79,3 +79,21 @@ export async function getVenue(id: string): Promise<Venue | null> {
   if (error) throw new Error(error.message);
   return data ? toVenue(data as DbVenue) : null;
 }
+
+/** Update a venue's amenities (business owner only, enforced by RLS). */
+export async function updateVenueAmenities(
+  venueId: string,
+  amenities: string[],
+): Promise<void> {
+  if (useMock()) {
+    const v = mockVenues.find((x) => x.id === venueId);
+    if (v) v.amenities = amenities;
+    return;
+  }
+  const supabase = getSupabase()!;
+  const { error } = await supabase
+    .from("venues")
+    .update({ amenities })
+    .eq("id", venueId);
+  if (error) throw new Error(error.message);
+}

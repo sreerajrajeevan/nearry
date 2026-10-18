@@ -75,6 +75,8 @@ export type OfferDraft = {
   slotCapacity: number;
   slotMinutes?: number;
   resourceKey?: string;
+  coverPhotoUrl?: string | null;
+  isSpotlight?: boolean;
 };
 
 /**

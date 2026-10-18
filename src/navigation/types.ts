@@ -51,6 +51,7 @@ export type BusinessStackParamList = {
   MyOffers: undefined;
   EditOffer: { offerId: string };
   EditBusinessProfile: undefined;
+  ManageVenue: undefined;
 };
 
 export type BusinessTabNav = CompositeNavigationProp<

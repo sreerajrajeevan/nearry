@@ -30,6 +30,8 @@ function toDb(
     slot_capacity: input.slotCapacity,
     slot_minutes: input.slotMinutes ?? 60,
     resource_key: input.resourceKey ?? "default",
+    cover_photo_url: input.coverPhotoUrl ?? null,
+    is_spotlight: input.isSpotlight ?? false,
     status,
   };
 }
@@ -125,6 +127,8 @@ export async function createDraft(
       slotCapacity: input.slotCapacity,
       slotMinutes: input.slotMinutes ?? 60,
       resourceKey: input.resourceKey ?? "default",
+      coverPhotoUrl: input.coverPhotoUrl ?? undefined,
+      isSpotlight: input.isSpotlight ?? false,
       status: "draft",
       redemptions: 0,
       createdAt: new Date().toISOString(),
@@ -191,6 +195,9 @@ export async function updateOffer(
     dbPatch.slot_capacity = input.slotCapacity;
   if (input.slotMinutes !== undefined) dbPatch.slot_minutes = input.slotMinutes;
   if (input.resourceKey !== undefined) dbPatch.resource_key = input.resourceKey;
+  if (input.coverPhotoUrl !== undefined)
+    dbPatch.cover_photo_url = input.coverPhotoUrl;
+  if (input.isSpotlight !== undefined) dbPatch.is_spotlight = input.isSpotlight;
 
   if (useMock()) {
     const o = mockOffers.find((x) => x.id === offerId);
@@ -212,6 +219,9 @@ export async function updateOffer(
       slotMinutes: input.slotMinutes ?? o.slotMinutes,
       resourceKey: input.resourceKey ?? o.resourceKey,
       venueId: input.venueId ?? o.venueId,
+      coverPhotoUrl:
+        input.coverPhotoUrl === undefined ? o.coverPhotoUrl : (input.coverPhotoUrl ?? undefined),
+      isSpotlight: input.isSpotlight ?? o.isSpotlight,
     });
     return o;
   }
