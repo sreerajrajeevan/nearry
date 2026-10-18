@@ -8,6 +8,7 @@ import Feather from "@expo/vector-icons/Feather";
 import { AuthProvider } from "./src/store/AuthContext";
 import { RootNavigator } from "./src/navigation/RootNavigator";
 import { colors } from "./src/theme";
+import { MotionProvider } from "./src/store/MotionContext";
 
 const navTheme = {
   ...DefaultTheme,
@@ -27,20 +28,22 @@ export default function App() {
   const [fontsLoaded, fontError] = useFonts(Feather.font);
   return (
     <SafeAreaProvider>
-      <StatusBar style="dark" backgroundColor={colors.background} />
-      <View style={styles.canvas}>
-        <View style={styles.app}>
-          {!fontsLoaded && !fontError ? (
-            <ActivityIndicator style={styles.loading} color={colors.accent} />
-          ) : (
-            <AuthProvider>
-              <NavigationContainer theme={navTheme}>
-                <RootNavigator />
-              </NavigationContainer>
-            </AuthProvider>
-          )}
+      <MotionProvider>
+        <StatusBar style="dark" backgroundColor={colors.background} />
+        <View style={styles.canvas}>
+          <View style={styles.app}>
+            {!fontsLoaded && !fontError ? (
+              <ActivityIndicator style={styles.loading} color={colors.accent} />
+            ) : (
+              <AuthProvider>
+                <NavigationContainer theme={navTheme}>
+                  <RootNavigator />
+                </NavigationContainer>
+              </AuthProvider>
+            )}
+          </View>
         </View>
-      </View>
+      </MotionProvider>
     </SafeAreaProvider>
   );
 }

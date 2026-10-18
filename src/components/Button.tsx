@@ -1,6 +1,5 @@
 import React from "react";
 import {
-  TouchableOpacity,
   Text,
   StyleSheet,
   ActivityIndicator,
@@ -9,6 +8,7 @@ import {
   TextStyle,
 } from "react-native";
 import { colors, typography, spacing, radius } from "../theme";
+import { MotionPressable } from "./Motion";
 
 type Variant = "primary" | "secondary" | "ghost" | "danger";
 
@@ -30,7 +30,7 @@ export function Button({
   style,
 }: Props) {
   return (
-    <TouchableOpacity
+    <MotionPressable
       accessibilityRole="button"
       accessibilityState={{
         disabled: !!(disabled || loading),
@@ -38,7 +38,6 @@ export function Button({
       }}
       onPress={onPress}
       disabled={disabled || loading}
-      activeOpacity={0.85}
       style={[
         styles.base,
         styles[variant],
@@ -60,7 +59,7 @@ export function Button({
           {title}
         </Text>
       )}
-    </TouchableOpacity>
+    </MotionPressable>
   );
 }
 

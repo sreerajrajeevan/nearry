@@ -12,6 +12,7 @@ export function OfferRow({ offer, distanceKm, onPress }: Props) {
   });
   return (
     <DiscoveryCard
+      imageUrl={offer.coverPhotoUrl}
       kind="Offer"
       icon={
         category === "Unwind"

@@ -35,18 +35,19 @@ export function BrandHeader({
   );
   return (
     <View style={styles.header}>
-      <View style={styles.brand} accessibilityLabel="Nearry">
-        <View style={styles.mark}>
-          <View style={styles.tail} />
+      <View style={styles.identity}>
+        <View style={styles.brand} accessibilityLabel="Nearry">
+          <View style={styles.mark}>
+            <View style={styles.tail} />
+          </View>
+          <Text style={styles.wordmark}>nearry</Text>
         </View>
-        <Text style={styles.wordmark}>nearry</Text>
-      </View>
-      <View style={styles.actions}>
         {!!context &&
           (onContextPress ? (
             <TouchableOpacity
               accessibilityRole="button"
               accessibilityLabel={`Change location, ${context}`}
+              hitSlop={4}
               onPress={onContextPress}
               style={styles.contextButton}
               activeOpacity={0.65}
@@ -56,6 +57,8 @@ export function BrandHeader({
           ) : (
             <View style={styles.contextButton}>{contextContent}</View>
           ))}
+      </View>
+      <View style={styles.actions}>
         {onNotificationsPress && (
           <TouchableOpacity
             accessibilityRole="button"
@@ -121,9 +124,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     gap: spacing.sm,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.lg,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.md,
   },
+  identity: { flex: 1, minWidth: 0 },
   brand: {
     flexDirection: "row",
     alignItems: "center",
@@ -131,8 +135,8 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   mark: {
-    width: 21,
-    height: 18,
+    width: 17,
+    height: 15,
     borderRadius: 6,
     borderBottomLeftRadius: 1,
     backgroundColor: colors.accent,
@@ -148,24 +152,21 @@ const styles = StyleSheet.create({
   },
   wordmark: {
     color: colors.text,
-    fontSize: 27,
-    lineHeight: 33,
+    fontSize: 22,
+    lineHeight: 28,
     fontWeight: "600",
-    letterSpacing: -1.5,
+    letterSpacing: -1,
   },
   contextButton: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.xs,
-    minHeight: 44,
+    minHeight: 36,
     flexShrink: 1,
     minWidth: 0,
-    justifyContent: "flex-end",
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 24,
-    paddingHorizontal: 12,
-    backgroundColor: colors.card,
+    justifyContent: "flex-start",
+    alignSelf: "flex-start",
+    maxWidth: "100%",
   },
   actions: {
     flexDirection: "row",
@@ -207,8 +208,8 @@ const styles = StyleSheet.create({
   },
   context: {
     ...typography.caption,
-    fontSize: 12,
-    color: colors.textDim,
+    fontSize: 13,
+    color: colors.text,
     flexShrink: 1,
   },
 });

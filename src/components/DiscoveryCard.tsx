@@ -1,7 +1,8 @@
 import React from "react";
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { View, Text, StyleSheet, Image } from "react-native";
 import { colors, typography, spacing } from "../theme";
 import { Icon, IconName } from "./Icon";
+import { MotionPressable } from "./Motion";
 
 type Props = {
   kind: "Plan" | "Place" | "Offer";
@@ -11,6 +12,7 @@ type Props = {
   detail?: string;
   action: string;
   onPress: () => void;
+  imageUrl?: string;
 };
 
 /** One generous tap target; the text action opens the existing details flow. */
@@ -22,19 +24,27 @@ export function DiscoveryCard({
   detail,
   action,
   onPress,
+  imageUrl,
 }: Props) {
   return (
-    <TouchableOpacity
+    <MotionPressable
       accessibilityRole="button"
       accessibilityLabel={[`${kind}: ${title}`, meta, detail, action]
         .filter(Boolean)
         .join(". ")}
-      activeOpacity={0.7}
       onPress={onPress}
       style={styles.card}
     >
       <View style={styles.thumbnail}>
-        <Icon name={icon} size={27} color={colors.accent} />
+        {imageUrl ? (
+          <Image
+            source={{ uri: imageUrl }}
+            resizeMode="cover"
+            style={styles.photo}
+          />
+        ) : (
+          <Icon name={icon} size={27} color={colors.accent} />
+        )}
       </View>
       <View style={styles.copy}>
         <Text style={styles.kind}>{kind}</Text>
@@ -48,7 +58,7 @@ export function DiscoveryCard({
           </View>
         </View>
       </View>
-    </TouchableOpacity>
+    </MotionPressable>
   );
 }
 
@@ -58,21 +68,23 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 12,
     padding: 12,
-    backgroundColor: colors.card,
+    backgroundColor: colors.onAccent,
     borderColor: colors.border,
     borderWidth: 1,
-    borderRadius: 18,
+    borderRadius: 22,
     marginBottom: 12,
   },
   thumbnail: {
-    width: 56,
-    minHeight: 76,
-    borderRadius: 12,
+    width: 65,
+    minHeight: 86,
+    borderRadius: 15,
+    overflow: "hidden",
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: colors.claySoft,
   },
   copy: { flex: 1, minWidth: 0 },
+  photo: { width: "100%", height: "100%", position: "absolute" },
   kind: {
     ...typography.caption,
     color: colors.accent,

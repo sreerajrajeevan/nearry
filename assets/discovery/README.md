@@ -1,0 +1,9 @@
+# Original Nearry category art
+
+`clay-categories.png` is an original transparent illustration atlas, generated with the built-in image-generation tool. `CategoryArt` renders its four quadrants as Play, Meet, Explore and Unwind. The image is bundled once and reused. It represents categories; it is never labelled as a photograph of a real venue. Actual venue and offer photos continue to use business uploads.
+
+Prompt:
+
+> Use case: stylized-concept. Asset type: one transparent 2-by-2 app category illustration atlas for Nearry, a warm local social app. Create a square canvas with four separate original premium clay-rendered miniature objects, one centered in each exact quadrant on genuinely transparent background. Top-left: a burnt-orange and warm ivory football beside a small rolled court towel (Play). Top-right: two warm ivory ceramic coffee cups, one with burnt-orange saucer, inviting steam (Meet). Bottom-left: a small dark-ink compass with burnt-orange needle beside a folded ivory local map (Explore). Bottom-right: softly folded ivory spa towel with one sculptural olive-neutral leaf and burnt-orange pebble (Unwind). Each vignette has identical scale, friendly soft rounded geometry, subtle tactile ceramic/paper textures, dimensional studio lighting, delicate contact shadows, tasteful high-end mobile app art. Palette strongly limited to warm ivory #FAF9F5, dark ink #252A26, burnt orange #C14D2F, clay blush #F6E8DF, with subdued natural leaf. Four subjects must not touch or cross quadrant boundaries; keep each vignette fully within the middle 65% of its quadrant with broad transparent gutters. Orthographic three-quarter perspective, consistent lighting from upper-left. No people, words, letters, badges, tile backgrounds, interface or watermark. Fresh editorial clay style, no imitation of a particular brand.
+
+The generated Play artwork uses a stylised sports ball, rather than a specific sport's equipment.

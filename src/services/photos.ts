@@ -1,5 +1,5 @@
 import * as ImagePicker from "expo-image-picker";
-import { getSupabase } from "./supabase";
+import { getSupabase, isDemoMode } from "./supabase";
 
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL ?? "";
 
@@ -26,11 +26,26 @@ export const HOME_CATEGORIES = [
   { key: "dining", label: "Dining", hint: "Eat out & save", icon: "coffee" },
   { key: "movies", label: "Movies", hint: "Grab best seats", icon: "film" },
   { key: "events", label: "Events", hint: "Buy tickets", icon: "music" },
-  { key: "stores", label: "Stores", hint: "Shop in-store", icon: "shopping-bag" },
-  { key: "activities", label: "Activities", hint: "Try fun outings", icon: "compass" },
+  {
+    key: "stores",
+    label: "Stores",
+    hint: "Shop in-store",
+    icon: "shopping-bag",
+  },
+  {
+    key: "activities",
+    label: "Activities",
+    hint: "Try fun outings",
+    icon: "compass",
+  },
   { key: "play", label: "Play", hint: "Book courts", icon: "zap" },
   { key: "comedy", label: "Comedy", hint: "Catch stand-ups", icon: "smile" },
-  { key: "salons", label: "Salons", hint: "Book appointment", icon: "scissors" },
+  {
+    key: "salons",
+    label: "Salons",
+    hint: "Book appointment",
+    icon: "scissors",
+  },
 ] as const;
 
 export async function pickPhoto(): Promise<string | null> {
@@ -68,14 +83,17 @@ export async function uploadPhoto(
   } as any);
 
   const path = `${userId}/${folder}/${Date.now()}.jpg`;
-  const response = await fetch(`${SUPABASE_URL}/storage/v1/object/photos/${path}`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${session.access_token}`,
-      "x-upsert": "true",
+  const response = await fetch(
+    `${SUPABASE_URL}/storage/v1/object/photos/${path}`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+        "x-upsert": "true",
+      },
+      body: formData,
     },
-    body: formData,
-  });
+  );
   if (!response.ok) {
     const detail = await response.text().catch(() => "");
     throw new Error(
@@ -91,7 +109,10 @@ async function table(tableName: "venue_photos" | "post_photos") {
 }
 
 export async function listVenuePhotos(venueId: string): Promise<PhotoRef[]> {
-  const { data, error } = await (await table("venue_photos"))
+  if (isDemoMode()) return [];
+  const { data, error } = await (
+    await table("venue_photos")
+  )
     .select("id, photo_url, sort_order")
     .eq("venue_id", venueId)
     .order("sort_order", { ascending: true });
@@ -104,7 +125,9 @@ export async function addVenuePhoto(
   photoUrl: string,
 ): Promise<void> {
   const existing = await listVenuePhotos(venueId);
-  const { error } = await (await table("venue_photos")).insert({
+  const { error } = await (
+    await table("venue_photos")
+  ).insert({
     venue_id: venueId,
     photo_url: photoUrl,
     sort_order: existing.length,
@@ -118,7 +141,9 @@ export async function deleteVenuePhoto(id: string): Promise<void> {
 }
 
 export async function listPostPhotos(postId: string): Promise<PhotoRef[]> {
-  const { data, error } = await (await table("post_photos"))
+  const { data, error } = await (
+    await table("post_photos")
+  )
     .select("id, photo_url, sort_order")
     .eq("post_id", postId)
     .order("sort_order", { ascending: true });
@@ -131,7 +156,9 @@ export async function addPostPhoto(
   photoUrl: string,
 ): Promise<void> {
   const existing = await listPostPhotos(postId);
-  const { error } = await (await table("post_photos")).insert({
+  const { error } = await (
+    await table("post_photos")
+  ).insert({
     post_id: postId,
     photo_url: photoUrl,
     sort_order: existing.length,
@@ -145,8 +172,15 @@ export async function deletePostPhoto(id: string): Promise<void> {
 }
 
 /** Spotlight offers: live, flagged, with a cover photo, newest first. */
-export async function listSpotlightOffers(limit = 10): Promise<
-  { id: string; title: string; cover_photo_url: string | null; business_id: string }[]
+export async function listSpotlightOffers(
+  limit = 10,
+): Promise<
+  {
+    id: string;
+    title: string;
+    cover_photo_url: string | null;
+    business_id: string;
+  }[]
 > {
   const supabase = getSupabase()!;
   const { data, error } = await supabase
