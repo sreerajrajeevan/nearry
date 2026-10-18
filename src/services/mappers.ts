@@ -15,6 +15,7 @@ export type DbProfile = {
   avatar_url: string | null;
   bio: string | null;
   interests: string[] | null;
+  gender?: "male" | "female" | "other" | null;
   business_name: string | null;
   business_details: Record<string, unknown> | null;
   verification_status: "unverified" | "pending" | "verified" | "rejected";
@@ -30,6 +31,7 @@ export type Profile = {
   avatarUrl?: string;
   bio?: string;
   interests: string[];
+  gender?: "male" | "female" | "other";
   businessName?: string;
   businessDetails: Record<string, unknown>;
   verificationStatus: DbProfile["verification_status"];
@@ -46,6 +48,7 @@ export function toProfile(row: DbProfile): Profile {
     avatarUrl: row.avatar_url ?? undefined,
     bio: row.bio ?? undefined,
     interests: row.interests ?? [],
+    gender: row.gender ?? undefined,
     businessName: row.business_name ?? undefined,
     businessDetails: row.business_details ?? {},
     verificationStatus: row.verification_status,
@@ -111,6 +114,7 @@ export type DbPost = {
   vacancies: number;
   cost_cents: number | null;
   tags: string[] | null;
+  gender_preference?: "male" | "female" | "any" | null;
   status: "open" | "closed" | "cancelled";
   created_at: string;
   // Joined aggregates (optional, present when selected):
@@ -135,6 +139,8 @@ export type NeedPost = {
   spotsLeft: number;
   costCents?: number;
   tags: string[];
+  /** Optional host preference for who joins. */
+  genderPreference?: "male" | "female" | "any";
   status: "open" | "closed" | "cancelled";
   createdAt: string;
 };
@@ -156,6 +162,7 @@ export function toNeedPost(row: DbPost): NeedPost {
     spotsLeft: Math.max(0, row.vacancies - joinedCount),
     costCents: row.cost_cents ?? undefined,
     tags: row.tags ?? [],
+    genderPreference: row.gender_preference ?? undefined,
     status: row.status,
     createdAt: row.created_at,
   };
@@ -171,6 +178,7 @@ export type NewPostInput = {
   vacancies: number;
   costCents?: number;
   tags: string[];
+  genderPreference?: "male" | "female" | "any";
 };
 
 export function toDbNewPost(
@@ -188,6 +196,7 @@ export function toDbNewPost(
     vacancies: input.vacancies,
     cost_cents: input.costCents ?? null,
     tags: input.tags,
+    gender_preference: input.genderPreference ?? null,
     status: "open",
   };
 }
@@ -198,7 +207,8 @@ export type DbJoinRequest = {
   id: string;
   post_id: string;
   requester_id: string;
-  status: "pending" | "approved" | "declined" | "withdrawn";
+  status: "pending" | "approved" | "declined" | "withdrawn" | "full";
+  decline_count: number;
   created_at: string;
   requester?: { display_name: string } | null;
 };
@@ -208,7 +218,9 @@ export type JoinRequest = {
   postId: string;
   requesterId: string;
   requesterName: string;
-  status: "pending" | "approved" | "declined" | "withdrawn";
+  status: "pending" | "approved" | "declined" | "withdrawn" | "full";
+  /** Times the host declined this user for this post. At 2, no more requests. */
+  declineCount: number;
   createdAt: string;
 };
 
@@ -219,6 +231,7 @@ export function toJoinRequest(row: DbJoinRequest): JoinRequest {
     requesterId: row.requester_id,
     requesterName: row.requester?.display_name ?? "Someone",
     status: row.status,
+    declineCount: row.decline_count ?? 0,
     createdAt: row.created_at,
   };
 }

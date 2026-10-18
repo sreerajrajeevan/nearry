@@ -278,7 +278,9 @@ export function ActivityScreen() {
                       label={
                         r.postStatus === "cancelled"
                           ? "Plan cancelled"
-                          : r.status.toUpperCase()
+                          : r.status === "full"
+                            ? "Slot full"
+                            : r.status.toUpperCase()
                       }
                       tone={statusTone(r.status)}
                     />

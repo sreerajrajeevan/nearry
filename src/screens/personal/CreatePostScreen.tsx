@@ -88,6 +88,7 @@ export function CreatePostScreen() {
   } | null>(null);
   const [vacancies, setVacancies] = useState(2);
   const [cost, setCost] = useState("");
+  const [genderPref, setGenderPref] = useState<"male" | "female" | "any" | undefined>(undefined);
 
   const [tags, setTags] = useState<string[]>([]);
   const [formError, setFormError] = useState("");
@@ -175,6 +176,7 @@ export function CreatePostScreen() {
         vacancies,
         costCents,
         tags,
+        genderPreference: genderPref,
       });
       setTitle("");
       setDescription("");
@@ -311,6 +313,33 @@ export function CreatePostScreen() {
               </TouchableOpacity>
             </View>
           </View>
+        </View>
+
+        <Text style={styles.fieldLabel}>Who can join (optional)</Text>
+        <View style={styles.chips}>
+          {(
+            [
+              { value: "male", label: "Men" },
+              { value: "female", label: "Women" },
+              { value: "any", label: "Anyone" },
+            ] as const
+          ).map((g) => {
+            const sel = genderPref === g.value;
+            return (
+              <TouchableOpacity
+                key={g.value}
+                activeOpacity={0.7}
+                onPress={() => setGenderPref(sel ? undefined : g.value)}
+                style={[styles.chip, sel && styles.chipSelected]}
+                accessibilityRole="button"
+                accessibilityState={{ selected: sel }}
+              >
+                <Text style={[styles.chipText, sel && styles.chipTextSelected]}>
+                  {g.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
 
         <View style={styles.row}>

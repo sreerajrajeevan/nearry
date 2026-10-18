@@ -194,6 +194,12 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
           </View>
         )}
 
+        {post.genderPreference && post.genderPreference !== "any" && (
+          <Text style={styles.pref}>
+            {post.genderPreference === "male" ? "Men only" : "Women only"}
+          </Text>
+        )}
+
         {isHost ? (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>
@@ -299,6 +305,12 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
                 title="This plan was cancelled"
                 hint="The host cancelled this plan. Find another hello nearby."
               />
+            ) : myRequest?.declineCount !== undefined &&
+              myRequest.declineCount >= 2 ? (
+              <EmptyState
+                title="No more requests"
+                hint="The host passed on your requests for this plan."
+              />
             ) : (!myRequest ||
                 myRequest.status === "declined" ||
                 myRequest.status === "withdrawn") &&
@@ -322,6 +334,8 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
                   run("join", () => requestToJoin(postId, myId).then(() => {}))
                 }
               />
+            ) : myRequest.status === "full" ? (
+              <Badge label="Slot full" tone="neutral" />
             ) : myRequest.status === "pending" ? (
               <>
                 <Badge label="Request pending" tone="neutral" />
@@ -403,6 +417,11 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: spacing.xs,
     marginTop: spacing.md,
+  },
+  pref: {
+    ...typography.label,
+    color: colors.clayDeep,
+    marginTop: spacing.sm,
   },
   section: { marginTop: spacing.xl },
   sectionTitle: {
