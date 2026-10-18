@@ -12,6 +12,7 @@ import { useNavigation } from "@react-navigation/native";
 import { useLiveQuery } from "../../hooks/useLiveQuery";
 import { bookingState, postState } from "../../utils/flowState";
 import { Screen } from "../../components/Screen";
+import { PersonalHeader } from "../../components/PersonalHeader";
 import { Card } from "../../components/Card";
 import { Badge } from "../../components/Badge";
 import { Button } from "../../components/Button";
@@ -140,6 +141,7 @@ export function ActivityScreen() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scroll}
       >
+        <PersonalHeader />
         <Text style={styles.header}>Activity</Text>
         <TouchableOpacity
           accessibilityRole="button"

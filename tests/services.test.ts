@@ -159,6 +159,37 @@ test("a read acknowledgement includes the last displayed message id", async () =
   assert.equal(calls.length, 0);
 });
 
+test("demo inbox snapshots refresh after reads and sends without mutating previous results", async () => {
+  const { setDemoMode } = await import("../src/services/supabase");
+  const { mockConversations, mockMessages } = await import("../src/data/mock");
+  const { getUnreadCounts } = await import("../src/services/unread");
+  const conversation = mockConversations[0];
+  const original = { ...conversation };
+  const originalMessages = mockMessages.length;
+  setDemoMode(true);
+  try {
+    conversation.unreadCount = 2;
+    const before = await chat.listConversations();
+    assert.notEqual(before, mockConversations);
+    assert.notEqual(before[0], conversation);
+    const unreadBefore = await getUnreadCounts();
+    await chat.markConversationRead(conversation.id);
+    const read = await chat.listConversations();
+    assert.equal(read[0].unreadCount, 0);
+    assert.equal(before[0].unreadCount, 2);
+    assert.equal((await getUnreadCounts()).messages, unreadBefore.messages - 2);
+    await chat.sendMessage(conversation.id, "demo-user", "See you at six!");
+    const sent = await chat.listConversations();
+    assert.equal(sent[0].lastBody, "See you at six!");
+    assert.equal(read[0].lastBody, original.lastBody);
+    assert.equal(calls.length, 0);
+  } finally {
+    Object.assign(conversation, original);
+    mockMessages.splice(originalMessages);
+    setDemoMode(false);
+  }
+});
+
 test("demo requests enforce capacity and leaving a full post reopens it", async () => {
   const { setDemoMode } = await import("../src/services/supabase");
   const requests = await import("../src/services/joinRequests");

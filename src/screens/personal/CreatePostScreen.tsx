@@ -11,6 +11,7 @@ import {
 import { useNavigation } from "@react-navigation/native";
 import { PageHeading } from "../../components/PageHeading";
 import { Screen } from "../../components/Screen";
+import { PersonalHeader } from "../../components/PersonalHeader";
 import { Input } from "../../components/Input";
 import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
@@ -202,6 +203,7 @@ export function CreatePostScreen() {
         contentContainerStyle={styles.scroll}
         keyboardShouldPersistTaps="handled"
       >
+        <PersonalHeader />
         <PageHeading
           greeting="Someone nearby might be up for it."
           title={"Start with\na little hello."}

@@ -7,13 +7,18 @@ type Props = {
   context?: string;
   onContextPress?: () => void;
   location?: boolean;
+  onMessagesPress?: () => void;
+  unreadMessages?: number;
 };
 
 export function BrandHeader({
   context,
   onContextPress,
   location = false,
+  onMessagesPress,
+  unreadMessages = 0,
 }: Props) {
+  const unread = Math.max(0, Math.floor(unreadMessages));
   const contextContent = (
     <>
       {location && <Icon name="map-pin" size={13} />}
@@ -31,20 +36,49 @@ export function BrandHeader({
         </View>
         <Text style={styles.wordmark}>nearry</Text>
       </View>
-      {!!context &&
-        (onContextPress ? (
+      <View style={styles.actions}>
+        {!!context &&
+          (onContextPress ? (
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel={`Change location, ${context}`}
+              onPress={onContextPress}
+              style={styles.contextButton}
+              activeOpacity={0.65}
+            >
+              {contextContent}
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.contextButton}>{contextContent}</View>
+          ))}
+        {onMessagesPress && (
           <TouchableOpacity
             accessibilityRole="button"
-            accessibilityLabel={`Change location, ${context}`}
-            onPress={onContextPress}
-            style={styles.contextButton}
-            activeOpacity={0.65}
+            accessibilityLabel={
+              unread > 0
+                ? `Messages, ${unread} unread message${unread === 1 ? "" : "s"}`
+                : "Messages"
+            }
+            accessibilityHint="Open your conversations"
+            onPress={onMessagesPress}
+            activeOpacity={0.7}
+            style={styles.messagesButton}
           >
-            {contextContent}
+            <Icon name="message-circle" size={22} color={colors.text} />
+            {unread > 0 && (
+              <View
+                style={styles.unreadBadge}
+                pointerEvents="none"
+                accessible={false}
+              >
+                <Text style={styles.unreadText}>
+                  {unread > 99 ? "99+" : unread}
+                </Text>
+              </View>
+            )}
           </TouchableOpacity>
-        ) : (
-          <View style={styles.contextButton}>{contextContent}</View>
-        ))}
+        )}
+      </View>
     </View>
   );
 }
@@ -54,7 +88,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: spacing.md,
+    gap: spacing.sm,
     paddingTop: spacing.md,
     paddingBottom: spacing.lg,
   },
@@ -93,12 +127,51 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
     minHeight: 44,
     flexShrink: 1,
+    minWidth: 0,
     justifyContent: "flex-end",
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: 24,
     paddingHorizontal: 12,
     backgroundColor: colors.card,
+  },
+  actions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    flexShrink: 1,
+    minWidth: 0,
+  },
+  messagesButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.card,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  unreadBadge: {
+    position: "absolute",
+    top: -4,
+    right: -4,
+    minWidth: 20,
+    minHeight: 20,
+    paddingHorizontal: 4,
+    borderWidth: 2,
+    borderColor: colors.background,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.accent,
+  },
+  unreadText: {
+    ...typography.caption,
+    lineHeight: 16,
+    color: colors.onAccent,
+    fontWeight: "600",
   },
   context: {
     ...typography.caption,
