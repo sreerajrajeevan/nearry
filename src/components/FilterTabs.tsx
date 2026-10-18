@@ -38,7 +38,7 @@ export function FilterTabs<T extends string>({
               <Icon
                 name={option.icon}
                 size={15}
-                color={active ? colors.accent : colors.textDim}
+                color={active ? colors.onAccent : colors.textDim}
               />
             )}
             <Text style={[styles.label, active && styles.activeLabel]}>
@@ -55,9 +55,7 @@ const styles = StyleSheet.create({
   tabs: {
     flexDirection: "row",
     flexWrap: "wrap",
-    columnGap: spacing.lg,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
+    gap: spacing.sm,
     marginBottom: spacing.lg,
   },
   tab: {
@@ -65,11 +63,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 6,
     minHeight: 48,
-    paddingVertical: 12,
-    borderBottomWidth: 2,
-    borderBottomColor: "transparent",
+    paddingVertical: 10,
+    paddingHorizontal: 13,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 24,
+    backgroundColor: colors.card,
   },
-  active: { borderBottomColor: colors.accent },
+  active: { backgroundColor: colors.accent, borderColor: colors.accent },
   label: { ...typography.bodySmall, color: colors.textDim },
-  activeLabel: { color: colors.accent, fontWeight: "500" },
+  activeLabel: { color: colors.onAccent, fontWeight: "500" },
 });

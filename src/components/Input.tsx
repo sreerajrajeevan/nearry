@@ -7,7 +7,7 @@ import {
   TextInputProps,
   ViewStyle,
 } from "react-native";
-import { colors, typography, spacing, radius } from "../theme";
+import { colors, typography, spacing } from "../theme";
 
 type Props = TextInputProps & {
   label?: string;
@@ -43,7 +43,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: radius.sm,
+    borderRadius: 14,
     paddingHorizontal: spacing.md,
     color: colors.text,
     fontSize: 16,

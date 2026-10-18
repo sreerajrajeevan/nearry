@@ -3,7 +3,6 @@ import {
   View,
   Text,
   ScrollView,
-  TouchableOpacity,
   RefreshControl,
   StyleSheet,
 } from "react-native";
@@ -23,19 +22,20 @@ import { Screen } from "../../components/Screen";
 import { BrandHeader } from "../../components/BrandHeader";
 import { PageHeading } from "../../components/PageHeading";
 import { FilterTabs } from "../../components/FilterTabs";
-import { Icon, IconName } from "../../components/Icon";
+import { IconName } from "../../components/Icon";
 import { Input } from "../../components/Input";
 import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
 import { PostRow } from "../../components/PostRow";
 import { OfferRow } from "../../components/OfferRow";
+import { VenueRow } from "../../components/VenueRow";
+import { DiscoverySearch } from "../../components/DiscoverySearch";
 import { colors, typography, spacing } from "../../theme";
 import { listPosts, subscribeToPosts } from "../../services/posts";
 import { listLiveOffers, subscribeToOffers } from "../../services/offers";
 import { getCurrentPosition, LatLng } from "../../services/location";
 import { nearbyVenues, listVenues } from "../../services/venues";
 import { NeedPost, Venue, Offer } from "../../services/mappers";
-import { formatDistance } from "../../utils/format";
 import {
   DiscoveryCategory,
   postCategory,
@@ -44,12 +44,16 @@ import {
 import { useAuth } from "../../store/AuthContext";
 import { PersonalTabNav, PersonalTabParamList } from "../../navigation/types";
 
-const categories: { key: DiscoveryCategory; label: string; icon: IconName }[] =
-  [
-    { key: "Play", label: "Play", icon: "dribbble" },
-    { key: "Meet", label: "Meet", icon: "coffee" },
-    { key: "Explore", label: "Explore", icon: "compass" },
-  ];
+const categories: {
+  key: DiscoveryCategory | "All";
+  label: string;
+  icon: IconName;
+}[] = [
+  { key: "All", label: "All", icon: "grid" },
+  { key: "Play", label: "Play", icon: "dribbble" },
+  { key: "Meet", label: "Meet", icon: "users" },
+  { key: "Unwind", label: "Unwind", icon: "sun" },
+];
 
 export function NearbyScreen() {
   const navigation = useNavigation<PersonalTabNav>();
@@ -186,7 +190,9 @@ export function NearbyScreen() {
         ? "Good company nearby"
         : category === "Explore"
           ? "A little discovery nearby"
-          : "A few hellos nearby";
+          : category === "Unwind"
+            ? "A little time for yourself"
+            : "Nearby for you";
 
   return (
     <Screen>
@@ -250,13 +256,15 @@ export function NearbyScreen() {
         )}
         {selectedPlace && <PlaceAttributions places={[selectedPlace]} />}
         <PageHeading
+          compact
           greeting={`Hello, ${firstName}.`}
-          title={"What are\nyou up for?"}
+          title={"What are you\nup for?"}
         />
+        <DiscoverySearch onPress={() => navigation.navigate("Search")} />
         <FilterTabs
           options={categories}
-          selected={category}
-          onSelect={(key) => setCategory(category === key ? null : key)}
+          selected={category || "All"}
+          onSelect={(key) => setCategory(key === "All" ? null : key)}
           label="Choose an interest"
         />
         {state === "loading" && posts.length === 0 && offers.length === 0 ? (
@@ -307,9 +315,6 @@ export function NearbyScreen() {
             ))}
             {visibleOffers.length > 0 && (
               <>
-                <Text style={styles.sectionHeading}>
-                  A little time for yourself
-                </Text>
                 {visibleOffers.map((offer) => (
                   <OfferRow
                     key={offer.id}
@@ -343,35 +348,13 @@ export function NearbyScreen() {
                   Around the neighbourhood
                 </Text>
                 {visibleVenues.slice(0, 8).map((venue) => (
-                  <TouchableOpacity
-                    accessibilityRole="button"
+                  <VenueRow
                     key={venue.id}
-                    style={styles.venueRow}
-                    activeOpacity={0.65}
+                    venue={venue}
                     onPress={() =>
                       navigation.navigate("VenueDetails", { venueId: venue.id })
                     }
-                  >
-                    <View style={styles.flex}>
-                      <Text style={styles.venueName}>{venue.name}</Text>
-                      <Text style={styles.venueMeta}>
-                        {[
-                          venue.category,
-                          venue.area,
-                          venue.distanceKm == null
-                            ? null
-                            : formatDistance(venue.distanceKm),
-                        ]
-                          .filter(Boolean)
-                          .join(" · ")}
-                      </Text>
-                    </View>
-                    <Icon
-                      name="arrow-up-right"
-                      size={17}
-                      color={colors.accent}
-                    />
-                  </TouchableOpacity>
+                  />
                 ))}
               </>
             )}
@@ -383,7 +366,6 @@ export function NearbyScreen() {
 }
 const styles = StyleSheet.create({
   scroll: { paddingBottom: spacing.xl },
-  flex: { flex: 1 },
   locationEditor: { paddingBottom: spacing.md },
   locationActions: { flexDirection: "row", gap: spacing.sm, flexWrap: "wrap" },
   error: {
@@ -401,8 +383,9 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     gap: spacing.sm,
+    marginBottom: spacing.md,
   },
-  sectionTitle: { ...typography.bodySmall, color: colors.text, flex: 1 },
+  sectionTitle: { ...typography.heading, color: colors.text, flex: 1 },
   sectionMeta: {
     ...typography.caption,
     color: colors.textDim,
@@ -410,22 +393,9 @@ const styles = StyleSheet.create({
     textAlign: "right",
   },
   sectionHeading: {
-    ...typography.bodySmall,
-    color: colors.textDim,
+    ...typography.heading,
+    color: colors.text,
     marginTop: spacing.lg,
-  },
-  venueRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    paddingVertical: spacing.lg,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
-  venueName: { ...typography.body, color: colors.text },
-  venueMeta: {
-    ...typography.caption,
-    color: colors.textDim,
-    marginTop: spacing.xs,
+    marginBottom: spacing.md,
   },
 });
