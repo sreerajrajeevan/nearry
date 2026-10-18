@@ -137,7 +137,10 @@ export function CreateOfferScreen({ navigation }: Props) {
     setSaving(true);
     try {
       await createDraft(profile.id, input);
-      Alert.alert("Draft saved", "Publish it from the dashboard when ready.");
+      Alert.alert(
+        "Draft saved",
+        "Find it under Business → My offers to publish when ready.",
+      );
       navigation.navigate("Dashboard");
     } catch (e) {
       Alert.alert(

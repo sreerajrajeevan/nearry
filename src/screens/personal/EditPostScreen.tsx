@@ -17,6 +17,7 @@ import { EditPostProps } from "../../navigation/types";
 import { getPost, updatePost } from "../../services/posts";
 import { NeedPost } from "../../services/mappers";
 import { validatePostDraft } from "../../utils/validation";
+import { useAuth } from "../../store/AuthContext";
 
 const TAG_OPTIONS = [
   "sports",
@@ -46,6 +47,7 @@ function toTimeInput(iso: string): string {
  */
 export function EditPostScreen({ route, navigation }: EditPostProps) {
   const { postId } = route.params;
+  const { profile } = useAuth();
   const [post, setPost] = useState<NeedPost | null>(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -88,6 +90,21 @@ export function EditPostScreen({ route, navigation }: EditPostProps) {
         <EmptyState
           title="Couldn't load this post"
           hint="It may have been removed."
+        />
+        <Button
+          title="Go back"
+          variant="ghost"
+          onPress={() => navigation.goBack()}
+        />
+      </Screen>
+    );
+  }
+  if (profile && post.authorId !== profile.id) {
+    return (
+      <Screen padded>
+        <EmptyState
+          title="Not your post"
+          hint="Only the host can edit this."
         />
         <Button
           title="Go back"

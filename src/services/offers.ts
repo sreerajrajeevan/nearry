@@ -117,8 +117,8 @@ export async function createDraft(
       businessName: "Your Business",
       title: input.title.trim(),
       description: input.description.trim(),
-      discountPct: input.discountPct,
-      priceCents: input.priceCents,
+      discountPct: input.discountPct ?? undefined,
+      priceCents: input.priceCents ?? undefined,
       startsAt: input.startsAt,
       endsAt: input.endsAt,
       venueId: input.venueId,
@@ -134,13 +134,15 @@ export async function createDraft(
   }
   const supabase = getSupabase()!;
   // One draft per title: reuse an existing draft instead of duplicating it
-  // (e.g. after a failed publish attempt).
+  // (e.g. after a failed publish attempt). Escape LIKE wildcards so a title
+  // containing % or _ can't false-match an unrelated draft.
+  const escaped = input.title.trim().replace(/[%_\\]/g, (c) => `\\${c}`);
   const { data: existing } = await supabase
     .from("offers")
     .select("id")
     .eq("business_id", businessId)
     .eq("status", "draft")
-    .ilike("title", input.title.trim())
+    .ilike("title", escaped)
     .limit(1)
     .maybeSingle();
   if (existing) return updateOffer(existing.id as string, input);
@@ -179,9 +181,13 @@ export async function publishOffer(offerId: string): Promise<Offer> {
 }
 
 /** Edit a draft (or a live offer's non-status fields). */
+/** Edit a draft (or a live offer's non-status fields). Pass null to clear discount/price. */
 export async function updateOffer(
   offerId: string,
-  input: Partial<NewOfferInput>,
+  input: Omit<Partial<NewOfferInput>, "discountPct" | "priceCents"> & {
+    discountPct?: number | null;
+    priceCents?: number | null;
+  },
 ): Promise<Offer> {
   const dbPatch: Record<string, unknown> = {};
   if (input.title !== undefined) dbPatch.title = input.title.trim();
@@ -205,8 +211,10 @@ export async function updateOffer(
     Object.assign(o, {
       title: input.title?.trim() ?? o.title,
       description: input.description?.trim() ?? o.description,
-      discountPct: input.discountPct ?? o.discountPct,
-      priceCents: input.priceCents ?? o.priceCents,
+      discountPct:
+        input.discountPct === undefined ? o.discountPct : (input.discountPct ?? undefined),
+      priceCents:
+        input.priceCents === undefined ? o.priceCents : (input.priceCents ?? undefined),
       startsAt: input.startsAt ?? o.startsAt,
       endsAt: input.endsAt ?? o.endsAt,
       slotCapacity: input.slotCapacity ?? o.slotCapacity,

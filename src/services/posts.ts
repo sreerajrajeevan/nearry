@@ -254,6 +254,19 @@ export async function cancelPost(postId: string): Promise<void> {
   if (error) throw new Error(error.message);
 }
 
+/** Permanently delete a post. Join requests cascade. */
+export async function deletePost(postId: string): Promise<void> {
+  if (useMock()) {
+    const i = mockPosts.findIndex((x) => x.id === postId);
+    if (i < 0) throw new Error("Post not found.");
+    mockPosts.splice(i, 1);
+    return;
+  }
+  const supabase = getSupabase()!;
+  const { error } = await supabase.from("posts").delete().eq("id", postId);
+  if (error) throw new Error(error.message);
+}
+
 /**
  * Realtime subscription for a post list or single post. Returns unsubscribe.
  * No-op in demo mode.

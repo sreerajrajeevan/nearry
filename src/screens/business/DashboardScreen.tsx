@@ -24,7 +24,7 @@ import {
   subscribeToBookings,
   confirmBooking,
 } from "../../services/bookings";
-import { Offer, Booking, isHoldExpired } from "../../services/mappers";
+import { Offer, Booking, isHoldExpired, isBookingStale } from "../../services/mappers";
 import { formatTime } from "../../utils/format";
 import { businessDay } from "../../utils/businessDay";
 
@@ -38,6 +38,7 @@ export function DashboardScreen({ navigation }: Props) {
   const [state, setState] = useState<"loading" | "ready" | "error">("loading");
   const [refreshing, setRefreshing] = useState(false);
   const [confirming, setConfirming] = useState<string | null>(null);
+  const [now, setNow] = useState(() => new Date());
   const request = useRef(0);
   const load = useCallback(async () => {
     if (!profile) return;
@@ -64,7 +65,11 @@ export function DashboardScreen({ navigation }: Props) {
     }, [load]),
   );
   useEffect(() => subscribeToBookings(() => void load()), [load]);
-  const { today, liveOffers, drafts } = businessDay(bookings, offers);
+  useEffect(() => {
+    const t = setInterval(() => setNow(new Date()), 30000);
+    return () => clearInterval(t);
+  }, []);
+  const { today, liveOffers, drafts } = businessDay(bookings, offers, now);
   const name = profile?.businessName || profile?.displayName || "your business";
   const verified = profile?.verificationStatus === "verified";
   const onConfirm = async (id: string) => {
@@ -194,8 +199,10 @@ export function DashboardScreen({ navigation }: Props) {
                   </View>
                   {booking.status === "confirmed" ? (
                     <Text style={styles.confirmed}>Confirmed</Text>
-                  ) : isHoldExpired(booking) ? (
-                    <Text style={styles.expired}>Expired</Text>
+                  ) : isBookingStale(booking, now) ? (
+                    <Text style={styles.expired}>
+                      {isHoldExpired(booking, now) ? "Expired" : "Missed"}
+                    </Text>
                   ) : (
                     <TouchableOpacity
                       accessibilityRole="button"

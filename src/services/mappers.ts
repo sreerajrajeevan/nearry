@@ -345,6 +345,17 @@ export function isHoldExpired(b: Booking, now = new Date()): boolean {
   );
 }
 
+/**
+ * True when a booking can no longer be confirmed: hold lapsed or slot passed.
+ * Mirrors the server-side change_booking_status guard.
+ */
+export function isBookingStale(b: Booking, now = new Date()): boolean {
+  if (b.status !== "pending") return false;
+  return (
+    isHoldExpired(b, now) || new Date(b.slot).getTime() <= now.getTime()
+  );
+}
+
 // ── Chat ──────────────────────────────────────────────────
 
 export type Conversation = {
