@@ -9,6 +9,8 @@ type Props = {
   location?: boolean;
   onMessagesPress?: () => void;
   unreadMessages?: number;
+  onNotificationsPress?: () => void;
+  unreadNotifications?: number;
 };
 
 export function BrandHeader({
@@ -17,8 +19,11 @@ export function BrandHeader({
   location = false,
   onMessagesPress,
   unreadMessages = 0,
+  onNotificationsPress,
+  unreadNotifications = 0,
 }: Props) {
   const unread = Math.max(0, Math.floor(unreadMessages));
+  const unreadNotifs = Math.max(0, Math.floor(unreadNotifications));
   const contextContent = (
     <>
       {location && <Icon name="map-pin" size={13} />}
@@ -51,6 +56,33 @@ export function BrandHeader({
           ) : (
             <View style={styles.contextButton}>{contextContent}</View>
           ))}
+        {onNotificationsPress && (
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel={
+              unreadNotifs > 0
+                ? `Notifications, ${unreadNotifs} unread`
+                : "Notifications"
+            }
+            accessibilityHint="Open your notifications"
+            onPress={onNotificationsPress}
+            activeOpacity={0.7}
+            style={styles.messagesButton}
+          >
+            <Icon name="bell" size={22} color={colors.text} />
+            {unreadNotifs > 0 && (
+              <View
+                style={styles.unreadBadge}
+                pointerEvents="none"
+                accessible={false}
+              >
+                <Text style={styles.unreadText}>
+                  {unreadNotifs > 99 ? "99+" : unreadNotifs}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        )}
         {onMessagesPress && (
           <TouchableOpacity
             accessibilityRole="button"
