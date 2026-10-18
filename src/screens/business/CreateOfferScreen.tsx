@@ -7,6 +7,7 @@ import {
   ScrollView,
   Alert,
   TouchableOpacity,
+  Image,
 } from "react-native";
 import { PageHeading } from "../../components/PageHeading";
 import { Screen } from "../../components/Screen";
@@ -23,6 +24,7 @@ import {
   NewOfferInput,
 } from "../../services/offers";
 import { validateOfferInput } from "../../utils/validation";
+import { pickPhoto, uploadPhoto } from "../../services/photos";
 import { BusinessTabParamList } from "../../navigation/types";
 
 type Props = {
@@ -85,6 +87,9 @@ export function CreateOfferScreen({ navigation }: Props) {
   const [capacity, setCapacity] = useState("10");
   const [duration, setDuration] = useState("60");
   const [resource, setResource] = useState("Main");
+  const [coverPhotoUrl, setCoverPhotoUrl] = useState<string | null>(null);
+  const [isSpotlight, setIsSpotlight] = useState(false);
+  const [uploadingCover, setUploadingCover] = useState(false);
   const [formError, setFormError] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -126,6 +131,8 @@ export function CreateOfferScreen({ navigation }: Props) {
       slotCapacity: Number(capacity),
       slotMinutes: Number(duration),
       resourceKey: resource.trim(),
+      coverPhotoUrl,
+      isSpotlight,
     };
     const err = validateOfferInput(input);
     if (err) {
@@ -215,6 +222,53 @@ export function CreateOfferScreen({ navigation }: Props) {
           numberOfLines={4}
           style={styles.multiline}
         />
+        <Text style={styles.label}>Cover photo</Text>
+        <TouchableOpacity
+          onPress={async () => {
+            try {
+              const uri = await pickPhoto();
+              if (!uri) return;
+              setUploadingCover(true);
+              const url = await uploadPhoto(profile.id, uri, "offers");
+              setCoverPhotoUrl(url);
+            } catch (e) {
+              Alert.alert(
+                "Could not upload",
+                e instanceof Error ? e.message : "Try again.",
+              );
+            } finally {
+              setUploadingCover(false);
+            }
+          }}
+          style={styles.coverPicker}
+          disabled={uploadingCover}
+        >
+          {coverPhotoUrl ? (
+            <Image source={{ uri: coverPhotoUrl }} style={styles.coverPreview} />
+          ) : (
+            <Text style={styles.coverPlaceholder}>
+              {uploadingCover ? "Uploading…" : "+ Add cover photo"}
+            </Text>
+          )}
+        </TouchableOpacity>
+        {coverPhotoUrl && (
+          <TouchableOpacity onPress={() => setCoverPhotoUrl(null)}>
+            <Text style={styles.removeCover}>Remove photo</Text>
+          </TouchableOpacity>
+        )}
+        <TouchableOpacity
+          onPress={() => setIsSpotlight(!isSpotlight)}
+          style={styles.spotlightRow}
+        >
+          <View
+            style={[styles.checkbox, isSpotlight && styles.checkboxActive]}
+          >
+            {isSpotlight && <Text style={styles.checkmark}>✓</Text>}
+          </View>
+          <Text style={styles.spotlightLabel}>
+            Feature in Spotlight on the home page
+          </Text>
+        </TouchableOpacity>
         <View style={styles.row}>
           <View style={styles.half}>
             <Input
@@ -339,6 +393,43 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
   },
   multiline: { height: 110, textAlignVertical: "top", paddingTop: spacing.md },
+  label: { ...typography.label, color: colors.text, marginBottom: spacing.sm },
+  coverPicker: {
+    height: 160,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderStyle: "dashed",
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+    marginBottom: spacing.sm,
+  },
+  coverPreview: { width: "100%", height: "100%" },
+  coverPlaceholder: { ...typography.label, color: colors.accent },
+  removeCover: {
+    ...typography.caption,
+    color: colors.textDim,
+    marginBottom: spacing.md,
+  },
+  spotlightRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginVertical: spacing.md,
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  checkboxActive: { backgroundColor: colors.accent, borderColor: colors.accent },
+  checkmark: { color: "#fff", fontSize: 14, lineHeight: 18 },
+  spotlightLabel: { ...typography.body, color: colors.text, flex: 1 },
   row: { flexDirection: "row", gap: spacing.md },
   half: { flex: 1 },
   fieldLabel: {

@@ -69,6 +69,7 @@ export type DbVenue = {
   location: unknown;
   rating: number | null;
   open_now: boolean | null;
+  amenities: string[];
   created_at: string;
 };
 
@@ -80,6 +81,7 @@ export type Venue = {
   area: string;
   rating: number;
   openNow: boolean;
+  amenities: string[];
   createdAt: string;
   /** Populated by nearby search / mock data only. */
   distanceKm?: number;
@@ -96,6 +98,7 @@ export function toVenue(row: DbVenue): Venue {
     area: row.area,
     rating: Number(row.rating ?? 0),
     openNow: row.open_now ?? true,
+    amenities: row.amenities ?? [],
     createdAt: row.created_at,
   };
 }
@@ -254,6 +257,8 @@ export type DbOffer = {
   max_redemptions: number | null;
   redemptions: number;
   status: "draft" | "live" | "ended" | "cancelled";
+  cover_photo_url: string | null;
+  is_spotlight: boolean;
   created_at: string;
   business?: { display_name: string } | null;
 };
@@ -275,6 +280,8 @@ export type Offer = {
   maxRedemptions?: number;
   redemptions: number;
   status: "draft" | "live" | "ended" | "cancelled";
+  coverPhotoUrl?: string;
+  isSpotlight: boolean;
   createdAt: string;
 };
 
@@ -296,6 +303,8 @@ export function toOffer(row: DbOffer): Offer {
     maxRedemptions: row.max_redemptions ?? undefined,
     redemptions: row.redemptions,
     status: row.status,
+    coverPhotoUrl: row.cover_photo_url ?? undefined,
+    isSpotlight: row.is_spotlight ?? false,
     createdAt: row.created_at,
   };
 }

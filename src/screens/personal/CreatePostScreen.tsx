@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Alert,
   StyleSheet,
+  Image,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { PageHeading } from "../../components/PageHeading";
@@ -22,6 +23,11 @@ import { createPost } from "../../services/posts";
 import { searchVenues } from "../../services/venues";
 import { Venue } from "../../services/mappers";
 import { validatePostDraft } from "../../utils/validation";
+import {
+  pickPhoto,
+  uploadPhoto,
+  addPostPhoto,
+} from "../../services/photos";
 
 const TAG_OPTIONS = [
   "sports",
@@ -89,6 +95,7 @@ export function CreatePostScreen() {
   const [vacancies, setVacancies] = useState(2);
   const [cost, setCost] = useState("");
   const [genderPref, setGenderPref] = useState<"male" | "female" | "any" | undefined>(undefined);
+  const [photoUris, setPhotoUris] = useState<string[]>([]);
 
   const [tags, setTags] = useState<string[]>([]);
   const [formError, setFormError] = useState("");
@@ -178,6 +185,16 @@ export function CreatePostScreen() {
         tags,
         genderPreference: genderPref,
       });
+      // Upload attached photos.
+      const authorId = profile?.id ?? "demo-user";
+      for (const uri of photoUris) {
+        try {
+          const url = await uploadPhoto(authorId, uri, "posts");
+          await addPostPhoto(post.id, url);
+        } catch {
+          /* photo failed — post itself is saved */
+        }
+      }
       setTitle("");
       setDescription("");
       setVenue(null);
@@ -281,6 +298,40 @@ export function CreatePostScreen() {
             placeholder="Pick time"
             onPress={() => setPicker({ field: "startsAt", mode: "time" })}
           />
+        </View>
+
+        <Text style={styles.fieldLabel}>Photos (optional)</Text>
+        <View style={styles.photoRow}>
+          {photoUris.map((uri) => (
+            <View key={uri} style={styles.photoWrap}>
+              <Image source={{ uri }} style={styles.thumb} />
+              <TouchableOpacity
+                onPress={() =>
+                  setPhotoUris((prev) => prev.filter((u) => u !== uri))
+                }
+                style={styles.thumbDelete}
+                hitSlop={8}
+              >
+                <Text style={styles.thumbDeleteText}>×</Text>
+              </TouchableOpacity>
+            </View>
+          ))}
+          <TouchableOpacity
+            onPress={async () => {
+              try {
+                const uri = await pickPhoto();
+                if (uri) setPhotoUris((prev) => [...prev, uri]);
+              } catch (e) {
+                Alert.alert(
+                  "Could not pick photo",
+                  e instanceof Error ? e.message : "Try again.",
+                );
+              }
+            }}
+            style={styles.addThumb}
+          >
+            <Text style={styles.addThumbText}>+ Add</Text>
+          </TouchableOpacity>
         </View>
 
         <View style={styles.row}>
@@ -438,6 +489,37 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
     marginTop: spacing.sm,
   },
+  photoRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
+  },
+  photoWrap: { position: "relative" },
+  thumb: { width: 80, height: 80, borderRadius: 8 },
+  thumbDelete: {
+    position: "absolute",
+    top: 2,
+    right: 2,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  thumbDeleteText: { color: "#fff", fontSize: 14, lineHeight: 18 },
+  addThumb: {
+    width: 80,
+    height: 80,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderStyle: "dashed",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  addThumbText: { ...typography.label, color: colors.accent },
   row: { flexDirection: "row", gap: 12, alignItems: "flex-start" },
   half: { flex: 1 },
   venuePick: {

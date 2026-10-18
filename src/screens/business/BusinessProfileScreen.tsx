@@ -206,12 +206,20 @@ export function BusinessProfileScreen({ navigation }: Props) {
 
         <Text style={styles.sectionTitle}>My venue</Text>
         {venue ? (
-          <Card>
-            <Text style={styles.venueName}>{venue.name}</Text>
-            <Text style={styles.venueMeta}>
-              {venue.category} · {venue.area}
-            </Text>
-          </Card>
+          <TouchableOpacity
+            onPress={() => navigation.navigate("ManageVenue")}
+            activeOpacity={0.7}
+          >
+            <Card>
+              <Text style={styles.venueName}>{venue.name}</Text>
+              <Text style={styles.venueMeta}>
+                {venue.category} · {venue.area}
+              </Text>
+              <Text style={styles.venueManage}>
+                Manage photos & amenities →
+              </Text>
+            </Card>
+          </TouchableOpacity>
         ) : (
           <Text style={styles.venueHint}>
             Your venue is linked by the reviewer alongside your business
@@ -315,6 +323,11 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.textDim,
     marginTop: spacing.xs,
+  },
+  venueManage: {
+    ...typography.label,
+    color: colors.accent,
+    marginTop: spacing.sm,
   },
   notifBtn: { marginTop: spacing.xl },
   logoutBtn: { marginTop: spacing.md },

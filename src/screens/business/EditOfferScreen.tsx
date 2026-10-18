@@ -7,6 +7,7 @@ import {
   ScrollView,
   Alert,
   TouchableOpacity,
+  Image,
 } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Screen } from "../../components/Screen";
@@ -18,6 +19,7 @@ import { BusinessStackParamList } from "../../navigation/types";
 import { getOffer, updateOffer, publishOffer } from "../../services/offers";
 import { useAuth } from "../../store/AuthContext";
 import { Offer } from "../../services/mappers";
+import { pickPhoto, uploadPhoto } from "../../services/photos";
 import {
   validateOfferInput,
   validateLiveOfferPatch,
@@ -80,6 +82,9 @@ export function EditOfferScreen({ route, navigation }: Props) {
   const [capacity, setCapacity] = useState("10");
   const [duration, setDuration] = useState("60");
   const [resource, setResource] = useState("Main");
+  const [coverPhotoUrl, setCoverPhotoUrl] = useState<string | null>(null);
+  const [isSpotlight, setIsSpotlight] = useState(false);
+  const [uploadingCover, setUploadingCover] = useState(false);
   const [picker, setPicker] = useState<{
     field: "startsAt" | "endsAt";
     mode: "date" | "time";
@@ -119,6 +124,8 @@ export function EditOfferScreen({ route, navigation }: Props) {
       setCapacity(String(o.slotCapacity));
       setDuration(String(o.slotMinutes ?? 60));
       setResource(o.resourceKey ?? "Main");
+      setCoverPhotoUrl(o.coverPhotoUrl ?? null);
+      setIsSpotlight(o.isSpotlight ?? false);
       setState("ready");
     } catch (e) {
       if (ticket === request.current) setState("error");
@@ -169,7 +176,14 @@ export function EditOfferScreen({ route, navigation }: Props) {
       slotCapacity?: number;
       slotMinutes?: number;
       resourceKey?: string;
-    } = { title: title.trim(), description: description.trim() };
+      coverPhotoUrl?: string | null;
+      isSpotlight?: boolean;
+    } = {
+      title: title.trim(),
+      description: description.trim(),
+      coverPhotoUrl,
+      isSpotlight,
+    };
     // Empty + previously set → null (clear). Empty + never set → skip.
     const d = discount.trim();
     patch.discountPct = d
@@ -287,6 +301,51 @@ export function EditOfferScreen({ route, navigation }: Props) {
           numberOfLines={4}
           style={styles.multiline}
         />
+        <Text style={styles.label}>Cover photo</Text>
+        <TouchableOpacity
+          onPress={async () => {
+            try {
+              const uri = await pickPhoto();
+              if (!uri || !profile) return;
+              setUploadingCover(true);
+              const url = await uploadPhoto(profile.id, uri, "offers");
+              setCoverPhotoUrl(url);
+            } catch (e) {
+              Alert.alert(
+                "Could not upload",
+                e instanceof Error ? e.message : "Try again.",
+              );
+            } finally {
+              setUploadingCover(false);
+            }
+          }}
+          style={styles.coverPicker}
+          disabled={uploadingCover}
+        >
+          {coverPhotoUrl ? (
+            <Image source={{ uri: coverPhotoUrl }} style={styles.coverPreview} />
+          ) : (
+            <Text style={styles.coverPlaceholder}>
+              {uploadingCover ? "Uploading…" : "+ Add cover photo"}
+            </Text>
+          )}
+        </TouchableOpacity>
+        {coverPhotoUrl && (
+          <TouchableOpacity onPress={() => setCoverPhotoUrl(null)}>
+            <Text style={styles.removeCover}>Remove photo</Text>
+          </TouchableOpacity>
+        )}
+        <TouchableOpacity
+          onPress={() => setIsSpotlight(!isSpotlight)}
+          style={styles.spotlightRow}
+        >
+          <View style={[styles.checkbox, isSpotlight && styles.checkboxActive]}>
+            {isSpotlight && <Text style={styles.checkmark}>✓</Text>}
+          </View>
+          <Text style={styles.spotlightLabel}>
+            Feature in Spotlight on the home page
+          </Text>
+        </TouchableOpacity>
         <View style={styles.row}>
           <View style={styles.half}>
             <Input
@@ -422,6 +481,43 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   multiline: { height: 110, textAlignVertical: "top", paddingTop: spacing.md },
+  label: { ...typography.label, color: colors.text, marginBottom: spacing.sm },
+  coverPicker: {
+    height: 160,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderStyle: "dashed",
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+    marginBottom: spacing.sm,
+  },
+  coverPreview: { width: "100%", height: "100%" },
+  coverPlaceholder: { ...typography.label, color: colors.accent },
+  removeCover: {
+    ...typography.caption,
+    color: colors.textDim,
+    marginBottom: spacing.md,
+  },
+  spotlightRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    marginVertical: spacing.md,
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  checkboxActive: { backgroundColor: colors.accent, borderColor: colors.accent },
+  checkmark: { color: "#fff", fontSize: 14, lineHeight: 18 },
+  spotlightLabel: { ...typography.body, color: colors.text, flex: 1 },
   row: { flexDirection: "row", gap: spacing.md },
   half: { flex: 1 },
   fieldLabel: {

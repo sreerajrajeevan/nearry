@@ -5,6 +5,8 @@ import {
   ScrollView,
   RefreshControl,
   StyleSheet,
+  TouchableOpacity,
+  Image,
 } from "react-native";
 import {
   useFocusEffect,
@@ -43,6 +45,8 @@ import {
 } from "../../utils/discovery";
 import { useAuth } from "../../store/AuthContext";
 import { PersonalTabNav, PersonalTabParamList } from "../../navigation/types";
+import { HOME_CATEGORIES, listSpotlightOffers } from "../../services/photos";
+import { Icon } from "../../components/Icon";
 
 const categories: {
   key: DiscoveryCategory | "All";
@@ -62,6 +66,9 @@ export function NearbyScreen() {
   const [posts, setPosts] = useState<NeedPost[]>([]);
   const [venues, setVenues] = useState<Venue[]>([]);
   const [offers, setOffers] = useState<Offer[]>([]);
+  const [spotlight, setSpotlight] = useState<
+    { id: string; title: string; cover_photo_url: string | null }[]
+  >([]);
   const [state, setState] = useState<"loading" | "error" | "ready">("loading");
   const [refreshing, setRefreshing] = useState(false);
   const [point, setPoint] = useState<LatLng | null>(null);
@@ -102,14 +109,16 @@ export function NearbyScreen() {
             v.area.toLowerCase().includes(appliedArea.toLowerCase()),
           );
         const ids = point || appliedArea ? places.map((v) => v.id) : undefined;
-        const [plans, openings] = await Promise.all([
+        const [plans, openings, featured] = await Promise.all([
           listPosts({ venueIds: ids }),
           listLiveOffers(ids),
+          listSpotlightOffers(10).catch(() => []),
         ]);
         if (request.current !== version) return;
         setPosts(plans);
         setVenues(places);
         setOffers(openings);
+        setSpotlight(featured);
         setState("ready");
       } catch {
         if (request.current === version) setState("error");
@@ -267,6 +276,69 @@ export function NearbyScreen() {
           onSelect={(key) => setCategory(key === "All" ? null : key)}
           label="Choose an interest"
         />
+        <View style={styles.shortcutGrid}>
+          {HOME_CATEGORIES.map((c) => (
+            <TouchableOpacity
+              key={c.key}
+              activeOpacity={0.7}
+              style={styles.shortcutTile}
+              onPress={() => navigation.navigate("Search")}
+              accessibilityRole="button"
+              accessibilityLabel={c.label}
+            >
+              <View style={styles.shortcutIcon}>
+                <Icon name={c.icon} size={22} color={colors.clay} />
+              </View>
+              <Text style={styles.shortcutLabel}>{c.label}</Text>
+              <Text style={styles.shortcutHint} numberOfLines={1}>
+                {c.hint}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+        {spotlight.length > 0 && (
+          <View style={styles.spotlightSection}>
+            <Text style={styles.sectionHeading}>In the spotlight</Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.spotlightRow}
+            >
+              {spotlight.map((s) => (
+                <TouchableOpacity
+                  key={s.id}
+                  activeOpacity={0.85}
+                  style={styles.spotlightCard}
+                  onPress={() =>
+                    navigation.navigate("OfferDetails", { offerId: s.id })
+                  }
+                  accessibilityRole="button"
+                  accessibilityLabel={s.title}
+                >
+                  {s.cover_photo_url ? (
+                    <Image
+                      source={{ uri: s.cover_photo_url }}
+                      style={styles.spotlightImage}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <View
+                      style={[styles.spotlightImage, styles.spotlightFallback]}
+                    />
+                  )}
+                  <View style={styles.spotlightOverlay}>
+                    <Text
+                      style={styles.spotlightTitle}
+                      numberOfLines={2}
+                    >
+                      {s.title}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        )}
         {state === "loading" && posts.length === 0 && offers.length === 0 ? (
           <Text accessibilityLiveRegion="polite" style={styles.status}>
             Finding a few hellos…
@@ -397,5 +469,59 @@ const styles = StyleSheet.create({
     color: colors.text,
     marginTop: spacing.lg,
     marginBottom: spacing.md,
+  },
+  shortcutGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    marginTop: spacing.md,
+    marginHorizontal: -spacing.xs,
+  },
+  shortcutTile: {
+    width: "25%",
+    alignItems: "center",
+    paddingHorizontal: spacing.xs,
+    marginBottom: spacing.md,
+  },
+  shortcutIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: colors.claySoft,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: spacing.xs,
+  },
+  shortcutLabel: {
+    ...typography.label,
+    color: colors.text,
+    textAlign: "center",
+  },
+  shortcutHint: {
+    ...typography.caption,
+    color: colors.textDim,
+    textAlign: "center",
+  },
+  spotlightSection: { marginTop: spacing.sm },
+  spotlightRow: { gap: spacing.md, paddingRight: spacing.lg },
+  spotlightCard: {
+    width: 240,
+    height: 140,
+    borderRadius: 16,
+    overflow: "hidden",
+    backgroundColor: colors.surfaceRaised,
+  },
+  spotlightImage: { width: "100%", height: "100%" },
+  spotlightFallback: { backgroundColor: colors.claySoft },
+  spotlightOverlay: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    padding: spacing.sm,
+    backgroundColor: "rgba(37, 42, 38, 0.55)",
+  },
+  spotlightTitle: {
+    ...typography.label,
+    color: colors.white,
   },
 });
