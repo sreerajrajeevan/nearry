@@ -18,11 +18,20 @@ export async function pickAvatar(): Promise<string | null> {
 /**
  * Upload a local image URI to the public avatars bucket under <userId>/avatar.jpg
  * and return the public URL.
+ *
+ * Note: React Native's fetch() cannot reliably turn a file:// URI into a Blob
+ * ("Network request failed" on device). XHR reads the local file correctly.
  */
 export async function uploadAvatar(userId: string, localUri: string): Promise<string> {
   const supabase = getSupabase()!;
-  const response = await fetch(localUri);
-  const blob = await response.blob();
+  const blob = await new Promise<Blob>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.onload = () => resolve(xhr.response as Blob);
+    xhr.onerror = () => reject(new Error("Could not read the selected photo."));
+    xhr.responseType = "blob";
+    xhr.open("GET", localUri, true);
+    xhr.send();
+  });
   const path = `${userId}/avatar.jpg`;
   const { error } = await supabase.storage
     .from("avatars")
