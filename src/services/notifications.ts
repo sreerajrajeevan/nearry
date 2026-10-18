@@ -144,6 +144,53 @@ export async function markAllNotificationsRead(): Promise<void> {
   notifyUnreadChanged();
 }
 
+/** Mark a single notification as unread again. */
+export async function markNotificationUnread(id: string): Promise<void> {
+  if (useMock()) {
+    const n = mockNotifications.find((x) => x.id === id);
+    if (n) n.read = false;
+    notifyUnreadChanged();
+    return;
+  }
+  const supabase = getSupabase()!;
+  const { error } = await supabase
+    .from("notifications")
+    .update({ read_at: null })
+    .eq("id", id);
+  if (error) throw new Error(error.message);
+  notifyUnreadChanged();
+}
+
+/** Delete one notification. */
+export async function deleteNotification(id: string): Promise<void> {
+  if (useMock()) {
+    const i = mockNotifications.findIndex((x) => x.id === id);
+    if (i >= 0) mockNotifications.splice(i, 1);
+    notifyUnreadChanged();
+    return;
+  }
+  const supabase = getSupabase()!;
+  const { error } = await supabase.from("notifications").delete().eq("id", id);
+  if (error) throw new Error(error.message);
+  notifyUnreadChanged();
+}
+
+/** Delete all of the user's notifications. */
+export async function clearAllNotifications(): Promise<void> {
+  if (useMock()) {
+    mockNotifications.length = 0;
+    notifyUnreadChanged();
+    return;
+  }
+  const supabase = getSupabase()!;
+  const { error } = await supabase
+    .from("notifications")
+    .delete()
+    .not("id", "is", null);
+  if (error) throw new Error(error.message);
+  notifyUnreadChanged();
+}
+
 /**
  * Remote push via the `send-push` edge function. Fire-and-forget:
  * resolves silently if the function isn't deployed yet.

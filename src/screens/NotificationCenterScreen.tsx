@@ -18,7 +18,10 @@ import {
   subscribeToNotifications,
   listNotifications,
   markNotificationRead,
+  markNotificationUnread,
   markAllNotificationsRead,
+  deleteNotification,
+  clearAllNotifications,
 } from "../services/notifications";
 import { useAuth } from "../store/AuthContext";
 import { AppNotification } from "../services/mappers";
@@ -118,6 +121,55 @@ export function NotificationCenterScreen({
     }
   };
 
+  const onToggleRead = async (n: AppNotification) => {
+    try {
+      if (n.read) {
+        await markNotificationUnread(n.id);
+      } else {
+        await markNotificationRead(n.id);
+      }
+      setItems((prev) =>
+        prev.map((x) => (x.id === n.id ? { ...x, read: !x.read } : x)),
+      );
+    } catch {
+      Alert.alert("Could not update", "Check your connection and try again.");
+    }
+  };
+
+  const onDelete = async (n: AppNotification) => {
+    try {
+      await deleteNotification(n.id);
+      setItems((prev) => prev.filter((x) => x.id !== n.id));
+    } catch {
+      Alert.alert("Could not delete", "Check your connection and try again.");
+    }
+  };
+
+  const onClearAll = () => {
+    Alert.alert(
+      "Clear all notifications?",
+      "This deletes every notification. You can't undo it.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Clear all",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await clearAllNotifications();
+              setItems([]);
+            } catch {
+              Alert.alert(
+                "Could not clear",
+                "Check your connection and try again.",
+              );
+            }
+          },
+        },
+      ],
+    );
+  };
+
   const unread = items.filter((n) => !n.read).length;
 
   return (
@@ -137,11 +189,18 @@ export function NotificationCenterScreen({
         </TouchableOpacity>
         <View style={styles.headerRow}>
           <Text style={styles.header}>Notifications</Text>
-          {unread > 0 && (
-            <TouchableOpacity onPress={onMarkAll} activeOpacity={0.7}>
-              <Text style={styles.markAll}>Mark all read</Text>
-            </TouchableOpacity>
-          )}
+          <View style={styles.headerActions}>
+            {unread > 0 && (
+              <TouchableOpacity onPress={onMarkAll} activeOpacity={0.7}>
+                <Text style={styles.markAll}>Mark all read</Text>
+              </TouchableOpacity>
+            )}
+            {items.length > 0 && (
+              <TouchableOpacity onPress={onClearAll} activeOpacity={0.7}>
+                <Text style={styles.clearAll}>Clear</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
 
         {state === "loading" ? (
@@ -161,24 +220,45 @@ export function NotificationCenterScreen({
           />
         ) : (
           items.map((n) => (
-            <TouchableOpacity
-              key={n.id}
-              activeOpacity={0.7}
-              onPress={() => onOpen(n)}
-              style={styles.row}
-            >
-              <View style={styles.topRow}>
-                <Text style={styles.title}>{n.title}</Text>
-                {!n.read && <View style={styles.dot} />}
-              </View>
-              <Text style={styles.body}>{n.body}</Text>
-              <View style={styles.metaRow}>
-                <Badge label={kindLabel(n.kind)} tone={kindTone(n.kind)} />
-                <Text style={styles.time}>
-                  {new Date(n.createdAt).toLocaleString()}
-                </Text>
-              </View>
-            </TouchableOpacity>
+            <View key={n.id} style={styles.row}>
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={() => onOpen(n)}
+                style={styles.rowMain}
+              >
+                <View style={styles.topRow}>
+                  <Text style={styles.title}>{n.title}</Text>
+                  <TouchableOpacity
+                    onPress={() => onToggleRead(n)}
+                    activeOpacity={0.7}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel={
+                      n.read ? "Mark as unread" : "Mark as read"
+                    }
+                  >
+                    <View style={[styles.dot, n.read && styles.dotRead]} />
+                  </TouchableOpacity>
+                </View>
+                <Text style={styles.body}>{n.body}</Text>
+                <View style={styles.metaRow}>
+                  <Badge label={kindLabel(n.kind)} tone={kindTone(n.kind)} />
+                  <Text style={styles.time}>
+                    {new Date(n.createdAt).toLocaleString()}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => onDelete(n)}
+                activeOpacity={0.7}
+                hitSlop={8}
+                style={styles.deleteBtn}
+                accessibilityRole="button"
+                accessibilityLabel="Delete notification"
+              >
+                <Text style={styles.deleteText}>×</Text>
+              </TouchableOpacity>
+            </View>
           ))
         )}
       </ScrollView>
@@ -202,6 +282,8 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.lg,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
+    flexDirection: "row",
+    alignItems: "flex-start",
   },
   topRow: {
     flexDirection: "row",
@@ -210,6 +292,19 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.accent },
+  dotRead: { backgroundColor: colors.border },
+  headerActions: { flexDirection: "row", gap: spacing.md, alignItems: "center" },
+  clearAll: { ...typography.label, color: colors.textDim },
+  rowMain: { flex: 1 },
+  deleteBtn: {
+    justifyContent: "center",
+    paddingLeft: spacing.sm,
+  },
+  deleteText: {
+    ...typography.title,
+    color: colors.textFaint,
+    lineHeight: 20,
+  },
   title: { ...typography.body, color: colors.text, flex: 1 },
   body: {
     ...typography.bodySmall,
