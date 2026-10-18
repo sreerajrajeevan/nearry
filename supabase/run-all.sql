@@ -2315,4 +2315,14 @@ $$ language plpgsql security definer set search_path = public;
 
 
 
+-- 00022_notification_delete.sql
+-- Migration 00022 — let users delete their own notifications.
+-- Run once in the Supabase dashboard SQL editor.
+
+drop policy if exists "users delete own notifications" on public.notifications;
+create policy "users delete own notifications" on public.notifications
+  for delete using (auth.uid() = user_id);
+
+
+
 commit;
