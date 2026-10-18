@@ -94,6 +94,16 @@ const styles = StyleSheet.create({
     minHeight: 44,
     flexShrink: 1,
     justifyContent: "flex-end",
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 24,
+    paddingHorizontal: 12,
+    backgroundColor: colors.card,
   },
-  context: { ...typography.bodySmall, color: colors.textDim, flexShrink: 1 },
+  context: {
+    ...typography.caption,
+    fontSize: 12,
+    color: colors.textDim,
+    flexShrink: 1,
+  },
 });

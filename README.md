@@ -1,6 +1,6 @@
 # Nearry
 
-React Native + Expo SDK 52, with Personal and Business experiences and Supabase Auth, Postgres, Storage and Realtime. The Hello Nearry UI uses warm-white surfaces, dark ink, one burnt-orange accent, and simple rows. Both account experiences share the same type, icons, controls, and safe-area-aware navigation.
+React Native + Expo SDK 52, with Personal and Business experiences and Supabase Auth, Postgres, Storage and Realtime. The Everyday Nearby UI uses the Current Clay palette: warm-white surfaces, dark ink and one burnt-orange accent. Both account experiences share the same type, icons, controls, and safe-area-aware navigation.
 
 ## Run
 
@@ -109,15 +109,17 @@ Search treats punctuation and pattern characters as literal text, and keeps expi
 
 The project remains on Expo SDK 52. SDK-compatible native package versions are aligned and the lockfile is committed. `npm audit fix` could not resolve all inherited dependency advisories within this SDK's supported ranges. An Expo SDK upgrade and its native/device regression pass remain separate release work; do not use `npm audit fix --force` to change the framework blindly.
 
-## Hello Nearry design
+## Everyday Nearby · Current Clay design
 
 - Palette: warm white `#FAF9F5`, ink `#252A26`, burnt orange `#C14D2F`. Statuses use explicit text, with no extra brand colours.
 - Typography: Avenir Next on iOS, the system sans elsewhere; comfortable body text and medium-weight headlines. Native text scaling is retained.
-- Layout: 24-point screen gutters, flat rows, subtle dividers, small initials, and text actions. Orange marks selection, primary actions, and the compact speech-mark logo.
+- Discovery: compact rounded cards with explicit Plan / Place / Offer labels, soft clay icon thumbnails, readable venue/time details and one action. Existing detail screens handle joining and booking; opening a card never submits a request. Thumbnails use category icons because venue/post models do not yet contain photos.
+- Nearby: a compact heading, search shortcut and All / Play / Meet / Unwind interest buttons. All includes exploration and uncategorised items. Search retains live place suggestions and attribution. Area selection, pull to refresh and realtime updates still use the existing services.
+- Layout: 24-point screen gutters, rounded search fields and category buttons, quiet borders and text actions. Orange marks selection, primary actions, and the compact speech-mark logo. Existing safe-area-aware tab bar spacing is preserved.
 - Navigation: five labelled outline icons for each role, space reserved for device bottom insets and scaled labels, no floating container, and a dark system status bar on the light canvas.
 - Personal listings: Profile → My posts (also linked from Activity) includes every post you created, even with no join requests. Filter All, Upcoming, Past or Cancelled; open a row to manage requests, edit or cancel an eligible post. The list refreshes on return, on live post/request changes and when pulled down. No additional database setup is needed.
-- Shared pieces live in `src/components`; palette/type tokens live in `src/theme`. Reuse `BrandHeader`, `PageHeading`, `FilterTabs`, `PostRow`, and `OfferRow` instead of adding another screen-specific design.
-- Nearby area controls open from the header. GPS alone enables the “Within 5 km” label; demo and unfiltered results are labelled honestly. Play, Meet, and Explore filter posts and places.
+- Shared pieces live in `src/components`; palette/type tokens live in `src/theme`. Reuse `DiscoveryCard`, `DiscoverySearch`, `VenueRow`, `PostRow`, `OfferRow`, `BrandHeader`, `PageHeading` and `FilterTabs` instead of adding another screen-specific design.
+- Nearby area controls open from the header. GPS alone enables the “Within 5 km” label; demo and unfiltered results are labelled honestly. Interest buttons filter plans, offers and places; All restores the complete feed.
 - Search uses the data services in both real and explicit demo modes. Stale requests cannot replace a newer query, and offers open their real detail route.
 - The Business dashboard counts bookings in the local calendar day, excludes cancelled bookings, and labels live offers accurately. A confirmation failure is shown instead of silently ignored.
 - Demo data uses valid local timestamps and associated venue IDs. Demo bookings use stable slots and their actual capacity. Live bookings send the selected slot ID to `book_offer_slot` instead of substituting the current timestamp. Demo mutations remain in memory.

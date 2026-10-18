@@ -51,6 +51,19 @@ test("discovery separates sports, company, and exploration using words rather th
     "Play",
   );
   assert.equal(venueCategory({ name: "Loaf Café", category: "Café" }), "Meet");
+  assert.equal(postCategory({ title: "Chaya after work?", tags: [] }), "Meet");
+  assert.equal(
+    postCategory({ title: "A haircut opening", tags: [] }),
+    "Unwind",
+  );
+  assert.equal(
+    venueCategory({ name: "Studio Nine", category: "Salon" }),
+    "Unwind",
+  );
+  assert.equal(
+    postCategory({ title: "A spacious art studio", tags: [] }),
+    "Explore",
+  );
 });
 
 test("bookings today excludes cancellations and tomorrow, includes the whole local day at a year boundary", () => {

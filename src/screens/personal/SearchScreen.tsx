@@ -1,19 +1,13 @@
 import React, { useEffect, useState } from "react";
-import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  StyleSheet,
-} from "react-native";
+import { View, Text, ScrollView, StyleSheet } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { PlaceSuggestions } from "../../components/PlaceSuggestions";
 import { usePlaceSuggestions } from "../../hooks/usePlaceSuggestions";
 import { Screen } from "../../components/Screen";
 import { PageHeading } from "../../components/PageHeading";
 import { FilterTabs } from "../../components/FilterTabs";
-import { Icon } from "../../components/Icon";
-import { Input } from "../../components/Input";
+import { DiscoverySearch } from "../../components/DiscoverySearch";
+import { VenueRow } from "../../components/VenueRow";
 import { EmptyState } from "../../components/EmptyState";
 import { Button } from "../../components/Button";
 import { PostRow } from "../../components/PostRow";
@@ -101,19 +95,11 @@ export function SearchScreen() {
         contentContainerStyle={styles.scroll}
       >
         <PageHeading
+          compact
           greeting="Something in mind?"
-          title={"Find your\nkind of hello."}
+          title={"Find your\nnext hello."}
         />
-        <Input
-          accessibilityLabel="Search nearby"
-          placeholder="Football, coffee, haircut…"
-          value={query}
-          onChangeText={setQuery}
-          autoCapitalize="none"
-          returnKeyType="search"
-          clearButtonMode="while-editing"
-          maxLength={120}
-        />
+        <DiscoverySearch value={query} onChangeText={setQuery} />
         <FilterTabs
           options={filters}
           selected={filter}
@@ -195,27 +181,13 @@ export function SearchScreen() {
               <>
                 <Text style={styles.sectionLabel}>Places on Nearry</Text>
                 {venues.map((venue) => (
-                  <TouchableOpacity
-                    accessibilityRole="button"
+                  <VenueRow
                     key={venue.id}
-                    activeOpacity={0.65}
-                    style={styles.venue}
+                    venue={venue}
                     onPress={() =>
                       navigation.navigate("VenueDetails", { venueId: venue.id })
                     }
-                  >
-                    <View style={styles.copy}>
-                      <Text style={styles.title}>{venue.name}</Text>
-                      <Text style={styles.meta}>
-                        {venue.category} · {venue.area}
-                      </Text>
-                    </View>
-                    <Icon
-                      name="arrow-up-right"
-                      size={17}
-                      color={colors.accent}
-                    />
-                  </TouchableOpacity>
+                  />
                 ))}
               </>
             )}
@@ -229,19 +201,9 @@ const styles = StyleSheet.create({
   scroll: { paddingTop: spacing.md, paddingBottom: spacing.xl },
   status: { ...typography.bodySmall, color: colors.textDim },
   sectionLabel: {
-    ...typography.bodySmall,
-    color: colors.textDim,
+    ...typography.heading,
+    color: colors.text,
     marginTop: spacing.lg,
+    marginBottom: spacing.md,
   },
-  venue: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    paddingVertical: spacing.lg,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
-  copy: { flex: 1 },
-  title: { ...typography.heading, color: colors.text },
-  meta: { ...typography.bodySmall, color: colors.textDim, marginTop: 4 },
 });
