@@ -1,5 +1,5 @@
 import { formatWhen } from "../../utils/format";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -8,7 +8,9 @@ import {
   StyleSheet,
   Alert,
 } from "react-native";
-import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import { useNavigation } from "@react-navigation/native";
+import { useLiveQuery } from "../../hooks/useLiveQuery";
+import { bookingState, postState } from "../../utils/flowState";
 import { Screen } from "../../components/Screen";
 import { Card } from "../../components/Card";
 import { Badge } from "../../components/Badge";
@@ -27,7 +29,7 @@ import {
   listRequestsForPost,
   withdrawRequest,
 } from "../../services/joinRequests";
-import { NeedPost, JoinRequest, Booking, isHoldExpired } from "../../services/mappers";
+import { NeedPost, JoinRequest, Booking } from "../../services/mappers";
 import {
   listMyBookings,
   cancelBooking,
@@ -46,53 +48,51 @@ export function ActivityScreen() {
   const navigation = useNavigation<PersonalTabNav>();
   const myId = profile?.id;
 
-  const [mine, setMine] = useState<(JoinRequest & { postTitle: string })[]>([]);
-  const [incoming, setIncoming] = useState<IncomingItem[]>([]);
-  const [bookings, setBookings] = useState<Booking[]>([]);
-  const [state, setState] = useState<"loading" | "error" | "ready">("loading");
   const [busy, setBusy] = useState<string | null>(null);
-
-  const load = useCallback(
-    async (silent = false) => {
-      if (!myId) {
-        setState("ready");
-        return;
-      }
-      if (!silent) setState("loading");
-      try {
-        const [myReqs, myPosts, myBookings] = await Promise.all([
-          listMyRequests(myId),
-          listPosts({ authorId: myId, status: "all" }),
-          listMyBookings(myId),
-        ]);
-        setMine(myReqs);
-        setBookings(myBookings);
-        const allReqs = await Promise.all(
-          myPosts.map((post) => listRequestsForPost(post.id)),
-        );
-        const items: IncomingItem[] = [];
-        myPosts.forEach((post, i) => {
-          const pending = allReqs[i].filter((r) => r.status === "pending");
-          if (pending.length > 0) items.push({ post, requests: pending });
-        });
-        setIncoming(items);
-        setState("ready");
-      } catch {
-        if (!silent) setState("error");
-      }
+  const {
+    data,
+    state,
+    refresh: load,
+  } = useLiveQuery(
+    `activity:${myId}`,
+    async () => {
+      if (!myId) return { mine: [], incoming: [], bookings: [] };
+      const [myReqs, myPosts, myBookings] = await Promise.all([
+        listMyRequests(myId),
+        listPosts({ authorId: myId, status: "all" }),
+        listMyBookings(myId),
+      ]);
+      const incoming = await Promise.all(
+        myPosts
+          .filter((p) => postState(p).canCancel)
+          .map(async (post) => ({
+            post,
+            requests: (await listRequestsForPost(post.id)).filter(
+              (r) => r.status === "pending",
+            ),
+          })),
+      );
+      return {
+        mine: myReqs,
+        incoming: incoming.filter((item) => item.requests.length),
+        bookings: myBookings,
+      };
     },
-    [myId],
+    (refresh) => {
+      const stopPosts = subscribeToPosts(refresh),
+        stopBookings = subscribeToBookings(refresh);
+      return () => {
+        stopPosts();
+        stopBookings();
+      };
+    },
   );
-
-  useFocusEffect(
-    useCallback(() => {
-      void load();
-    }, [load]),
-  );
-  useEffect(() => subscribeToPosts(() => void load(true)), [load]);
-  useEffect(() => subscribeToBookings(() => void load(true)), [load]);
+  const mine = data?.mine ?? [],
+    incoming = data?.incoming ?? [],
+    bookings = data?.bookings ?? [];
 
   const run = async (key: string, fn: () => Promise<void>) => {
+    if (busy) return;
     setBusy(key);
     try {
       await fn();
@@ -197,17 +197,14 @@ export function ActivityScreen() {
                             <View style={styles.reqGap} />
                             <Button
                               title="Approve"
+                              disabled={
+                                busy !== null || !postState(post).accepting
+                              }
                               loading={busy === `a${r.id}`}
                               onPress={() =>
-                                run(`a${r.id}`, async () => {
-                                  const res = await approveRequest(r.id);
-                                  if (res.postClosed) {
-                                    Alert.alert(
-                                      "Post is now full",
-                                      "All spots are taken.",
-                                    );
-                                  }
-                                })
+                                run(`a${r.id}`, () =>
+                                  approveRequest(r.id).then(() => {}),
+                                )
                               }
                             />
                           </View>
@@ -226,21 +223,14 @@ export function ActivityScreen() {
                     <View style={styles.rowTop}>
                       <Text style={styles.postTitle}>{b.offerTitle}</Text>
                       <Badge
-                        label={
-                          isHoldExpired(b) ? "EXPIRED" : b.status.toUpperCase()
-                        }
-                        tone={isHoldExpired(b) ? "neutral" : bookingTone(b.status)}
+                        label={bookingState(b).label}
+                        tone={bookingTone(b.status)}
                       />
                     </View>
                     <Text style={styles.bookMeta}>
                       {formatWhen(b.slot)} · {b.partySize}{" "}
                       {b.partySize === 1 ? "person" : "people"}
                     </Text>
-                    {isHoldExpired(b) && (
-                      <Text style={styles.expiredNote}>
-                        The confirmation window passed — the hold was released.
-                      </Text>
-                    )}
                     <View style={styles.bookActions}>
                       {b.businessId && (
                         <TouchableOpacity
@@ -252,8 +242,7 @@ export function ActivityScreen() {
                           </Text>
                         </TouchableOpacity>
                       )}
-                      {(b.status === "pending" || b.status === "confirmed") &&
-                        !isHoldExpired(b) && (
+                      {bookingState(b).canCancel && (
                         <TouchableOpacity
                           activeOpacity={0.7}
                           style={styles.cancelWrap}
@@ -284,7 +273,11 @@ export function ActivityScreen() {
                   <View style={styles.rowTop}>
                     <Text style={styles.postTitle}>{r.postTitle}</Text>
                     <Badge
-                      label={r.status.toUpperCase()}
+                      label={
+                        r.postStatus === "cancelled"
+                          ? "Plan cancelled"
+                          : r.status.toUpperCase()
+                      }
                       tone={statusTone(r.status)}
                     />
                   </View>
@@ -297,7 +290,7 @@ export function ActivityScreen() {
                     >
                       <Text style={styles.viewPost}>View post →</Text>
                     </TouchableOpacity>
-                    {r.status === "pending" && (
+                    {r.status === "pending" && r.postStatus !== "cancelled" && (
                       <TouchableOpacity
                         activeOpacity={0.7}
                         onPress={() =>
@@ -309,18 +302,21 @@ export function ActivityScreen() {
                         </Text>
                       </TouchableOpacity>
                     )}
-                    {r.status === "approved" && (
-                      <TouchableOpacity
-                        activeOpacity={0.7}
-                        onPress={() =>
-                          run(`l${r.id}`, () => cancelParticipation(r.id))
-                        }
-                      >
-                        <Text style={styles.withdraw}>
-                          {busy === `l${r.id}` ? "…" : "LEAVE"}
-                        </Text>
-                      </TouchableOpacity>
-                    )}
+                    {r.status === "approved" &&
+                      r.postStatus !== "cancelled" &&
+                      !!r.postStartsAt &&
+                      new Date(r.postStartsAt).getTime() > Date.now() && (
+                        <TouchableOpacity
+                          activeOpacity={0.7}
+                          onPress={() =>
+                            run(`l${r.id}`, () => cancelParticipation(r.id))
+                          }
+                        >
+                          <Text style={styles.withdraw}>
+                            {busy === `l${r.id}` ? "…" : "LEAVE"}
+                          </Text>
+                        </TouchableOpacity>
+                      )}
                   </View>
                 </Card>
               ))
@@ -391,12 +387,6 @@ const styles = StyleSheet.create({
   bookMeta: {
     ...typography.caption,
     color: colors.textDim,
-    marginTop: spacing.xs,
-  },
-  expiredNote: {
-    ...typography.caption,
-    color: colors.textFaint,
-    fontStyle: "italic",
     marginTop: spacing.xs,
   },
   bookActions: {

@@ -65,13 +65,16 @@ export function RootNavigator() {
     );
   }
 
-  if (!demoMode && (profileError || (session && !profile))) {
+  if (!demoMode && !profile && (profileError || session)) {
     return (
       <View style={[styles.loading, { padding: 24 }]}>
         <Text style={{ color: colors.text, marginBottom: 20 }}>
           {profileError || "Loading your profile…"}
         </Text>
-        <Button title="RETRY" onPress={() => void refreshProfile()} />
+        <Button
+          title="RETRY"
+          onPress={() => void refreshProfile().catch(() => {})}
+        />
         <Button
           title="SIGN OUT"
           variant="ghost"

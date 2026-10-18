@@ -259,11 +259,16 @@ export async function deletePost(postId: string): Promise<void> {
   if (useMock()) {
     const i = mockPosts.findIndex((x) => x.id === postId);
     if (i < 0) throw new Error("Post not found.");
+    const { listRequestsForPost } = await import("./joinRequests");
+    if ((await listRequestsForPost(postId)).length)
+      throw new Error(
+        "This post has requests. Cancel it to retain participation history.",
+      );
     mockPosts.splice(i, 1);
     return;
   }
   const supabase = getSupabase()!;
-  const { error } = await supabase.from("posts").delete().eq("id", postId);
+  const { error } = await supabase.rpc("delete_post", { p_post_id: postId });
   if (error) throw new Error(error.message);
 }
 

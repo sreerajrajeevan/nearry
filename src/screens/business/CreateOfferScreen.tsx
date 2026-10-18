@@ -1,5 +1,5 @@
 import { DateSheet, TimeSheet } from "../../components/DateTimeSheets";
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import {
   View,
   Text,
@@ -19,6 +19,7 @@ import { useAuth } from "../../store/AuthContext";
 import {
   createDraft,
   publishOffer,
+  updateOffer,
   NewOfferInput,
 } from "../../services/offers";
 import { validateOfferInput } from "../../utils/validation";
@@ -87,6 +88,9 @@ export function CreateOfferScreen({ navigation }: Props) {
   const [formError, setFormError] = useState("");
   const [saving, setSaving] = useState(false);
 
+  const draftId = useRef<string>();
+  const savingLock = useRef(false);
+
   const verified = profile?.verificationStatus === "verified";
 
   if (!profile) {
@@ -131,42 +135,41 @@ export function CreateOfferScreen({ navigation }: Props) {
     return input;
   };
 
-  const onSaveDraft = async () => {
-    const input = buildInput();
-    if (!input) return;
-    setSaving(true);
-    try {
-      await createDraft(profile.id, input);
-      Alert.alert(
-        "Draft saved",
-        "Find it under Business → My offers to publish when ready.",
-      );
-      navigation.navigate("Dashboard");
-    } catch (e) {
-      Alert.alert(
-        "Could not save",
-        e instanceof Error ? e.message : "Please try again.",
-      );
-    } finally {
-      setSaving(false);
-    }
+  const persist = async (input: NewOfferInput) => {
+    if (draftId.current) return updateOffer(draftId.current, input);
+    const draft = await createDraft(profile.id, input);
+    draftId.current = draft.id;
+    return draft;
   };
-
-  const onPublish = async () => {
+  const save = async (publish: boolean) => {
+    if (savingLock.current) return;
     const input = buildInput();
     if (!input) return;
+    savingLock.current = true;
     setSaving(true);
     try {
-      const draft = await createDraft(profile.id, input);
-      await publishOffer(draft.id);
-      Alert.alert("Offer live", "Customers can now book it.");
+      const draft = await persist(input);
+      if (publish) await publishOffer(draft.id);
+      draftId.current = undefined;
+      setTitle("");
+      setDescription("");
+      setDiscount("");
+      setPrice("");
+      setStartsAtDate(null);
+      setEndsAtDate(null);
+      setCapacity("10");
+      setDuration("60");
+      setResource("Main");
       navigation.navigate("Dashboard");
     } catch (e) {
-      Alert.alert(
-        "Could not publish",
-        e instanceof Error ? e.message : "Please try again.",
+      setFormError(
+        (e instanceof Error ? e.message : "Please retry.") +
+          (publish && draftId.current
+            ? " Your draft is saved; retry here or open My offers."
+            : ""),
       );
     } finally {
+      savingLock.current = false;
       setSaving(false);
     }
   };
@@ -305,13 +308,13 @@ export function CreateOfferScreen({ navigation }: Props) {
         <Button
           title="Save draft"
           variant="secondary"
-          onPress={onSaveDraft}
+          onPress={() => void save(false)}
           loading={saving}
           style={styles.btn}
         />
         <Button
           title="Publish now"
-          onPress={onPublish}
+          onPress={() => void save(true)}
           loading={saving}
           disabled={!verified}
           style={styles.btn}

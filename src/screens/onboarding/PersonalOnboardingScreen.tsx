@@ -40,7 +40,7 @@ function Chip({
 
 /** 3-step personal onboarding: interests → location → done. */
 export function PersonalOnboardingScreen() {
-  const { completeOnboarding } = useAuth();
+  const { completeOnboarding, loading } = useAuth();
   const [step, setStep] = useState(1);
   const [selected, setSelected] = useState<string[]>([]);
   const [locating, setLocating] = useState(false);
@@ -54,6 +54,11 @@ export function PersonalOnboardingScreen() {
     setLocating(true);
     try {
       await requestLocationPermission();
+    } catch {
+      Alert.alert(
+        "Location unavailable",
+        "You can choose an area from Nearby later.",
+      );
     } finally {
       setLocating(false);
       setStep(3);
@@ -125,6 +130,7 @@ export function PersonalOnboardingScreen() {
           <View style={styles.footer}>
             <Button
               title="Start exploring"
+              loading={loading}
               onPress={() =>
                 void completeOnboarding({ interests: selected }).catch((e) =>
                   Alert.alert(

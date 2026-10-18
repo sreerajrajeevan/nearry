@@ -1197,3 +1197,296 @@ test(
     assert.ok(results.every((venue: any) => venue.distance_m <= 5000));
   },
 );
+
+async function corePersonal() {
+  const id = (await db.query("select gen_random_uuid() id")).rows[0].id;
+  await db.query(
+    'insert into auth.users(id,email,raw_user_meta_data) values($1,$2,\'{"account_type":"personal","display_name":"Neighbour"}\')',
+    [id, `${id}@test.example`],
+  );
+  await db.query("update profiles set onboarding_completed=true where id=$1", [
+    id,
+  ]);
+  return id;
+}
+
+test("core journey: create, request, approve, chat, read and cancel preserve permissions and notify participants", async () => {
+  const owner = await corePersonal(),
+    participant = await corePersonal(),
+    waiting = await corePersonal();
+  const p = (
+    await asUser(owner, (tx) =>
+      tx.query(
+        "insert into posts(author_id,title,description,starts_at,vacancies) values($1,'Chaya and a walk','A friendly evening by the waterfront',now()+interval '4 hours',2) returning id",
+        [owner],
+      ),
+    )
+  ).rows[0].id;
+  const r = await request(participant, p);
+  await request(waiting, p);
+  await assert.rejects(
+    asUser(waiting, (tx) =>
+      tx.query("select get_or_create_conversation($1,$2,null)", [owner, p]),
+    ),
+    /not allowed/,
+  );
+  await asUser(owner, (tx) => tx.query("select approve_join_request($1)", [r]));
+  const conv = (
+    await asUser(participant, (tx) =>
+      tx.query("select get_or_create_conversation($1,$2,null) id", [owner, p]),
+    )
+  ).rows[0].id;
+  const msg = (
+    await asUser(owner, (tx) =>
+      tx.query(
+        "insert into messages(conversation_id,sender_id,body) values($1,$2,'See you there!') returning id",
+        [conv, owner],
+      ),
+    )
+  ).rows[0].id;
+  assert.equal(
+    (
+      await asUser(waiting, (tx) =>
+        tx.query("select * from messages where conversation_id=$1", [conv]),
+      )
+    ).rows.length,
+    0,
+  );
+  await assert.rejects(
+    asUser(waiting, (tx) =>
+      tx.query(
+        "insert into messages(conversation_id,sender_id,body) values($1,$2,'Outsider')",
+        [conv, waiting],
+      ),
+    ),
+    /row-level security/,
+  );
+  const before = (
+    await asUser(participant, (tx) => tx.query("select unread_counts() counts"))
+  ).rows[0].counts;
+  assert.equal(Number(before.messages), 1);
+  assert.equal(
+    Number(before.notifications) - Number(before.other_notifications),
+    1,
+  );
+  await asUser(participant, (tx) =>
+    tx.query("select mark_conversation_read($1,$2)", [conv, msg]),
+  );
+  const after = (
+    await asUser(participant, (tx) => tx.query("select unread_counts() counts"))
+  ).rows[0].counts;
+  assert.equal(Number(after.messages), 0);
+  assert.equal(
+    Number(after.notifications) - Number(after.other_notifications),
+    0,
+  );
+  await asUser(owner, (tx) => tx.query("select cancel_post($1)", [p]));
+  for (const user of [participant, waiting]) {
+    assert.equal(
+      (
+        await asUser(user, (tx) =>
+          tx.query(
+            "select id from notifications where kind='post_cancelled' and ref_id=$1",
+            [p],
+          ),
+        )
+      ).rows.length,
+      1,
+    );
+  }
+  await assert.rejects(
+    asUser(owner, (tx) => tx.query("select cancel_post($1)", [p])),
+    /already cancelled|not found/,
+  );
+  await assert.rejects(request(waiting, p), /closed|expired/);
+});
+
+test("core journey: reading one message never acknowledges a newer message from the same transaction", async () => {
+  const owner = await corePersonal(),
+    participant = await corePersonal();
+  const own = (
+    await db.query(
+      "insert into posts(author_id,title,description,starts_at,vacancies) values($1,'Read cursor test','A friendly read cursor regression',now()+interval '4 hours',2) returning id",
+      [owner],
+    )
+  ).rows[0].id;
+  const r = await request(participant, own);
+  await asUser(owner, (tx) => tx.query("select approve_join_request($1)", [r]));
+  const conv = (
+    await asUser(participant, (tx) =>
+      tx.query("select get_or_create_conversation($1,$2,null) id", [
+        owner,
+        own,
+      ]),
+    )
+  ).rows[0].id;
+  const ids = (
+    await asUser(owner, (tx) =>
+      tx.query(
+        "insert into messages(conversation_id,sender_id,body) values($1,$2,'First'),($1,$2,'Later') returning id",
+        [conv, owner],
+      ),
+    )
+  ).rows;
+  // Notifications share transaction time, while messages have separate server chronology.
+  await db.query(
+    "update messages set created_at=now()+interval '1 second' where id=$1",
+    [ids[0].id],
+  );
+  await db.query(
+    "update messages set created_at=now()+interval '2 seconds' where id=$1",
+    [ids[1].id],
+  );
+  await asUser(participant, (tx) =>
+    tx.query("select mark_conversation_read($1,$2)", [conv, ids[0].id]),
+  );
+  const rows = (
+    await asUser(participant, (tx) =>
+      tx.query(
+        "select message_id,read_at from notifications where ref_id=$1 and kind='message' order by message_id",
+        [conv],
+      ),
+    )
+  ).rows;
+  assert.ok(rows.find((n: any) => n.message_id === ids[0].id).read_at);
+  assert.equal(rows.find((n: any) => n.message_id === ids[1].id).read_at, null);
+  assert.equal(
+    Number(
+      (
+        await asUser(participant, (tx) =>
+          tx.query("select unread_counts() counts"),
+        )
+      ).rows[0].counts.messages,
+    ),
+    1,
+  );
+  await assert.rejects(
+    asUser(null, (tx) => tx.query("select unread_counts()"), "anon"),
+    /permission denied/,
+  );
+});
+
+test("core journey: a booking retry returns its active reservation, and business cancellation releases confirmed seats", async () => {
+  const business = await auditBusiness(),
+    customer = await corePersonal(),
+    other = await corePersonal();
+  const offer = await auditOffer(business);
+  const first = (
+    await asUser(customer, (tx) =>
+      tx.query("select book_offer_slot($1,1) result", [offer.slot]),
+    )
+  ).rows[0].result;
+  const retry = (
+    await asUser(customer, (tx) =>
+      tx.query("select book_offer_slot($1,1) result", [offer.slot]),
+    )
+  ).rows[0].result;
+  assert.equal(retry.booking_id, first.booking_id);
+  assert.equal(
+    (
+      await db.query(
+        "select count(*)::int n from bookings where slot_id=$1 and customer_id=$2",
+        [offer.slot, customer],
+      )
+    ).rows[0].n,
+    1,
+  );
+  await assert.rejects(
+    asUser(customer, (tx) =>
+      tx.query("select book_offer_slot($1,2)", [offer.slot]),
+    ),
+    /already requested/,
+  );
+  await assert.rejects(
+    asUser(other, (tx) =>
+      tx.query("select change_booking_status($1,'cancelled')", [
+        first.booking_id,
+      ]),
+    ),
+    /not your booking/,
+  );
+  await asUser(business, (tx) =>
+    tx.query("select change_booking_status($1,'confirmed')", [
+      first.booking_id,
+    ]),
+  );
+  await asUser(business, (tx) =>
+    tx.query("select change_booking_status($1,'cancelled')", [
+      first.booking_id,
+    ]),
+  );
+  assert.equal(
+    (
+      await asUser(customer, (tx) =>
+        tx.query("select status from bookings where id=$1", [first.booking_id]),
+      )
+    ).rows[0].status,
+    "cancelled",
+  );
+  await assert.rejects(
+    asUser(business, (tx) =>
+      tx.query("select change_booking_status($1,'confirmed')", [
+        first.booking_id,
+      ]),
+    ),
+    /cannot be confirmed/,
+  );
+  const next = (
+    await asUser(customer, (tx) =>
+      tx.query("select book_offer_slot($1,1) result", [offer.slot]),
+    )
+  ).rows[0].result;
+  assert.notEqual(next.booking_id, first.booking_id);
+});
+
+test("core journey: deletion works only for owned empty posts and draft offers without history", async () => {
+  const owner = await corePersonal(),
+    other = await corePersonal();
+  const make = async () =>
+    (
+      await asUser(owner, (tx) =>
+        tx.query(
+          "insert into posts(author_id,title,description,starts_at,vacancies) values($1,'Empty plan','A friendly plan without any requests',now()+interval '4 hours',2) returning id",
+          [owner],
+        ),
+      )
+    ).rows[0].id;
+  const empty = await make();
+  await assert.rejects(
+    asUser(other, (tx) => tx.query("select delete_post($1)", [empty])),
+    /not yours|not found/,
+  );
+  await assert.rejects(
+    asUser(owner, (tx) => tx.query("delete from posts where id=$1", [empty])),
+    /permission denied/,
+  );
+  await asUser(owner, (tx) => tx.query("select delete_post($1)", [empty]));
+  assert.equal(
+    (await db.query("select id from posts where id=$1", [empty])).rows.length,
+    0,
+  );
+  const withHistory = await make();
+  await request(other, withHistory);
+  await assert.rejects(
+    asUser(owner, (tx) => tx.query("select delete_post($1)", [withHistory])),
+    /has requests/,
+  );
+  const business = await auditBusiness();
+  const draft = (
+    await asUser(business, (tx) =>
+      tx.query(
+        "insert into offers(business_id,title,description,starts_at,ends_at,status) values($1,'Draft deletion','A friendly draft without bookings',now()+interval '4 hours',now()+interval '6 hours','draft') returning id",
+        [business],
+      ),
+    )
+  ).rows[0].id;
+  await assert.rejects(
+    asUser(other, (tx) => tx.query("select delete_offer($1)", [draft])),
+    /not yours|not found/,
+  );
+  await asUser(business, (tx) => tx.query("select delete_offer($1)", [draft]));
+  assert.equal(
+    (await db.query("select id from offers where id=$1", [draft])).rows.length,
+    0,
+  );
+});

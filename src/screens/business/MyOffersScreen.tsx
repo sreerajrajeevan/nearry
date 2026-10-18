@@ -7,7 +7,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { useFocusEffect } from "@react-navigation/native";
+import { useLiveQuery } from "../../hooks/useLiveQuery";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { BusinessStackParamList } from "../../navigation/types";
 import { Screen } from "../../components/Screen";
@@ -18,7 +18,12 @@ import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
 import { Icon } from "../../components/Icon";
 import { useAuth } from "../../store/AuthContext";
-import { listMyOffers, cancelOffer, deleteOffer } from "../../services/offers";
+import {
+  listMyOffers,
+  cancelOffer,
+  deleteOffer,
+  subscribeToOffers,
+} from "../../services/offers";
 import { Offer } from "../../services/mappers";
 import { formatWhen } from "../../utils/format";
 import { colors, typography, spacing } from "../../theme";
@@ -35,7 +40,7 @@ const filters: { key: Filter; label: string }[] = [
 function statusLabel(offer: Offer): string {
   switch (offer.status) {
     case "live":
-      return "Live";
+      return new Date(offer.endsAt).getTime() <= Date.now() ? "Ended" : "Live";
     case "draft":
       return "Draft";
     case "cancelled":
@@ -48,42 +53,21 @@ function statusLabel(offer: Offer): string {
 /** The business's own offers, with cancel for live ones. */
 export function MyOffersScreen({ navigation }: Props) {
   const { profile } = useAuth();
-  const [offers, setOffers] = useState<Offer[]>([]);
   const [filter, setFilter] = useState<Filter>("all");
-  const [state, setState] = useState<"loading" | "ready" | "error">("loading");
-  const [refreshing, setRefreshing] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
-
-  const load = useCallback(
-    async (refresh = false) => {
-      if (!profile) {
-        setState("ready");
-        return;
-      }
-      if (refresh) setRefreshing(true);
-      else setState("loading");
-      try {
-        const rows = await listMyOffers(profile.id);
-        setOffers(
-          [...rows].sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
-        );
-        setState("ready");
-      } catch {
-        setState("error");
-      } finally {
-        setRefreshing(false);
-      }
-    },
-    [profile],
-  );
-
-  useFocusEffect(
-    useCallback(() => {
-      void load();
-    }, [load]),
+  const {
+    data: offers = [],
+    state,
+    refreshing,
+    refresh: load,
+  } = useLiveQuery(
+    `my-offers:${profile?.id}`,
+    async () => (profile ? listMyOffers(profile.id) : []),
+    subscribeToOffers,
   );
 
   const onCancel = (offer: Offer) => {
+    if (busy) return;
     Alert.alert(
       "Cancel this offer?",
       "Customers will no longer be able to book it. This cannot be undone.",
@@ -112,6 +96,7 @@ export function MyOffersScreen({ navigation }: Props) {
   };
 
   const onDelete = (offer: Offer) => {
+    if (busy) return;
     Alert.alert(
       "Delete this draft?",
       "It will be removed permanently. This cannot be undone.",
@@ -141,9 +126,14 @@ export function MyOffersScreen({ navigation }: Props) {
 
   const visible = offers.filter((o) => {
     if (filter === "all") return true;
-    if (filter === "live") return o.status === "live";
+    if (filter === "live")
+      return o.status === "live" && new Date(o.endsAt).getTime() > Date.now();
     if (filter === "drafts") return o.status === "draft";
-    return o.status === "ended" || o.status === "cancelled";
+    return (
+      o.status === "ended" ||
+      o.status === "cancelled" ||
+      (o.status === "live" && new Date(o.endsAt).getTime() <= Date.now())
+    );
   });
 
   return (
@@ -221,7 +211,7 @@ export function MyOffersScreen({ navigation }: Props) {
             <Text style={styles.meta}>
               {formatWhen(offer.startsAt)} → {formatWhen(offer.endsAt)}
             </Text>
-            {!!offer.priceCents && (
+            {offer.priceCents != null && (
               <Text style={styles.meta}>
                 ₹{(offer.priceCents / 100).toFixed(2).replace(/\.00$/, "")}
                 {typeof offer.discountPct === "number"
@@ -245,7 +235,11 @@ export function MyOffersScreen({ navigation }: Props) {
                     style={styles.link}
                   >
                     <Text style={styles.actionText}>Edit</Text>
-                    <Icon name="arrow-up-right" size={15} color={colors.accent} />
+                    <Icon
+                      name="arrow-up-right"
+                      size={15}
+                      color={colors.accent}
+                    />
                   </TouchableOpacity>
                 )}
                 {offer.status === "live" ? (
@@ -259,7 +253,11 @@ export function MyOffersScreen({ navigation }: Props) {
                     <Text style={styles.actionText}>
                       {busy === offer.id ? "Cancelling…" : "Cancel offer"}
                     </Text>
-                    <Icon name="arrow-up-right" size={15} color={colors.accent} />
+                    <Icon
+                      name="arrow-up-right"
+                      size={15}
+                      color={colors.accent}
+                    />
                   </TouchableOpacity>
                 ) : null}
                 {offer.status === "draft" ? (

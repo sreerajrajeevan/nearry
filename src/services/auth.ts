@@ -18,51 +18,8 @@ WebBrowser.maybeCompleteAuthSession();
  * configured these functions throw; the UI must route to explicit demo mode.
  */
 
-export type OtpChannel = "signup" | "login";
-
-function accountTypeMeta(accountType: AccountType, displayName?: string) {
-  return {
-    data: {
-      account_type: accountType,
-      ...(displayName ? { display_name: displayName } : {}),
-    },
-  };
-}
-
-/** Step 1: send a 6-digit code to the email. Creates the user on first use. */
-export async function sendEmailOtp(
-  email: string,
-  accountType: AccountType,
-  displayName?: string,
-  signup = true,
-): Promise<void> {
-  const supabase = requireSupabase();
-  const { error } = await supabase.auth.signInWithOtp({
-    email: email.trim().toLowerCase(),
-    options: {
-      ...accountTypeMeta(accountType, displayName),
-      shouldCreateUser: signup,
-    },
-  });
-  if (error) throw new Error(friendlyAuthError(error.message));
-}
-
-/** Step 2: verify the 6-digit code. Returns the authenticated user id. */
-export async function verifyEmailOtp(
-  email: string,
-  code: string,
-): Promise<string> {
-  const supabase = requireSupabase();
-  const { data, error } = await supabase.auth.verifyOtp({
-    email: email.trim().toLowerCase(),
-    token: code.trim(),
-    type: "email",
-  });
-  if (error) throw new Error(friendlyAuthError(error.message));
-  if (!data.user)
-    throw new Error("Verification succeeded but no user was returned.");
-  return data.user.id;
-}
+export { sendEmailOtp, verifyEmailOtp } from "./emailAuth";
+import { friendlyAuthError } from "../utils/authError";
 
 /**
  * Google sign-in through Supabase.
@@ -151,21 +108,6 @@ function extractParam(url: string, name: string): string | null {
     const m = new RegExp(`[?&#]${name}=([^&#]+)`).exec(url);
     return m ? decodeURIComponent(m[1]) : null;
   }
-}
-
-function friendlyAuthError(message: string): string {
-  const m = message.toLowerCase();
-  if (m.includes("invalid") && m.includes("otp"))
-    return "That code is incorrect or expired.";
-  if (m.includes("expired"))
-    return "That code has expired — request a new one.";
-  if (m.includes("rate limit") || m.includes("too many"))
-    return "Too many attempts — wait a minute and try again.";
-  if (m.includes("provider") && m.includes("not enabled"))
-    return "Google sign-in is not enabled yet.";
-  if (m.includes("signup") && m.includes("not allowed"))
-    return "No account found for this email. If you're new, create an account below.";
-  return message;
 }
 
 /** Remove consumed credentials so a browser reload cannot replay the callback. */

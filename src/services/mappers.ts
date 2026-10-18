@@ -296,9 +296,9 @@ export type DbBooking = {
   business_id?: string;
   slot: string;
   party_size: number;
+  hold_expires_at?: string | null;
   status: "pending" | "confirmed" | "cancelled";
   created_at: string;
-  hold_expires_at?: string;
   customer?: { display_name: string } | null;
   offer?: { title: string } | null;
   customer_name?: string;
@@ -330,9 +330,9 @@ export function toBooking(row: DbBooking): Booking {
     offerTitle: row.offer?.title ?? row.offer_title ?? "Offer",
     slot: row.slot,
     partySize: row.party_size,
+    holdExpiresAt: row.hold_expires_at ?? undefined,
     status: row.status,
     createdAt: row.created_at,
-    holdExpiresAt: row.hold_expires_at ?? undefined,
   };
 }
 
@@ -351,9 +351,7 @@ export function isHoldExpired(b: Booking, now = new Date()): boolean {
  */
 export function isBookingStale(b: Booking, now = new Date()): boolean {
   if (b.status !== "pending") return false;
-  return (
-    isHoldExpired(b, now) || new Date(b.slot).getTime() <= now.getTime()
-  );
+  return isHoldExpired(b, now) || new Date(b.slot).getTime() <= now.getTime();
 }
 
 // ── Chat ──────────────────────────────────────────────────

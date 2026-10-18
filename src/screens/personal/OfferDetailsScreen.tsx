@@ -7,7 +7,8 @@ import {
   StyleSheet,
   Alert,
 } from "react-native";
-import { useFocusEffect } from "@react-navigation/native";
+import { useLiveQuery } from "../../hooks/useLiveQuery";
+import { bookingState } from "../../utils/flowState";
 import { Screen } from "../../components/Screen";
 import { Button } from "../../components/Button";
 import { Badge } from "../../components/Badge";
@@ -22,6 +23,8 @@ import {
   listOfferSlots,
   AvailableSlot,
   bookOffer,
+  listMyBookings,
+  subscribeToBookings,
 } from "../../services/bookings";
 import { Offer } from "../../services/mappers";
 import { timeLeft, formatTime } from "../../utils/format";
@@ -37,15 +40,32 @@ function fmtINR(cents?: number): string {
 export function OfferDetailsScreen({ route, navigation }: Props) {
   const { offerId } = route.params;
   const { profile } = useAuth();
-  const [offer, setOffer] = useState<Offer | null>(null);
-  const [state, setState] = useState<"loading" | "error" | "ready">("loading");
-  const [slots, setSlots] = useState<AvailableSlot[]>([]);
   const [daySel, setDaySel] = useState("");
   const [slotId, setSlotId] = useState("");
   const [partySize, setPartySize] = useState(1);
   const [formError, setFormError] = useState("");
   const [booking, setBooking] = useState(false);
-  const [done, setDone] = useState(false);
+  const [bookingId, setBookingId] = useState<string | null>(null);
+  const {
+    data,
+    state,
+    refresh: load,
+  } = useLiveQuery(
+    `offer:${offerId}:${profile?.id}`,
+    async () => {
+      const [offer, slots, bookings] = await Promise.all([
+        getOffer(offerId),
+        listOfferSlots(offerId),
+        profile ? listMyBookings(profile.id) : Promise.resolve([]),
+      ]);
+      if (!offer) throw new Error("Offer not found.");
+      return { offer, slots, bookings };
+    },
+    subscribeToBookings,
+  );
+  const offer = data?.offer,
+    slots = data?.slots ?? [];
+  const requestedBooking = data?.bookings.find((b) => b.id === bookingId);
 
   const dayKey = (iso: string) => {
     const d = new Date(iso);
@@ -87,41 +107,28 @@ export function OfferDetailsScreen({ route, navigation }: Props) {
     setPartySize(1);
   };
 
-  const load = useCallback(async () => {
-    setState("loading");
-    try {
-      const [o, available] = await Promise.all([
-        getOffer(offerId),
-        listOfferSlots(offerId),
-      ]);
-      setSlots(available);
-      const firstOpen = available.find((s) => s.seats_left > 0);
-      const defaultDay = firstOpen
-        ? dayKey(firstOpen.starts_at)
-        : available.length > 0
-          ? dayKey(available[0].starts_at)
-          : "";
-      setDaySel(defaultDay);
-      setSlotId(firstOpen?.id ?? "");
-      setPartySize(1);
-      if (!o) throw new Error("Offer not found.");
-      setOffer(o);
-      setState("ready");
-    } catch {
-      setState("error");
-    }
-  }, [offerId]);
-
   useEffect(() => {
-    void load();
-  }, [load]);
-  useFocusEffect(
-    useCallback(() => {
-      void load();
-    }, [load]),
-  );
+    setBookingId(null);
+    setPartySize(1);
+    setSlotId("");
+    setDaySel("");
+  }, [offerId]);
+  useEffect(() => {
+    if (!data) return;
+    const selected =
+      data.slots.find((s) => s.id === slotId && s.seats_left > 0) ??
+      data.slots.find((s) => s.seats_left > 0);
+    setSlotId(selected?.id ?? "");
+    if (selected) {
+      setDaySel(dayKey(selected.starts_at));
+      setPartySize((size) =>
+        Math.max(1, Math.min(size, selected.seats_left, 50)),
+      );
+    }
+  }, [data]);
 
   const onBook = async () => {
+    if (booking) return;
     setFormError("");
     if (!profile) {
       setFormError("Sign in to book.");
@@ -134,13 +141,14 @@ export function OfferDetailsScreen({ route, navigation }: Props) {
     }
     setBooking(true);
     try {
-      await bookOffer(offerId, slot.id, partySize);
-      setDone(true);
+      const result = await bookOffer(offerId, slot.id, partySize);
+      setBookingId(result.bookingId);
+      await load(true);
     } catch (e) {
-      Alert.alert(
-        "Could not book",
-        e instanceof Error ? e.message : "Please try again.",
+      setFormError(
+        e instanceof Error ? e.message : "Could not book. Please try again.",
       );
+      await load(true);
     } finally {
       setBooking(false);
     }
@@ -204,15 +212,44 @@ export function OfferDetailsScreen({ route, navigation }: Props) {
           </Text>
         </View>
 
-        {done ? (
+        {bookingId ? (
           <View style={styles.doneBox}>
-            <Badge label="Booked" tone="green" />
+            <Badge
+              label={
+                requestedBooking
+                  ? bookingState(requestedBooking).label
+                  : "Request sent"
+              }
+              tone="neutral"
+            />
             <Text style={styles.doneText}>
-              Your seats are held. The business will confirm shortly — track it
-              in Activity.
+              {requestedBooking?.status === "confirmed"
+                ? "The business confirmed your booking."
+                : requestedBooking &&
+                    (bookingState(requestedBooking).expired ||
+                      requestedBooking.status === "cancelled")
+                  ? "This reservation is no longer active. You can request another available time."
+                  : "Your seats are held for up to 30 minutes while the business confirms."}
             </Text>
+            <Button
+              title="View in Activity"
+              variant="secondary"
+              onPress={() =>
+                navigation.navigate("PersonalTabs", { screen: "Activity" })
+              }
+            />
+            {requestedBooking &&
+              (bookingState(requestedBooking).expired ||
+                requestedBooking.status === "cancelled") && (
+                <Button
+                  title="Choose another time"
+                  variant="ghost"
+                  onPress={() => setBookingId(null)}
+                />
+              )}
           </View>
-        ) : offer.status !== "live" ? (
+        ) : offer.status !== "live" ||
+          new Date(offer.endsAt).getTime() <= Date.now() ? (
           <EmptyState
             title="This offer isn't live"
             hint="Check back for the next one."
@@ -320,6 +357,7 @@ export function OfferDetailsScreen({ route, navigation }: Props) {
                 onPress={() =>
                   setPartySize((v) =>
                     Math.min(
+                      50,
                       slots.find((s) => s.id === slotId)?.seats_left ??
                         offer.slotCapacity,
                       v + 1,

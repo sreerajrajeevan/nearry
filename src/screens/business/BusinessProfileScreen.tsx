@@ -121,6 +121,11 @@ export function BusinessProfileScreen({ navigation }: Props) {
           />
         }
       >
+        <Button
+          title="My offers"
+          variant="secondary"
+          onPress={() => navigation.navigate("MyOffers")}
+        />
         <View style={styles.headerRow}>
           <Avatar name={name} size={64} />
           <View style={styles.nameBlock}>

@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Device from "expo-device";
 import * as Notifications from "expo-notifications";
-import { Platform } from "react-native";
+import { AppState, Platform } from "react-native";
 import { getSupabase, isSupabaseConfigured, isDemoMode } from "./supabase";
 import { notifyUnreadChanged } from "./unreadEvents";
 import { multiplexSubscribe } from "./realtime";
@@ -174,22 +174,32 @@ export async function presentLocal(title: string, body: string): Promise<void> {
  * for the same user; one channel per topic is shared by all subscribers. */
 export function subscribeToNotifications(
   userId: string,
-  onInsert: (n: AppNotification) => void,
+  onChange: () => void,
 ): () => void {
   if (useMock()) return () => {};
-  return multiplexSubscribe<AppNotification[]>(
+  return multiplexSubscribe(
     `notifs-${userId}`,
     (ch, fire) =>
       ch.on(
         "postgres_changes",
         {
-          event: "INSERT",
+          event: "*",
           schema: "public",
           table: "notifications",
           filter: `user_id=eq.${userId}`,
         },
-        (payload) => fire(toAppNotification(payload.new as DbNotification)),
+        (payload) => {
+          fire();
+          // One foreground banner per shared channel, never once per mounted badge.
+          if (
+            payload.eventType === "INSERT" &&
+            AppState.currentState === "active"
+          ) {
+            const notice = toAppNotification(payload.new as DbNotification);
+            void presentLocal(notice.title, notice.body);
+          }
+        },
       ),
-    (n) => onInsert(n),
+    onChange,
   );
 }

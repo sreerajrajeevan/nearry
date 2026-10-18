@@ -27,8 +27,8 @@ export async function bookOffer(
   slotId: string,
   partySize: number,
 ): Promise<{ bookingId: string; seatsLeft: number }> {
-  if (!Number.isInteger(partySize) || partySize < 1)
-    throw new Error("Party size must be at least 1.");
+  if (!Number.isInteger(partySize) || partySize < 1 || partySize > 50)
+    throw new Error("Party size must be between 1 and 50.");
   if (useMock()) {
     const offer = mockOffers.find((o) => o.id === offerId);
     const slot = (await listOfferSlots(offerId)).find((s) => s.id === slotId);
@@ -44,6 +44,9 @@ export async function bookOffer(
       slot: slot.starts_at,
       partySize,
       status: "pending",
+      holdExpiresAt: new Date(
+        Math.min(Date.now() + 30 * 60_000, new Date(slot.starts_at).getTime()),
+      ).toISOString(),
       createdAt: new Date().toISOString(),
     };
     mockBookings.unshift(b);
@@ -105,7 +108,14 @@ export async function listBookingsForBusiness(
 export async function confirmBooking(bookingId: string): Promise<void> {
   if (useMock()) {
     const b = mockBookings.find((x) => x.id === bookingId);
-    if (b) b.status = "confirmed";
+    if (
+      !b ||
+      b.status !== "pending" ||
+      new Date(b.slot).getTime() <= Date.now() ||
+      (b.holdExpiresAt && new Date(b.holdExpiresAt).getTime() <= Date.now())
+    )
+      throw new Error("Booking cannot be confirmed.");
+    b.status = "confirmed";
     return;
   }
   const supabase = getSupabase()!;
@@ -194,7 +204,10 @@ export async function listOfferSlots(
           (b) =>
             b.offerId === offerId &&
             b.slot === starts_at &&
-            b.status !== "cancelled",
+            b.status !== "cancelled" &&
+            (b.status === "confirmed" ||
+              !b.holdExpiresAt ||
+              new Date(b.holdExpiresAt).getTime() > Date.now()),
         )
         .reduce((sum, b) => sum + b.partySize, 0);
       slots.push({

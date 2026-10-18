@@ -53,6 +53,9 @@ export function EditPostScreen({ route, navigation }: EditPostProps) {
   const [description, setDescription] = useState("");
   const [dateStr, setDateStr] = useState("");
   const [timeStr, setTimeStr] = useState("");
+  const [expiryDate, setExpiryDate] = useState("");
+  const [expiryTime, setExpiryTime] = useState("");
+  const [retry, setRetry] = useState(0);
   const [vacancies, setVacancies] = useState(2);
   const [cost, setCost] = useState("");
   const [tags, setTags] = useState<string[]>([]);
@@ -61,21 +64,33 @@ export function EditPostScreen({ route, navigation }: EditPostProps) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let active = true;
+    setLoading(true);
     getPost(postId)
       .then((p) => {
+        if (!active) return;
         if (!p) throw new Error("Post not found.");
         setPost(p);
         setTitle(p.title);
         setDescription(p.description);
         setDateStr(toDateInput(p.startsAt));
         setTimeStr(toTimeInput(p.startsAt));
+        setExpiryDate(p.expiresAt ? toDateInput(p.expiresAt) : "");
+        setExpiryTime(p.expiresAt ? toTimeInput(p.expiresAt) : "");
         setVacancies(p.vacancies);
         setCost(p.costCents !== undefined ? String(p.costCents / 100) : "");
         setTags(p.tags);
       })
-      .catch(() => setPost(null))
-      .finally(() => setLoading(false));
-  }, [postId]);
+      .catch(() => {
+        if (active) setPost(null);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [postId, retry]);
 
   if (loading) {
     return (
@@ -91,6 +106,7 @@ export function EditPostScreen({ route, navigation }: EditPostProps) {
           title="Couldn't load this post"
           hint="It may have been removed."
         />
+        <Button title="Retry" onPress={() => setRetry((n) => n + 1)} />
         <Button
           title="Go back"
           variant="ghost"
@@ -121,10 +137,19 @@ export function EditPostScreen({ route, navigation }: EditPostProps) {
     );
 
   const save = async () => {
+    if (saving) return;
     setFormError("");
     const startsAt = parseDateTime(dateStr, timeStr);
     if (!startsAt) {
       setFormError("Enter date as YYYY-MM-DD and time as HH:MM (24h).");
+      return;
+    }
+    const expiresAt =
+      expiryDate.trim() || expiryTime.trim()
+        ? parseDateTime(expiryDate, expiryTime)
+        : null;
+    if ((expiryDate.trim() || expiryTime.trim()) && !expiresAt) {
+      setFormError("Enter both an expiry date and time, or clear both.");
       return;
     }
     const costCents = cost.trim()
@@ -134,6 +159,7 @@ export function EditPostScreen({ route, navigation }: EditPostProps) {
       title,
       description,
       startsAt,
+      expiresAt,
       vacancies,
       costCents,
     });
@@ -153,6 +179,7 @@ export function EditPostScreen({ route, navigation }: EditPostProps) {
         title: title.trim(),
         description: description.trim(),
         startsAt: startsAt.toISOString(),
+        expiresAt: expiresAt?.toISOString() ?? null,
         vacancies,
         costCents: costCents ?? null,
         tags,
@@ -245,6 +272,35 @@ export function EditPostScreen({ route, navigation }: EditPostProps) {
             </View>
           </View>
         </View>
+        <Text style={styles.fieldLabel}>Requests close (optional)</Text>
+        <View style={styles.row}>
+          <View style={styles.half}>
+            <Input
+              label="Expiry date"
+              placeholder="YYYY-MM-DD"
+              value={expiryDate}
+              onChangeText={setExpiryDate}
+            />
+          </View>
+          <View style={styles.half}>
+            <Input
+              label="Expiry time"
+              placeholder="HH:MM"
+              value={expiryTime}
+              onChangeText={setExpiryTime}
+            />
+          </View>
+        </View>
+        {expiryDate || expiryTime ? (
+          <Button
+            title="Clear closing time"
+            variant="ghost"
+            onPress={() => {
+              setExpiryDate("");
+              setExpiryTime("");
+            }}
+          />
+        ) : null}
         <Text style={styles.fieldLabel}>Tags</Text>
         <View style={styles.chips}>
           {TAG_OPTIONS.map((tag) => {

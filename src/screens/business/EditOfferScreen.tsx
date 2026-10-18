@@ -1,5 +1,5 @@
 import { DateSheet, TimeSheet } from "../../components/DateTimeSheets";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -16,8 +16,12 @@ import { EmptyState } from "../../components/EmptyState";
 import { colors, typography, spacing } from "../../theme";
 import { BusinessStackParamList } from "../../navigation/types";
 import { getOffer, updateOffer, publishOffer } from "../../services/offers";
+import { useAuth } from "../../store/AuthContext";
 import { Offer } from "../../services/mappers";
-import { validateOfferInput, validateLiveOfferPatch } from "../../utils/validation";
+import {
+  validateOfferInput,
+  validateLiveOfferPatch,
+} from "../../utils/validation";
 
 type Props = NativeStackScreenProps<BusinessStackParamList, "EditOffer">;
 
@@ -61,6 +65,9 @@ function DateTimeField({
 /** Edit a draft (all fields) or a live offer (title, description, price only). */
 export function EditOfferScreen({ route, navigation }: Props) {
   const { offerId } = route.params;
+  const { profile, demoMode } = useAuth();
+  const request = useRef(0);
+  const savingLock = useRef(false);
   const [offer, setOffer] = useState<Offer | null>(null);
   const [state, setState] = useState<"loading" | "error" | "ready">("loading");
 
@@ -81,10 +88,22 @@ export function EditOfferScreen({ route, navigation }: Props) {
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
+    const ticket = ++request.current;
     setState("loading");
     try {
       const o = await getOffer(offerId);
-      if (!o || (o.status !== "draft" && o.status !== "live"))
+      if (ticket !== request.current) return;
+      if (
+        o &&
+        o.businessId !== profile?.id &&
+        !(demoMode && o.businessId === "b1")
+      )
+        throw new Error("Not your offer.");
+      if (
+        !o ||
+        (o.status !== "draft" && o.status !== "live") ||
+        (o.status === "live" && new Date(o.endsAt).getTime() <= Date.now())
+      )
         throw new Error("This offer can't be edited.");
       setOffer(o);
       setTitle(o.title);
@@ -93,9 +112,7 @@ export function EditOfferScreen({ route, navigation }: Props) {
         typeof o.discountPct === "number" ? String(o.discountPct) : "",
       );
       setPrice(
-        typeof o.priceCents === "number"
-          ? String(o.priceCents / 100)
-          : "",
+        typeof o.priceCents === "number" ? String(o.priceCents / 100) : "",
       );
       setStartsAtDate(new Date(o.startsAt));
       setEndsAtDate(new Date(o.endsAt));
@@ -104,12 +121,15 @@ export function EditOfferScreen({ route, navigation }: Props) {
       setResource(o.resourceKey ?? "Main");
       setState("ready");
     } catch (e) {
-      setState("error");
+      if (ticket === request.current) setState("error");
     }
-  }, [offerId]);
+  }, [offerId, profile?.id, demoMode]);
 
   useEffect(() => {
     void load();
+    return () => {
+      ++request.current;
+    };
   }, [load]);
 
   if (state === "loading") {
@@ -126,7 +146,12 @@ export function EditOfferScreen({ route, navigation }: Props) {
           title="Couldn't load this offer"
           hint="It may have been deleted."
         />
-        <Button title="Go back" variant="ghost" onPress={() => navigation.goBack()} />
+        <Button title="Retry" onPress={() => void load()} />
+        <Button
+          title="Go back"
+          variant="ghost"
+          onPress={() => navigation.goBack()}
+        />
       </Screen>
     );
   }
@@ -201,6 +226,7 @@ export function EditOfferScreen({ route, navigation }: Props) {
   };
 
   const onSave = async (andPublish: boolean) => {
+    if (savingLock.current) return;
     setFormError("");
     const patch = buildPatch();
     if (!patch) return;
@@ -213,6 +239,7 @@ export function EditOfferScreen({ route, navigation }: Props) {
         return;
       }
     }
+    savingLock.current = true;
     setSaving(true);
     try {
       await updateOffer(offer.id, patch);
@@ -224,6 +251,7 @@ export function EditOfferScreen({ route, navigation }: Props) {
         e instanceof Error ? e.message : "Please try again.",
       );
     } finally {
+      savingLock.current = false;
       setSaving(false);
     }
   };
@@ -250,11 +278,7 @@ export function EditOfferScreen({ route, navigation }: Props) {
           </Text>
         )}
 
-        <Input
-          label="Title"
-          value={title}
-          onChangeText={setTitle}
-        />
+        <Input label="Title" value={title} onChangeText={setTitle} />
         <Input
           label="Description"
           value={description}
@@ -268,7 +292,9 @@ export function EditOfferScreen({ route, navigation }: Props) {
             <Input
               label="Discount (%)"
               value={discount}
-              onChangeText={(t: string) => setDiscount(t.replace(/[^0-9]/g, ""))}
+              onChangeText={(t: string) =>
+                setDiscount(t.replace(/[^0-9]/g, ""))
+              }
               keyboardType="number-pad"
             />
           </View>
@@ -316,13 +342,17 @@ export function EditOfferScreen({ route, navigation }: Props) {
             <Input
               label="Places per slot"
               value={capacity}
-              onChangeText={(t: string) => setCapacity(t.replace(/[^0-9]/g, ""))}
+              onChangeText={(t: string) =>
+                setCapacity(t.replace(/[^0-9]/g, ""))
+              }
               keyboardType="number-pad"
             />
             <Input
               label="Slot duration (minutes)"
               value={duration}
-              onChangeText={(t: string) => setDuration(t.replace(/[^0-9]/g, ""))}
+              onChangeText={(t: string) =>
+                setDuration(t.replace(/[^0-9]/g, ""))
+              }
               keyboardType="number-pad"
             />
             <Input

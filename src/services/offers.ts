@@ -133,19 +133,6 @@ export async function createDraft(
     return created;
   }
   const supabase = getSupabase()!;
-  // One draft per title: reuse an existing draft instead of duplicating it
-  // (e.g. after a failed publish attempt). Escape LIKE wildcards so a title
-  // containing % or _ can't false-match an unrelated draft.
-  const escaped = input.title.trim().replace(/[%_\\]/g, (c) => `\\${c}`);
-  const { data: existing } = await supabase
-    .from("offers")
-    .select("id")
-    .eq("business_id", businessId)
-    .eq("status", "draft")
-    .ilike("title", escaped)
-    .limit(1)
-    .maybeSingle();
-  if (existing) return updateOffer(existing.id as string, input);
   const { data, error } = await supabase
     .from("offers")
     .insert(toDb(input, businessId, "draft"))
@@ -212,9 +199,13 @@ export async function updateOffer(
       title: input.title?.trim() ?? o.title,
       description: input.description?.trim() ?? o.description,
       discountPct:
-        input.discountPct === undefined ? o.discountPct : (input.discountPct ?? undefined),
+        input.discountPct === undefined
+          ? o.discountPct
+          : (input.discountPct ?? undefined),
       priceCents:
-        input.priceCents === undefined ? o.priceCents : (input.priceCents ?? undefined),
+        input.priceCents === undefined
+          ? o.priceCents
+          : (input.priceCents ?? undefined),
       startsAt: input.startsAt ?? o.startsAt,
       endsAt: input.endsAt ?? o.endsAt,
       slotCapacity: input.slotCapacity ?? o.slotCapacity,

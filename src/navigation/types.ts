@@ -53,6 +53,11 @@ export type BusinessStackParamList = {
   EditBusinessProfile: undefined;
 };
 
+export type BusinessTabNav = CompositeNavigationProp<
+  BottomTabNavigationProp<BusinessTabParamList>,
+  NativeStackNavigationProp<BusinessStackParamList>
+>;
+
 /** Navigation available inside personal tab screens (tab + parent stack). */
 export type PersonalTabNav = CompositeNavigationProp<
   BottomTabNavigationProp<PersonalTabParamList>,

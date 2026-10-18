@@ -22,6 +22,8 @@ import { Conversation } from "../../services/mappers";
 
 type Props = {
   navigation: {
+    goBack?: () => void;
+    canGoBack?: () => boolean;
     navigate: (screen: string, params?: Record<string, unknown>) => void;
   };
 };
@@ -88,6 +90,13 @@ export function ChatListScreen({ navigation }: Props) {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scroll}
       >
+        {navigation.canGoBack?.() && (
+          <Button
+            title="← Back"
+            variant="ghost"
+            onPress={() => navigation.goBack?.()}
+          />
+        )}
         <Text style={styles.header}>Messages</Text>
         {state === "loading" ? (
           <Text style={styles.status}>Loading…</Text>

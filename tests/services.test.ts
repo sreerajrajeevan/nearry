@@ -218,3 +218,103 @@ test("place suggestions use the server function contract, never a provider key o
   await searchPlaces("in");
   assert.equal(calls.length, 0);
 });
+
+test("email login never creates an account, signup passes the chosen role, and no phone is sent", async () => {
+  const { sendEmailOtp } = await import("../src/services/emailAuth");
+  handler = () => ({});
+  await sendEmailOtp(" Person@Example.com ", "personal", undefined, false);
+  assert.match(calls[0].url.pathname, /auth\/v1\/otp$/);
+  assert.equal(calls[0].body.email, "person@example.com");
+  assert.equal(calls[0].body.create_user, false);
+  assert.ok(!("phone" in calls[0].body));
+  calls.length = 0;
+  await sendEmailOtp("owner@example.com", "business", "Owner", true);
+  assert.equal(calls[0].body.create_user, true);
+  assert.equal(calls[0].body.data.account_type, "business");
+  assert.equal(calls[0].body.data.display_name, "Owner");
+});
+
+test("badge totals come from one authorized snapshot and count each chat message once", async () => {
+  const { getUnreadCounts } = await import("../src/services/unread");
+  handler = () => ({ messages: 3, notifications: 5, other_notifications: 2 });
+  assert.deepEqual(await getUnreadCounts(), {
+    messages: 3,
+    notifications: 5,
+    activity: 5,
+  });
+  assert.match(calls[0].url.pathname, /rpc\/unread_counts$/);
+});
+
+test("clearing offer price/discount sends null; oversized booking groups never reach the server", async () => {
+  const offers = await import("../src/services/offers");
+  const bookings = await import("../src/services/bookings");
+  handler = () => ({
+    id: "offer",
+    business_id: "business",
+    title: "Offer",
+    status: "draft",
+    business: { display_name: "Business" },
+  });
+  await offers.updateOffer("offer", { priceCents: null, discountPct: null });
+  assert.deepEqual(calls[0].body.p_patch, {
+    price_cents: null,
+    discount_pct: null,
+  });
+  calls.length = 0;
+  await assert.rejects(bookings.bookOffer("offer", "slot", 51), /1 and 50/);
+  assert.equal(calls.length, 0);
+});
+
+test("shared realtime listeners reload after reconnect and remove a channel only after the last unsubscribe", async () => {
+  const { getSupabase } = await import("../src/services/supabase");
+  const { multiplexSubscribe } = await import("../src/services/realtime");
+  const db = getSupabase()!;
+  const originalChannel = db.channel,
+    originalRemove = db.removeChannel;
+  let status: (status: any) => void = () => {};
+  let created = 0,
+    removed = 0,
+    first = 0,
+    second = 0;
+  const channel = {
+    subscribe(fn: typeof status) {
+      status = fn;
+      return this;
+    },
+  };
+  db.channel = (() => {
+    created++;
+    return channel;
+  }) as any;
+  db.removeChannel = (async () => {
+    removed++;
+    return "ok";
+  }) as any;
+  try {
+    const a = multiplexSubscribe(
+      "regression",
+      (ch) => ch,
+      () => first++,
+    );
+    const b = multiplexSubscribe(
+      "regression",
+      (ch) => ch,
+      () => second++,
+    );
+    assert.equal(created, 1);
+    status("SUBSCRIBED");
+    status("CHANNEL_ERROR");
+    status("SUBSCRIBED");
+    assert.deepEqual([first, second], [2, 2]);
+    a();
+    a();
+    assert.equal(removed, 0);
+    status("SUBSCRIBED");
+    assert.deepEqual([first, second], [2, 3]);
+    b();
+    assert.equal(removed, 1);
+  } finally {
+    db.channel = originalChannel;
+    db.removeChannel = originalRemove;
+  }
+});

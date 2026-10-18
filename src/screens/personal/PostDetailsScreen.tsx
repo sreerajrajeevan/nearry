@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -7,7 +7,8 @@ import {
   StyleSheet,
   Alert,
 } from "react-native";
-import { useFocusEffect } from "@react-navigation/native";
+import { useLiveQuery } from "../../hooks/useLiveQuery";
+import { postState } from "../../utils/flowState";
 import { Screen } from "../../components/Screen";
 import { Button } from "../../components/Button";
 import { Badge } from "../../components/Badge";
@@ -17,7 +18,12 @@ import { colors, typography, spacing } from "../../theme";
 import { getOrCreateConversation } from "../../services/chat";
 import { PostDetailsProps } from "../../navigation/types";
 import { useAuth } from "../../store/AuthContext";
-import { getPost, cancelPost, deletePost, subscribeToPosts } from "../../services/posts";
+import {
+  getPost,
+  cancelPost,
+  deletePost,
+  subscribeToPosts,
+} from "../../services/posts";
 import {
   approveRequest,
   cancelParticipation,
@@ -40,52 +46,35 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
   const { profile } = useAuth();
   const myId = profile?.id;
 
-  const [post, setPost] = useState<NeedPost | null>(null);
-  const [requests, setRequests] = useState<JoinRequest[]>([]);
-  const [myRequest, setMyRequest] = useState<JoinRequest | null>(null);
-  const [state, setState] = useState<"loading" | "error" | "ready">("loading");
-  const [errorMsg, setErrorMsg] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
-
-  const load = useCallback(async (silent = false) => {
-    if (!silent) {
-      setState("loading");
-      setErrorMsg("");
-    }
-    try {
+  const {
+    data,
+    state,
+    error: errorMsg,
+    refresh: load,
+  } = useLiveQuery(
+    `post:${postId}:${myId}`,
+    async () => {
       const p = await getPost(postId);
       if (!p) throw new Error("Post not found.");
-      setPost(p);
       const [reqs, mine] = await Promise.all([
         listRequestsForPost(postId),
         myId ? myRequestForPost(postId, myId) : Promise.resolve(null),
       ]);
-      setRequests(reqs);
-      setMyRequest(mine);
-      setState("ready");
-    } catch (e) {
-      setErrorMsg(e instanceof Error ? e.message : "Could not load this post.");
-      setState("error");
-    }
-  }, [postId, myId]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  // Refresh when returning to the screen, and live via realtime.
-  useFocusEffect(
-    useCallback(() => {
-      void load();
-    }, [load]),
+      return { post: p, requests: reqs, myRequest: mine };
+    },
+    subscribeToPosts,
   );
-  useEffect(() => subscribeToPosts(() => void load(true)), [load]);
+  const post = data?.post;
+  const requests = data?.requests ?? [];
+  const myRequest = data?.myRequest;
 
   const isHost = !!myId && post?.authorId === myId;
   const pending = requests.filter((r) => r.status === "pending");
   const approved = requests.filter((r) => r.status === "approved");
 
   const run = async (key: string, fn: () => Promise<void>) => {
+    if (busy) return;
     setBusy(key);
     try {
       await fn();
@@ -144,7 +133,7 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
     return (
       <Screen padded>
         <EmptyState title="Couldn't load this post" hint={errorMsg} />
-        <Button title="Retry" onPress={load} />
+        <Button title="Retry" onPress={() => void load()} />
         <View style={styles.gap} />
         <Button
           title="Go back"
@@ -155,12 +144,10 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
     );
   }
 
-  const spotsBadge =
-    post.status === "open"
-      ? post.spotsLeft > 0
-        ? `${post.spotsLeft} spot${post.spotsLeft === 1 ? "" : "s"} left`
-        : "Full"
-      : post.status;
+  const flow = postState(post);
+  const spotsBadge = flow.accepting
+    ? `${post.spotsLeft} spot${post.spotsLeft === 1 ? "" : "s"} left`
+    : flow.label;
 
   return (
     <Screen>
@@ -225,7 +212,7 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
                 <View style={styles.flex} />
                 <TouchableOpacity
                   activeOpacity={0.7}
-                  disabled={busy === `d${r.id}`}
+                  disabled={busy !== null}
                   onPress={() => run(`d${r.id}`, () => declineRequest(r.id))}
                 >
                   <Text style={styles.declineLink}>
@@ -234,7 +221,7 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
                 </TouchableOpacity>
                 <TouchableOpacity
                   activeOpacity={0.7}
-                  disabled={busy === `a${r.id}`}
+                  disabled={busy !== null || !flow.accepting}
                   onPress={() =>
                     run(`a${r.id}`, () => approveRequest(r.id).then(() => {}))
                   }
@@ -259,62 +246,69 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
                 </TouchableOpacity>
               </View>
             ))}
-            {post.status !== "cancelled" &&
-              new Date(post.startsAt).getTime() > Date.now() && (
-                <View style={styles.hostActions}>
-                  {post.status === "open" && (
-                    <>
-                      <Button
-                        title="Edit post"
-                        variant="secondary"
-                        onPress={() =>
-                          navigation.navigate("EditPost", { postId: post.id })
-                        }
-                      />
-                      <View style={styles.gap} />
-                    </>
-                  )}
-                  <Button
-                    title="Cancel post"
-                    variant="danger"
-                    loading={busy === "cancel"}
-                    onPress={onCancelPost}
-                  />
-                  <View style={styles.gap} />
-                  <Button
-                    title="Delete post"
-                    variant="ghost"
-                    loading={busy === "delete"}
-                    onPress={() =>
-                      Alert.alert(
-                        "Delete this post?",
-                        "It will be permanently removed for everyone. This cannot be undone.",
-                        [
-                          { text: "Keep it", style: "cancel" },
-                          {
-                            text: "Delete",
-                            style: "destructive",
-                            onPress: () =>
-                              run("delete", async () => {
-                                await deletePost(postId);
-                                navigation.goBack();
-                              }),
-                          },
-                        ],
-                      )
-                    }
-                  />
-                </View>
-              )}
+            {flow.canCancel && (
+              <View style={styles.hostActions}>
+                {flow.canEdit && (
+                  <>
+                    <Button
+                      title="Edit post"
+                      variant="secondary"
+                      onPress={() =>
+                        navigation.navigate("EditPost", { postId: post.id })
+                      }
+                    />
+                    <View style={styles.gap} />
+                  </>
+                )}
+                <Button
+                  title="Cancel post"
+                  variant="danger"
+                  loading={busy === "cancel"}
+                  onPress={onCancelPost}
+                />
+                <Button
+                  title="Delete post"
+                  variant="ghost"
+                  disabled={busy !== null || requests.length > 0}
+                  onPress={() =>
+                    Alert.alert(
+                      "Delete this post?",
+                      "Posts without requests can be permanently deleted. Cancel plans with requests to retain their history.",
+                      [
+                        { text: "Keep it", style: "cancel" },
+                        {
+                          text: "Delete",
+                          style: "destructive",
+                          onPress: () =>
+                            void run("delete", async () => {
+                              await deletePost(postId);
+                              navigation.goBack();
+                            }),
+                        },
+                      ],
+                    )
+                  }
+                />
+              </View>
+            )}
           </View>
         ) : (
           <View style={styles.section}>
-            {(!myRequest ||
-              myRequest.status === "declined" ||
-              myRequest.status === "withdrawn") &&
-            post.status !== "open" ? (
+            {post.status === "cancelled" ? (
               <EmptyState
-                title={`This post is ${post.status}`}
+                title="This plan was cancelled"
+                hint="The host cancelled this plan. Find another hello nearby."
+              />
+            ) : (!myRequest ||
+                myRequest.status === "declined" ||
+                myRequest.status === "withdrawn") &&
+              !flow.accepting ? (
+              <EmptyState
+                title={
+                  flow.label === "Past"
+                    ? "This plan has passed"
+                    : "Requests are closed"
+                }
                 hint="Keep an eye out for the next one."
               />
             ) : !myRequest ||
@@ -339,16 +333,12 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
                   onPress={() => run("wd", () => withdrawRequest(myRequest.id))}
                 />
               </>
-            ) : post.status === "cancelled" ? (
-              <>
-                <Badge label="Post cancelled" tone="red" />
-                <Text style={styles.cancelledNote}>
-                  The host cancelled this activity.
-                </Text>
-              </>
             ) : (
               <>
-                <Badge label="You're in" tone="green" />
+                <Badge
+                  label={flow.label === "Past" ? "Past plan" : "You're in"}
+                  tone="green"
+                />
                 <View style={styles.gap} />
                 <Button
                   title="Message host"
@@ -359,14 +349,16 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
                   }
                 />
                 <View style={styles.gap} />
-                <Button
-                  title="Leave activity"
-                  variant="danger"
-                  loading={busy === "lv"}
-                  onPress={() =>
-                    run("lv", () => cancelParticipation(myRequest.id))
-                  }
-                />
+                {flow.canLeave && (
+                  <Button
+                    title="Leave activity"
+                    variant="danger"
+                    loading={busy === "lv"}
+                    onPress={() =>
+                      run("lv", () => cancelParticipation(myRequest.id))
+                    }
+                  />
+                )}
               </>
             )}
           </View>
@@ -449,10 +441,5 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
   hostActions: { marginTop: spacing.lg },
-  cancelledNote: {
-    ...typography.bodySmall,
-    color: colors.textDim,
-    marginTop: spacing.sm,
-  },
   gap: { height: spacing.md },
 });

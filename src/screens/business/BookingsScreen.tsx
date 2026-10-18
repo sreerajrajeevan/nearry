@@ -9,7 +9,8 @@ import {
   TouchableOpacity,
   Alert,
 } from "react-native";
-import { useFocusEffect } from "@react-navigation/native";
+import { useLiveQuery } from "../../hooks/useLiveQuery";
+import { bookingState } from "../../utils/flowState";
 import { Screen } from "../../components/Screen";
 import { Button } from "../../components/Button";
 import { Badge } from "../../components/Badge";
@@ -26,7 +27,13 @@ import {
 import { Booking, isHoldExpired, isBookingStale } from "../../services/mappers";
 import { getOrCreateConversation } from "../../services/chat";
 
-const FILTERS = ["ALL", "PENDING", "CONFIRMED", "CANCELLED"] as const;
+const FILTERS = [
+  "ALL",
+  "PENDING",
+  "CONFIRMED",
+  "CANCELLED",
+  "EXPIRED",
+] as const;
 type Filter = (typeof FILTERS)[number];
 
 function statusTone(status: Booking["status"]): "neutral" | "green" | "red" {
@@ -45,34 +52,20 @@ type Props = {
 export function BookingsScreen({ navigation }: Props) {
   const { profile } = useAuth();
   const [filter, setFilter] = useState<Filter>("ALL");
-  const [bookings, setBookings] = useState<Booking[]>([]);
-  const [state, setState] = useState<"loading" | "error" | "ready">("loading");
-  const [refreshing, setRefreshing] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
-
-  const load = useCallback(async (silent = false) => {
-    if (!profile) return;
-    if (!silent) setState("loading");
-    try {
-      setBookings(await listBookingsForBusiness(profile.id));
-      setState("ready");
-    } catch {
-      if (!silent) setState("error");
-    }
-  }, [profile]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-  useFocusEffect(
-    useCallback(() => {
-      void load();
-    }, [load]),
+  const {
+    data: bookings = [],
+    state,
+    refreshing,
+    refresh: load,
+  } = useLiveQuery(
+    `business-bookings:${profile?.id}`,
+    () => (profile ? listBookingsForBusiness(profile.id) : Promise.resolve([])),
+    subscribeToBookings,
   );
-  useEffect(() => subscribeToBookings(() => void load(true)), [load]);
 
   const visible = bookings.filter(
-    (b) => filter === "ALL" || b.status === filter.toLowerCase(),
+    (b) => filter === "ALL" || bookingState(b).label.toUpperCase() === filter,
   );
 
   const openChat = async (booking: Booking) => {
@@ -96,6 +89,7 @@ export function BookingsScreen({ navigation }: Props) {
   };
 
   const run = async (key: string, fn: () => Promise<void>) => {
+    if (busy) return;
     setBusy(key);
     try {
       await fn();
@@ -119,9 +113,7 @@ export function BookingsScreen({ navigation }: Props) {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={async () => {
-              setRefreshing(true);
-              await load();
-              setRefreshing(false);
+              await load(true);
             }}
           />
         }
@@ -178,7 +170,7 @@ export function BookingsScreen({ navigation }: Props) {
                   <Text style={styles.offer}>{b.offerTitle}</Text>
                 </View>
                 <Badge
-                  label={b.status.toUpperCase()}
+                  label={bookingState(b).label}
                   tone={statusTone(b.status)}
                 />
               </View>
@@ -229,6 +221,28 @@ export function BookingsScreen({ navigation }: Props) {
                       </TouchableOpacity>
                     </>
                   ))}
+                {b.status === "confirmed" && bookingState(b).canCancel && (
+                  <Button
+                    title="Cancel booking"
+                    variant="danger"
+                    disabled={busy !== null}
+                    onPress={() =>
+                      Alert.alert(
+                        "Cancel this booking?",
+                        "The customer will be notified and the places released.",
+                        [
+                          { text: "Keep booking", style: "cancel" },
+                          {
+                            text: "Cancel booking",
+                            style: "destructive",
+                            onPress: () =>
+                              void run(`x${b.id}`, () => cancelBooking(b.id)),
+                          },
+                        ],
+                      )
+                    }
+                  />
+                )}
               </View>
             </View>
           ))

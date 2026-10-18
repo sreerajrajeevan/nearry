@@ -24,7 +24,7 @@ For a native Google login test, use a development/standalone build with the `nea
 
 ## Backend installation / upgrade
 
-Follow [migration instructions](supabase/migrations/README.md). New installs use migrations `00001`–`00019`; existing installations apply only missing migrations. `run-all.sql` is fresh-database-only and refuses to run when profiles already exist. No production database is automatically modified by the application or CI.
+Follow [migration instructions](supabase/migrations/README.md). New installs use migrations `00001`–`00021`; existing installations apply only missing migrations. `run-all.sql` is fresh-database-only and refuses to run when profiles already exist. No production database is automatically modified by the application or CI.
 
 Migrations `00011`–`00018` introduce required RPCs, so deploy migrations and the matching app version together. Older app versions relying on raw join/booking writes will need to update.
 
@@ -94,6 +94,10 @@ TEST_DATABASE_URL=postgres://postgres:password@localhost:5432/nearry_test npm ru
 The suite creates test schemas and roles; never point it at a real project. CI runs this against a disposable PostGIS service, including simultaneous last-spot approvals and bookings. A committed lockfile and `npm ci` make checks repeatable.
 
 Before rollout, test Google/OTP delivery, app restart, both account types, denied location permission, proof upload, a three-account join journey, bookings, chat and notifications on real devices. No README claim substitutes for a live test. Payments and a full administrator dashboard remain outside this milestone; business proof review uses the protected email review page.
+
+## Core journey checks
+
+See the [core journey changes and phone checklist](docs/core-journey-checklist.md). Existing projects at `00020` need only `00021_core_journeys.sql` before the matching app update. Business users can manage saved offers from Dashboard → My offers; notifications open their relevant workflow.
 
 ## Backend audit
 
