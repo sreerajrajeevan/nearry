@@ -2,8 +2,8 @@ import {
   LegalScreen,
   RestrictedAccountScreen,
 } from "../screens/settings/SafetyScreens";
-import React, { useEffect } from "react";
-import { View, ActivityIndicator, StyleSheet, Text, Alert } from "react-native";
+import React, { useEffect, useState } from "react";
+import { View, StyleSheet, Text, Alert } from "react-native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { Button } from "../components/Button";
 import { AccountTypeScreen } from "../screens/auth/AccountTypeScreen";
@@ -12,6 +12,7 @@ import { useReducedMotion } from "../store/MotionContext";
 import { RootStackParamList } from "./types";
 import { useAuth } from "../store/AuthContext";
 import { usePushSetup } from "../hooks/useUnreadCounts";
+import { StartupSplash } from "../components/StartupSplash";
 import { WelcomeScreen } from "../screens/WelcomeScreen";
 import { PersonalAuthScreen } from "../screens/auth/PersonalAuthScreen";
 import { BusinessAuthScreen } from "../screens/auth/BusinessAuthScreen";
@@ -51,6 +52,14 @@ export function RootNavigator() {
 
   usePushSetup();
 
+  // Minimum splash time so the logo animation always completes,
+  // even when session bootstrap is instant.
+  const [splashMinElapsed, setSplashMinElapsed] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setSplashMinElapsed(true), 2300);
+    return () => clearTimeout(t);
+  }, []);
+
   // The login lane is only a hint: one email = one account = one fixed type.
   // If the user picked the other lane, say so instead of landing silently.
   useEffect(() => {
@@ -63,12 +72,8 @@ export function RootNavigator() {
     );
   }, [roleMismatch, clearRoleMismatch]);
 
-  if (bootstrapping || (!demoMode && profileLoading)) {
-    return (
-      <View style={styles.loading}>
-        <ActivityIndicator color={colors.red} size="large" />
-      </View>
-    );
+  if (bootstrapping || (!demoMode && profileLoading) || !splashMinElapsed) {
+    return <StartupSplash />;
   }
 
   if (!demoMode && !profile && (profileError || session)) {
