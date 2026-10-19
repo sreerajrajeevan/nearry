@@ -68,8 +68,9 @@ export function StartupSplash() {
         useNativeDriver: false,
       }),
       // 2. Arch curves over.
-      Animated.parallel(
-        [
+      Animated.sequence([
+        Animated.delay(350),
+        Animated.parallel([
           Animated.timing(archOpacity, {
             toValue: 1,
             duration: 350,
@@ -82,9 +83,8 @@ export function StartupSplash() {
             easing: easeOut,
             useNativeDriver: true,
           }),
-        ],
-        { delay: 350 },
-      ),
+        ]),
+      ]),
       // 3. Right stem draws downward.
       Animated.timing(stemRightH, {
         toValue: RIGHT_STEM_H,
@@ -125,8 +125,9 @@ export function StartupSplash() {
         ]),
       ]),
       // 6. Wordmark fades up.
-      Animated.parallel(
-        [
+      Animated.sequence([
+        Animated.delay(1400),
+        Animated.parallel([
           Animated.timing(wordOpacity, {
             toValue: 1,
             duration: 450,
@@ -139,9 +140,8 @@ export function StartupSplash() {
             easing: easeOut,
             useNativeDriver: true,
           }),
-        ],
-        { delay: 1400 },
-      ),
+        ]),
+      ]),
     ]).start();
   }, [
     reduced,
