@@ -14,6 +14,7 @@ import { Button } from "../../components/Button";
 import { Badge } from "../../components/Badge";
 import { EmptyState } from "../../components/EmptyState";
 import { Avatar } from "../../components/Avatar";
+import { PostPhotoGallery } from "../../components/PostPhotoGallery";
 import { colors, typography, spacing } from "../../theme";
 import { getOrCreateConversation } from "../../services/chat";
 import { PostDetailsProps } from "../../navigation/types";
@@ -185,6 +186,7 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
             Requests close {timeLeft(post.expiresAt)}
           </Text>
         )}
+        <PostPhotoGallery postId={postId} />
         <Text style={styles.desc}>{post.description}</Text>
         {post.tags.length > 0 && (
           <View style={styles.tags}>

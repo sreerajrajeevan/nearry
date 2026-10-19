@@ -154,6 +154,52 @@ test("all migrations preserve legacy data tables", async () => {
       table,
     );
 });
+test("post photo ownership permits host attachments and rejects another user's writes", async () => {
+  const pid = await post();
+  const photo = (
+    await asUser(host, (tx) =>
+      tx.query(
+        "insert into post_photos(post_id,photo_url,sort_order) values($1,'https://photos.test/plan.png',0) returning id",
+        [pid],
+      ),
+    )
+  ).rows[0];
+  const gallery = await asUser(b, (tx) =>
+    tx.query("select photo_url from post_photos where post_id=$1", [pid]),
+  );
+  assert.equal(gallery.rows[0].photo_url, "https://photos.test/plan.png");
+  await assert.rejects(
+    asUser(b, (tx) =>
+      tx.query(
+        "insert into post_photos(post_id,photo_url) values($1,'https://photos.test/forged.png')",
+        [pid],
+      ),
+    ),
+    /row-level security/,
+  );
+  await asUser(b, (tx) =>
+    tx.query("delete from post_photos where id=$1", [photo.id]),
+  );
+  assert.equal(
+    (
+      await db.query("select count(*)::int as n from post_photos where id=$1", [
+        photo.id,
+      ])
+    ).rows[0].n,
+    1,
+  );
+  await asUser(host, (tx) =>
+    tx.query("delete from post_photos where id=$1", [photo.id]),
+  );
+  assert.equal(
+    (
+      await db.query("select count(*)::int as n from post_photos where id=$1", [
+        photo.id,
+      ])
+    ).rows[0].n,
+    0,
+  );
+});
 test("legacy messages, notifications and bookings survive the upgrade", async () => {
   assert.equal(
     (await db.query("select body from legacy_messages")).rows[0].body,

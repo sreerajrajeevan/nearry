@@ -1,9 +1,12 @@
 import * as ImagePicker from "expo-image-picker";
+import * as FileSystem from "expo-file-system";
+import { Platform } from "react-native";
 import { getSupabase, isDemoMode } from "./supabase";
-
-const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL ?? "";
-
-export type PhotoRef = { id: string; photo_url: string; sort_order: number };
+import { imageBytesFromBase64 } from "../utils/imageBytes";
+import { MAX_PHOTO_BYTES, uploadPhotoBytes } from "./photoStorage";
+import type { PhotoRef } from "./postPhotos";
+export { listPostPhotos, addPostPhoto, deletePostPhoto } from "./postPhotos";
+export type { PhotoRef } from "./postPhotos";
 
 /** Preset amenities businesses can pick from (plus free-form custom entries). */
 export const AMENITY_PRESETS = [
@@ -49,59 +52,54 @@ export const HOME_CATEGORIES = [
 ] as const;
 
 export async function pickPhoto(): Promise<string | null> {
-  const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-  if (status !== "granted") throw new Error("Photo library permission denied.");
+  // The system picker grants access to the chosen item. Do not require broad
+  // library permission or await a permission prompt before a web user gesture.
   const result = await ImagePicker.launchImageLibraryAsync({
-    mediaTypes: ImagePicker.MediaTypeOptions.Images,
+    mediaTypes: ["images"],
     allowsEditing: true,
     quality: 0.8,
   });
   if (result.canceled || result.assets.length === 0) return null;
-  return result.assets[0].uri;
+  const photo = result.assets[0];
+  if (photo.fileSize && photo.fileSize > MAX_PHOTO_BYTES)
+    throw new Error("Choose a photo smaller than 10 MB.");
+  return photo.uri;
 }
 
 /**
- * Upload a local image to the public photos bucket under <userId>/<folder>/<ts>.jpg.
- * Uses FormData — the reliable React Native file-upload path.
+ * Read native files as bytes and web blob/data URIs as ArrayBuffers.
+ * SDK upload supplies the API key and current auth token on both platforms.
  */
 export async function uploadPhoto(
   userId: string,
   localUri: string,
   folder: string,
 ): Promise<string> {
-  const supabase = getSupabase()!;
+  if (isDemoMode()) return localUri;
+  const supabase = getSupabase();
+  if (!supabase) throw new Error("Photo upload needs the backend configured.");
   const {
     data: { session },
   } = await supabase.auth.getSession();
-  if (!session) throw new Error("Not signed in.");
-
-  const formData = new FormData();
-  formData.append("file", {
-    uri: localUri,
-    name: "photo.jpg",
-    type: "image/jpeg",
-  } as any);
-
-  const path = `${userId}/${folder}/${Date.now()}.jpg`;
-  const response = await fetch(
-    `${SUPABASE_URL}/storage/v1/object/photos/${path}`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${session.access_token}`,
-        "x-upsert": "true",
-      },
-      body: formData,
-    },
-  );
-  if (!response.ok) {
-    const detail = await response.text().catch(() => "");
-    throw new Error(
-      `Upload failed: ${response.status} ${detail.slice(0, 120)}`.trim(),
+  if (!session || session.user.id !== userId)
+    throw new Error("Sign in again to upload photos.");
+  let bytes: Uint8Array;
+  if (Platform.OS === "web") {
+    const response = await fetch(localUri);
+    if (!response.ok)
+      throw new Error("Could not read this photo. Please choose it again.");
+    bytes = new Uint8Array(await response.arrayBuffer());
+  } else {
+    const info = await FileSystem.getInfoAsync(localUri);
+    if (info.exists && info.size > MAX_PHOTO_BYTES)
+      throw new Error("Choose a photo smaller than 10 MB.");
+    bytes = imageBytesFromBase64(
+      await FileSystem.readAsStringAsync(localUri, {
+        encoding: FileSystem.EncodingType.Base64,
+      }),
     );
   }
-  const { data } = supabase.storage.from("photos").getPublicUrl(path);
-  return `${data.publicUrl}?t=${Date.now()}`;
+  return uploadPhotoBytes(userId, bytes, folder);
 }
 
 async function table(tableName: "venue_photos" | "post_photos") {
@@ -140,41 +138,8 @@ export async function deleteVenuePhoto(id: string): Promise<void> {
   if (error) throw new Error(error.message);
 }
 
-export async function listPostPhotos(postId: string): Promise<PhotoRef[]> {
-  const { data, error } = await (
-    await table("post_photos")
-  )
-    .select("id, photo_url, sort_order")
-    .eq("post_id", postId)
-    .order("sort_order", { ascending: true });
-  if (error) throw new Error(error.message);
-  return (data ?? []) as PhotoRef[];
-}
-
-export async function addPostPhoto(
-  postId: string,
-  photoUrl: string,
-): Promise<void> {
-  const existing = await listPostPhotos(postId);
-  const { error } = await (
-    await table("post_photos")
-  ).insert({
-    post_id: postId,
-    photo_url: photoUrl,
-    sort_order: existing.length,
-  });
-  if (error) throw new Error(error.message);
-}
-
-export async function deletePostPhoto(id: string): Promise<void> {
-  const { error } = await (await table("post_photos")).delete().eq("id", id);
-  if (error) throw new Error(error.message);
-}
-
 /** Spotlight offers: live, flagged, with a cover photo, newest first. */
-export async function listSpotlightOffers(
-  limit = 10,
-): Promise<
+export async function listSpotlightOffers(limit = 10): Promise<
   {
     id: string;
     title: string;

@@ -1,8 +1,10 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet, Image } from "react-native";
 import { colors, typography, spacing } from "../theme";
 import { Icon, IconName } from "./Icon";
 import { MotionPressable } from "./Motion";
+import { ActivityArt } from "./ActivityArt";
+import { ActivityArtwork } from "../utils/activityArtwork";
 
 type Props = {
   kind: "Plan" | "Place" | "Offer";
@@ -13,6 +15,7 @@ type Props = {
   action: string;
   onPress: () => void;
   imageUrl?: string;
+  artwork?: ActivityArtwork;
 };
 
 /** One generous tap target; the text action opens the existing details flow. */
@@ -25,7 +28,10 @@ export function DiscoveryCard({
   action,
   onPress,
   imageUrl,
+  artwork,
 }: Props) {
+  const [photoFailed, setPhotoFailed] = useState(false);
+  useEffect(() => setPhotoFailed(false), [imageUrl]);
   return (
     <MotionPressable
       accessibilityRole="button"
@@ -36,12 +42,15 @@ export function DiscoveryCard({
       style={styles.card}
     >
       <View style={styles.thumbnail}>
-        {imageUrl ? (
+        {imageUrl && !photoFailed ? (
           <Image
             source={{ uri: imageUrl }}
             resizeMode="cover"
             style={styles.photo}
+            onError={() => setPhotoFailed(true)}
           />
+        ) : artwork ? (
+          <ActivityArt artwork={artwork} size={76} />
         ) : (
           <Icon name={icon} size={27} color={colors.accent} />
         )}
@@ -75,13 +84,13 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   thumbnail: {
-    width: 65,
+    width: 80,
     minHeight: 86,
     borderRadius: 15,
     overflow: "hidden",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: colors.claySoft,
+    backgroundColor: colors.background,
   },
   copy: { flex: 1, minWidth: 0 },
   photo: { width: "100%", height: "100%", position: "absolute" },
