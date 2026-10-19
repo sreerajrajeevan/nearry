@@ -1,3 +1,12 @@
+import {
+  SafetyPrivacyScreen,
+  BlockedUsersScreen,
+  MyReportsScreen,
+  ReportScreen,
+  NotificationSettingsScreen,
+  DeleteAccountScreen,
+  LegalScreen,
+} from "../screens/settings/SafetyScreens";
 import React from "react";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { colors } from "../theme";
@@ -35,6 +44,16 @@ export function BusinessStack() {
         component={EditBusinessProfileScreen}
       />
       <Stack.Screen name="ManageVenue" component={ManageVenueScreen} />
+      <Stack.Screen name="SafetyPrivacy" component={SafetyPrivacyScreen} />
+      <Stack.Screen name="BlockedUsers" component={BlockedUsersScreen} />
+      <Stack.Screen name="MyReports" component={MyReportsScreen} />
+      <Stack.Screen name="Report" component={ReportScreen} />
+      <Stack.Screen
+        name="NotificationSettings"
+        component={NotificationSettingsScreen}
+      />
+      <Stack.Screen name="DeleteAccount" component={DeleteAccountScreen} />
+      <Stack.Screen name="Legal" component={LegalScreen} />
     </Stack.Navigator>
   );
 }

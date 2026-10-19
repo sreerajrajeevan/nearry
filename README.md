@@ -24,7 +24,7 @@ For a native Google login test, use a development/standalone build with the `nea
 
 ## Backend installation / upgrade
 
-Follow [migration instructions](supabase/migrations/README.md). New installs use migrations `00001`–`00023`; existing installations apply only missing migrations. `run-all.sql` is fresh-database-only and refuses to run when profiles already exist. No production database is automatically modified by the application or CI.
+Follow [migration instructions](supabase/migrations/README.md). New installs use migrations `00001`–`00025`; existing installations apply only missing migrations. `run-all.sql` is fresh-database-only and refuses to run when profiles already exist. No production database is automatically modified by the application or CI.
 
 Migrations `00011`–`00018` introduce required RPCs, so deploy migrations and the matching app version together. Older app versions relying on raw join/booking writes will need to update.
 
@@ -64,13 +64,19 @@ supabase functions deploy send-push --no-verify-jwt
 
 Disabling JWT verification here is paired with the worker's required `x-dispatch-secret` check. Configure a trusted scheduler to POST to the function every minute using that header. Keep the header secret in server/scheduler configuration only. Hosted Supabase supplies the service role environment variables.
 
-The worker claims up to 50 committed events, sends bounded Expo batches, records ticket errors, removes immediately rejected DeviceNotRegistered tokens and retries failures up to five claims. Delivery is at least once: a timeout after Expo accepts a batch can cause a retry/duplicate. Expo ticket acceptance is not proof of device delivery; receipt reconciliation and device-level delivery remain release checks.
+The worker claims up to 10 committed events, sends bounded Expo batches, records ticket errors, removes immediately rejected DeviceNotRegistered tokens and retries failures up to five claims. Delivery is at least once: a timeout after Expo accepts a batch can cause a retry/duplicate. Expo ticket acceptance is not proof of device delivery; receipt reconciliation is implemented in migration 00025; device-level delivery remains a release check.
 
 Push registration reuses an existing notification permission rather than prompting on every startup. If permission has not been granted, users can tap Enable notifications in Profile/Business. Denied permissions can be changed in system settings. Registration and sign-out deregistration are serialized; a token belongs to the latest registered account. Sign-out displays an error if deregistration fails instead of silently leaving a token attached.
 
 Migrations add relevant tables to `supabase_realtime` if that publication exists. Verify dashboard Realtime configuration and two-device updates in the target project.
 
 Schedule server expiry jobs separately: `close_expired_posts()` and `expire_booking_holds()` every minute using a trusted service role.
+
+## Account safety and privacy
+
+See [account safety rollout](docs/account-safety-rollout.md) for migrations **00024 and 00025**, worker deployment, public privacy/support configuration and device checks. Both roles have Safety & privacy, report history, blocked people, notification preferences and confirmed account deletion. Reports are private; only a trusted service operator can moderate them. Blocking is enforced on the server and keeps existing bookings manageable. Deletion deactivates immediately, then a protected worker removes files before Auth and related records. The app includes an 18+ community-terms acknowledgement; account deletion remains accessible without agreement. Set the actual legal operator and monitored support email before releasing or exporting public policies with `npm run legal:export`.
+
+The push worker stores accepted per-device tickets and checks receipts. Notifications contain generic text and a recipient-checked notification ID. The app uses an explicit Expo project UUID. Deploy backend migrations and workers before distributing the matching app; schedules and live credentials are not configured by this repository.
 
 ## Tests and checks
 

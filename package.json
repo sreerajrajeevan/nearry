@@ -53,7 +53,8 @@
     "format": "prettier --write \"src/**/*.{ts,tsx}\" \"tests/**/*.ts\"",
     "sql:generate": "node scripts/generate-sql.mjs",
     "sql:check": "node scripts/generate-sql.mjs --check",
-    "assets": "python3 assets/generate_icons.py"
+    "assets": "python3 assets/generate_icons.py",
+    "legal:export": "node --env-file-if-exists=.env --import tsx scripts/export-legal.ts"
   },
   "version": "0.1.0"
 }

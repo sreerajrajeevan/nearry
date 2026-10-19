@@ -18,7 +18,6 @@ import { PageHeading } from "../../components/PageHeading";
 import { colors, typography, spacing } from "../../theme";
 import { useAuth } from "../../store/AuthContext";
 import { useUnreadCounts } from "../../hooks/useUnreadCounts";
-import { enablePushNotifications } from "../../services/notifications";
 import { PersonalTabNav } from "../../navigation/types";
 
 type Props = { navigation: PersonalTabNav };
@@ -40,7 +39,11 @@ export function ProfileScreen({ navigation }: Props) {
         <PersonalHeader />
         {demoMode && <Badge label="Sample personal profile" />}
         <View style={styles.avatar}>
-          <Avatar name={profile.displayName || "N"} size={64} uri={profile.avatarUrl} />
+          <Avatar
+            name={profile.displayName || "N"}
+            size={64}
+            uri={profile.avatarUrl}
+          />
         </View>
         <PageHeading
           greeting="A familiar face nearby."
@@ -112,25 +115,14 @@ export function ProfileScreen({ navigation }: Props) {
         </TouchableOpacity>
         <View style={styles.actions}>
           <Button
-            title="Enable notifications"
+            title="Safety & privacy"
             variant="secondary"
-            onPress={() =>
-              void enablePushNotifications(profile.id)
-                .then(() =>
-                  Alert.alert(
-                    "Notifications",
-                    "Notification setup is complete.",
-                  ),
-                )
-                .catch((error) =>
-                  Alert.alert(
-                    "Notifications",
-                    error instanceof Error
-                      ? error.message
-                      : "Please try again.",
-                  ),
-                )
-            }
+            onPress={() => navigation.navigate("SafetyPrivacy")}
+          />
+          <Button
+            title="Notification preferences"
+            variant="secondary"
+            onPress={() => navigation.navigate("NotificationSettings")}
           />
           {demoMode && (
             <Button

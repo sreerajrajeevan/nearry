@@ -1,3 +1,4 @@
+import { navigationRef } from "./src/navigation/navigationRef";
 import React from "react";
 import { View, ActivityIndicator, StyleSheet } from "react-native";
 import { NavigationContainer, DefaultTheme } from "@react-navigation/native";
@@ -36,7 +37,7 @@ export default function App() {
               <ActivityIndicator style={styles.loading} color={colors.accent} />
             ) : (
               <AuthProvider>
-                <NavigationContainer theme={navTheme}>
+                <NavigationContainer theme={navTheme} ref={navigationRef}>
                   <RootNavigator />
                 </NavigationContainer>
               </AuthProvider>

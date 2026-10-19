@@ -1,3 +1,9 @@
+import { POLICY_VERSION } from "../utils/legal";
+import {
+  LegalScreen,
+  RestrictedAccountScreen,
+  CommunityConsentScreen,
+} from "../screens/settings/SafetyScreens";
 import React, { useEffect } from "react";
 import { View, ActivityIndicator, StyleSheet, Text, Alert } from "react-native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
@@ -85,6 +91,18 @@ export function RootNavigator() {
       </View>
     );
   }
+  if (
+    !demoMode &&
+    profile &&
+    (profile.suspendedAt || profile.deletionRequestedAt)
+  )
+    return <RestrictedAccountScreen />;
+  if (
+    !demoMode &&
+    profile?.onboardingCompleted &&
+    profile.termsVersion !== POLICY_VERSION
+  )
+    return <CommunityConsentScreen />;
   if (!demoMode && session && profile && !profile.roleSelected)
     return <AccountTypeScreen />;
 
@@ -119,6 +137,7 @@ export function RootNavigator() {
           <Stack.Screen name="BusinessAuth" component={BusinessAuthScreen} />
         </>
       )}
+      <Stack.Screen name="Legal" component={LegalScreen} />
     </Stack.Navigator>
   );
 }

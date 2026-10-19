@@ -2,7 +2,7 @@
 
 Never run `run-all.sql` against an existing project. It is generated, fresh-install-only and protected by a transaction and existing-schema guard.
 
-For a fresh database, run `run-all.sql`, or apply `00001` through `00023` once in order. For an existing project, inspect its migration history and apply **only missing** numbered migrations in order. Back up the project first. Do not replay old migrations.
+For a fresh database, run `run-all.sql`, or apply `00001` through `00025` once in order. For an existing project, inspect its migration history and apply **only missing** numbered migrations in order. Back up the project first. Do not replay old migrations.
 
 For a project already on `00010`, apply `00011` through `00018` in order. These are forward migrations. Existing posts, profiles, offers and bookings are preserved. New columns and grants require deploying the matching app build together with these migrations.
 
@@ -37,3 +37,7 @@ For projects already on `00016`, apply only `00017` and `00018` after taking a b
 `00020`: owner-authorized deletion of draft offers without bookings.
 
 `00021`: core journeys: atomic unread counts, message notice read tracking, participant notifications on post cancellation, and safe reservation retries. Apply after `00020`; use the matching app for the new badge RPC. Existing records are retained.
+
+## Account safety and notifications (00024–00025)
+
+Existing projects at 00023 apply only `00024_account_safety.sql` and `00025_push_delivery_receipts.sql`, in order, before distributing the matching client. These add report/block rules, account deactivation/deletion queues, terms acknowledgement, notification preferences and delivery receipts. Deploy/redeploy `account-maintenance` and `send-push`, configure trusted schedules, and set public legal/EAS configuration. See [rollout and operator instructions](../../docs/account-safety-rollout.md). Existing future commitments are not cancelled by migration installation; cancellation happens only after an explicit deletion request or a trusted moderation action.

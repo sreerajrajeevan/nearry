@@ -57,7 +57,7 @@ type AuthState = {
   ) => Promise<void>;
   verifyOtp: (email: string, code: string) => Promise<void>;
   signInGoogle: (accountType: AccountType) => Promise<void>;
-  signOut: () => Promise<void>;
+  signOut: (localOnly?: boolean) => Promise<void>;
   enterDemoMode: (accountType?: AccountType) => void;
   exitDemoMode: () => void;
   completeOnboarding: (data: OnboardingData) => Promise<void>;
@@ -284,11 +284,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       await refreshProfile();
     });
   }
-  async function signOut() {
+  async function signOut(localOnly = false) {
     await action(async () => {
       if (!demoRef.current) {
-        await unregisterPushToken();
-        await serviceSignOut();
+        if (localOnly) {
+          await requireSupabase()
+            .auth.signOut({ scope: "local" })
+            .catch(() => {});
+          await AsyncStorage.removeItem("nearry.pushToken");
+        } else {
+          await unregisterPushToken();
+          await serviceSignOut();
+        }
       }
       version.current.invalidate();
       demoRef.current = false;

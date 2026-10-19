@@ -53,3 +53,7 @@ Use a staging Supabase project and test mailbox first. Confirm unauthorized work
 ## Place suggestions
 
 The authenticated `place-search` function is configured separately from scheduled workers. It uses `GEOAPIFY_API_KEY` (server only) and migration `00019`; no dispatch secret or scheduler is needed. See [place search setup](../../docs/place-search.md) for deployment, quota controls and the provider adapter contract.
+
+## Account maintenance and push receipts
+
+For the account-safety release, apply migrations 00024 and 00025 before deploying the updated `send-push` and new `account-maintenance` functions. Account maintenance requires its own server-only `ACCOUNT_MAINTENANCE_SECRET` and trusted POST schedule with that `x-dispatch-secret`. Push uses the existing `PUSH_DISPATCH_SECRET`; optionally set server-only `EXPO_ACCESS_TOKEN` when Expo enhanced push security is enabled. Neither endpoint accepts a client-selected user, recipient, message or deletion target. See [full rollout, moderation and deletion monitoring](../../docs/account-safety-rollout.md).

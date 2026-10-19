@@ -17,7 +17,13 @@ import { MotionPressable } from "./Motion";
 import { Button } from "./Button";
 import { Icon } from "./Icon";
 
-export function PostPhotoGallery({ postId }: { postId: string }) {
+export function PostPhotoGallery({
+  postId,
+  onReportPhoto,
+}: {
+  postId: string;
+  onReportPhoto?: (id: string) => void;
+}) {
   const { width } = useWindowDimensions();
   const reduced = useReducedMotion();
   const [selected, setSelected] = useState<string | null>(null);
@@ -92,6 +98,17 @@ export function PostPhotoGallery({ postId }: { postId: string }) {
           >
             <Icon name="x" size={24} color={colors.onAccent} />
           </MotionPressable>
+          {selected && onReportPhoto && (
+            <Button
+              title="Report this photo"
+              variant="secondary"
+              onPress={() => {
+                const photo = photos.find((p) => p.photo_url === selected);
+                setSelected(null);
+                if (photo) onReportPhoto(photo.id);
+              }}
+            />
+          )}
           {selected &&
             (failed.includes(selected) ? (
               <Text style={styles.viewerError}>
