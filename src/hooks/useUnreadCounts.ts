@@ -1,3 +1,4 @@
+import { POLICY_VERSION } from "../utils/legal";
 import * as Notifications from "expo-notifications";
 import {
   getNotification,
@@ -62,7 +63,14 @@ export function useUnreadCounts() {
 export function usePushSetup() {
   const { profile } = useAuth();
   useEffect(() => {
-    if (!profile || profile.suspendedAt || profile.deletionRequestedAt) return;
+    if (
+      !profile ||
+      profile.suspendedAt ||
+      profile.deletionRequestedAt ||
+      !profile.onboardingCompleted ||
+      profile.termsVersion !== POLICY_VERSION
+    )
+      return;
     let active = true;
     const opened = new Set<string>();
     const inFlight = new Set<string>();
@@ -126,5 +134,11 @@ export function usePushSetup() {
       tap.remove();
       app.remove();
     };
-  }, [profile?.id]);
+  }, [
+    profile?.id,
+    profile?.termsVersion,
+    profile?.onboardingCompleted,
+    profile?.suspendedAt,
+    profile?.deletionRequestedAt,
+  ]);
 }

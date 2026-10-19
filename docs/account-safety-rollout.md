@@ -9,6 +9,7 @@ This change contains application and server code. It does not modify the deploye
    - `EXPO_PUBLIC_EAS_PROJECT_ID`: the Expo project's UUID. This is public, not an access token.
    - `EXPO_PUBLIC_LEGAL_OWNER`: the actual legal operator/company name.
    - `EXPO_PUBLIC_SUPPORT_EMAIL`: a monitored public support address.
+   For the repository's automatic APK builds, also add these three values under GitHub repository Settings → Secrets and variables → Actions → Variables (the same names above). The APK workflow passes them to the bundle. Local builds read `.env`; EAS builds need the same public values in their build environment. A missing owner/contact leaves real-account entry disabled until the policy is configured; demos remain available.
 3. Set a separate server-only `ACCOUNT_MAINTENANCE_SECRET`. Retain `PUSH_DISPATCH_SECRET`. If Expo enhanced push security is enabled, set server-only `EXPO_ACCESS_TOKEN` as well. Never put these secrets or the Supabase service-role key into an `EXPO_PUBLIC_*` value.
 4. Deploy the updated workers:
 
