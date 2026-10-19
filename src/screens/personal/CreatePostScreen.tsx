@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { DateSheet, TimeSheet } from "../../components/DateTimeSheets";
 import {
   View,
@@ -23,11 +23,12 @@ import { createPost } from "../../services/posts";
 import { searchVenues } from "../../services/venues";
 import { Venue } from "../../services/mappers";
 import { validatePostDraft } from "../../utils/validation";
+import { pickPhoto, uploadPhoto } from "../../services/photos";
 import {
-  pickPhoto,
-  uploadPhoto,
-  addPostPhoto,
-} from "../../services/photos";
+  MAX_POST_PHOTOS,
+  PendingPostPhoto,
+  savePostPhotos,
+} from "../../services/postPhotos";
 
 const TAG_OPTIONS = [
   "sports",
@@ -94,8 +95,12 @@ export function CreatePostScreen() {
   } | null>(null);
   const [vacancies, setVacancies] = useState(2);
   const [cost, setCost] = useState("");
-  const [genderPref, setGenderPref] = useState<"male" | "female" | "any" | undefined>(undefined);
-  const [photoUris, setPhotoUris] = useState<string[]>([]);
+  const [genderPref, setGenderPref] = useState<
+    "male" | "female" | "any" | undefined
+  >(undefined);
+  const [photos, setPhotos] = useState<PendingPostPhoto[]>([]);
+  const [savedPostId, setSavedPostId] = useState<string | null>(null);
+  const publishLock = useRef(false);
 
   const [tags, setTags] = useState<string[]>([]);
   const [formError, setFormError] = useState("");
@@ -141,7 +146,28 @@ export function CreatePostScreen() {
     else setExpiresAtDate(d);
   };
 
+  const resetDraft = () => {
+    setTitle("");
+    setDescription("");
+    setVenue(null);
+    setVenueQuery("");
+    setStartsAtDate(null);
+    setExpiresAtDate(null);
+    setVacancies(2);
+    setCost("");
+    setTags([]);
+    setGenderPref(undefined);
+    setPhotos([]);
+    setSavedPostId(null);
+    setFormError("");
+  };
+  const openSavedPost = (id: string) => {
+    resetDraft();
+    navigation.navigate("PostDetails", { postId: id });
+  };
+
   const handlePublish = async () => {
+    if (publishLock.current) return;
     setFormError("");
     if (!startsAtDate) {
       setFormError("Pick a date and time for your post.");
@@ -159,61 +185,107 @@ export function CreatePostScreen() {
       setFormError("Cost must be a non-negative number, or leave it empty.");
       return;
     }
-    const err = validatePostDraft({
-      title,
-      description,
-      startsAt,
-      expiresAt,
-      vacancies,
-      costCents,
-    });
+    const err = savedPostId
+      ? null
+      : validatePostDraft({
+          title,
+          description,
+          startsAt,
+          expiresAt,
+          vacancies,
+          costCents,
+        });
     if (err) {
       setFormError(err);
       return;
     }
+    publishLock.current = true;
     setPublishing(true);
     try {
-      const post = await createPost(profile?.id ?? "demo-user", {
-        title: title.trim(),
-        description: description.trim(),
-        venueId: venue?.id,
-        venueName: venue?.name,
-        startsAt: startsAt.toISOString(),
-        expiresAt: expiresAt?.toISOString(),
-        vacancies,
-        costCents,
-        tags,
-        genderPreference: genderPref,
-      });
-      // Upload attached photos.
       const authorId = profile?.id ?? "demo-user";
-      for (const uri of photoUris) {
-        try {
-          const url = await uploadPhoto(authorId, uri, "posts");
-          await addPostPhoto(post.id, url);
-        } catch {
-          /* photo failed — post itself is saved */
-        }
+      const postId =
+        savedPostId ??
+        (
+          await createPost(authorId, {
+            title: title.trim(),
+            description: description.trim(),
+            venueId: venue?.id,
+            venueName: venue?.name,
+            startsAt: startsAt.toISOString(),
+            expiresAt: expiresAt?.toISOString(),
+            vacancies,
+            costCents,
+            tags,
+            genderPreference: genderPref,
+          })
+        ).id;
+      setSavedPostId(postId);
+      const result = await savePostPhotos(postId, photos, (uri) =>
+        uploadPhoto(authorId, uri, "posts"),
+      );
+      setPhotos(result.pending);
+      if (result.pending.length) {
+        setFormError(
+          `Your post is published, but ${result.pending.length} photo${result.pending.length === 1 ? "" : "s"} still need saving. ${result.error}`,
+        );
+        return;
       }
-      setTitle("");
-      setDescription("");
-      setVenue(null);
-      setVenueQuery("");
-      setStartsAtDate(null);
-      setExpiresAtDate(null);
-      setVacancies(2);
-      setCost("");
-      setTags([]);
-      navigation.navigate("PostDetails", { postId: post.id });
+      openSavedPost(postId);
     } catch (e) {
       Alert.alert(
         "Failed to publish",
         e instanceof Error ? e.message : "Please try again.",
       );
     } finally {
+      publishLock.current = false;
       setPublishing(false);
     }
   };
+
+  if (savedPostId) {
+    return (
+      <Screen scroll>
+        <PageHeading
+          greeting="Your plan is saved."
+          title="Finish your photos."
+        />
+        <Text style={styles.fieldLabel}>{title}</Text>
+        <Text accessibilityLiveRegion="polite" style={styles.formError}>
+          {publishing ? "Saving photos…" : formError}
+        </Text>
+        <View style={styles.photoRow}>
+          {photos.map(({ uri }, index) => (
+            <View key={uri} style={styles.photoWrap}>
+              <Image source={{ uri }} style={styles.thumb} />
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel={`Remove unsaved photo ${index + 1}`}
+                disabled={publishing}
+                style={styles.thumbDelete}
+                hitSlop={8}
+                onPress={() =>
+                  setPhotos((prev) => prev.filter((photo) => photo.uri !== uri))
+                }
+              >
+                <Text style={styles.thumbDeleteText}>×</Text>
+              </TouchableOpacity>
+            </View>
+          ))}
+        </View>
+        <Button
+          title={photos.length ? "Retry photos" : "View saved post"}
+          loading={publishing}
+          onPress={handlePublish}
+        />
+        <Button
+          title="Skip remaining photos"
+          variant="ghost"
+          disabled={publishing}
+          onPress={() => openSavedPost(savedPostId)}
+        />
+      </Screen>
+    );
+  }
 
   return (
     <Screen keyboard>
@@ -302,25 +374,37 @@ export function CreatePostScreen() {
 
         <Text style={styles.fieldLabel}>Photos (optional)</Text>
         <View style={styles.photoRow}>
-          {photoUris.map((uri) => (
+          {photos.map(({ uri }, index) => (
             <View key={uri} style={styles.photoWrap}>
               <Image source={{ uri }} style={styles.thumb} />
               <TouchableOpacity
                 onPress={() =>
-                  setPhotoUris((prev) => prev.filter((u) => u !== uri))
+                  setPhotos((prev) => prev.filter((photo) => photo.uri !== uri))
                 }
                 style={styles.thumbDelete}
                 hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel={`Remove photo ${index + 1}`}
+                disabled={publishing}
               >
                 <Text style={styles.thumbDeleteText}>×</Text>
               </TouchableOpacity>
             </View>
           ))}
           <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Add post photo"
+            disabled={publishing || photos.length >= MAX_POST_PHOTOS}
             onPress={async () => {
               try {
                 const uri = await pickPhoto();
-                if (uri) setPhotoUris((prev) => [...prev, uri]);
+                if (uri)
+                  setPhotos((prev) =>
+                    prev.some((photo) => photo.uri === uri) ||
+                    prev.length >= MAX_POST_PHOTOS
+                      ? prev
+                      : [...prev, { uri }],
+                  );
               } catch (e) {
                 Alert.alert(
                   "Could not pick photo",
@@ -330,9 +414,15 @@ export function CreatePostScreen() {
             }}
             style={styles.addThumb}
           >
-            <Text style={styles.addThumbText}>+ Add</Text>
+            <Text style={styles.addThumbText}>
+              {photos.length >= MAX_POST_PHOTOS ? "5 / 5" : "+ Add"}
+            </Text>
           </TouchableOpacity>
         </View>
+        <Text style={styles.photoHint}>
+          Up to 5 photos · JPEG, PNG or WebP · 10 MB each
+          {demoMode ? " · Demo photos stay in this session" : ""}
+        </Text>
 
         <View style={styles.row}>
           <View style={styles.half}>
@@ -469,6 +559,7 @@ export function CreatePostScreen() {
 }
 
 const styles = StyleSheet.create({
+  photoHint: { ...typography.caption, color: colors.textDim, marginBottom: 16 },
   scroll: { paddingBottom: spacing.xl },
   header: {
     ...typography.display,

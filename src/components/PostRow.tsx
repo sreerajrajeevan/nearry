@@ -4,6 +4,7 @@ import { formatWhen, formatDistance } from "../utils/format";
 import { postState } from "../utils/flowState";
 import { postCategory } from "../utils/discovery";
 import { DiscoveryCard } from "./DiscoveryCard";
+import { activityArtwork } from "../utils/activityArtwork";
 
 type Props = {
   post: NeedPost;
@@ -31,6 +32,8 @@ export function PostRow({
   return (
     <DiscoveryCard
       kind="Plan"
+      artwork={activityArtwork(post)}
+      imageUrl={post.coverPhotoUrl}
       icon={
         category === "Play"
           ? "dribbble"

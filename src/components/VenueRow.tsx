@@ -3,6 +3,7 @@ import { Venue } from "../services/mappers";
 import { venueCategory } from "../utils/discovery";
 import { formatDistance } from "../utils/format";
 import { DiscoveryCard } from "./DiscoveryCard";
+import { activityArtwork } from "../utils/activityArtwork";
 
 export function VenueRow({
   venue,
@@ -15,6 +16,7 @@ export function VenueRow({
   return (
     <DiscoveryCard
       kind="Place"
+      artwork={activityArtwork({ title: `${venue.name} ${venue.category}` })}
       icon={
         category === "Play"
           ? "dribbble"

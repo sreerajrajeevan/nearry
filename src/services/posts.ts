@@ -10,6 +10,21 @@ import {
 } from "./mappers";
 import { searchLiteral } from "../utils/searchFilter";
 import { validatePostDraft } from "../utils/validation";
+import { postPhotoCovers } from "./postPhotos";
+
+async function withPhotoCovers(posts: NeedPost[]): Promise<NeedPost[]> {
+  try {
+    const covers = await postPhotoCovers(posts.map((post) => post.id));
+    return posts.map((post) => ({
+      ...post,
+      coverPhotoUrl: covers.get(post.id),
+    }));
+  } catch {
+    // Optional thumbnails must not hide otherwise usable plans. The details
+    // gallery reports photo loading errors and offers its own retry.
+    return posts;
+  }
+}
 
 const useMock = () => {
   if (isDemoMode()) return true;
@@ -65,7 +80,7 @@ export async function listPosts(filter: PostFilter = {}): Promise<NeedPost[]> {
           (p.venueName ?? "").toLowerCase().includes(q),
       );
     }
-    return posts;
+    return withPhotoCovers(posts);
   }
   const supabase = getSupabase()!;
   let req = supabase
@@ -98,7 +113,9 @@ export async function listPosts(filter: PostFilter = {}): Promise<NeedPost[]> {
   if (conditions.length) req = req.or(`and(${conditions.join(",")})`);
   const { data, error } = await req;
   if (error) throw new Error(error.message);
-  return ((data ?? []) as Record<string, unknown>[]).map(toCard);
+  return withPhotoCovers(
+    ((data ?? []) as Record<string, unknown>[]).map(toCard),
+  );
 }
 
 export async function getPost(id: string): Promise<NeedPost | null> {
@@ -168,7 +185,12 @@ export type PostPatch = {
 } & Partial<
   Pick<
     NewPostInput,
-    "title" | "description" | "startsAt" | "vacancies" | "tags" | "genderPreference"
+    | "title"
+    | "description"
+    | "startsAt"
+    | "vacancies"
+    | "tags"
+    | "genderPreference"
   >
 >;
 
