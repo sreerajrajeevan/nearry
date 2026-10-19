@@ -9,6 +9,9 @@ import { AccountType } from "../navigation/types";
 // ── Profiles ──────────────────────────────────────────────
 
 export type DbProfile = {
+  suspended_at?: string | null;
+  deletion_requested_at?: string | null;
+  terms_version?: string | null;
   id: string;
   account_type: AccountType;
   display_name: string;
@@ -25,6 +28,9 @@ export type DbProfile = {
 };
 
 export type Profile = {
+  suspendedAt?: string;
+  deletionRequestedAt?: string;
+  termsVersion?: string;
   id: string;
   accountType: AccountType;
   displayName: string;
@@ -42,6 +48,9 @@ export type Profile = {
 
 export function toProfile(row: DbProfile): Profile {
   return {
+    suspendedAt: row.suspended_at ?? undefined,
+    deletionRequestedAt: row.deletion_requested_at ?? undefined,
+    termsVersion: row.terms_version ?? undefined,
     id: row.id,
     accountType: row.account_type,
     displayName: row.display_name,

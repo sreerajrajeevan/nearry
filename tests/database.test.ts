@@ -1536,3 +1536,438 @@ test("core journey: deletion works only for owned empty posts and draft offers w
     0,
   );
 });
+
+test("safety: reports are private, deduplicated and only service operators can moderate", async () => {
+  const pid = await post();
+  const report = await asUser(
+    b,
+    async (tx) =>
+      (
+        await tx.query(
+          "select submit_content_report('post',$1,'spam','Unwanted advertising') as id",
+          [pid],
+        )
+      ).rows[0].id,
+  );
+  const again = await asUser(
+    b,
+    async (tx) =>
+      (
+        await tx.query(
+          "select submit_content_report('post',$1,'scam','Repeated report') as id",
+          [pid],
+        )
+      ).rows[0].id,
+  );
+  assert.equal(report, again);
+  assert.equal(
+    (
+      await asUser(c, (tx) =>
+        tx.query("select id from content_reports where id=$1", [report]),
+      )
+    ).rows.length,
+    0,
+  );
+  await assert.rejects(
+    asUser(b, (tx) =>
+      tx.query("select snapshot from content_reports where id=$1", [report]),
+    ),
+    /permission denied/,
+  );
+  await assert.rejects(
+    asUser(b, (tx) =>
+      tx.query("select review_content_report($1,'remove','')", [report]),
+    ),
+    /permission denied/,
+  );
+  await assert.rejects(
+    asUser(host, (tx) =>
+      tx.query("select submit_content_report('post',$1,'spam','')", [pid]),
+    ),
+    /own content/,
+  );
+  await asUser(
+    null,
+    (tx) =>
+      tx.query("select review_content_report($1,'remove','Spam removed')", [
+        report,
+      ]),
+    "service_role",
+  );
+  assert.equal(
+    (
+      await asUser(c, (tx) =>
+        tx.query("select id from posts where id=$1", [pid]),
+      )
+    ).rows.length,
+    0,
+  );
+  assert.equal(
+    (
+      await asUser(b, (tx) =>
+        tx.query("select status from content_reports where id=$1", [report]),
+      )
+    ).rows[0].status,
+    "resolved",
+  );
+});
+test("safety: blocking is mutual for new joins, chat creation and raw message sends", async () => {
+  const pid = await post(),
+    rid = await request(b, pid);
+  await asUser(host, (tx) => tx.query("select set_user_block($1,true)", [b]));
+  await assert.rejects(
+    asUser(host, (tx) => tx.query("select approve_join_request($1)", [rid])),
+    /blocked or inactive/,
+  );
+  assert.equal(
+    (
+      await asUser(b, (tx) =>
+        tx.query("select id from posts where id=$1", [pid]),
+      )
+    ).rows.length,
+    0,
+  );
+  const nextPost = await post();
+  await assert.rejects(
+    asUser(b, (tx) => tx.query("select request_join($1)", [nextPost])),
+    /blocked or inactive/,
+  );
+  await asUser(host, (tx) => tx.query("select set_user_block($1,false)", [b]));
+  await asUser(host, (tx) =>
+    tx.query("select approve_join_request($1)", [rid]),
+  );
+  const conv = (
+    await asUser(b, (tx) =>
+      tx.query("select get_or_create_conversation($1,$2,null) as id", [
+        host,
+        pid,
+      ]),
+    )
+  ).rows[0].id;
+  await asUser(b, (tx) => tx.query("select set_user_block($1,true)", [host]));
+  await assert.rejects(
+    asUser(host, (tx) =>
+      tx.query("select get_or_create_conversation($1,$2,null)", [b, pid]),
+    ),
+    /blocked or inactive/,
+  );
+  await assert.rejects(
+    asUser(host, (tx) =>
+      tx.query(
+        "insert into messages(conversation_id,sender_id,body) values($1,$2,'Unwanted message')",
+        [conv, host],
+      ),
+    ),
+    /blocked or inactive/,
+  );
+  assert.equal(
+    (
+      await asUser(b, (tx) =>
+        tx.query("select conversation_safety($1) as s", [conv]),
+      )
+    ).rows[0].s.canMessage,
+    false,
+  );
+  const blockList = (
+    await asUser(b, (tx) => tx.query("select list_blocked_users() as items"))
+  ).rows[0].items;
+  assert.ok(blockList.some((u: any) => u.id === host));
+  await asUser(b, (tx) => tx.query("select set_user_block($1,false)", [host]));
+});
+test("safety: blocking stops new bookings but retains manageable booking history", async () => {
+  const owner = await auditBusiness(),
+    offer = await auditOffer(owner);
+  const booking = (
+    await asUser(b, (tx) =>
+      tx.query("select book_offer_slot($1,1) as item", [offer.slot]),
+    )
+  ).rows[0].item;
+  await asUser(b, (tx) => tx.query("select set_user_block($1,true)", [owner]));
+  assert.equal(
+    (
+      await asUser(b, (tx) =>
+        tx.query("select id from offers where id=$1", [offer.id]),
+      )
+    ).rows.length,
+    1,
+  );
+  assert.equal(
+    (
+      await asUser(b, (tx) =>
+        tx.query("select id from discovery_offers where id=$1", [offer.id]),
+      )
+    ).rows.length,
+    0,
+  );
+  await assert.rejects(
+    asUser(owner, (tx) =>
+      tx.query("select change_booking_status($1,'confirmed')", [
+        booking.booking_id,
+      ]),
+    ),
+    /blocked or inactive/,
+  );
+  await asUser(b, (tx) =>
+    tx.query("select change_booking_status($1,'cancelled')", [
+      booking.booking_id,
+    ]),
+  );
+  await asUser(b, (tx) => tx.query("select set_user_block($1,false)", [owner]));
+});
+test("safety: private message reports require membership; block storage cannot be forged", async () => {
+  const pid = await post(),
+    rid = await request(c, pid);
+  await asUser(host, (tx) =>
+    tx.query("select approve_join_request($1)", [rid]),
+  );
+  const conv = (
+    await asUser(c, (tx) =>
+      tx.query("select get_or_create_conversation($1,$2,null) as id", [
+        host,
+        pid,
+      ]),
+    )
+  ).rows[0].id;
+  const message = (
+    await asUser(host, (tx) =>
+      tx.query(
+        "insert into messages(conversation_id,sender_id,body) values($1,$2,'A reportable message') returning id",
+        [conv, host],
+      ),
+    )
+  ).rows[0].id;
+  await assert.rejects(
+    asUser(outsider, (tx) =>
+      tx.query("select submit_content_report('message',$1,'harassment','')", [
+        message,
+      ]),
+    ),
+    /not found or not accessible/,
+  );
+  await asUser(c, (tx) =>
+    tx.query("select submit_content_report('message',$1,'harassment','')", [
+      message,
+    ]),
+  );
+  await assert.rejects(
+    asUser(b, (tx) =>
+      tx.query("insert into user_blocks(blocker_id,blocked_id) values($1,$2)", [
+        host,
+        c,
+      ]),
+    ),
+    /permission denied/,
+  );
+});
+test("deletion: deactivation is immediate, files must be removed first, and Auth deletion cascades", async () => {
+  const owner = await auditBusiness();
+  await db.query(
+    "insert into venues(business_id,name,category,area) values($1,'Deletion test','Sports','Kochi')",
+    [owner],
+  );
+  const offer = await auditOffer(owner);
+  await asUser(b, (tx) =>
+    tx.query("select book_offer_slot($1,1)", [offer.slot]),
+  );
+  const path = `${owner}/posts/test.png`;
+  await asUser(owner, (tx) =>
+    tx.query(
+      "insert into storage.objects(bucket_id,name) values('photos',$1)",
+      [path],
+    ),
+  );
+  await assert.rejects(
+    asUser(owner, (tx) => tx.query("select request_account_deletion('yes')")),
+    /Type DELETE/,
+  );
+  await asUser(owner, (tx) =>
+    tx.query("select request_account_deletion('DELETE')"),
+  );
+  await asUser(owner, (tx) =>
+    tx.query("select request_account_deletion('DELETE')"),
+  );
+  assert.equal(
+    (
+      await db.query(
+        "select count(*)::int n from account_deletion_jobs where user_id=$1",
+        [owner],
+      )
+    ).rows[0].n,
+    1,
+  );
+  assert.equal(
+    (await db.query("select account_active($1) as active", [owner])).rows[0]
+      .active,
+    false,
+  );
+  assert.equal(
+    (await db.query("select status from offers where id=$1", [offer.id]))
+      .rows[0].status,
+    "ended",
+  );
+  await assert.rejects(
+    asUser(owner, (tx) =>
+      tx.query(
+        "insert into storage.objects(bucket_id,name) values('photos',$1)",
+        [`${owner}/new.png`],
+      ),
+    ),
+    /row-level security/,
+  );
+  await assert.rejects(
+    asUser(owner, (tx) =>
+      tx.query(
+        "select register_push_token('ExponentPushToken[deleting]','android')",
+      ),
+    ),
+    /Account unavailable/,
+  );
+  await assert.rejects(
+    asUser(owner, (tx) =>
+      tx.query("select prepare_auth_deletion($1)", [owner]),
+    ),
+    /permission denied/,
+  );
+  await assert.rejects(
+    asUser(
+      null,
+      (tx) => tx.query("select prepare_auth_deletion($1)", [owner]),
+      "service_role",
+    ),
+    /Remove stored files first/,
+  );
+  await db.query("delete from storage.objects where name=$1", [path]);
+  await asUser(
+    null,
+    (tx) => tx.query("select prepare_auth_deletion($1)", [owner]),
+    "service_role",
+  );
+  const safeNoticesBefore = (
+    await db.query(
+      "select count(*)::int n from notifications where user_id=$1 and kind='booking_cancelled' and ref_id is null",
+      [b],
+    )
+  ).rows[0].n;
+  await asUser(
+    null,
+    (tx) => tx.query("select prepare_auth_deletion($1)", [owner]),
+    "service_role",
+  );
+  assert.equal(
+    (
+      await db.query(
+        "select count(*)::int n from notifications where user_id=$1 and kind='booking_cancelled' and ref_id is null",
+        [b],
+      )
+    ).rows[0].n,
+    safeNoticesBefore,
+  );
+  assert.ok(safeNoticesBefore > 0);
+  await db.query("delete from auth.users where id=$1", [owner]);
+  assert.equal(
+    (await db.query("select id from profiles where id=$1", [owner])).rows
+      .length,
+    0,
+  );
+  assert.equal(
+    (await db.query("select id from offers where business_id=$1", [owner])).rows
+      .length,
+    0,
+  );
+  assert.equal(
+    (
+      await db.query(
+        "select business_id from venues where name='Deletion test'",
+      )
+    ).rows[0].business_id,
+    null,
+  );
+  await db.query("delete from account_deletion_jobs where user_id=$1", [owner]);
+});
+test("notifications: disabling push keeps in-app events while suppressing push jobs", async () => {
+  await asUser(c, (tx) => tx.query("select set_push_enabled(false)"));
+  const notice = (
+    await db.query(
+      "insert into notifications(user_id,kind,title,body) values($1,'booking','An update','Open Nearry') returning id",
+      [c],
+    )
+  ).rows[0].id;
+  assert.equal(
+    (
+      await db.query("select id from push_jobs where notification_id=$1", [
+        notice,
+      ])
+    ).rows.length,
+    0,
+  );
+  assert.equal(
+    (
+      await asUser(c, (tx) =>
+        tx.query("select id from notifications where id=$1", [notice]),
+      )
+    ).rows.length,
+    1,
+  );
+  await assert.rejects(
+    asUser(c, (tx) => tx.query("select * from push_deliveries")),
+    /permission denied/,
+  );
+  await assert.rejects(
+    asUser(c, (tx) => tx.query("select claim_push_receipts()")),
+    /permission denied/,
+  );
+  await asUser(c, (tx) => tx.query("select set_push_enabled(true)"));
+  const consent = await asUser(c, (tx) =>
+    tx.query("select accept_community_terms('2026-10-19',true)"),
+  );
+  assert.ok(consent);
+  await assert.rejects(
+    asUser(c, (tx) => tx.query("select accept_community_terms('old',true)")),
+    /current terms/,
+  );
+});
+
+test("moderation: removing a reported photo hides metadata and queues its owned storage object", async () => {
+  const pid = await post();
+  const path = `${host}/posts/reported.png`;
+  const photo = (
+    await asUser(host, (tx) =>
+      tx.query(
+        "insert into post_photos(post_id,photo_url) values($1,$2) returning id",
+        [
+          pid,
+          `https://project.example/storage/v1/object/public/photos/${path}`,
+        ],
+      ),
+    )
+  ).rows[0];
+  const report = (
+    await asUser(b, (tx) =>
+      tx.query(
+        "select submit_content_report('photo',$1,'inappropriate','') as id",
+        [photo.id],
+      ),
+    )
+  ).rows[0].id;
+  await asUser(
+    null,
+    (tx) =>
+      tx.query("select review_content_report($1,'remove','Photo removed')", [
+        report,
+      ]),
+    "service_role",
+  );
+  assert.equal(
+    (await db.query("select id from post_photos where id=$1", [photo.id])).rows
+      .length,
+    0,
+  );
+  assert.equal(
+    (
+      await db.query("select path from media_cleanup_jobs where path=$1", [
+        path,
+      ])
+    ).rows[0].path,
+    path,
+  );
+});

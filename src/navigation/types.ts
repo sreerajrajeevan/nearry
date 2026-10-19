@@ -11,7 +11,18 @@ import { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 
 export type AccountType = "personal" | "business";
 
+export type SafetyStackParamList = {
+  SafetyPrivacy: undefined;
+  BlockedUsers: undefined;
+  MyReports: undefined;
+  Report: { target: import("../services/safety").ReportTarget };
+  NotificationSettings: undefined;
+  DeleteAccount: undefined;
+  Legal: { page?: import("../utils/legal").LegalPage } | undefined;
+};
+
 export type RootStackParamList = {
+  Legal: { page?: import("../utils/legal").LegalPage } | undefined;
   Welcome: undefined;
   PersonalAuth: { mode: "login" | "signup" } | undefined;
   BusinessAuth: { mode: "login" | "signup" } | undefined;
@@ -30,7 +41,7 @@ export type PersonalTabParamList = {
 };
 
 /** Stack above the personal tabs: tab screens push details here. */
-export type PersonalStackParamList = {
+export type PersonalStackParamList = SafetyStackParamList & {
   PersonalTabs: NavigatorScreenParams<PersonalTabParamList> | undefined;
   PlaceDetails: { place: Place };
   PostDetails: { postId: string };
@@ -44,7 +55,7 @@ export type PersonalStackParamList = {
   Notifications: undefined;
 };
 
-export type BusinessStackParamList = {
+export type BusinessStackParamList = SafetyStackParamList & {
   BusinessTabs: NavigatorScreenParams<BusinessTabParamList> | undefined;
   Conversation: { conversationId: string; title?: string };
   Notifications: undefined;

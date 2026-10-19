@@ -1,4 +1,3 @@
-import { enablePushNotifications } from "../../services/notifications";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   View,
@@ -148,29 +147,29 @@ export function BusinessProfileScreen({ navigation }: Props) {
         {verif.status === "verified" ? (
           <VerifiedWelcome businessName={name} />
         ) : (
-        <Card style={styles.verifyCard} accent={true}>
-          <View style={styles.verifyRow}>
-            <Text style={styles.verifyTitle}>Business verification</Text>
-            <Badge
-              label={verif.status.toUpperCase()}
-              tone={statusTone(verif.status)}
-            />
-          </View>
-          <Text style={styles.verifyDesc}>{STATUS_COPY[verif.status]}</Text>
-          {verif.status === "rejected" && verif.note ? (
-            <Text style={styles.verifyNote}>Reason: {verif.note}</Text>
-          ) : null}
-          {(verif.status === "unverified" || verif.status === "rejected") &&
-            !isDemoMode() && (
-              <Button
-                title="Submit document"
-                variant="secondary"
-                loading={busy === "doc"}
-                onPress={onSubmitDoc}
-                style={styles.verifyBtn}
+          <Card style={styles.verifyCard} accent={true}>
+            <View style={styles.verifyRow}>
+              <Text style={styles.verifyTitle}>Business verification</Text>
+              <Badge
+                label={verif.status.toUpperCase()}
+                tone={statusTone(verif.status)}
               />
-            )}
-        </Card>
+            </View>
+            <Text style={styles.verifyDesc}>{STATUS_COPY[verif.status]}</Text>
+            {verif.status === "rejected" && verif.note ? (
+              <Text style={styles.verifyNote}>Reason: {verif.note}</Text>
+            ) : null}
+            {(verif.status === "unverified" || verif.status === "rejected") &&
+              !isDemoMode() && (
+                <Button
+                  title="Submit document"
+                  variant="secondary"
+                  loading={busy === "doc"}
+                  onPress={onSubmitDoc}
+                  style={styles.verifyBtn}
+                />
+              )}
+          </Card>
         )}
 
         <TouchableOpacity
@@ -234,17 +233,14 @@ export function BusinessProfileScreen({ navigation }: Props) {
           style={styles.notifBtn}
         />
         <Button
-          title="Enable notifications"
+          title="Safety & privacy"
           variant="secondary"
-          onPress={() => {
-            if (profile)
-              void enablePushNotifications(profile.id).catch((e) =>
-                Alert.alert(
-                  "Notifications",
-                  e instanceof Error ? e.message : "Please retry.",
-                ),
-              );
-          }}
+          onPress={() => navigation.navigate("SafetyPrivacy")}
+        />
+        <Button
+          title="Notification preferences"
+          variant="secondary"
+          onPress={() => navigation.navigate("NotificationSettings")}
         />
         <Button
           title="Log out"

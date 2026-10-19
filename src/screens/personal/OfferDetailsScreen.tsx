@@ -1,3 +1,4 @@
+import { SafetyActions } from "../../components/SafetyActions";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   View,
@@ -200,6 +201,20 @@ export function OfferDetailsScreen({ route, navigation }: Props) {
           )}
         </View>
         <Text style={styles.business}>{offer.businessName}</Text>
+        <SafetyActions
+          target={{
+            kind: "offer",
+            id: offer.id,
+            userId: offer.businessId,
+            name: offer.businessName,
+          }}
+          onReport={() =>
+            navigation.navigate("Report", {
+              target: { kind: "offer", id: offer.id, name: offer.title },
+            })
+          }
+          onBlocked={() => navigation.goBack()}
+        />
         <Text style={styles.desc}>{offer.description}</Text>
         <View style={styles.metaRow}>
           <Badge label={timeLeft(offer.endsAt)} tone="red" />

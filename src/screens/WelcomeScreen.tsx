@@ -77,6 +77,16 @@ export function WelcomeScreen({ navigation }: Props) {
             Demos use sample data. No account needed.
           </Text>
         </View>
+        <Button
+          title="Privacy policy"
+          variant="ghost"
+          onPress={() => navigation.navigate("Legal", { page: "privacy" })}
+        />
+        <Button
+          title="Community guidelines & terms"
+          variant="ghost"
+          onPress={() => navigation.navigate("Legal", { page: "terms" })}
+        />
       </ScrollView>
     </Screen>
   );

@@ -1,3 +1,4 @@
+import { demoUserBlocked, conversationSafety } from "./safety";
 import { getSupabase, isSupabaseConfigured, isDemoMode } from "./supabase";
 import { notifyUnreadChanged } from "./unreadEvents";
 import { multiplexSubscribe } from "./realtime";
@@ -34,6 +35,8 @@ export async function getOrCreateConversation(
   ctx: { postId: string } | { bookingId: string },
 ): Promise<string> {
   if (useMock()) {
+    if (demoUserBlocked(otherUserId))
+      throw new Error("This person is blocked.");
     const existing = mockConversations.find(
       (c) =>
         c.otherUserId === otherUserId &&
@@ -67,7 +70,9 @@ export async function getOrCreateConversation(
 export async function listConversations(): Promise<Conversation[]> {
   // Return snapshots, as the live RPC does, so read/sent mutations refresh lists.
   if (useMock())
-    return mockConversations.map((conversation) => ({ ...conversation }));
+    return mockConversations
+      .filter((c) => !demoUserBlocked(c.otherUserId))
+      .map((conversation) => ({ ...conversation }));
   const supabase = getSupabase()!;
   const { data, error } = await supabase.rpc("list_my_conversations");
   if (error) throw new Error(error.message);
@@ -113,6 +118,8 @@ export async function sendMessage(
   if (err) throw new Error(err);
   const text = body.trim();
   if (useMock()) {
+    if (!(await conversationSafety(conversationId))?.canMessage)
+      throw new Error("Messaging is unavailable.");
     const msg: ChatMessage = {
       id: `mock-msg-${Date.now()}`,
       conversationId,

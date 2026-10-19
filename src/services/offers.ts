@@ -1,3 +1,4 @@
+import { demoUserBlocked } from "./safety";
 import { getSupabase, isSupabaseConfigured, isDemoMode } from "./supabase";
 import { multiplexSubscribe } from "./realtime";
 import { mockBookings, mockOffers } from "../data/mock";
@@ -44,7 +45,12 @@ function withBusiness(row: Record<string, unknown>): Offer {
   return toOffer({
     ...(row as unknown as DbOffer),
     business: {
-      display_name: b?.business_name || b?.display_name || "Business",
+      display_name:
+        b?.business_name ||
+        b?.display_name ||
+        (row.discovery_business_name as string) ||
+        (row.discovery_display_name as string) ||
+        "Business",
     },
   });
 }
@@ -55,15 +61,14 @@ export async function listLiveOffers(venueIds?: string[]): Promise<Offer[]> {
     return mockOffers.filter(
       (o) =>
         o.status === "live" &&
+        !demoUserBlocked(o.businessId) &&
         (!venueIds || venueIds.includes(o.venueId ?? "")),
     );
   if (venueIds && !venueIds.length) return [];
   const supabase = getSupabase()!;
   let query = supabase
-    .from("offers")
-    .select(
-      "*, business:profiles!offers_business_id_fkey(display_name, business_name)",
-    )
+    .from("discovery_offers")
+    .select("*")
     .eq("status", "live")
     .gt("ends_at", new Date().toISOString())
     .order("ends_at");
@@ -220,7 +225,9 @@ export async function updateOffer(
       resourceKey: input.resourceKey ?? o.resourceKey,
       venueId: input.venueId ?? o.venueId,
       coverPhotoUrl:
-        input.coverPhotoUrl === undefined ? o.coverPhotoUrl : (input.coverPhotoUrl ?? undefined),
+        input.coverPhotoUrl === undefined
+          ? o.coverPhotoUrl
+          : (input.coverPhotoUrl ?? undefined),
       isSpotlight: input.isSpotlight ?? o.isSpotlight,
     });
     return o;

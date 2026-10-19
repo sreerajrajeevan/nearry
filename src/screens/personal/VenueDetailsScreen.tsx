@@ -1,3 +1,4 @@
+import { SafetyActions } from "../../components/SafetyActions";
 import React, { useRef, useState } from "react";
 import {
   View,
@@ -236,6 +237,20 @@ export function VenueDetailsScreen({ route, navigation }: VenueDetailsProps) {
             </>
           )}
         </View>
+        <SafetyActions
+          target={{
+            kind: "venue",
+            id: venue.id,
+            userId: venue.businessId,
+            name: venue.name,
+          }}
+          onReport={() =>
+            navigation.navigate("Report", {
+              target: { kind: "venue", id: venue.id, name: venue.name },
+            })
+          }
+          onBlocked={() => navigation.goBack()}
+        />
         <View
           style={styles.section}
           onLayout={(e) => {

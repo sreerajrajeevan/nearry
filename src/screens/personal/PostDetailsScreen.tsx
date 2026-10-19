@@ -1,3 +1,4 @@
+import { SafetyActions } from "../../components/SafetyActions";
 import React, { useState } from "react";
 import {
   View,
@@ -186,7 +187,31 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
             Requests close {timeLeft(post.expiresAt)}
           </Text>
         )}
-        <PostPhotoGallery postId={postId} />
+        <SafetyActions
+          target={{
+            kind: "post",
+            id: postId,
+            userId: post.authorId,
+            name: post.authorName,
+          }}
+          onReport={() =>
+            navigation.navigate("Report", {
+              target: { kind: "post", id: postId, name: post.title },
+            })
+          }
+          onBlocked={() => navigation.goBack()}
+        />
+        <PostPhotoGallery
+          postId={postId}
+          onReportPhoto={
+            isHost
+              ? undefined
+              : (id) =>
+                  navigation.navigate("Report", {
+                    target: { kind: "photo", id, name: post.title },
+                  })
+          }
+        />
         <Text style={styles.desc}>{post.description}</Text>
         {post.tags.length > 0 && (
           <View style={styles.tags}>
@@ -214,31 +239,51 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
               />
             )}
             {pending.map((r) => (
-              <View key={r.id} style={styles.reqRow2}>
-                <Avatar name={r.requesterName} size={32} />
-                <Text style={styles.reqName}>{r.requesterName}</Text>
-                <View style={styles.flex} />
-                <TouchableOpacity
-                  activeOpacity={0.7}
-                  disabled={busy !== null}
-                  onPress={() => run(`d${r.id}`, () => declineRequest(r.id))}
-                >
-                  <Text style={styles.declineLink}>
-                    {busy === `d${r.id}` ? "…" : "Decline"}
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  activeOpacity={0.7}
-                  disabled={busy !== null || !flow.accepting}
-                  onPress={() =>
-                    run(`a${r.id}`, () => approveRequest(r.id).then(() => {}))
+              <View key={r.id}>
+                <View style={styles.reqRow2}>
+                  <Avatar name={r.requesterName} size={32} />
+                  <Text style={styles.reqName}>{r.requesterName}</Text>
+                  <View style={styles.flex} />
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    disabled={busy !== null}
+                    onPress={() => run(`d${r.id}`, () => declineRequest(r.id))}
+                  >
+                    <Text style={styles.declineLink}>
+                      {busy === `d${r.id}` ? "…" : "Decline"}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    disabled={busy !== null || !flow.accepting}
+                    onPress={() =>
+                      run(`a${r.id}`, () => approveRequest(r.id).then(() => {}))
+                    }
+                    style={styles.approvePill}
+                  >
+                    <Text style={styles.approveText}>
+                      {busy === `a${r.id}` ? "…" : "Approve"}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+                <SafetyActions
+                  target={{
+                    kind: "user",
+                    id: r.requesterId,
+                    userId: r.requesterId,
+                    name: r.requesterName,
+                  }}
+                  onReport={() =>
+                    navigation.navigate("Report", {
+                      target: {
+                        kind: "user",
+                        id: r.requesterId,
+                        name: r.requesterName,
+                      },
+                    })
                   }
-                  style={styles.approvePill}
-                >
-                  <Text style={styles.approveText}>
-                    {busy === `a${r.id}` ? "…" : "Approve"}
-                  </Text>
-                </TouchableOpacity>
+                  onBlocked={() => void load()}
+                />
               </View>
             ))}
             {approved.map((r) => (

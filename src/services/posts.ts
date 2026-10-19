@@ -1,3 +1,4 @@
+import { demoUserBlocked } from "./safety";
 import { getSupabase, isSupabaseConfigured, isDemoMode } from "./supabase";
 import { multiplexSubscribe } from "./realtime";
 import { mockPosts } from "../data/mock";
@@ -57,7 +58,7 @@ function toCard(row: Record<string, unknown>): NeedPost {
  */
 export async function listPosts(filter: PostFilter = {}): Promise<NeedPost[]> {
   if (useMock()) {
-    let posts = [...mockPosts];
+    let posts = mockPosts.filter((p) => !demoUserBlocked(p.authorId));
     const status = filter.status ?? "open";
     if (status !== "all") posts = posts.filter((p) => p.status === status);
     if (status === "open")

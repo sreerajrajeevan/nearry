@@ -6,3 +6,6 @@ dist/
 
 # Icons are generated in CI
 assets/*.png
+
+# Generated public legal pages; build with configured public contacts.
+dist-legal/

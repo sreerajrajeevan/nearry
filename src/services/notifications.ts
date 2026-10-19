@@ -1,7 +1,8 @@
+import { notificationPreferences, setPushEnabled } from "./safety";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Device from "expo-device";
 import * as Notifications from "expo-notifications";
-import { AppState, Platform } from "react-native";
+import { Platform } from "react-native";
 import { getSupabase, isSupabaseConfigured, isDemoMode } from "./supabase";
 import { notifyUnreadChanged } from "./unreadEvents";
 import { multiplexSubscribe } from "./realtime";
@@ -27,11 +28,15 @@ Notifications.setNotificationHandler({
 const TOKEN_KEY = "nearry.pushToken";
 let registration: Promise<void> = Promise.resolve();
 /** Registration and sign-out removal are serialized to avoid leaving a token behind. */
-export function registerPushToken(userId: string): Promise<void> {
+export function registerPushToken(
+  userId: string,
+  force = false,
+): Promise<void> {
   registration = registration
     .catch(() => {})
     .then(async () => {
       if (useMock() || !Device.isDevice || Platform.OS === "web") return;
+      if (!force && !(await notificationPreferences()).pushEnabled) return;
       const db = getSupabase()!;
       const { data: auth } = await db.auth.getSession();
       if (auth.session?.user.id !== userId) return;
@@ -43,7 +48,11 @@ export function registerPushToken(userId: string): Promise<void> {
       const { status } = await Notifications.getPermissionsAsync();
       // Ask from an explicit user action; startup only registers an existing permission.
       if (status !== "granted") return;
-      const token = (await Notifications.getExpoPushTokenAsync()).data;
+      const projectId = process.env.EXPO_PUBLIC_EAS_PROJECT_ID?.trim();
+      if (!projectId)
+        throw new Error("Notifications are not configured for this build.");
+      const token = (await Notifications.getExpoPushTokenAsync({ projectId }))
+        .data;
       const { data: current } = await db.auth.getSession();
       if (current.session?.user.id !== userId) return;
       const { error } = await db.rpc("register_push_token", {
@@ -69,7 +78,8 @@ export async function enablePushNotifications(userId: string): Promise<void> {
     throw new Error(
       "Notifications are disabled. Enable them in system settings.",
     );
-  await registerPushToken(userId);
+  await registerPushToken(userId, true);
+  await setPushEnabled(true);
 }
 export async function unregisterPushToken(): Promise<void> {
   await registration.catch(() => {});
@@ -237,16 +247,22 @@ export function subscribeToNotifications(
         },
         (payload) => {
           fire();
-          // One foreground banner per shared channel, never once per mounted badge.
-          if (
-            payload.eventType === "INSERT" &&
-            AppState.currentState === "active"
-          ) {
-            const notice = toAppNotification(payload.new as DbNotification);
-            void presentLocal(notice.title, notice.body);
-          }
         },
       ),
     onChange,
   );
+}
+
+/** Fetch by opaque ID; RLS verifies the recipient before a push can navigate. */
+export async function getNotification(
+  id: string,
+): Promise<AppNotification | null> {
+  if (useMock()) return mockNotifications.find((n) => n.id === id) ?? null;
+  const { data, error } = await getSupabase()!
+    .from("notifications")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data ? toAppNotification(data as DbNotification) : null;
 }

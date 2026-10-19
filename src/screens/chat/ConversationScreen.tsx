@@ -1,3 +1,5 @@
+import { SafetyActions } from "../../components/SafetyActions";
+import { conversationSafety, ConversationSafety } from "../../services/safety";
 import React, { useCallback, useRef, useState } from "react";
 import {
   AppState,
@@ -30,13 +32,33 @@ import { ChatMessage } from "../../services/mappers";
 
 type Props = {
   route: { params: { conversationId: string; title?: string } };
-  navigation: { goBack: () => void };
+  navigation: {
+    goBack: () => void;
+    navigate: (
+      screen: "Report",
+      params: { target: import("../../services/safety").ReportTarget },
+    ) => void;
+  };
 };
 
-function Bubble({ msg }: { msg: ChatMessage }) {
+function Bubble({
+  msg,
+  onReport,
+}: {
+  msg: ChatMessage;
+  onReport?: () => void;
+}) {
   return (
     <View style={[styles.bubbleRow, msg.mine && styles.bubbleRowMine]}>
-      <View style={[styles.bubble, msg.mine && styles.bubbleMine]}>
+      <TouchableOpacity
+        activeOpacity={0.95}
+        onLongPress={onReport}
+        accessibilityRole={onReport ? "button" : undefined}
+        accessibilityLabel={
+          onReport ? `${msg.body}. Hold to report message` : undefined
+        }
+        style={[styles.bubble, msg.mine && styles.bubbleMine]}
+      >
         <Text style={[styles.body, msg.mine && styles.bodyMine]}>
           {msg.body}
         </Text>
@@ -46,7 +68,7 @@ function Bubble({ msg }: { msg: ChatMessage }) {
             minute: "2-digit",
           })}
         </Text>
-      </View>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -56,6 +78,7 @@ export function ConversationScreen({ route, navigation }: Props) {
   const { conversationId, title } = route.params;
   const { profile } = useAuth();
   const myId = profile?.id ?? "";
+  const [peer, setPeer] = useState<ConversationSafety | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState("");
   const [state, setState] = useState<"loading" | "error" | "ready">("loading");
@@ -74,8 +97,12 @@ export function ConversationScreen({ route, navigation }: Props) {
     if (!isForeground()) return;
     const ticket = ++generation.current;
     try {
-      const msgs = await listMessages(conversationId, myId);
+      const [msgs, safety] = await Promise.all([
+        listMessages(conversationId, myId),
+        conversationSafety(conversationId),
+      ]);
       if (!focused.current || ticket !== generation.current) return;
+      setPeer(safety);
       setMessages((previous) => mergeMessages(previous, msgs));
       setState("ready");
       // Only acknowledge the messages in this displayed snapshot.
@@ -117,7 +144,7 @@ export function ConversationScreen({ route, navigation }: Props) {
 
   const onSend = async () => {
     const text = draft.trim();
-    if (!text || sending) return;
+    if (!text || sending || !peer?.canMessage) return;
     const sendingRoom = `${conversationId}:${myId}`;
     setSending(true);
     try {
@@ -165,6 +192,28 @@ export function ConversationScreen({ route, navigation }: Props) {
           </Text>
         </View>
 
+        {peer && (
+          <SafetyActions
+            target={{
+              kind: "user",
+              id: peer.userId,
+              userId: peer.userId,
+              name: peer.name,
+            }}
+            onReport={() =>
+              navigation.navigate("Report", {
+                target: { kind: "user", id: peer.userId, name: peer.name },
+              })
+            }
+            onBlocked={() => navigation.goBack()}
+          />
+        )}
+        {peer && !peer.canMessage && (
+          <Text style={styles.status}>
+            Messaging is unavailable because an account is blocked or inactive.
+            Manage your blocks in Safety & privacy.
+          </Text>
+        )}
         {state === "loading" ? (
           <Text style={styles.status}>Loading…</Text>
         ) : state === "error" ? (
@@ -181,7 +230,21 @@ export function ConversationScreen({ route, navigation }: Props) {
             data={messages}
             keyExtractor={(m: ChatMessage) => m.id}
             renderItem={({ item }: { item: ChatMessage }) => (
-              <Bubble msg={item} />
+              <Bubble
+                msg={item}
+                onReport={
+                  item.mine
+                    ? undefined
+                    : () =>
+                        navigation.navigate("Report", {
+                          target: {
+                            kind: "message",
+                            id: item.id,
+                            name: "Message",
+                          },
+                        })
+                }
+              />
             )}
             contentContainerStyle={styles.list}
             onScroll={({ nativeEvent }) => {
@@ -215,23 +278,24 @@ export function ConversationScreen({ route, navigation }: Props) {
             onChangeText={setDraft}
             multiline
             maxLength={2000}
-            editable={!sending}
+            editable={!sending && !!peer?.canMessage}
             onSubmitEditing={onSend}
           />
           <TouchableOpacity
             accessibilityRole="button"
             accessibilityLabel="Send message"
             accessibilityState={{
-              disabled: !draft.trim() || sending,
+              disabled: !draft.trim() || sending || !peer?.canMessage,
               busy: sending,
             }}
             style={[
               styles.send,
-              (!draft.trim() || sending) && styles.sendDisabled,
+              (!draft.trim() || sending || !peer?.canMessage) &&
+                styles.sendDisabled,
             ]}
             activeOpacity={0.8}
             onPress={onSend}
-            disabled={!draft.trim() || sending}
+            disabled={!draft.trim() || sending || !peer?.canMessage}
           >
             {sending ? (
               <Text style={styles.sendText}>…</Text>

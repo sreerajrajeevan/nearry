@@ -25,7 +25,13 @@
         }
       ],
       "./plugins/withBundleInDebug",
-      "./plugins/withSharedDebugKeystore"
+      "./plugins/withSharedDebugKeystore",
+      [
+        "expo-notifications",
+        {
+          "defaultChannel": "default"
+        }
+      ]
     ],
     "scheme": "nearry",
     "slug": "nearry",
