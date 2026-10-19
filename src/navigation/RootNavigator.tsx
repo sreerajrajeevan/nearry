@@ -1,8 +1,6 @@
-import { POLICY_VERSION } from "../utils/legal";
 import {
   LegalScreen,
   RestrictedAccountScreen,
-  CommunityConsentScreen,
 } from "../screens/settings/SafetyScreens";
 import React, { useEffect } from "react";
 import { View, ActivityIndicator, StyleSheet, Text, Alert } from "react-native";
@@ -97,12 +95,6 @@ export function RootNavigator() {
     (profile.suspendedAt || profile.deletionRequestedAt)
   )
     return <RestrictedAccountScreen />;
-  if (
-    !demoMode &&
-    profile?.onboardingCompleted &&
-    profile.termsVersion !== POLICY_VERSION
-  )
-    return <CommunityConsentScreen />;
   if (!demoMode && session && profile && !profile.roleSelected)
     return <AccountTypeScreen />;
 
