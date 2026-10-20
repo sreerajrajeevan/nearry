@@ -10,6 +10,8 @@ My plans and Bookings have Upcoming and History filters. Ended, cancelled, withd
 declined and full requests, plus expired booking holds, stay discoverable in History.
 Date checks apply before backend maintenance has updated the stored status. The
 Activity tab uses a calendar icon to distinguish it from the notifications bell.
+Its old badge mixed unread messages and notifications, so that misleading count is
+removed; those unread counts remain on their actual destinations.
 My posts remains a prominent shortcut for managing hosted plans.
 
 Leaving, withdrawing and cancelling use inline confirmation, followed by a named
