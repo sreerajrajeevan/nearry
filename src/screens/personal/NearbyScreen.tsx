@@ -1,3 +1,4 @@
+import { LoadingState } from "../../components/LoadingState";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   View,
@@ -278,9 +279,10 @@ export function NearbyScreen() {
           }}
         />
         {state === "loading" && posts.length === 0 && offers.length === 0 ? (
-          <Text accessibilityLiveRegion="polite" style={styles.status}>
-            Finding a few hellos…
-          </Text>
+          <LoadingState
+            label="Finding nearby places and plans…"
+            layout="list"
+          />
         ) : state === "error" && posts.length === 0 && offers.length === 0 ? (
           <>
             <EmptyState

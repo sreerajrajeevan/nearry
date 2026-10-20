@@ -1,3 +1,4 @@
+import { LoadingState } from "../../components/LoadingState";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   Alert,
@@ -177,7 +178,7 @@ export function MyOffersScreen({ navigation }: Props) {
         }
         ListEmptyComponent={
           state === "loading" ? (
-            <Text style={styles.loading}>Loading your offers…</Text>
+            <LoadingState label="Loading your offers…" layout="list" />
           ) : state === "error" ? (
             <>
               <EmptyState

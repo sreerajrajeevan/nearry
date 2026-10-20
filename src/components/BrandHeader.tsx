@@ -2,6 +2,7 @@ import React from "react";
 import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import { colors, typography, spacing } from "../theme";
 import { Icon } from "./Icon";
+import { BrandLogo } from "./BrandLogo";
 
 type Props = {
   context?: string;
@@ -36,12 +37,7 @@ export function BrandHeader({
   return (
     <View style={styles.header}>
       <View style={styles.identity}>
-        <View style={styles.brand} accessibilityLabel="Nearry">
-          <View style={styles.mark}>
-            <View style={styles.tail} />
-          </View>
-          <Text style={styles.wordmark}>nearry</Text>
-        </View>
+        <BrandLogo />
         {!!context &&
           (onContextPress ? (
             <TouchableOpacity
@@ -128,35 +124,6 @@ const styles = StyleSheet.create({
     paddingBottom: spacing.md,
   },
   identity: { flex: 1, minWidth: 0 },
-  brand: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    flexShrink: 0,
-  },
-  mark: {
-    width: 17,
-    height: 15,
-    borderRadius: 6,
-    borderBottomLeftRadius: 1,
-    backgroundColor: colors.accent,
-  },
-  tail: {
-    position: "absolute",
-    bottom: -4,
-    left: 0,
-    width: 6,
-    height: 8,
-    borderBottomRightRadius: 6,
-    backgroundColor: colors.accent,
-  },
-  wordmark: {
-    color: colors.text,
-    fontSize: 22,
-    lineHeight: 28,
-    fontWeight: "600",
-    letterSpacing: -1,
-  },
   contextButton: {
     flexDirection: "row",
     alignItems: "center",

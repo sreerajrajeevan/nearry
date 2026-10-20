@@ -1,3 +1,4 @@
+import { LoadingState } from "../components/LoadingState";
 import React, { useCallback, useRef, useState } from "react";
 import {
   Alert,
@@ -204,7 +205,7 @@ export function NotificationCenterScreen({
         </View>
 
         {state === "loading" ? (
-          <Text style={styles.status}>Loading…</Text>
+          <LoadingState label="Loading notifications…" layout="list" />
         ) : state === "error" ? (
           <View>
             <EmptyState
@@ -293,7 +294,11 @@ const styles = StyleSheet.create({
   },
   dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.accent },
   dotRead: { backgroundColor: colors.border },
-  headerActions: { flexDirection: "row", gap: spacing.md, alignItems: "center" },
+  headerActions: {
+    flexDirection: "row",
+    gap: spacing.md,
+    alignItems: "center",
+  },
   clearAll: { ...typography.label, color: colors.textDim },
   rowMain: { flex: 1 },
   deleteBtn: {

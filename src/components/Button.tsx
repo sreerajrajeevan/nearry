@@ -1,14 +1,15 @@
 import React from "react";
 import {
   Text,
+  View,
   StyleSheet,
-  ActivityIndicator,
   ViewStyle,
   StyleProp,
   TextStyle,
 } from "react-native";
 import { colors, typography, spacing, radius } from "../theme";
 import { MotionPressable } from "./Motion";
+import { LoadingDots } from "./LoadingDots";
 
 type Variant = "primary" | "secondary" | "ghost" | "danger";
 
@@ -32,6 +33,7 @@ export function Button({
   return (
     <MotionPressable
       accessibilityRole="button"
+      accessibilityLabel={loading ? `${title}. In progress` : title}
       accessibilityState={{
         disabled: !!(disabled || loading),
         busy: !!loading,
@@ -41,15 +43,22 @@ export function Button({
       style={[
         styles.base,
         styles[variant],
-        (disabled || loading) && styles.disabled,
+        disabled && !loading && styles.disabled,
         style,
       ]}
     >
-      {loading ? (
-        <ActivityIndicator
-          color={variant === "primary" ? colors.onAccent : colors.text}
-        />
-      ) : (
+      <View style={styles.content}>
+        {loading && (
+          <LoadingDots
+            color={
+              variant === "primary"
+                ? colors.onAccent
+                : variant === "danger"
+                  ? colors.red
+                  : colors.text
+            }
+          />
+        )}
         <Text
           style={[
             styles.text,
@@ -58,12 +67,18 @@ export function Button({
         >
           {title}
         </Text>
-      )}
+      </View>
     </MotionPressable>
   );
 }
 
 const styles = StyleSheet.create({
+  content: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing.sm,
+  },
   base: {
     minHeight: 50,
     paddingVertical: spacing.sm,

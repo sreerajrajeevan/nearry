@@ -1,3 +1,4 @@
+import { LoadingState } from "../../components/LoadingState";
 import React, { useRef, useState } from "react";
 import { Alert, Linking, StyleSheet, Switch, Text, View } from "react-native";
 import { Screen } from "../../components/Screen";
@@ -196,7 +197,7 @@ export function BlockedUsersScreen({ navigation }: { navigation: Nav }) {
       {state === "error" ? (
         <Button title="Retry" onPress={() => void refresh()} />
       ) : state === "loading" ? (
-        <Text style={styles.copy}>Loading…</Text>
+        <LoadingState label="Loading blocked accounts…" layout="compact" />
       ) : !data?.length ? (
         <Text style={styles.copy}>You haven't blocked anyone.</Text>
       ) : (
@@ -234,7 +235,7 @@ export function MyReportsScreen({ navigation }: { navigation: Nav }) {
       {state === "error" ? (
         <Button title="Retry" onPress={() => void refresh()} />
       ) : state === "loading" ? (
-        <Text style={styles.copy}>Loading…</Text>
+        <LoadingState label="Loading your reports…" layout="compact" />
       ) : !data?.length ? (
         <Text style={styles.copy}>You haven't submitted any reports.</Text>
       ) : (
@@ -370,7 +371,10 @@ export function NotificationSettingsScreen({
       {state === "error" ? (
         <Button title="Retry" onPress={() => void refresh()} />
       ) : state === "loading" ? (
-        <Text style={styles.copy}>Loading…</Text>
+        <LoadingState
+          label="Loading notification preferences…"
+          layout="compact"
+        />
       ) : (
         <View style={styles.row}>
           <Text style={styles.name}>Push notifications</Text>

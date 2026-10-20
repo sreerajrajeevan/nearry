@@ -2,7 +2,7 @@ import {
   LegalScreen,
   RestrictedAccountScreen,
 } from "../screens/settings/SafetyScreens";
-import React, { useEffect, useState } from "react";
+import React, { useEffect } from "react";
 import { View, StyleSheet, Text, Alert } from "react-native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { Button } from "../components/Button";
@@ -12,7 +12,7 @@ import { useReducedMotion } from "../store/MotionContext";
 import { RootStackParamList } from "./types";
 import { useAuth } from "../store/AuthContext";
 import { usePushSetup } from "../hooks/useUnreadCounts";
-import { StartupSplash } from "../components/StartupSplash";
+import { LoadingState } from "../components/LoadingState";
 import { WelcomeScreen } from "../screens/WelcomeScreen";
 import { PersonalAuthScreen } from "../screens/auth/PersonalAuthScreen";
 import { BusinessAuthScreen } from "../screens/auth/BusinessAuthScreen";
@@ -25,7 +25,7 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 
 /**
  * Routes by auth state:
- * - bootstrapping              -> spinner
+ * - bootstrapping              -> branded loading state
  * - demo mode                  -> demo lane tabs (explicitly separate)
  * - no session                 -> Welcome / auth
  * - session, onboarding needed -> resume onboarding (lane from saved profile)
@@ -52,14 +52,6 @@ export function RootNavigator() {
 
   usePushSetup();
 
-  // Minimum splash time so the logo animation always completes,
-  // even when session bootstrap is instant.
-  const [splashMinElapsed, setSplashMinElapsed] = useState(false);
-  useEffect(() => {
-    const t = setTimeout(() => setSplashMinElapsed(true), 2300);
-    return () => clearTimeout(t);
-  }, []);
-
   // The login lane is only a hint: one email = one account = one fixed type.
   // If the user picked the other lane, say so instead of landing silently.
   useEffect(() => {
@@ -72,8 +64,10 @@ export function RootNavigator() {
     );
   }, [roleMismatch, clearRoleMismatch]);
 
-  if (bootstrapping || (!demoMode && profileLoading) || !splashMinElapsed) {
-    return <StartupSplash />;
+  if (bootstrapping || (!demoMode && profileLoading)) {
+    return (
+      <LoadingState fullScreen layout="compact" label="Opening your account…" />
+    );
   }
 
   if (!demoMode && !profile && (profileError || session)) {

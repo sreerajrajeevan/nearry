@@ -1,3 +1,4 @@
+import { LoadingState } from "../../components/LoadingState";
 import { parseDateTime } from "../../utils/dateTime";
 import React, { useEffect, useState } from "react";
 import {
@@ -95,7 +96,7 @@ export function EditPostScreen({ route, navigation }: EditPostProps) {
   if (loading) {
     return (
       <Screen padded>
-        <Text style={styles.status}>Loading…</Text>
+        <LoadingState label="Getting your post ready…" layout="detail" />
       </Screen>
     );
   }
@@ -118,10 +119,7 @@ export function EditPostScreen({ route, navigation }: EditPostProps) {
   if (profile && post.authorId !== profile.id) {
     return (
       <Screen padded>
-        <EmptyState
-          title="Not your post"
-          hint="Only the host can edit this."
-        />
+        <EmptyState title="Not your post" hint="Only the host can edit this." />
         <Button
           title="Go back"
           variant="ghost"

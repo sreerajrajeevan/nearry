@@ -3,7 +3,8 @@
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#FAF9F5",
-        "foregroundImage": "./assets/adaptive-icon.png"
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "monochromeImage": "./assets/adaptive-monochrome.png"
       },
       "package": "com.nearry.app"
     },
@@ -30,6 +31,18 @@
         "expo-notifications",
         {
           "defaultChannel": "default"
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#FAF9F5",
+          "image": "./assets/splash.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "android": {
+            "image": "./assets/splash-android.png"
+          }
         }
       ]
     ],

@@ -1,3 +1,4 @@
+import { LoadingState } from "../../components/LoadingState";
 import { SafetyActions } from "../../components/SafetyActions";
 import React, { useState } from "react";
 import {
@@ -127,7 +128,7 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
   if (state === "loading") {
     return (
       <Screen padded>
-        <Text style={styles.status}>Loading…</Text>
+        <LoadingState label="Loading this plan…" layout="detail" />
       </Screen>
     );
   }

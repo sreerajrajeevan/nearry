@@ -1,3 +1,4 @@
+import { LoadingState } from "../../components/LoadingState";
 import { SafetyActions } from "../../components/SafetyActions";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -158,7 +159,7 @@ export function OfferDetailsScreen({ route, navigation }: Props) {
   if (state === "loading") {
     return (
       <Screen padded>
-        <Text style={styles.status}>Loading…</Text>
+        <LoadingState label="Loading this offer…" layout="detail" />
       </Screen>
     );
   }

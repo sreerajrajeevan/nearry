@@ -1,3 +1,4 @@
+import { LoadingState } from "../../components/LoadingState";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   View,
@@ -25,7 +26,12 @@ import {
   subscribeToBookings,
   confirmBooking,
 } from "../../services/bookings";
-import { Offer, Booking, isHoldExpired, isBookingStale } from "../../services/mappers";
+import {
+  Offer,
+  Booking,
+  isHoldExpired,
+  isBookingStale,
+} from "../../services/mappers";
 import { formatTime } from "../../utils/format";
 import { businessDay } from "../../utils/businessDay";
 
@@ -94,7 +100,7 @@ export function DashboardScreen({ navigation }: Props) {
           title={"Make room\nfor a new face."}
         />
         {state === "loading" ? (
-          <Text style={styles.status}>Getting your day ready…</Text>
+          <LoadingState label="Getting your day ready…" layout="list" />
         ) : state === "error" ? (
           <>
             <EmptyState

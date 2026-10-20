@@ -1,3 +1,4 @@
+import { LoadingDots } from "../../components/LoadingDots";
 import React, { useCallback, useState } from "react";
 import {
   View,
@@ -8,7 +9,6 @@ import {
   Image,
   TextInput,
   Alert,
-  ActivityIndicator,
 } from "react-native";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { Screen } from "../../components/Screen";
@@ -154,7 +154,7 @@ export function ManageVenueScreen() {
                 disabled={uploading}
               >
                 {uploading ? (
-                  <ActivityIndicator color={colors.accent} />
+                  <LoadingDots />
                 ) : (
                   <Text style={styles.addPhotoText}>+ Add</Text>
                 )}
@@ -189,12 +189,20 @@ export function ManageVenueScreen() {
                 style={styles.customInput}
                 onSubmitEditing={addCustomAmenity}
               />
-              <Button title="Add" onPress={addCustomAmenity} variant="secondary" />
+              <Button
+                title="Add"
+                onPress={addCustomAmenity}
+                variant="secondary"
+              />
             </View>
-            {amenities.filter((a) => !(AMENITY_PRESETS as readonly string[]).includes(a)).length > 0 && (
+            {amenities.filter(
+              (a) => !(AMENITY_PRESETS as readonly string[]).includes(a),
+            ).length > 0 && (
               <View style={styles.chipWrap}>
                 {amenities
-                  .filter((a) => !(AMENITY_PRESETS as readonly string[]).includes(a))
+                  .filter(
+                    (a) => !(AMENITY_PRESETS as readonly string[]).includes(a),
+                  )
                   .map((name) => (
                     <TouchableOpacity
                       key={name}
@@ -222,9 +230,17 @@ export function ManageVenueScreen() {
 }
 
 const styles = StyleSheet.create({
-  back: { ...typography.label, color: colors.textDim, marginBottom: spacing.md },
+  back: {
+    ...typography.label,
+    color: colors.textDim,
+    marginBottom: spacing.md,
+  },
   title: { ...typography.title, color: colors.text, marginBottom: spacing.sm },
-  venueName: { ...typography.heading, color: colors.text, marginBottom: spacing.lg },
+  venueName: {
+    ...typography.heading,
+    color: colors.text,
+    marginBottom: spacing.lg,
+  },
   sectionTitle: {
     ...typography.label,
     color: colors.text,

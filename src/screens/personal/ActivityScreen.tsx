@@ -1,3 +1,4 @@
+import { LoadingState } from "../../components/LoadingState";
 import { formatWhen } from "../../utils/format";
 import React, { useState } from "react";
 import {
@@ -153,7 +154,7 @@ export function ActivityScreen() {
         </TouchableOpacity>
 
         {state === "loading" ? (
-          <Text style={styles.status}>Loading…</Text>
+          <LoadingState label="Loading your activity…" layout="list" />
         ) : state === "error" ? (
           <View>
             <EmptyState

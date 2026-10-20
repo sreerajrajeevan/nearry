@@ -1,3 +1,4 @@
+import { LoadingState } from "../../components/LoadingState";
 import { DateSheet, TimeSheet } from "../../components/DateTimeSheets";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -142,7 +143,7 @@ export function EditOfferScreen({ route, navigation }: Props) {
   if (state === "loading") {
     return (
       <Screen>
-        <Text style={styles.status}>Loading…</Text>
+        <LoadingState label="Getting your offer ready…" layout="detail" />
       </Screen>
     );
   }
@@ -323,7 +324,10 @@ export function EditOfferScreen({ route, navigation }: Props) {
           disabled={uploadingCover}
         >
           {coverPhotoUrl ? (
-            <Image source={{ uri: coverPhotoUrl }} style={styles.coverPreview} />
+            <Image
+              source={{ uri: coverPhotoUrl }}
+              style={styles.coverPreview}
+            />
           ) : (
             <Text style={styles.coverPlaceholder}>
               {uploadingCover ? "Uploading…" : "+ Add cover photo"}
@@ -515,7 +519,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  checkboxActive: { backgroundColor: colors.accent, borderColor: colors.accent },
+  checkboxActive: {
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
+  },
   checkmark: { color: "#fff", fontSize: 14, lineHeight: 18 },
   spotlightLabel: { ...typography.body, color: colors.text, flex: 1 },
   row: { flexDirection: "row", gap: spacing.md },
