@@ -1,3 +1,4 @@
+import { LoadingState } from "./LoadingState";
 import React from "react";
 import {
   View,
@@ -54,9 +55,7 @@ export function PlaceSuggestions({
   return (
     <View>
       {loading ? (
-        <Text accessibilityLiveRegion="polite" style={styles.caption}>
-          Finding places…
-        </Text>
+        <LoadingState label="Finding places…" layout="inline" />
       ) : error ? (
         <View>
           <Text accessibilityRole="alert" style={styles.caption}>

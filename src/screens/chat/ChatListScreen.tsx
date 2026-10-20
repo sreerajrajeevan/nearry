@@ -1,3 +1,4 @@
+import { LoadingState } from "../../components/LoadingState";
 import React, { useCallback, useRef, useState } from "react";
 import {
   AppState,
@@ -105,7 +106,7 @@ export function ChatListScreen({ navigation }: Props) {
         <PageHeading compact title="Your conversations" />
         <Text style={styles.subtitle}>About your plans and bookings</Text>
         {state === "loading" ? (
-          <Text style={styles.status}>Loading…</Text>
+          <LoadingState label="Loading conversations…" layout="list" />
         ) : state === "error" ? (
           <View>
             <EmptyState

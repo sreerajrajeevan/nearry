@@ -1,5 +1,6 @@
+import { LoadingImage } from "./LoadingImage";
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, Image } from "react-native";
+import { View, Text, StyleSheet } from "react-native";
 import { colors, typography, spacing } from "../theme";
 import { Icon, IconName } from "./Icon";
 import { MotionPressable } from "./Motion";
@@ -43,7 +44,7 @@ export function DiscoveryCard({
     >
       <View style={styles.thumbnail}>
         {imageUrl && !photoFailed ? (
-          <Image
+          <LoadingImage
             source={{ uri: imageUrl }}
             resizeMode="cover"
             style={styles.photo}

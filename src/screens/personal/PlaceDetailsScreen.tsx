@@ -1,3 +1,4 @@
+import { LoadingState } from "../../components/LoadingState";
 import React, { useCallback, useRef, useState } from "react";
 import {
   View,
@@ -79,7 +80,10 @@ export function PlaceDetailsScreen({ route, navigation }: Props) {
             : "Near this place · Within 5 km"}
         </Text>
         {state === "loading" ? (
-          <Text style={styles.meta}>Finding nearby plans and openings…</Text>
+          <LoadingState
+            label="Finding nearby plans and openings…"
+            layout="list"
+          />
         ) : state === "error" ? (
           <>
             <EmptyState

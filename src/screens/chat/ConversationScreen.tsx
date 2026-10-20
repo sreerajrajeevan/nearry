@@ -1,3 +1,4 @@
+import { LoadingState } from "../../components/LoadingState";
 import { SafetyActions } from "../../components/SafetyActions";
 import { conversationSafety, ConversationSafety } from "../../services/safety";
 import React, { useCallback, useRef, useState } from "react";
@@ -215,7 +216,7 @@ export function ConversationScreen({ route, navigation }: Props) {
           </Text>
         )}
         {state === "loading" ? (
-          <Text style={styles.status}>Loading…</Text>
+          <LoadingState label="Loading messages…" layout="list" />
         ) : state === "error" ? (
           <View>
             <EmptyState

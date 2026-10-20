@@ -1,3 +1,4 @@
+import { LoadingState } from "../../components/LoadingState";
 import React, { useEffect, useState } from "react";
 import { View, Text, ScrollView, StyleSheet } from "react-native";
 import { useNavigation } from "@react-navigation/native";
@@ -126,9 +127,7 @@ export function SearchScreen() {
             hint="Search for places, plans, or an opening nearby."
           />
         ) : state === "loading" ? (
-          <Text accessibilityLiveRegion="polite" style={styles.status}>
-            Looking around…
-          </Text>
+          <LoadingState label="Looking nearby…" layout="list" />
         ) : state === "error" ? (
           <>
             <EmptyState

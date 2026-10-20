@@ -1,6 +1,7 @@
+import { LoadingImage } from "./LoadingImage";
+import { LoadingState } from "./LoadingState";
 import React, { useState } from "react";
 import {
-  Image,
   Modal,
   ScrollView,
   StyleSheet,
@@ -38,7 +39,7 @@ export function PostPhotoGallery({
     void refresh();
   };
   if (state === "loading" && !photos)
-    return <Text style={styles.note}>Loading photos…</Text>;
+    return <LoadingState label="Loading photos…" layout="compact" />;
   if (state === "error")
     return (
       <View style={styles.section}>
@@ -68,7 +69,7 @@ export function PostPhotoGallery({
             {failed.includes(photo.photo_url) ? (
               <Text style={styles.note}>Photo unavailable</Text>
             ) : (
-              <Image
+              <LoadingImage
                 source={{ uri: photo.photo_url }}
                 style={styles.photo}
                 resizeMode="cover"
@@ -115,7 +116,7 @@ export function PostPhotoGallery({
                 Photo unavailable. Close and retry.
               </Text>
             ) : (
-              <Image
+              <LoadingImage
                 source={{ uri: selected }}
                 resizeMode="contain"
                 style={styles.fullPhoto}

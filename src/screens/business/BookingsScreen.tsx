@@ -1,3 +1,4 @@
+import { LoadingState } from "../../components/LoadingState";
 import { formatWhen } from "../../utils/format";
 import React, { useCallback, useEffect, useState } from "react";
 import {
@@ -142,7 +143,7 @@ export function BookingsScreen({ navigation }: Props) {
         </View>
 
         {state === "loading" ? (
-          <Text style={styles.status}>Loading…</Text>
+          <LoadingState label="Loading bookings…" layout="list" />
         ) : state === "error" ? (
           <View>
             <EmptyState

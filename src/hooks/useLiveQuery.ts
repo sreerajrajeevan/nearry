@@ -17,6 +17,7 @@ export function useLiveQuery<T>(
   const focused = useRef(false),
     version = useRef(0);
   const lastKey = useRef<string>();
+  const loadedKey = useRef<string>();
   const refresh = useCallback(async (silent = false) => {
     if (!focused.current) return;
     const ticket = ++version.current;
@@ -25,11 +26,12 @@ export function useLiveQuery<T>(
       focused.current &&
       ticket === version.current &&
       requested.key === source.current.key;
-    if (!silent) setState("loading");
+    if (!silent && loadedKey.current !== requested.key) setState("loading");
     setRefreshing(true);
     try {
       const result = await requested.fetcher();
       if (!current()) return;
+      loadedKey.current = requested.key;
       setData(result);
       setError("");
       setState("ready");
@@ -49,6 +51,7 @@ export function useLiveQuery<T>(
       focused.current = true;
       if (lastKey.current !== key) {
         lastKey.current = key;
+        loadedKey.current = undefined;
         setData(undefined);
       }
       void refresh();

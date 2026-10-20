@@ -1,3 +1,5 @@
+import { LoadingImage } from "../../components/LoadingImage";
+import { LoadingState } from "../../components/LoadingState";
 import { SafetyActions } from "../../components/SafetyActions";
 import React, { useRef, useState } from "react";
 import {
@@ -5,7 +7,6 @@ import {
   Text,
   ScrollView,
   StyleSheet,
-  Image,
   Linking,
   Share,
   Alert,
@@ -121,13 +122,7 @@ export function VenueDetailsScreen({ route, navigation }: VenueDetailsProps) {
               <Button title="Try again" onPress={() => void refresh()} />
             </>
           ) : (
-            <>
-              <View style={styles.skeletonHero} />
-              <View style={styles.skeletonLine} />
-              <Text accessibilityLiveRegion="polite" style={styles.meta}>
-                Getting to know this place…
-              </Text>
-            </>
+            <LoadingState label="Getting to know this place…" layout="detail" />
           )}
         </View>
       </Screen>
@@ -153,7 +148,7 @@ export function VenueDetailsScreen({ route, navigation }: VenueDetailsProps) {
         {toolbar}
         <View style={styles.hero}>
           {data.photos.length ? (
-            <Image
+            <LoadingImage
               source={{ uri: data.photos[0].photo_url }}
               resizeMode="cover"
               style={styles.heroPhoto}
@@ -351,7 +346,7 @@ export function VenueDetailsScreen({ route, navigation }: VenueDetailsProps) {
                   onPress={() => setSelectedPhoto(photo.photo_url)}
                   style={styles.galleryTile}
                 >
-                  <Image
+                  <LoadingImage
                     source={{ uri: photo.photo_url }}
                     style={styles.galleryImage}
                     resizeMode="cover"
@@ -412,7 +407,7 @@ export function VenueDetailsScreen({ route, navigation }: VenueDetailsProps) {
             <Icon name="x" size={22} color={colors.onAccent} />
           </MotionPressable>
           {selectedPhoto && (
-            <Image
+            <LoadingImage
               source={{ uri: selectedPhoto }}
               style={styles.fullPhoto}
               resizeMode="contain"

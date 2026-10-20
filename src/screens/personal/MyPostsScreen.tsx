@@ -1,3 +1,4 @@
+import { LoadingState } from "../../components/LoadingState";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   FlatList,
@@ -146,7 +147,7 @@ export function MyPostsScreen({ navigation }: Props) {
         }
         ListEmptyComponent={
           state === "loading" ? (
-            <Text style={styles.loading}>Loading your posts…</Text>
+            <LoadingState label="Loading your posts…" layout="list" />
           ) : state === "error" ? (
             <>
               <EmptyState
