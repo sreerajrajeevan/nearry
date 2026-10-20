@@ -36,7 +36,7 @@ export function PersonalTabs() {
           name="Activity"
           component={ActivityScreen}
           options={{
-            ...tabOptions("bell", "Activity"),
+            ...tabOptions("calendar", "Activity"),
             tabBarBadge: total > 0 ? total : undefined,
           }}
         />
