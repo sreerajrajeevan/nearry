@@ -74,6 +74,8 @@ export function Button({
 
 const styles = StyleSheet.create({
   content: {
+    maxWidth: "100%",
+    flexShrink: 1,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
@@ -100,7 +102,13 @@ const styles = StyleSheet.create({
     borderColor: colors.red,
   },
   disabled: { opacity: 0.4 },
-  text: { ...typography.body, fontWeight: "600", color: colors.text },
+  text: {
+    ...typography.body,
+    fontWeight: "600",
+    color: colors.text,
+    flexShrink: 1,
+    textAlign: "center",
+  },
   primaryText: { color: colors.onAccent },
   secondaryText: { color: colors.text },
   ghostText: { color: colors.textDim },

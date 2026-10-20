@@ -13,7 +13,7 @@ import { ProfileScreen } from "../screens/personal/ProfileScreen";
 const Tab = createBottomTabNavigator<PersonalTabParamList>();
 export function PersonalTabs() {
   const tabBarLayout = useTabBarLayout();
-  const { activity: total, messages } = useUnreadCounts();
+  const { messages } = useUnreadCounts();
   return (
     <PersonalMessagesContext.Provider value={messages}>
       <Tab.Navigator screenOptions={tabBarLayout}>
@@ -35,10 +35,7 @@ export function PersonalTabs() {
         <Tab.Screen
           name="Activity"
           component={ActivityScreen}
-          options={{
-            ...tabOptions("bell", "Activity"),
-            tabBarBadge: total > 0 ? total : undefined,
-          }}
+          options={tabOptions("calendar", "Activity")}
         />
         <Tab.Screen
           name="Profile"
