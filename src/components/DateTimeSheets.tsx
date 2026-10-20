@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { View, Text, Modal, TouchableOpacity, StyleSheet } from "react-native";
+import { View, Text, Modal, TouchableOpacity, TextInput, StyleSheet } from "react-native";
 import { colors, typography, spacing } from "../theme";
 
 const WEEKDAYS = ["S", "M", "T", "W", "T", "F", "S"];
@@ -165,6 +165,14 @@ function Stepper({
   const wrap = (v: number) => min + ((((v - min) % range) + range) % range);
   const dec = () => onChange(wrap(value - step));
   const inc = () => onChange(wrap(value + step));
+  // Typed value while the field is being edited; null = show the value.
+  const [draft, setDraft] = useState<string | null>(null);
+  const commitDraft = () => {
+    if (draft === null) return;
+    const n = parseInt(draft.replace(/\D/g, ""), 10);
+    if (!Number.isNaN(n)) onChange(Math.min(max, Math.max(min, n)));
+    setDraft(null);
+  };
   return (
     <View style={styles.stepCol}>
       <Text style={styles.stepLabel}>{label}</Text>
@@ -175,7 +183,17 @@ function Stepper({
       >
         <Text style={styles.stepText}>+</Text>
       </TouchableOpacity>
-      <Text style={styles.stepValue}>{String(value).padStart(2, "0")}</Text>
+      <TextInput
+        style={styles.stepInput}
+        value={draft ?? String(value).padStart(2, "0")}
+        keyboardType="number-pad"
+        maxLength={2}
+        selectTextOnFocus
+        onChangeText={setDraft}
+        onBlur={commitDraft}
+        onSubmitEditing={commitDraft}
+        accessibilityLabel={`${label} value, type to change`}
+      />
       <TouchableOpacity
         style={styles.stepBtn}
         onPress={dec}
@@ -321,7 +339,14 @@ const styles = StyleSheet.create({
     marginVertical: 4,
   },
   stepText: { color: colors.text, fontSize: 22 },
-  stepValue: { ...typography.title, color: colors.text, fontSize: 28 },
+  stepInput: {
+    ...typography.title,
+    color: colors.text,
+    fontSize: 28,
+    minWidth: 56,
+    textAlign: "center",
+    paddingVertical: 2,
+  },
   colon: { ...typography.title, color: colors.textDim, fontSize: 28 },
   periodCol: { alignItems: "center", marginLeft: spacing.lg },
   periodBtn: {
