@@ -5,8 +5,7 @@ const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL ?? "";
 
 /** Pick a square-cropped image from the library. Returns the local URI or null. */
 export async function pickAvatar(): Promise<string | null> {
-  const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-  if (status !== "granted") throw new Error("Photo access is needed to set a profile picture.");
+  // The system picker grants access to the selected photo without broad library permission.
   const result = await ImagePicker.launchImageLibraryAsync({
     mediaTypes: ["images"],
     allowsEditing: true,
