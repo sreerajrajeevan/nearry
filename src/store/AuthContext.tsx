@@ -246,6 +246,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (!url) return;
       try {
         const userId = await completeOAuthCallback(url);
+        await roleRestored;
         if (userId && alive && !demoRef.current)
           await refreshAuthenticatedProfile(userId);
       } catch (e) {
