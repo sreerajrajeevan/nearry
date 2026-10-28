@@ -1,3 +1,4 @@
+import { completeSignupAgreement } from "./terms";
 import { requireSupabase } from "./supabase";
 import type { AccountType } from "../navigation/types";
 import { friendlyAuthError } from "../utils/authError";
@@ -45,5 +46,10 @@ export async function verifyEmailOtp(
   if (error) throw new Error(friendlyAuthError(error.message));
   if (!data.user)
     throw new Error("Verification succeeded but no user was returned.");
+  await completeSignupAgreement(
+    "email",
+    data.user.id,
+    data.user.email ?? email,
+  );
   return data.user.id;
 }

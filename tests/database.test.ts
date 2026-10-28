@@ -1921,6 +1921,17 @@ test("notifications: disabling push keeps in-app events while suppressing push j
     tx.query("select accept_community_terms('2026-10-19',true)"),
   );
   assert.ok(consent);
+  const acceptedProfile = (
+    await asUser(c, (tx) => tx.query("select get_my_profile() as profile"))
+  ).rows[0].profile;
+  assert.equal(acceptedProfile.terms_version, "2026-10-19");
+  assert.ok(Number.isFinite(Date.parse(acceptedProfile.terms_accepted_at)));
+  await assert.rejects(
+    asUser(c, (tx) =>
+      tx.query("select accept_community_terms('2026-10-19',false)"),
+    ),
+    /confirm your age/,
+  );
   await assert.rejects(
     asUser(c, (tx) => tx.query("select accept_community_terms('old',true)")),
     /current terms/,

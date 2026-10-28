@@ -1,3 +1,4 @@
+import { completeSignupAgreement } from "./terms";
 import * as WebBrowser from "expo-web-browser";
 import * as Linking from "expo-linking";
 import { Platform } from "react-native";
@@ -77,9 +78,10 @@ export async function completeOAuthCallback(
   if (!exchanges.has(code)) {
     const promise = requireSupabase()
       .auth.exchangeCodeForSession(code)
-      .then(({ data, error }) => {
+      .then(async ({ data, error }) => {
         if (error) throw new Error(friendlyAuthError(error.message));
         if (!data.user) throw new Error("No authenticated user was returned.");
+        await completeSignupAgreement("google", data.user.id);
         return data.user.id;
       });
     exchanges.set(code, promise);

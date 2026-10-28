@@ -1,5 +1,10 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { useNavigation } from "@react-navigation/native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { RootStackParamList } from "../../navigation/types";
+import { TermsAgreement } from "../../components/TermsAgreement";
+import { AGREEMENT_REQUIRED } from "../../services/terms";
 import { Screen } from "../../components/Screen";
 import { Button } from "../../components/Button";
 import { Input } from "../../components/Input";
@@ -37,6 +42,9 @@ export function AuthScreen({
   onBack,
 }: Props) {
   const isLogin = mode === "login";
+  const navigation =
+    useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const [agreed, setAgreed] = useState(false);
   const { sendOtp, verifyOtp, signInGoogle, loading } = useAuth();
 
   const [step, setStep] = useState<"email" | "code">("email");
@@ -45,6 +53,13 @@ export function AuthScreen({
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [sentTo, setSentTo] = useState<string | null>(null);
+  useEffect(() => {
+    setAgreed(false);
+    setStep("email");
+    setCode("");
+    setSentTo(null);
+    setError(null);
+  }, [mode, accountType]);
 
   const fail = (e: unknown) =>
     setError(e instanceof Error ? e.message : "Something went wrong.");
@@ -52,6 +67,7 @@ export function AuthScreen({
   const sendCode = async () => {
     if (loading) return;
     setError(null);
+    if (!isLogin && !agreed) return setError(AGREEMENT_REQUIRED);
     const clean = email.trim();
     if (!isValidEmail(clean)) return setError("Enter a valid email address.");
     if (!isLogin && !isValidDisplayName(displayName))
@@ -62,6 +78,7 @@ export function AuthScreen({
         accountType,
         isLogin ? undefined : displayName.trim(),
         !isLogin,
+        agreed,
       );
       setSentTo(clean);
       setCode("");
@@ -74,6 +91,7 @@ export function AuthScreen({
   const confirmCode = async () => {
     if (loading) return;
     setError(null);
+    if (!isLogin && !agreed) return setError(AGREEMENT_REQUIRED);
     if (!isValidOtp(code)) return setError("Enter the 6-digit code.");
     try {
       await verifyOtp(sentTo ?? email.trim(), code.trim());
@@ -87,7 +105,8 @@ export function AuthScreen({
     if (loading) return;
     setError(null);
     try {
-      await signInGoogle(accountType);
+      if (!isLogin && !agreed) return setError(AGREEMENT_REQUIRED);
+      await signInGoogle(accountType, !isLogin, agreed);
     } catch (e) {
       fail(e);
     }
@@ -153,7 +172,26 @@ export function AuthScreen({
             onSubmitEditing={sendCode}
           />
           <View style={styles.gap} />
-          <Button title="Send code" onPress={sendCode} loading={loading} />
+          {!isLogin && (
+            <TermsAgreement
+              checked={agreed}
+              onChange={(checked) => {
+                setAgreed(checked);
+                setError(null);
+              }}
+              disabled={loading}
+              onTerms={() => navigation.navigate("Legal", { page: "terms" })}
+              onPrivacy={() =>
+                navigation.navigate("Legal", { page: "privacy" })
+              }
+            />
+          )}
+          <Button
+            title="Send code"
+            onPress={sendCode}
+            loading={loading}
+            disabled={!isLogin && !agreed}
+          />
         </>
       ) : (
         <>
@@ -204,9 +242,14 @@ export function AuthScreen({
         variant="secondary"
         onPress={google}
         loading={loading}
+        disabled={!isLogin && !agreed}
       />
 
-      {error && <Text style={styles.error}>{error}</Text>}
+      {error && (
+        <Text accessibilityRole="alert" style={styles.error}>
+          {error}
+        </Text>
+      )}
 
       <TouchableOpacity
         onPress={onSwitchMode}
