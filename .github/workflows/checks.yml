@@ -33,3 +33,46 @@ jobs:
           TEST_DATABASE_URL: postgres://postgres:test-only@localhost:5432/nearry_test
       - run: python3 -m pip install pillow && python3 assets/generate_icons.py
       - run: EXPO_NO_TELEMETRY=1 EXPO_NO_CACHE=1 npx expo export --platform android --platform web
+
+  android-release:
+    # This compile uses no private signing key and never publishes a store build.
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - run: npm ci --no-audit --no-fund
+      - run: python3 -m pip install pillow && python3 assets/generate_icons.py
+      - name: Install Android 36 tools
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "platforms;android-36" "build-tools;36.0.0" > /dev/null
+      - run: CI=1 npx expo prebuild --platform android --no-install
+      - name: Compile unsigned release APK and AAB
+        working-directory: android
+        run: ./gradlew :app:assembleRelease :app:bundleRelease -PreactNativeArchitectures=arm64-v8a,x86_64 --no-daemon --max-workers=2
+      - name: Verify release manifest, signature and 16 KB alignment
+        shell: bash
+        run: |
+          apk=android/app/build/outputs/apk/release/app-release-unsigned.apk
+          aab=android/app/build/outputs/bundle/release/app-release.aab
+          test -f "$apk" && test -f "$aab"
+          test "$("$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest target-sdk "$apk")" = "36"
+          test "$("$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest debuggable "$apk")" = "false"
+          if "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify "$apk"; then
+            echo 'Unexpected signing: the CI release must be unsigned.'
+            exit 1
+          fi
+          "$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest permissions "$apk" > /tmp/nearry-permissions.txt
+          if grep -E 'READ_MEDIA_|READ_EXTERNAL_STORAGE|WRITE_EXTERNAL_STORAGE|RECORD_AUDIO|ACCESS_BACKGROUND_LOCATION|CAMERA|SYSTEM_ALERT_WINDOW' /tmp/nearry-permissions.txt; then
+            echo 'Unexpected broad media, microphone or background-location permission.'
+            exit 1
+          fi
+          "$ANDROID_HOME/build-tools/36.0.0/zipalign" -c -P 16 4 "$apk"
+          python3 scripts/check-native-alignment.py "$apk"
+          python3 scripts/check-native-alignment.py "$aab"

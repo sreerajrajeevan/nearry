@@ -16,8 +16,8 @@ export function useLiveQuery<T>(
   source.current = { key, fetcher, subscribe };
   const focused = useRef(false),
     version = useRef(0);
-  const lastKey = useRef<string>();
-  const loadedKey = useRef<string>();
+  const lastKey = useRef<string | undefined>(undefined);
+  const loadedKey = useRef<string | undefined>(undefined);
   const refresh = useCallback(async (silent = false) => {
     if (!focused.current) return;
     const ticket = ++version.current;

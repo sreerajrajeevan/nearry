@@ -1,0 +1,30 @@
+node_modules/
+.expo/
+dist/
+.env
+*.log
+
+# Icons are generated in CI
+assets/*.png
+
+# Generated public legal pages; build with configured public contacts.
+dist-legal/
+
+# Generated native projects and private signing material
+android/
+ios/
+.env.*
+!.env.example
+credentials.json
+*.jks
+*.keystore
+*.p12
+*.p8
+*.aab
+*.apk
+google-services.json
+GoogleService-Info.plist
+
+# Generate these with npm run assets before uploading to EAS.
+!assets/*.png
+.git/

@@ -34,12 +34,12 @@ jobs:
       - name: Generate app icons
         run: pip install pillow && python3 assets/generate_icons.py
 
-      - name: Ensure Android SDK 35
+      - name: Ensure Android SDK 36
         run: |
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "platforms;android-35" "build-tools;35.0.0" > /dev/null
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "platforms;android-36" "build-tools;36.0.0" > /dev/null
 
       - name: Prebuild Android native project
-        run: npx expo prebuild --platform android --non-interactive --no-install
+        run: CI=1 npx expo prebuild --platform android --no-install
 
       - name: Build debug APK
         run: cd android && ./gradlew assembleDebug -PreactNativeArchitectures=arm64-v8a --no-daemon

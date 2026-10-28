@@ -1,5 +1,5 @@
 import * as ImagePicker from "expo-image-picker";
-import * as FileSystem from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
 import { Platform } from "react-native";
 import { getSupabase, isDemoMode } from "./supabase";
 import { imageBytesFromBase64 } from "../utils/imageBytes";

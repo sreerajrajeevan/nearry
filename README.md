@@ -1,6 +1,6 @@
 # Nearry
 
-React Native + Expo SDK 52, with Personal and Business experiences and Supabase Auth, Postgres, Storage and Realtime. The Everyday Nearby UI uses the Current Clay palette: warm-white surfaces, dark ink and one burnt-orange accent. Both account experiences share the same type, icons, controls, and safe-area-aware navigation.
+React Native + Expo SDK 54, with Personal and Business experiences and Supabase Auth, Postgres, Storage and Realtime. The Everyday Nearby UI uses the Current Clay palette: warm-white surfaces, dark ink and one burnt-orange accent. Both account experiences share the same type, icons, controls, and safe-area-aware navigation.
 
 ## Run
 
@@ -113,7 +113,7 @@ Search treats punctuation and pattern characters as literal text, and keeps expi
 
 ## Dependency maintenance
 
-The project remains on Expo SDK 52. SDK-compatible native package versions are aligned and the lockfile is committed. `npm audit fix` could not resolve all inherited dependency advisories within this SDK's supported ranges. An Expo SDK upgrade and its native/device regression pass remain separate release work; do not use `npm audit fix --force` to change the framework blindly.
+Expo SDK 54 / React Native 0.81 target Android API 36 with the New Architecture and edge-to-edge layout. Native packages follow Expo's supported versions. Photo/document uploads retain the compatible filesystem API, and foreground notifications use the banner/list API. CI compiles an unsigned native release and checks its manifest, permissions and 16 KB native alignment. This does not replace a signed release test on a phone. See [Android release setup](docs/android-release.md) for signing, environment variables and the first Play internal test. Do not use `npm audit fix --force` to change the framework blindly.
 
 ## Everyday Nearby · Current Clay design
 

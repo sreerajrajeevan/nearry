@@ -19,7 +19,8 @@ const useMock = () => {
 // How local notifications behave when the app is foregrounded.
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
-    shouldShowAlert: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
     shouldPlaySound: true,
     shouldSetBadge: false,
   }),
