@@ -26,10 +26,20 @@ import {
   signOut as serviceSignOut,
 } from "../services/auth";
 import { unregisterPushToken } from "../services/notifications";
+import { POLICY_VERSION } from "../utils/legal";
+import {
+  acceptCurrentTerms,
+  AGREEMENT_REQUIRED,
+  beginSignupAgreement,
+  clearSignupAgreement,
+  configureSignupAgreementStorage,
+} from "../services/terms";
 import { RequestVersion } from "../utils/requestVersion";
 configureAuthStorage(AsyncStorage);
+configureSignupAgreementStorage(AsyncStorage);
 
 export type OnboardingData = {
+  termsAccepted?: boolean;
   interests?: string[];
   businessName?: string;
   businessDetails?: Record<string, unknown>;
@@ -54,9 +64,14 @@ type AuthState = {
     accountType: AccountType,
     displayName?: string,
     signup?: boolean,
+    termsAccepted?: boolean,
   ) => Promise<void>;
   verifyOtp: (email: string, code: string) => Promise<void>;
-  signInGoogle: (accountType: AccountType) => Promise<void>;
+  signInGoogle: (
+    accountType: AccountType,
+    signup?: boolean,
+    termsAccepted?: boolean,
+  ) => Promise<void>;
   signOut: (localOnly?: boolean) => Promise<void>;
   enterDemoMode: (accountType?: AccountType) => void;
   exitDemoMode: () => void;
@@ -230,7 +245,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const callback = async (url: string | null) => {
       if (!url) return;
       try {
-        await completeOAuthCallback(url);
+        const userId = await completeOAuthCallback(url);
+        if (userId && alive && !demoRef.current)
+          await refreshAuthenticatedProfile(userId);
       } catch (e) {
         if (alive) setProfileError(errorText(e));
       }
@@ -275,6 +292,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   async function refreshProfile() {
     if (!demoRef.current) await hydrate(sessionRef.current, true);
   }
+  async function refreshAuthenticatedProfile(userId: string) {
+    const { data, error } = await requireSupabase().auth.getSession();
+    if (error) throw error;
+    if (data.session?.user.id !== userId)
+      throw new Error("Account changed. Please retry.");
+    await hydrate(data.session, true);
+  }
   async function selectAccountType(role: AccountType) {
     await action(async () => {
       const { error } = await requireSupabase().rpc("select_account_type", {
@@ -309,6 +333,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setProfileError("");
       setProfileLoading(false);
       await AsyncStorage.removeItem("nearry.pendingRole");
+      await clearSignupAgreement();
     });
   }
   function enterDemoMode(role: AccountType = "personal") {
@@ -327,6 +352,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (demoRef.current) return;
       const id = sessionRef.current?.user.id;
       if (!id || !profile) throw new Error("Sign in first.");
+      if (profile.termsVersion !== POLICY_VERSION) {
+        if (!data.termsAccepted) throw new Error(AGREEMENT_REQUIRED);
+        await acceptCurrentTerms(id);
+      }
       const ticket = version.current.next();
       const patch: Record<string, unknown> = {
         onboarding_completed: true,
@@ -380,26 +409,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         intendedRole,
         roleMismatch,
         clearRoleMismatch: () => setRoleMismatch(null),
-        sendOtp: (email, role, name, signup = true) =>
+        sendOtp: (email, role, name, signup = true, termsAccepted = false) =>
           action(async () => {
+            if (signup)
+              await beginSignupAgreement("email", termsAccepted, email);
+            else await clearSignupAgreement();
             await remember(role);
             try {
               await sendEmailOtp(email, role, name, signup);
             } catch (e) {
+              await clearSignupAgreement();
               await AsyncStorage.removeItem("nearry.pendingRole");
               throw e;
             }
           }),
         verifyOtp: (email, code) =>
           action(async () => {
-            await verifyEmailOtp(email, code);
+            const userId = await verifyEmailOtp(email, code);
+            await refreshAuthenticatedProfile(userId);
           }),
-        signInGoogle: (role) =>
+        signInGoogle: (role, signup = false, termsAccepted = false) =>
           action(async () => {
+            if (signup) await beginSignupAgreement("google", termsAccepted);
+            else await clearSignupAgreement();
             await remember(role);
             try {
-              await signInWithGoogle(role);
+              const userId = await signInWithGoogle(role);
+              if (userId) await refreshAuthenticatedProfile(userId);
             } catch (e) {
+              await clearSignupAgreement();
               await AsyncStorage.removeItem("nearry.pendingRole");
               throw e;
             }

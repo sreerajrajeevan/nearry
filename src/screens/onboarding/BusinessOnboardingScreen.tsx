@@ -1,5 +1,10 @@
 import React, { useState } from "react";
 import { View, Text, TouchableOpacity, StyleSheet, Alert } from "react-native";
+import { useNavigation } from "@react-navigation/native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { RootStackParamList } from "../../navigation/types";
+import { TermsAgreement } from "../../components/TermsAgreement";
+import { POLICY_VERSION } from "../../utils/legal";
 import { Screen } from "../../components/Screen";
 import { Button } from "../../components/Button";
 import { Input } from "../../components/Input";
@@ -41,7 +46,11 @@ function Chip({
 
 /** 3-step business onboarding: profile → location → done. */
 export function BusinessOnboardingScreen() {
-  const { completeOnboarding, loading } = useAuth();
+  const { completeOnboarding, loading, profile } = useAuth();
+  const navigation =
+    useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const [agreed, setAgreed] = useState(false);
+  const agreementNeeded = profile?.termsVersion !== POLICY_VERSION;
   const [step, setStep] = useState(1);
   const [businessName, setBusinessName] = useState("");
   const [category, setCategory] = useState<string | null>(null);
@@ -149,11 +158,24 @@ export function BusinessOnboardingScreen() {
             Post offers, take bookings, watch footfall grow.
           </Text>
           <View style={styles.footerWide}>
+            {agreementNeeded && (
+              <TermsAgreement
+                checked={agreed}
+                onChange={setAgreed}
+                disabled={loading}
+                onTerms={() => navigation.navigate("Legal", { page: "terms" })}
+                onPrivacy={() =>
+                  navigation.navigate("Legal", { page: "privacy" })
+                }
+              />
+            )}
             <Button
               title="Open dashboard"
+              disabled={agreementNeeded && !agreed}
               loading={loading}
               onPress={() =>
                 void completeOnboarding({
+                  termsAccepted: agreed,
                   businessName: businessName.trim(),
                   businessDetails: {
                     category,

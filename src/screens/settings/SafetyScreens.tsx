@@ -20,13 +20,7 @@ import {
   setPushEnabled,
 } from "../../services/safety";
 import { enablePushNotifications } from "../../services/notifications";
-import {
-  legalSections,
-  legalContact,
-  LegalPage,
-  POLICY_VERSION,
-  legalConfigured,
-} from "../../utils/legal";
+import { legalSections, legalContact, LegalPage } from "../../utils/legal";
 
 type Nav = { goBack(): void; navigate(name: string, params?: any): void };
 const errorText = (e: unknown) =>
@@ -511,95 +505,6 @@ export function RestrictedAccountScreen() {
       <Button
         title="Sign out"
         onPress={() => void signOut(true).catch((e) => setError(errorText(e)))}
-      />
-    </Screen>
-  );
-}
-export function CommunityConsentScreen() {
-  const { refreshProfile, signOut } = useAuth();
-  const [page, setPage] = useState<LegalPage | "delete" | null>(null);
-  const [adult, setAdult] = useState(false);
-  const [agree, setAgree] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const nav: Nav = { goBack: () => setPage(null), navigate: () => {} };
-  if (page === "delete") return <DeleteAccountScreen navigation={nav} />;
-  if (page)
-    return <LegalScreen route={{ params: { page } }} navigation={nav} />;
-  return (
-    <Screen scroll style={styles.page}>
-      <PageHeading
-        greeting="Good company starts with respect."
-        title="Keep Nearry welcoming"
-      />
-      <Text style={styles.copy}>
-        No harassment, scams, illegal activity or sharing someone's private
-        information. Report concerns and block unwanted contact. Nearry is for
-        adults aged 18 and over.
-      </Text>
-      <Button
-        title="Read community guidelines & terms"
-        variant="secondary"
-        onPress={() => setPage("terms")}
-      />
-      <Button
-        title="Read privacy policy"
-        variant="secondary"
-        onPress={() => setPage("privacy")}
-      />
-      <View style={styles.row}>
-        <Text style={styles.copy}>I am 18 or older.</Text>
-        <Switch
-          accessibilityLabel="I am 18 or older"
-          value={adult}
-          onValueChange={setAdult}
-        />
-      </View>
-      <View style={styles.row}>
-        <Text style={[styles.copy, { flex: 1 }]}>
-          I agree to the community guidelines and terms.
-        </Text>
-        <Switch
-          accessibilityLabel="I agree to the community guidelines and terms"
-          value={agree}
-          onValueChange={setAgree}
-        />
-      </View>
-      {!!error && <Text style={styles.error}>{error}</Text>}
-      {!legalConfigured && (
-        <Text style={styles.copy}>
-          Account setup is not available for this preview yet. You can read the
-          policies or request deletion of an existing account.
-        </Text>
-      )}
-      <Button
-        title="Agree and continue"
-        disabled={!adult || !agree || !legalConfigured}
-        loading={busy}
-        onPress={() => {
-          setBusy(true);
-          void import("../../services/supabase")
-            .then(async ({ requireSupabase }) => {
-              const { error } = await requireSupabase().rpc(
-                "accept_community_terms",
-                { p_version: POLICY_VERSION, p_adult: true },
-              );
-              if (error) throw error;
-              await refreshProfile();
-            })
-            .catch((e) => setError(errorText(e)))
-            .finally(() => setBusy(false));
-        }}
-      />
-      <Button
-        title="Delete my account"
-        variant="ghost"
-        onPress={() => setPage("delete")}
-      />
-      <Button
-        title="Sign out"
-        variant="ghost"
-        onPress={() => void signOut().catch((e) => setError(errorText(e)))}
       />
     </Screen>
   );

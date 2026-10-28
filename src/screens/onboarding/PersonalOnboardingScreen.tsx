@@ -1,5 +1,10 @@
 import React, { useState } from "react";
 import { View, Text, TouchableOpacity, StyleSheet, Alert } from "react-native";
+import { useNavigation } from "@react-navigation/native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { RootStackParamList } from "../../navigation/types";
+import { TermsAgreement } from "../../components/TermsAgreement";
+import { POLICY_VERSION } from "../../utils/legal";
 import { Screen } from "../../components/Screen";
 import { Button } from "../../components/Button";
 import { colors, typography, spacing, radius } from "../../theme";
@@ -40,7 +45,11 @@ function Chip({
 
 /** 3-step personal onboarding: interests → location → done. */
 export function PersonalOnboardingScreen() {
-  const { completeOnboarding, loading } = useAuth();
+  const { completeOnboarding, loading, profile } = useAuth();
+  const navigation =
+    useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const [agreed, setAgreed] = useState(false);
+  const agreementNeeded = profile?.termsVersion !== POLICY_VERSION;
   const [step, setStep] = useState(1);
   const [selected, setSelected] = useState<string[]>([]);
   const [locating, setLocating] = useState(false);
@@ -128,11 +137,26 @@ export function PersonalOnboardingScreen() {
             Your people are already out there. Go find them.
           </Text>
           <View style={styles.footer}>
+            {agreementNeeded && (
+              <TermsAgreement
+                checked={agreed}
+                onChange={setAgreed}
+                disabled={loading}
+                onTerms={() => navigation.navigate("Legal", { page: "terms" })}
+                onPrivacy={() =>
+                  navigation.navigate("Legal", { page: "privacy" })
+                }
+              />
+            )}
             <Button
               title="Start exploring"
+              disabled={agreementNeeded && !agreed}
               loading={loading}
               onPress={() =>
-                void completeOnboarding({ interests: selected }).catch((e) =>
+                void completeOnboarding({
+                  interests: selected,
+                  termsAccepted: agreed,
+                }).catch((e) =>
                   Alert.alert(
                     "Could not save profile",
                     e instanceof Error ? e.message : "Please retry.",
@@ -199,6 +223,7 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   footer: {
+    alignSelf: "stretch",
     marginTop: "auto",
     marginBottom: spacing.md,
   },

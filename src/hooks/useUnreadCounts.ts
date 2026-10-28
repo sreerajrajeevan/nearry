@@ -1,4 +1,3 @@
-import { POLICY_VERSION } from "../utils/legal";
 import * as Notifications from "expo-notifications";
 import {
   getNotification,
@@ -67,8 +66,7 @@ export function usePushSetup() {
       !profile ||
       profile.suspendedAt ||
       profile.deletionRequestedAt ||
-      !profile.onboardingCompleted ||
-      profile.termsVersion !== POLICY_VERSION
+      !profile.onboardingCompleted
     )
       return;
     let active = true;
@@ -136,7 +134,6 @@ export function usePushSetup() {
     };
   }, [
     profile?.id,
-    profile?.termsVersion,
     profile?.onboardingCompleted,
     profile?.suspendedAt,
     profile?.deletionRequestedAt,
