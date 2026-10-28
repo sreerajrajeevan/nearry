@@ -93,7 +93,7 @@ export function CreateOfferScreen({ navigation }: Props) {
   const [formError, setFormError] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const draftId = useRef<string>();
+  const draftId = useRef<string | undefined>(undefined);
   const savingLock = useRef(false);
 
   const verified = profile?.verificationStatus === "verified";

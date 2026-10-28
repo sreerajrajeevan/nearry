@@ -1,7 +1,7 @@
 import { Platform } from "react-native";
 import { proofImageType } from "../utils/proofImage";
 import * as ImagePicker from "expo-image-picker";
-import * as FileSystem from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
 import { getSupabase, isDemoMode, isSupabaseConfigured } from "./supabase";
 
 const BUCKET = "verification_docs";
@@ -43,7 +43,7 @@ export async function submitVerificationDoc(
   if (useMock()) throw new Error("Verification needs the backend configured.");
 
   const picked = await ImagePicker.launchImageLibraryAsync({
-    mediaTypes: ImagePicker.MediaTypeOptions.Images,
+    mediaTypes: ["images"],
     quality: 0.7,
   });
   if (picked.canceled || !picked.assets[0])

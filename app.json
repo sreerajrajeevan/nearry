@@ -6,7 +6,20 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "monochromeImage": "./assets/adaptive-monochrome.png"
       },
-      "package": "com.nearry.app"
+      "package": "com.nearry.app",
+      "edgeToEdgeEnabled": true,
+      "versionCode": 1,
+      "blockedPermissions": [
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.READ_MEDIA_AUDIO",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.ACCESS_BACKGROUND_LOCATION",
+        "android.permission.SYSTEM_ALERT_WINDOW"
+      ],
+      "allowBackup": false
     },
     "icon": "./assets/icon.png",
     "ios": {
@@ -18,15 +31,26 @@
     "plugins": [
       "expo-location",
       [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Nearry to access a photo you choose for a post, profile or business.",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
+      ],
+      [
         "expo-build-properties",
         {
           "android": {
-            "kotlinVersion": "1.9.25"
+            "compileSdkVersion": 36,
+            "targetSdkVersion": 36,
+            "buildToolsVersion": "36.0.0"
           }
         }
       ],
       "./plugins/withBundleInDebug",
       "./plugins/withSharedDebugKeystore",
+      "./plugins/withReleaseSigning",
       [
         "expo-notifications",
         {
@@ -62,12 +86,11 @@
     },
     "backgroundColor": "#FAF9F5",
     "androidStatusBar": {
-      "barStyle": "dark-content",
-      "backgroundColor": "#FAF9F5"
+      "barStyle": "dark-content"
     },
     "androidNavigationBar": {
-      "barStyle": "dark-content",
-      "backgroundColor": "#FAF9F5"
-    }
+      "barStyle": "dark-content"
+    },
+    "newArchEnabled": true
   }
 }

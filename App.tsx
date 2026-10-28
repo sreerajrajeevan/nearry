@@ -86,7 +86,7 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <MotionProvider>
-        <StatusBar style="dark" backgroundColor={colors.background} />
+        <StatusBar style="dark" />
         <AuthProvider>
           <AppShell
             resourcesReady={
