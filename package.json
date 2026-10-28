@@ -47,7 +47,7 @@
   "private": true,
   "scripts": {
     "android": "expo start --android",
-    "ios": "expo run:ios",
+    "ios": "expo start --ios",
     "start": "expo start",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
@@ -61,5 +61,10 @@
     "release:check": "node --env-file-if-exists=.env scripts/check-release.mjs",
     "eas-build-post-install": "node scripts/check-eas-build.mjs"
   },
-  "version": "0.1.0"
+  "version": "0.1.0",
+  "overrides": {
+    "@expo/metro-config": {
+      "postcss": "8.5.32"
+    }
+  }
 }

@@ -69,6 +69,8 @@ For standalone testing before Play, use `npx eas-cli build --platform android --
 
 Core checks run TypeScript, app/service tests, disposable PostgreSQL/PostGIS tests and Android/web bundle exports. The Android release job compiles an **unsigned** release APK and AAB for arm64/x86_64. It checks target SDK 36, non-debuggable manifest, absence of broad media/audio/background-location permissions, absence of a release signature, APK ZIP alignment and all 64-bit ELF load-segment alignments. It does not publish these unsigned outputs or request private credentials.
 
+The lockfile pins patched PostCSS 8.5.32 for Expo’s Metro config using a scoped override. Reassess this override during the next Expo upgrade. One inherited high-severity `image-size` advisory remains in Metro’s Node build tooling: its patched 2.x package removes the synchronous file-path API this Metro version uses, so substituting it breaks image bundling. Build only reviewed repository assets in isolated CI; resolve this upstream dependency during the next framework update. The app’s photo upload does not execute this Node parser. This is not an audit-clean dependency stack.
+
 The image picker uses the system's selected-photo access, not broad library access. Camera/audio and background location are not app features and are excluded. Verify photo selection/upload and foreground location after the upgrade.
 
 ## Checks still required before going live
