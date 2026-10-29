@@ -301,7 +301,7 @@ test("email delivery failures reject the request and explain restrictions and se
       500,
       "unexpected_failure",
       "Error sending magic link email",
-      /Error sending magic link email/,
+      /couldn't send your email code/,
     ],
   ] as const) {
     responseStatus = status;
@@ -311,6 +311,23 @@ test("email delivery failures reject the request and explain restrictions and se
       expected,
     );
   }
+});
+
+test("eight-digit email verification sends the entire token, including a leading zero", async () => {
+  const { verifyEmailOtp } = await import("../src/services/emailAuth");
+  responseStatus = 403;
+  handler = () => ({
+    code: "otp_expired",
+    msg: "Token has expired or is invalid",
+  });
+  await assert.rejects(
+    verifyEmailOtp(" Person@Example.com ", " 01234567 "),
+    /incorrect or expired/,
+  );
+  assert.match(calls[0].url.pathname, /auth\/v1\/verify$/);
+  assert.equal(calls[0].body.email, "person@example.com");
+  assert.equal(calls[0].body.token, "01234567");
+  assert.equal(calls[0].body.type, "email");
 });
 
 test("badge totals come from one authorized snapshot and count each chat message once", async () => {

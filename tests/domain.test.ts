@@ -33,6 +33,11 @@ test("email and OTP validation", () => {
   assert.ok(isValidEmail("a@b.com"));
   assert.equal(isValidEmail("a@"), false);
   assert.ok(isValidOtp("123456"));
+  assert.ok(isValidOtp("01234567"));
+  assert.ok(isValidOtp("1234567890"));
+  assert.equal(isValidOtp("12345"), false);
+  assert.equal(isValidOtp("12345678901"), false);
+  assert.equal(isValidOtp("1234abcd"), false);
   assert.equal(isValidOtp("abc123"), false);
 });
 test("post validation and explicit snake-case write mapping", () => {

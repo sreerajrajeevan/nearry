@@ -9,6 +9,11 @@ export function friendlyAuthError(message: string, code?: string): string {
     return "Nearry's email sending limit has been reached. Try again later or continue with Google.";
   if (code === "email_provider_disabled")
     return "Email sign-in is currently unavailable. Try Google sign-in for now.";
+  if (
+    m.includes("error sending magic link") ||
+    m.includes("error sending confirmation email")
+  )
+    return "Nearry couldn't send your email code. Try again later or continue with Google.";
   if (code === "over_request_rate_limit")
     return "Too many attempts — wait a minute and try again.";
   if (code === "otp_expired")

@@ -11,7 +11,7 @@ WebBrowser.maybeCompleteAuthSession();
 /**
  * Authentication — Supabase only.
  *
- * - Email: passwordless OTP (6-digit code). No passwords, no phone numbers.
+ * - Email: passwordless OTP. No passwords, no phone numbers.
  * - Google: OAuth *through Supabase* (Supabase handles the Google exchange;
  *   the app only opens the provider URL and completes the PKCE/code flow).
  *

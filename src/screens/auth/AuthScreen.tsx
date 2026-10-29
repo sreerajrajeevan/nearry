@@ -30,7 +30,7 @@ type Props = {
 };
 
 /**
- * Passwordless auth: email OTP (6-digit code) + Google via Supabase.
+ * Passwordless auth: email OTP + Google via Supabase.
  * No passwords, no phone numbers. The saved profile's account type —
  * not this screen's lane — decides where the user lands after login.
  */
@@ -105,7 +105,8 @@ export function AuthScreen({
     if (loading) return;
     setError(null);
     if (!isLogin && !agreed) return setError(AGREEMENT_REQUIRED);
-    if (!isValidOtp(code)) return setError("Enter the 6-digit code.");
+    if (!isValidOtp(code))
+      return setError("Enter the full code from your email (6–10 digits).");
     try {
       await verifyOtp(sentTo ?? email.trim(), code.trim());
       // RootNavigator routes on session+profile automatically.
@@ -211,18 +212,17 @@ export function AuthScreen({
       ) : (
         <>
           <Input
-            label="6-digit code"
-            placeholder="123456"
+            label="Email code"
+            placeholder="Enter your code"
             value={code}
             onChangeText={(t: string) =>
-              setCode(t.replace(/[^0-9]/g, "").slice(0, 6))
+              setCode(t.replace(/[^0-9]/g, "").slice(0, 10))
             }
             keyboardType="number-pad"
             returnKeyType="send"
             onSubmitEditing={confirmCode}
             textContentType="oneTimeCode"
             autoComplete="one-time-code"
-            maxLength={6}
             autoFocus
           />
           <View style={styles.gap} />

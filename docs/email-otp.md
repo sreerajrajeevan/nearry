@@ -16,12 +16,18 @@ notifications. Changing the Android Firebase file will not fix email delivery.
    service, with its verified sender/domain and host, port, username and password.
    Store SMTP credentials only in Supabase, never in the app or GitHub source.
 4. Under Emails → Templates, include `{{ .Token }}` in both **Magic Link**
-   (returning users) and **Confirm signup** (new users). Nearry expects a six-digit
-   numeric code, so match the Email provider's OTP length to six. Do not disable
-   email confirmation to work around a delivery problem.
+   (returning users) and **Confirm signup** (new users). Nearry accepts the full
+   numeric code with Supabase's supported length of 6–10 digits; do not shorten
+   server-generated codes to fit an older app. Do not disable email confirmation
+   to work around a delivery problem.
 5. Log in does not create accounts. Someone without a Nearry account must use
    Create an account first. Supabase may deliberately hide account existence;
    the app cannot infer mailbox delivery from an accepted request.
+
+For Resend SMTP, its `resend.dev` test sender can only send to the Resend account
+owner. A verified sending domain and a From address on that domain are required
+to email other recipients. A working SMTP connection or valid API key alone does
+not remove that restriction. See [Resend's test-domain restriction](https://resend.com/docs/knowledge-base/403-error-resend-dev-domain).
 
 ## Verify the result
 

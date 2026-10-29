@@ -9,7 +9,9 @@ export function isValidEmail(email: string): boolean {
 }
 
 export function isValidOtp(code: string): boolean {
-  return /^\d{6}$/.test(code.trim());
+  // Supabase supports configurable email OTP lengths from 6 to 10 digits.
+  // The server decides the required length and verifies the complete token.
+  return /^\d{6,10}$/.test(code.trim());
 }
 
 export function isValidDisplayName(name: string): boolean {

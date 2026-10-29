@@ -32,7 +32,7 @@ export async function sendEmailOtp(
   if (error) throw new Error(friendlyAuthError(error.message, error.code));
 }
 
-/** Step 2: verify the 6-digit code. Returns the authenticated user id. */
+/** Step 2: verify the complete email code. Returns the authenticated user id. */
 export async function verifyEmailOtp(
   email: string,
   code: string,
