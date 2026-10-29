@@ -14,7 +14,7 @@ function accountTypeMeta(accountType: AccountType, displayName?: string) {
   };
 }
 
-/** Step 1: send a 6-digit code to the email. Creates the user on first use. */
+/** Step 1: request an email code. Only signup permits account creation. */
 export async function sendEmailOtp(
   email: string,
   accountType: AccountType,
@@ -29,10 +29,10 @@ export async function sendEmailOtp(
       shouldCreateUser: signup,
     },
   });
-  if (error) throw new Error(friendlyAuthError(error.message));
+  if (error) throw new Error(friendlyAuthError(error.message, error.code));
 }
 
-/** Step 2: verify the 6-digit code. Returns the authenticated user id. */
+/** Step 2: verify the complete email code. Returns the authenticated user id. */
 export async function verifyEmailOtp(
   email: string,
   code: string,
@@ -43,7 +43,7 @@ export async function verifyEmailOtp(
     token: code.trim(),
     type: "email",
   });
-  if (error) throw new Error(friendlyAuthError(error.message));
+  if (error) throw new Error(friendlyAuthError(error.message, error.code));
   if (!data.user)
     throw new Error("Verification succeeded but no user was returned.");
   await completeSignupAgreement(

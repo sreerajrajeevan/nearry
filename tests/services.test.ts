@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 const originalFetch = globalThis.fetch;
 const calls: { url: URL; method: string; body: any }[] = [];
 let handler: (url: URL) => unknown = () => [];
+let responseStatus = 200;
 let posts: typeof import("../src/services/posts");
 let chat: typeof import("../src/services/chat");
 before(async () => {
@@ -21,8 +22,11 @@ before(async () => {
       body: typeof init?.body === "string" ? JSON.parse(init.body) : undefined,
     });
     return new Response(JSON.stringify(handler(url)), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
+      status: responseStatus,
+      headers: {
+        "Content-Type": "application/json",
+        "X-Supabase-Api-Version": "2024-01-01",
+      },
     });
   }) as typeof fetch;
   posts = await import("../src/services/posts");
@@ -34,6 +38,7 @@ after(() => {
 beforeEach(() => {
   calls.length = 0;
   handler = () => [];
+  responseStatus = 200;
 });
 
 test("open-post search keeps expiry and text filters together and quotes punctuation", async () => {
@@ -263,6 +268,66 @@ test("email login never creates an account, signup passes the chosen role, and n
   assert.equal(calls[0].body.create_user, true);
   assert.equal(calls[0].body.data.account_type, "business");
   assert.equal(calls[0].body.data.display_name, "Owner");
+});
+
+test("email delivery failures reject the request and explain restrictions and sender quotas", async () => {
+  const { sendEmailOtp } = await import("../src/services/emailAuth");
+  for (const [status, code, message, expected] of [
+    [
+      403,
+      "email_address_not_authorized",
+      "Email address not authorized",
+      /delivery needs to be configured/,
+    ],
+    [
+      429,
+      "over_email_send_rate_limit",
+      "Email rate limit exceeded",
+      /sending limit.*Try again later/,
+    ],
+    [
+      429,
+      "over_request_rate_limit",
+      "Request rate limit reached",
+      /wait a minute/,
+    ],
+    [
+      422,
+      "email_provider_disabled",
+      "Email logins are disabled",
+      /Email sign-in is currently unavailable/,
+    ],
+    [
+      500,
+      "unexpected_failure",
+      "Error sending magic link email",
+      /couldn't send your email code/,
+    ],
+  ] as const) {
+    responseStatus = status;
+    handler = () => ({ code, msg: message });
+    await assert.rejects(
+      sendEmailOtp("person@example.com", "personal", undefined, false),
+      expected,
+    );
+  }
+});
+
+test("eight-digit email verification sends the entire token, including a leading zero", async () => {
+  const { verifyEmailOtp } = await import("../src/services/emailAuth");
+  responseStatus = 403;
+  handler = () => ({
+    code: "otp_expired",
+    msg: "Token has expired or is invalid",
+  });
+  await assert.rejects(
+    verifyEmailOtp(" Person@Example.com ", " 01234567 "),
+    /incorrect or expired/,
+  );
+  assert.match(calls[0].url.pathname, /auth\/v1\/verify$/);
+  assert.equal(calls[0].body.email, "person@example.com");
+  assert.equal(calls[0].body.token, "01234567");
+  assert.equal(calls[0].body.type, "email");
 });
 
 test("badge totals come from one authorized snapshot and count each chat message once", async () => {
