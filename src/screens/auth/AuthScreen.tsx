@@ -53,6 +53,16 @@ export function AuthScreen({
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [sentTo, setSentTo] = useState<string | null>(null);
+  const [resendAt, setResendAt] = useState(0);
+  const [resendSeconds, setResendSeconds] = useState(0);
+  useEffect(() => {
+    const update = () =>
+      setResendSeconds(Math.max(0, Math.ceil((resendAt - Date.now()) / 1000)));
+    update();
+    if (!resendAt) return;
+    const timer = setInterval(update, 1000);
+    return () => clearInterval(timer);
+  }, [resendAt]);
   useEffect(() => {
     setAgreed(false);
     setStep("email");
@@ -67,6 +77,8 @@ export function AuthScreen({
   const sendCode = async () => {
     if (loading) return;
     setError(null);
+    if (Date.now() < resendAt)
+      return setError("Please wait before requesting another code.");
     if (!isLogin && !agreed) return setError(AGREEMENT_REQUIRED);
     const clean = email.trim();
     if (!isValidEmail(clean)) return setError("Enter a valid email address.");
@@ -81,6 +93,7 @@ export function AuthScreen({
         agreed,
       );
       setSentTo(clean);
+      setResendAt(Date.now() + 60_000);
       setCode("");
       setStep("code");
     } catch (e) {
@@ -135,7 +148,9 @@ export function AuthScreen({
             : "Check your inbox"}
         </Text>
         {step === "code" && sentTo && (
-          <Text style={styles.sub}>We sent a 6-digit code to {sentTo}.</Text>
+          <Text style={styles.sub}>
+            Code requested for {sentTo}. Check your inbox and spam folder.
+          </Text>
         )}
       </View>
 
@@ -205,17 +220,25 @@ export function AuthScreen({
             keyboardType="number-pad"
             returnKeyType="send"
             onSubmitEditing={confirmCode}
+            textContentType="oneTimeCode"
+            autoComplete="one-time-code"
+            maxLength={6}
             autoFocus
           />
           <View style={styles.gap} />
           <Button title="Verify" onPress={confirmCode} loading={loading} />
           <TouchableOpacity
             onPress={sendCode}
-            disabled={loading}
+            disabled={loading || resendSeconds > 0}
+            accessibilityRole="button"
             activeOpacity={0.7}
             style={styles.link}
           >
-            <Text style={styles.linkText}>Resend code</Text>
+            <Text style={styles.linkText}>
+              {resendSeconds > 0
+                ? `Resend code in ${resendSeconds}s`
+                : "Resend code"}
+            </Text>
           </TouchableOpacity>
           <TouchableOpacity
             disabled={loading}
