@@ -136,3 +136,12 @@ Expo SDK 54 / React Native 0.81 target Android API 36 with the New Architecture 
 - Demo data uses valid local timestamps and associated venue IDs. Demo bookings use stable slots and their actual capacity. Live bookings send the selected slot ID to `book_offer_slot` instead of substituting the current timestamp. Demo mutations remain in memory.
 
 Review on a phone with both a short and a long display name. Check Nearby filters, the area picker, Search, details, Create, keyboard dismissal, Activity, and Profile; then check all five Business tabs. Verify the native safe areas and large-text setting on iOS and Android before release. Browser checks are useful for layout, but cannot verify native Google redirects, push permission, or device keyboard behavior.
+
+
+## Optional personal selfie review
+
+Personal accounts may request a private camera selfie comparison against their
+current profile picture. A badge only appears after a trusted manual review;
+it does **not** verify legal identity, age or liveness. Deploy migration 00026,
+run the cleanup worker and staff the review queue before making this available
+to real users. See [setup and safety details](docs/personal-selfie-verification.md).

@@ -1982,3 +1982,33 @@ test("moderation: removing a reported photo hides metadata and queues its owned 
     path,
   );
 });
+
+test("personal selfie approval is trusted and revoked after profile photo change", async () => {
+  const path = `${host}/selfie-test-123.jpg`;
+  await asUser(host, tx => tx.query("update profiles set avatar_url='https://avatars.test/user.jpg' where id=$1", [host]));
+  await asUser(host, tx => tx.query("insert into storage.objects(bucket_id,name) values('selfie_proofs',$1)", [path]));
+  await asUser(host, tx => tx.query("select submit_personal_selfie($1,true)", [path]));
+  const pending = await asUser(host, tx => tx.query("select status from personal_selfie_reviews where user_id=$1", [host]));
+  assert.equal(pending.rows[0].status, "pending");
+  const other = await asUser(b, tx => tx.query("select status from personal_selfie_reviews where user_id=$1", [host]));
+  assert.equal(other.rows.length, 0);
+  await assert.rejects(asUser(host, tx => tx.query(
+    "update personal_selfie_reviews set status='verified' where user_id=$1", [host]
+  )), /permission denied/);
+  assert.equal((await asUser(b, tx => tx.query(
+    "select is_personal_selfie_checked($1) as approved", [host]
+  ))).rows[0].approved, false);
+  await asUser(null, tx => tx.query("select review_personal_selfie($1,'verified',null)", [host]), "service_role");
+  assert.equal((await asUser(b, tx => tx.query(
+    "select is_personal_selfie_checked($1) as approved", [host]
+  ))).rows[0].approved, true);
+  await asUser(host, tx => tx.query(
+    "update profiles set avatar_url='https://avatars.test/new.jpg' where id=$1", [host]
+  ));
+  assert.equal((await asUser(b, tx => tx.query(
+    "select is_personal_selfie_checked($1) as approved", [host]
+  ))).rows[0].approved, false);
+  assert.equal((await db.query(
+    "select count(*)::int as n from media_cleanup_jobs where bucket='selfie_proofs' and path=$1", [path]
+  )).rows[0].n, 1);
+});
