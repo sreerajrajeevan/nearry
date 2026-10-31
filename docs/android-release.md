@@ -71,7 +71,7 @@ Core checks run TypeScript, app/service tests, disposable PostgreSQL/PostGIS tes
 
 The lockfile pins patched PostCSS 8.5.32 for Expo’s Metro config using a scoped override. Reassess this override during the next Expo upgrade. One inherited high-severity `image-size` advisory remains in Metro’s Node build tooling: its patched 2.x package removes the synchronous file-path API this Metro version uses, so substituting it breaks image bundling. Build only reviewed repository assets in isolated CI; resolve this upstream dependency during the next framework update. The app’s photo upload does not execute this Node parser. This is not an audit-clean dependency stack.
 
-The image picker uses the system's selected-photo access, not broad library access. Camera/audio and background location are not app features and are excluded. Verify photo selection/upload and foreground location after the upgrade.
+The image picker uses the system's selected-photo access, not broad library access. Optional personal selfie verification requires CAMERA permission and a fresh native build; its camera image is uploaded privately after explicit consent, not to the public photos bucket. Camera/audio and background location are not app features and are excluded. Verify photo selection/upload and foreground location after the upgrade.
 
 ## Checks still required before going live
 
@@ -80,3 +80,8 @@ Install the signed build on actual phones and run [the core journey checklist](c
 Confirm live Supabase migrations/functions/schedules and moderation/deletion workers using [the safety rollout guide](account-safety-rollout.md). No production database is changed by these build scripts. Merge the separate signup-agreement fix before the public release. Publish reviewed privacy/account-deletion pages with real contacts, then complete Play's store listing, App access, Data safety, content rating, ads/target-audience declarations and any testing requirement shown for your developer account. A successful build alone does not make Nearry production-ready.
 
 Reference: [Expo SDK 54 changes](https://expo.dev/changelog/sdk-54), [EAS Android build/signing lifecycle](https://docs.expo.dev/build-reference/android-builds/), [EAS version management](https://docs.expo.dev/build-reference/app-versions/), [Android page-size guidance](https://developer.android.com/guide/practices/page-sizes).
+
+
+**Selfie release gate:** deploy 00026, configure a staffed human review process
+and cleanup worker, and test CAMERA permission, private Storage access, manual
+approval, badge revocation on profile photo change and account deletion.

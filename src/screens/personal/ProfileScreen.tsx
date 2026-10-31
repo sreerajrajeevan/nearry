@@ -10,6 +10,9 @@ import { MotionPressable } from "../../components/Motion";
 import { Icon } from "../../components/Icon";
 import { colors, typography, spacing } from "../../theme";
 import { useAuth } from "../../store/AuthContext";
+import { getMySelfieReview } from "../../services/selfieVerification";
+import { useFocusEffect } from "@react-navigation/native";
+import { useCallback } from "react";
 import { useUnreadCounts } from "../../hooks/useUnreadCounts";
 import { PersonalTabNav } from "../../navigation/types";
 
@@ -17,6 +20,15 @@ type Props = { navigation: PersonalTabNav };
 export function ProfileScreen({ navigation }: Props) {
   const { profile, session, demoMode, signOut, enterDemoMode } = useAuth();
   const { notifications, messages } = useUnreadCounts();
+  const [selfieChecked, setSelfieChecked] = useState(false);
+  useFocusEffect(useCallback(() => {
+    let alive = true;
+    if (profile && !demoMode) void getMySelfieReview(profile.id)
+      .then(review => { if (alive) setSelfieChecked(review.status === "verified"); })
+      .catch(() => { if (alive) setSelfieChecked(false); });
+    else setSelfieChecked(false);
+    return () => { alive = false; };
+  }, [profile?.id, demoMode]));
   const [signingOut, setSigningOut] = useState(false);
   const signOutLock = useRef(false);
   const leave = async () => {
@@ -73,7 +85,7 @@ export function ProfileScreen({ navigation }: Props) {
               <Text style={styles.name}>
                 {profile.displayName || "Your profile"}
               </Text>
-              <Text style={styles.member}>Personal account</Text>
+              <Text style={styles.member}>Personal account{selfieChecked ? " · Selfie checked ✓" : ""}</Text>
             </View>
           </View>
           {!!profile.bio && <Text style={styles.bio}>{profile.bio}</Text>}
@@ -135,6 +147,13 @@ export function ProfileScreen({ navigation }: Props) {
           Settings & privacy
         </Text>
         <View style={styles.group}>
+          <AccountMenuRow
+            icon="shield"
+            title="Selfie verification"
+            hint={selfieChecked ? "Selfie checked by a reviewer" : "Optional private selfie review"}
+            onPress={() => navigation.navigate("SelfieVerification")}
+          />
+          <View style={styles.divider} />
           <AccountMenuRow
             icon="shield"
             title="Safety & privacy"

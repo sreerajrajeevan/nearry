@@ -33,7 +33,7 @@ export function legalSections(
       },
       {
         title: "Bookings and meeting others",
-        body: "Hosts and businesses are responsible for accurate details, availability and delivering their plans or services. Nearry does not currently process payments. Confirm prices and arrangements directly with the host or business. Verification is a document review, not a guarantee of safety or service quality. Meet responsibly and use public places where appropriate. Nearry is not an emergency service.",
+        body: "Hosts and businesses are responsible for accurate details, availability and delivering their plans or services. Nearry does not currently process payments. Confirm prices and arrangements directly with the host or business. Business verification is a document review and optional personal selfie review is a human photo comparison, not proof of legal identity, age, liveness or safety. Meet responsibly and use public places where appropriate. Nearry is not an emergency service.",
       },
       {
         title: "Leaving and changes",
@@ -53,6 +53,10 @@ export function legalSections(
     {
       title: "Location and permissions",
       body: "Location access is optional. With permission, coordinates are used to find nearby results and may be sent to our place-search service and its provider, Geoapify. Manual area selection is available. We do not continuously track your background location. Photo selection provides access to the image you choose. Push notifications require separate phone permission and a device push token.",
+    },
+    {
+      title: "Optional selfie verification",
+      body: "Personal accounts may choose a private camera selfie review against their current public profile picture. Nearry stores the selfie in a private bucket for trusted human review and stores your consent, result and review note. Only an approved boolean is shown to other users as 'Selfie checked'. This is not legal identity, age or certified liveness verification. The original review photo is queued for deletion following a decision; pending photos are removed during account deletion. Changing your profile picture revokes the badge. No automated facial recognition or face templates are used in this version.",
     },
     {
       title: "What others can see",

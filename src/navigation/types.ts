@@ -49,6 +49,7 @@ export type PersonalStackParamList = SafetyStackParamList & {
   EditPost: { postId: string };
   MyPosts: undefined;
   EditProfile: undefined;
+  SelfieVerification: undefined;
   OfferDetails: { offerId: string };
   Messages: undefined;
   Conversation: { conversationId: string; title?: string };
