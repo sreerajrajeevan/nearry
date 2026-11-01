@@ -9,7 +9,7 @@ import { Screen } from "../../components/Screen";
 import { Button } from "../../components/Button";
 import { Input } from "../../components/Input";
 import { BrandLogo } from "../../components/BrandLogo";
-import { CategoryArt } from "../../components/CategoryArt";
+import { NearryAtmosphere } from "../../components/NearryAtmosphere";
 import { Icon } from "../../components/Icon";
 import { Badge } from "../../components/Badge";
 import { colors, typography, spacing } from "../../theme";
@@ -129,6 +129,7 @@ export function AuthScreen({
 
   return (
     <Screen padded scroll keyboard>
+      <View style={styles.authAtmosphere} pointerEvents="none"><NearryAtmosphere /></View>
       <View style={styles.brandRow}>
         <BrandLogo width={152} />
         <View style={styles.laneChip}>
@@ -146,14 +147,9 @@ export function AuthScreen({
         <Text style={styles.linkText}>Back</Text>
       </TouchableOpacity>
       <View style={styles.header}>
-        <View style={styles.artHeader}>
-          <View style={styles.artFrame}>
-            <CategoryArt category={accountType === "business" ? "Meet" : "Play"} size={76} />
-          </View>
-          <View style={styles.artCaption}>
-            <Text style={styles.kicker}>YOUR NEXT GOOD DAY STARTS HERE</Text>
-            <Text style={styles.artNote}>One account. Real plans, real places.</Text>
-          </View>
+        <View style={styles.intro}>
+          <View style={styles.orbitLine} pointerEvents="none" />
+          <Text style={styles.kicker}>YOUR WORLD, A LITTLE CLOSER</Text>
         </View>
         <Text style={styles.title}>
           {step === "email"
@@ -180,8 +176,8 @@ export function AuthScreen({
         <View style={styles.warn}>
           <Badge label="Preview build" />
           <Text style={styles.warnText}>
-            Sign-in is not available in this build yet. Go back to explore the
-            personal or business demo.
+            Sign-in is unavailable in this build. Check the Supabase
+            configuration before testing authentication.
           </Text>
         </View>
       )}
@@ -315,6 +311,15 @@ export function AuthScreen({
 }
 
 const styles = StyleSheet.create({
+  authAtmosphere: {
+    ...StyleSheet.absoluteFillObject, overflow: "hidden",
+  },
+  intro: { marginTop: 30, marginBottom: 8, minHeight: 50, justifyContent: "flex-end" },
+  orbitLine: {
+    position: "absolute", top: -5, left: 8, width: 195, height: 55,
+    borderWidth: 1, borderColor: "#EBCBB8", borderRadius: 110,
+    transform: [{ rotate: "-14deg" }],
+  },
   brandRow: {
     paddingTop: spacing.md, flexDirection: "row", alignItems: "center",
     justifyContent: "space-between", flexWrap: "wrap", gap: 10,
@@ -327,13 +332,6 @@ const styles = StyleSheet.create({
     ...typography.caption, color: colors.clayDeep,
     fontSize: 10, letterSpacing: 0.8, fontWeight: "700",
   },
-  artHeader: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 16 },
-  artFrame: {
-    width: 91, height: 91, borderRadius: 20, backgroundColor: "#E5ECDD",
-    alignItems: "center", justifyContent: "center",
-  },
-  artCaption: { flex: 1, gap: 5 },
-  artNote: { ...typography.bodySmall, color: colors.textDim },
   submitButton: { borderRadius: 28, backgroundColor: colors.ink, minHeight: 54 },
   googleButton: { borderRadius: 28, backgroundColor: colors.white, minHeight: 52 },
   back: {
@@ -343,9 +341,9 @@ const styles = StyleSheet.create({
     minHeight: 44,
     alignSelf: "flex-start",
   },
-  header: { marginTop: spacing.md, marginBottom: spacing.lg },
+  header: { marginTop: spacing.sm, marginBottom: spacing.xl },
   kicker: { ...typography.caption, color: colors.clay, letterSpacing: 1.1, fontWeight: "700" },
-  title: { ...typography.display, color: colors.text, marginTop: spacing.sm, fontSize: 34, lineHeight: 40 },
+  title: { ...typography.display, color: colors.text, marginTop: spacing.sm, fontSize: 37, lineHeight: 43 },
   sub: { ...typography.body, color: colors.textDim, marginTop: spacing.sm },
   warn: { marginBottom: spacing.lg, gap: spacing.sm },
   warnText: { ...typography.caption, color: colors.textDim },
