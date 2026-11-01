@@ -2938,6 +2938,13 @@ begin
   if p_record_id is null or char_length(coalesce(p_note,'')) > 200 then
     raise exception 'invalid review input';
   end if;
+  if p_kind='report' and p_decision='suspend' and v_role<>'owner' then
+    raise exception 'only owner may suspend accounts';
+  end if;
+  if p_decision in ('rejected','remove','suspend')
+     and nullif(btrim(coalesce(p_note,'')),'') is null then
+    raise exception 'review reason required';
+  end if;
   if p_kind='business' then
     if p_decision not in ('approved','rejected') then
       raise exception 'invalid business decision';
