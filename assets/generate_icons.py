@@ -53,9 +53,13 @@ if __name__ == '__main__':
     tile(1024).save(ROOT/'icon.png')
     tile(1024, True).save(ROOT/'adaptive-icon.png')
     tile(1024, True, True).save(ROOT/'adaptive-monochrome.png')
-    splash().save(ROOT/'splash.png')
-    # Android 12 masks its native splash icon. Keep the wordmark for the React reveal.
-    splash(True).save(ROOT/'splash-android.png')
+    # A centered orange point is the FIRST frame of the React motion.
+    # Keep native launch imagery minimal; React morphs it into the approved logo.
+    native_spark = Image.new('RGBA', (1024, 1024), (0, 0, 0, 0))
+    native_draw = ImageDraw.Draw(native_spark)
+    native_draw.ellipse((463, 463, 561, 561), fill=ORANGE)
+    native_spark.save(ROOT/'splash.png')
+    native_spark.save(ROOT/'splash-android.png')
     # A background tile keeps the icon visible on light and dark browser chrome.
     tile(48).save(ROOT/'favicon.png')
     print('Around You launcher, splash and favicon assets generated')
