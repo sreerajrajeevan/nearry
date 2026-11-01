@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="referrer" content="no-referrer">
+  <meta name="theme-color" content="#252A26">
+  <title>Nearry · Operations</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div id="setup" class="notice" hidden>Admin settings not configured. See admin/README.md.</div>
+  <section id="signin" class="auth-shell" hidden>
+    <div class="auth-card">
+      <div class="brand"><span class="brand-mark">◉</span><span>nearry<span class="brand-dot">.</span></span></div>
+      <p class="eyebrow">PRIVATE OPERATIONS</p>
+      <h1>Keep Nearry<br>safe and running.</h1>
+      <p class="muted">This dashboard is limited to explicitly approved Nearry administrators. Sign in with your existing Nearry identity.</p>
+      <form id="email-form">
+        <label for="email">Admin account email</label>
+        <input type="email" id="email" autocomplete="email" required placeholder="you@company.com">
+        <button type="submit" class="primary">Send email code</button>
+      </form>
+      <form id="code-form" hidden>
+        <label for="otp">Code sent to your inbox</label>
+        <input type="text" id="otp" autocomplete="one-time-code" inputmode="numeric" minlength="6" maxlength="10" placeholder="Enter 6–10 digit code" required>
+        <button type="submit" class="primary">Verify and sign in</button>
+      </form>
+      <div class="or">OR</div>
+      <button id="google" class="secondary">Continue with Google</button>
+      <p id="auth-message" role="status" class="feedback"></p>
+      <p class="footnote">No public registration. Access must be granted by a trusted Nearry operator.</p>
+    </div>
+  </section>
+  <div id="dashboard" class="app" hidden>
+    <aside class="sidebar">
+      <div class="brand"><span class="brand-mark">◉</span><span>nearry<span class="brand-dot">.</span></span></div>
+      <p class="side-label">OPERATIONS CONSOLE</p>
+      <nav id="navigation" aria-label="Admin sections"></nav>
+      <div class="sidebar-bottom">
+        <p id="operator" class="operator"></p>
+        <button id="signout" class="signout">Sign out</button>
+      </div>
+    </aside>
+    <main class="main">
+      <header class="topbar">
+        <div><p class="eyebrow">NEARRY / ADMIN</p><h1 id="section-title">Overview</h1><p id="section-description" class="muted">Review the health of your neighborhood platform.</p></div>
+        <button id="refresh" class="secondary small">↻ Refresh</button>
+      </header>
+      <div id="feedback" class="feedback" role="status" aria-live="polite"></div>
+      <div id="content" aria-live="polite"></div>
+      <div id="pagination" class="pagination" hidden>
+        <button id="previous" class="secondary small">← Previous</button>
+        <span id="page-label"></span>
+        <button id="next" class="secondary small">Next →</button>
+      </div>
+      <footer class="footnote">Restricted operations console. Do not share evidence links. Changes are logged.</footer>
+    </main>
+  </div>
+  <script src="./config.js"></script>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
