@@ -8,7 +8,8 @@ import { AGREEMENT_REQUIRED } from "../../services/terms";
 import { Screen } from "../../components/Screen";
 import { Button } from "../../components/Button";
 import { Input } from "../../components/Input";
-import { BrandHeader } from "../../components/BrandHeader";
+import { BrandLogo } from "../../components/BrandLogo";
+import { CategoryArt } from "../../components/CategoryArt";
 import { Icon } from "../../components/Icon";
 import { Badge } from "../../components/Badge";
 import { colors, typography, spacing } from "../../theme";
@@ -128,7 +129,12 @@ export function AuthScreen({
 
   return (
     <Screen padded scroll keyboard>
-      <BrandHeader context={kicker} />
+      <View style={styles.brandRow}>
+        <BrandLogo width={152} />
+        <View style={styles.laneChip}>
+          <Text style={styles.laneText}>{kicker.toUpperCase()} ACCOUNT</Text>
+        </View>
+      </View>
       <TouchableOpacity
         accessibilityRole="button"
         accessibilityLabel="Back to welcome"
@@ -140,7 +146,15 @@ export function AuthScreen({
         <Text style={styles.linkText}>Back</Text>
       </TouchableOpacity>
       <View style={styles.header}>
-        <Text style={styles.kicker}>{kicker}</Text>
+        <View style={styles.artHeader}>
+          <View style={styles.artFrame}>
+            <CategoryArt category={accountType === "business" ? "Meet" : "Play"} size={76} />
+          </View>
+          <View style={styles.artCaption}>
+            <Text style={styles.kicker}>YOUR NEXT GOOD DAY STARTS HERE</Text>
+            <Text style={styles.artNote}>One account. Real plans, real places.</Text>
+          </View>
+        </View>
         <Text style={styles.title}>
           {step === "email"
             ? isLogin
@@ -148,6 +162,13 @@ export function AuthScreen({
               : "Create account"
             : "Check your inbox"}
         </Text>
+        {step === "email" && (
+          <Text style={styles.sub}>
+            {isLogin
+              ? "Sign in securely with your email or Google account."
+              : "Just a few details, then you're ready to explore Nearry."}
+          </Text>
+        )}
         {step === "code" && sentTo && (
           <Text style={styles.sub}>
             Code requested for {sentTo}. Check your inbox and spam folder.
@@ -204,6 +225,7 @@ export function AuthScreen({
           )}
           <Button
             title="Send code"
+            style={styles.submitButton}
             onPress={sendCode}
             loading={loading}
             disabled={!isLogin && !agreed}
@@ -226,7 +248,7 @@ export function AuthScreen({
             autoFocus
           />
           <View style={styles.gap} />
-          <Button title="Verify" onPress={confirmCode} loading={loading} />
+          <Button title="Verify" style={styles.submitButton} onPress={confirmCode} loading={loading} />
           <TouchableOpacity
             onPress={sendCode}
             disabled={loading || resendSeconds > 0}
@@ -262,6 +284,7 @@ export function AuthScreen({
       </View>
       <Button
         title="Continue with Google"
+        style={styles.googleButton}
         variant="secondary"
         onPress={google}
         loading={loading}
@@ -292,6 +315,27 @@ export function AuthScreen({
 }
 
 const styles = StyleSheet.create({
+  brandRow: {
+    paddingTop: spacing.md, flexDirection: "row", alignItems: "center",
+    justifyContent: "space-between", flexWrap: "wrap", gap: 10,
+  },
+  laneChip: {
+    backgroundColor: colors.claySoft, borderRadius: 999,
+    paddingHorizontal: 11, paddingVertical: 7,
+  },
+  laneText: {
+    ...typography.caption, color: colors.clayDeep,
+    fontSize: 10, letterSpacing: 0.8, fontWeight: "700",
+  },
+  artHeader: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 16 },
+  artFrame: {
+    width: 91, height: 91, borderRadius: 20, backgroundColor: "#E5ECDD",
+    alignItems: "center", justifyContent: "center",
+  },
+  artCaption: { flex: 1, gap: 5 },
+  artNote: { ...typography.bodySmall, color: colors.textDim },
+  submitButton: { borderRadius: 28, backgroundColor: colors.ink, minHeight: 54 },
+  googleButton: { borderRadius: 28, backgroundColor: colors.white, minHeight: 52 },
   back: {
     flexDirection: "row",
     alignItems: "center",
@@ -299,9 +343,9 @@ const styles = StyleSheet.create({
     minHeight: 44,
     alignSelf: "flex-start",
   },
-  header: { marginTop: spacing.sm, marginBottom: spacing.lg },
-  kicker: { ...typography.label, color: colors.red, letterSpacing: 0 },
-  title: { ...typography.display, color: colors.text, marginTop: spacing.sm },
+  header: { marginTop: spacing.md, marginBottom: spacing.lg },
+  kicker: { ...typography.caption, color: colors.clay, letterSpacing: 1.1, fontWeight: "700" },
+  title: { ...typography.display, color: colors.text, marginTop: spacing.sm, fontSize: 34, lineHeight: 40 },
   sub: { ...typography.body, color: colors.textDim, marginTop: spacing.sm },
   warn: { marginBottom: spacing.lg, gap: spacing.sm },
   warnText: { ...typography.caption, color: colors.textDim },
