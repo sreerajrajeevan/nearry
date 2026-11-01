@@ -208,7 +208,7 @@ const styles = StyleSheet.create({
   },
   tileNote: { ...typography.bodySmall, color: colors.ink, fontWeight: "700" },
   lower: {
-    marginTop: 11, borderWidth: 1, borderColor: colors.hairline,
+    marginTop: 11, borderWidth: 1, borderColor: colors.border,
     borderRadius: 17, paddingVertical: 10, paddingHorizontal: 12,
     flexDirection: "row", alignItems: "center", gap: 10,
   },
