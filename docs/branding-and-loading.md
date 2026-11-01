@@ -1,55 +1,72 @@
-# Around You branding and loading
+# Nearry brand, launch animation and welcome
 
-The approved logo is now used in personal/business headers, the welcome and auth
-headers, the React launch reveal, and the generated launcher/splash/favicon assets.
+Nearry's approved original mark (dark-ink open location pin and independent
+burnt-orange point) and original outlined wordmark stay unchanged. Their
+committed masters remain `assets/brand/pin.png` and
+`assets/brand/wordmark.png`. Do not substitute an AI-generated logo.
 
-## Launch
+## Premium launch animation
 
-`App.tsx` holds the native splash while bundled artwork and the icon font load, then
-hands over to `StartupSplash`. The pin settles, the orange nearby point arrives and
-the wordmark brightens. The ready app fades in after the short 620ms reveal plus 180ms
-exit. Reduced motion skips those animations and delays. Session/profile errors can
-reach their existing retry/sign-out UI rather than waiting for a navigator's
-`onReady` event. The launch reveal runs once per app mount, not after every login or
-profile refresh. Slow startup shows a connection hint and retry after 12 seconds.
+`App.tsx` holds the native splash until fonts and brand assets are ready.
+Both iOS and Android native launch images display a **single centered orange
+point**, matching the first frame of the React animation and preventing an
+old logo flash. Android 12 may mask or scale the native splash imagery.
 
-The system accessibility preference defaults to reduced motion while it is checked.
-A bounded preference check keeps an unavailable accessibility API from holding launch.
-Loading loops stop when a screen blurs, the app backgrounds or reduced motion is on.
+`StartupSplash` tells one short, non-geographical Nearry story:
 
-Android 12+ masks its native splash image, so its pin-only frame omits the wordmark;
-iOS uses the complete composition. The React frame uses the same position/scale.
-The source images are transparent, with a warm-white native splash background.
+1. A solitary orange spark gently pulses.
+2. An abstract wire globe appears using latitude/longitude-like curves
+   **without borders, countries or location names**.
+3. The globe pushes inward toward a destination pulse.
+4. Thin orbital lines and a moving spark frame the **existing original logo**.
+5. The exact Nearry symbol and wordmark appear; the spark fades where the
+   brand's orange dot sits.
 
-## Loading states
+React animation takes about 2.05 seconds plus a 270ms fade once startup is
+ready. Reduced Motion immediately renders the original logo without
+decorative motion. Slow startup retains the loading note and retry control.
+The launch animation plays once per app mount, not on every navigation.
 
-`LoadingState` supplies list, detail, compact and inline layouts. Initial content
-shows softly pulsing placeholders and a contextual label. Error/retry and empty
-states stay separate. After 12 seconds, a connection hint explains a long wait.
-The placeholders are excluded from the accessibility tree and progress is named.
+`NearryAtmosphere` in `src/components/NearryAtmosphere.tsx`.
+It uses only React Native primitives to build subtle warm-peach and ivory
+curves, without image downloads or new native dependencies.
 
-Nearby, search, place/venue/post/offer details, edit forms, personal activity/my posts,
-business dashboard/bookings/my offers, chat, notifications, blocked accounts,
-report history and notification settings use this shared state. Button actions keep
-their label, disable repeat presses and show shared loading dots. Place suggestions
-use the compact inline treatment. Cover and gallery photos reserve their space and
-show dots while loading; each caller retains its existing error fallback.
+## Welcome and authentication
 
-The shared live-query hook keeps existing results visible on repeat focus/refresh.
-A changed query/account key clears them as before. Pull-to-refresh and background
-refresh use the screen's existing controls rather than a full-screen overlay.
+The welcome screen matches the accepted premium direction: centered original
+Nearry identity with understated orbit, generous space, the heading
+“Less scrolling. More living.”, a warm-orange Google button, and a pale
+outlined Email button. The user can switch to login or enter the separate
+business signup flow.
 
-## Assets and builds
+The **Play/Meet illustration cards, personal and business demo entry points,
+and demo copy were removed from welcome**. No map pins, floating avatars,
+made-up active plans, or unverified listings are displayed.
 
-Run `npm run assets` with Pillow installed before prebuild/export. The generator
-uses committed `assets/brand/pin.png` and `wordmark.png`; it will not restore the old
-speech-bubble assets. Their editable SVG originals and export sizes are documented
-in `assets/brand/README.md`. CI already runs generation before building the APK.
+Google signup continues using the existing Supabase flow and **requires an
+explicit 18+ terms/community-guidelines acceptance**. The Google button is
+visually active at all times but shows the consent error if the checkbox
+has not been accepted; it never bypasses the agreement. Email signup
+continues to the existing form with its own explicit consent step.
+Returning users can log in using existing credentials. Business signup
+and the personal/business auth forms retain the original backend logic.
+No authentication RPC, storage policies, or database migrations changed.
 
-Install/rebuild the native app to see the launcher and native splash changes.
-An over-the-air JavaScript update or Expo Go cannot replace the installed launcher
-artwork or fully reproduce the standalone native splash. Check the new APK on both
-Android and iOS when available, including reduced motion, a cold launch with a saved
-session, a failed/offline profile request, uploads and a slow first content load.
+The admin-panel work is a separate PR and is not part of this branch.
 
-No database migration or Supabase configuration change is required for this change.
+## Builds and QA
+
+Before rebuilding the Android/iOS native app, run `npm run assets` (requires
+Pillow) to regenerate native splash files from the new orange-point frame.
+Existing installed native splash artwork cannot be updated by an OTA
+JavaScript bundle; install a freshly built app. Expo Go is not an accurate
+representation of the installed native splash.
+
+Verify a real Android cold start with and without a saved session; background
+startup, offline/slow startup and retry; Google signup with checkbox
+unchecked/checked; Email OTP; login and separate Business signup;
+small screens with scroll and keyboard; Android large-font accessibility;
+and reduced-motion settings. A passing CI build does not replace device QA.
+
+The rest of the app's `LoadingState` skeletons and their error/retry behavior
+remain as documented and unchanged.
