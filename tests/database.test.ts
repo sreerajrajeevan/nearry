@@ -1982,3 +1982,20 @@ test("moderation: removing a reported photo hides metadata and queues its owned 
     path,
   );
 });
+
+test("admin dashboard rejects client actions and atomically audits trusted moderation",async()=>{
+ const reportId=(await db.query(
+  "insert into content_reports(reporter_id,subject_user_id,target_kind,target_id,reason,details,snapshot) values($1,$2,'user',gen_random_uuid(),'spam','test','evidence') returning id",
+  [host,b]
+ )).rows[0].id;
+ const sql="select admin_console_decide($1,'report',$2,'dismiss','reviewed in test')";
+ await assert.rejects(asUser(host,tx=>tx.query(sql,[host,reportId])),/permission denied/);
+ await assert.rejects(asUser(null,tx=>tx.query(sql,[host,reportId]),"service_role"),/admin not authorized/);
+ await db.query("insert into admin_console_members(user_id,role) values($1,'owner')",[host]);
+ await asUser(null,tx=>tx.query(sql,[host,reportId]),"service_role");
+ assert.equal((await db.query("select status from content_reports where id=$1",[reportId])).rows[0].status,"dismissed");
+ const audit=(await db.query("select actor_id,action from admin_console_audit where target_id=$1",[reportId])).rows;
+ assert.equal(audit.length,1);
+ assert.equal(audit[0].actor_id,host);
+ assert.equal(audit[0].action,"report:dismiss");
+});
