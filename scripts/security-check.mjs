@@ -44,9 +44,13 @@ export async function securityProblems(root=ROOT){
  return issues;
 }
 if(process.argv[1] && fileURLToPath(import.meta.url)===fileURLToPath(new URL("file://"+process.argv[1],import.meta.url))){
- const problems=await securityProblems();
- if(problems.length){
-  console.error("Nearry client security audit failed:\n- "+problems.join("\n- "));
+ void securityProblems().then(problems=>{
+  if(problems.length){
+   console.error("Nearry client security audit failed:\n- "+problems.join("\n- "));
+   process.exitCode=1;
+  }else console.log("Nearry client audit: no obvious embedded private keys or EXPO_PUBLIC_* secrets.");
+ }).catch(error=>{
+  console.error("Nearry client audit could not complete:",error.message);
   process.exitCode=1;
- }else console.log("Nearry client audit: no obvious embedded private keys or EXPO_PUBLIC_* secrets.");
+ });
 }
