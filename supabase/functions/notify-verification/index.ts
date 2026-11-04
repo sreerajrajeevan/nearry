@@ -8,7 +8,7 @@ serve(async (req) => {
     return new Response("method not allowed", { status: 405 });
   const dispatchSecret = Deno.env.get("VERIFICATION_DISPATCH_SECRET");
   if (
-    !dispatchSecret ||
+    !validServerSecret(dispatchSecret) ||
     req.headers.get("x-dispatch-secret") !== dispatchSecret
   )
     return new Response("unauthorized", { status: 401 });
@@ -23,7 +23,7 @@ serve(async (req) => {
     !serviceKey ||
     !resendKey ||
     !adminEmail ||
-    !reviewSecret ||
+    !validServerSecret(reviewSecret) ||
     !from
   )
     return new Response("email not configured", { status: 503 });

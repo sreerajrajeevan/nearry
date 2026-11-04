@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { validServerSecret } from "../_shared/serverSecrets.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { createAccountMaintenanceHandler } from "../_shared/accountMaintenance.ts";
 const db = createClient(
@@ -8,6 +9,8 @@ const db = createClient(
 serve(
   createAccountMaintenanceHandler(
     db,
-    Deno.env.get("ACCOUNT_MAINTENANCE_SECRET"),
+    validServerSecret(Deno.env.get("ACCOUNT_MAINTENANCE_SECRET"))
+      ? Deno.env.get("ACCOUNT_MAINTENANCE_SECRET")
+      : undefined,
   ),
 );
