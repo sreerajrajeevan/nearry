@@ -2934,22 +2934,22 @@ begin
     v_owner:=new.author_id;
     v_small_scope:='post_hour';v_large_scope:='post_day';
     v_small_limit:=8;v_large_limit:=30;
-    v_small_window:=date_trunc('hour',v_now);
+    v_small_window:=date_trunc('hour',v_now at time zone 'UTC') at time zone 'UTC';
   elsif tg_table_name='offers' then
     v_owner:=new.business_id;
     v_small_scope:='offer_hour';v_large_scope:='offer_day';
     v_small_limit:=10;v_large_limit:=40;
-    v_small_window:=date_trunc('hour',v_now);
+    v_small_window:=date_trunc('hour',v_now at time zone 'UTC') at time zone 'UTC';
   elsif tg_table_name='messages' then
     v_owner:=new.sender_id;
     v_small_scope:='message_minute';v_large_scope:='message_day';
     v_small_limit:=40;v_large_limit:=1000;
-    v_small_window:=date_trunc('minute',v_now);
+    v_small_window:=date_trunc('minute',v_now at time zone 'UTC') at time zone 'UTC';
   elsif tg_table_name='join_requests' then
     v_owner:=new.requester_id;
     v_small_scope:='join_minute';v_large_scope:='join_day';
     v_small_limit:=20;v_large_limit:=120;
-    v_small_window:=date_trunc('minute',v_now);
+    v_small_window:=date_trunc('minute',v_now at time zone 'UTC') at time zone 'UTC';
   else
     raise exception 'unsupported rate-limited operation';
   end if;
