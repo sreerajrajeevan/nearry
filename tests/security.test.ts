@@ -1,5 +1,6 @@
 import {test} from "node:test";
 import assert from "node:assert/strict";
+// @ts-expect-error Node-only JavaScript build helper has no declaration file.
 import {auditClientText,securityProblems} from "../scripts/security-check.mjs";
 test("public Supabase anon/publishable settings are allowed",()=>{
  assert.deepEqual(auditClientText('const key=process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;'),[]);

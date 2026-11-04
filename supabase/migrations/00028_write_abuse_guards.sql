@@ -68,13 +68,13 @@ begin
   -- A rejected second bucket rolls back the first increment as well.
   for v_idx in 1..2 loop
     v_hit:=null;
-    insert into public.app_write_usage(user_id,scope,window_start,writes)
+    insert into public.app_write_usage as quota(user_id,scope,window_start,writes)
       values(v_actor,
         case when v_idx=1 then v_small_scope else v_large_scope end,
         case when v_idx=1 then v_small_window else v_large_window end,1)
     on conflict(user_id,scope,window_start) do update
-      set writes=public.app_write_usage.writes+1
-      where public.app_write_usage.writes <
+      set writes=quota.writes+1
+      where quota.writes <
         case when v_idx=1 then v_small_limit else v_large_limit end
       returning writes into v_hit;
 
