@@ -41,3 +41,15 @@ For projects already on `00016`, apply only `00017` and `00018` after taking a b
 ## Account safety and notifications (00024–00025)
 
 Existing projects at 00023 apply only `00024_account_safety.sql` and `00025_push_delivery_receipts.sql`, in order, before distributing the matching client. These add report/block rules, account deactivation/deletion queues, terms acknowledgement, notification preferences and delivery receipts. Deploy/redeploy `account-maintenance` and `send-push`, configure trusted schedules, and set public legal/EAS configuration. See [rollout and operator instructions](../../docs/account-safety-rollout.md). Existing future commitments are not cancelled by migration installation; cancellation happens only after an explicit deletion request or a trusted moderation action.
+
+## Anti-abuse write quotas (00028)
+
+Migration `00028_write_abuse_guards.sql` adds private, atomic per-account
+creation limits for plans, offers, messages and join requests, along with
+retention cleanup. Apply it only once after migrations through 00025.
+Other open PRs currently use 00026 (selfie verification) and 00027
+(admin dashboard); coordinate migration order and any changes to
+`maintenance_retention_cleanup` when merging them.
+
+See the [seven-door security review](../../docs/seven-door-security-audit.md)
+for limits, staging tests, worker secrets and Supabase Auth settings.
