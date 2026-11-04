@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 
 const ROOT=fileURLToPath(new URL("../",import.meta.url));
 const extensions=/\.(ts|tsx|js|mjs|json)$/i;
-const exposedEnv=/\bEXPO_PUBLIC_[A-Z0-9_]*(?:SERVICE_ROLE|SECRET|PRIVATE_KEY|DISPATCH|RESEND_API_KEY|STRIPE_SECRET|WEBHOOK_SECRET)\b/g;
+const exposedEnv=/\bEXPO_PUBLIC_[A-Z0-9_]*(?:SERVICE_ROLE|SECRET|PRIVATE_KEY|DISPATCH|RESEND_API_KEY|STRIPE_SECRET|WEBHOOK_SECRET)(?:_[A-Z0-9_]+)?\b/g;
 const leakedService=/["'](?:sb_secret_[A-Za-z0-9_-]{8,}|eyJ[A-Za-z0-9_-]{25,}\.eyJ[A-Za-z0-9_-]{25,}\.[A-Za-z0-9_-]{25,})["']/g;
 
 /** Returns only issue categories; never prints a suspected secret. */
