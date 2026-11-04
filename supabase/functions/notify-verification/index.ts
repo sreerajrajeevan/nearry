@@ -1,5 +1,6 @@
 // Scheduled private worker. Submission only queues work; email failures never block it.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { validServerSecret } from "../_shared/serverSecrets.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { signReviewToken, escapeHtml as esc } from "../_shared/reviewToken.ts";
 
