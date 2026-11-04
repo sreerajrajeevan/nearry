@@ -59,7 +59,8 @@
     "assets": "python3 assets/generate_icons.py",
     "legal:export": "node --env-file-if-exists=.env --import tsx scripts/export-legal.ts",
     "release:check": "node --env-file-if-exists=.env scripts/check-release.mjs",
-    "eas-build-post-install": "node scripts/check-eas-build.mjs"
+    "eas-build-post-install": "node scripts/check-eas-build.mjs",
+    "security:check": "node scripts/security-check.mjs"
   },
   "version": "0.1.0",
   "overrides": {

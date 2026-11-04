@@ -1982,3 +1982,75 @@ test("moderation: removing a reported photo hides metadata and queues its owned 
     path,
   );
 });
+
+
+test("security gate: all user and operational tables have row-level security enabled",async()=>{
+ for(const table of [
+  "profiles","posts","offers","bookings","conversations","messages",
+  "join_requests","notifications","push_tokens","content_reports",
+  "removed_content","user_blocks","verification_review_jobs",
+  "account_deletion_jobs","app_write_usage"
+ ]){
+  const result=await db.query(
+   "select relrowsecurity from pg_class where oid=to_regclass($1)",
+   ["public."+table]
+  );
+  assert.equal(result.rows[0]?.relrowsecurity,true,table+" missing RLS");
+ }
+});
+test("security gate: operator RPCs are not callable by user or anonymous roles",async()=>{
+ const functions=[
+  "public.review_verification(uuid,text,text)",
+  "public.review_content_report(uuid,text,text)",
+  "public.reserve_place_search(uuid)",
+  "public.claim_push_jobs()",
+  "public.queue_account_deletion(uuid)",
+  "public.enforce_nearry_write_quota()"
+ ];
+ for(const fn of functions){
+  for(const role of ["authenticated","anon"]){
+   const result=await db.query(
+    "select has_function_privilege($1,$2,'EXECUTE') as allowed",[role,fn]
+   );
+   assert.equal(result.rows[0].allowed,false,role+" can run "+fn);
+  }
+ }
+});
+test("plan creation is atomically rate limited even from a modified client",async()=>{
+ const actor="00000000-0000-0000-0000-000000000028";
+ await db.query(
+  "insert into auth.users(id,email,raw_user_meta_data)values($1,'throttle@nearry.test','{\"account_type\":\"personal\"}')",
+  [actor]
+ );
+ await db.query("update profiles set onboarding_completed=true where id=$1",[actor]);
+ const create=()=>asUser(actor,tx=>tx.query(
+  "insert into posts(author_id,title,description,starts_at,expires_at,vacancies) values($1,'A local activity','A group activity for nearby people',now()+interval '5 hours',now()+interval '4 hours',2)",
+  [actor]
+ ));
+ for(let i=0;i<8;i++)await create();
+ await assert.rejects(create(),/Too many actions/);
+ const entries=await db.query(
+  "select scope,writes from app_write_usage where user_id=$1 order by scope",
+  [actor]
+ );
+ assert.deepEqual(entries.rows.map(r=>[r.scope,r.writes]),[
+  ["post_day",8],["post_hour",8]
+ ]);
+ const other="00000000-0000-0000-0000-000000000029";
+ await db.query(
+  "insert into auth.users(id,email,raw_user_meta_data)values($1,'other-throttle@nearry.test','{\"account_type\":\"personal\"}')",
+  [other]
+ );
+ await db.query("update profiles set onboarding_completed=true where id=$1",[other]);
+ await asUser(other,tx=>tx.query(
+  "insert into posts(author_id,title,description,starts_at,expires_at,vacancies) values($1,'Another activity','A legitimate independent new activity',now()+interval '5 hours',now()+interval '4 hours',2)",
+  [other]
+ ));
+ await assert.rejects(
+  asUser(actor,tx=>tx.query(
+   "insert into posts(author_id,title,description,starts_at,expires_at,vacancies) values($1,'Forged activity','Should not create for someone else',now()+interval '5 hours',now()+interval '4 hours',2)",
+   [other]
+  )),
+  /unauthorized write|row-level security/
+ );
+});

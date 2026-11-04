@@ -1,5 +1,6 @@
 // Scheduled private worker. Submission only queues work; email failures never block it.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { validServerSecret } from "../_shared/serverSecrets.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { signReviewToken, escapeHtml as esc } from "../_shared/reviewToken.ts";
 
@@ -8,7 +9,7 @@ serve(async (req) => {
     return new Response("method not allowed", { status: 405 });
   const dispatchSecret = Deno.env.get("VERIFICATION_DISPATCH_SECRET");
   if (
-    !dispatchSecret ||
+    !validServerSecret(dispatchSecret) ||
     req.headers.get("x-dispatch-secret") !== dispatchSecret
   )
     return new Response("unauthorized", { status: 401 });
@@ -23,7 +24,7 @@ serve(async (req) => {
     !serviceKey ||
     !resendKey ||
     !adminEmail ||
-    !reviewSecret ||
+    !validServerSecret(reviewSecret) ||
     !from
   )
     return new Response("email not configured", { status: 503 });

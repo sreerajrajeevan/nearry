@@ -57,3 +57,16 @@ The authenticated `place-search` function is configured separately from schedule
 ## Account maintenance and push receipts
 
 For the account-safety release, apply migrations 00024 and 00025 before deploying the updated `send-push` and new `account-maintenance` functions. Account maintenance requires its own server-only `ACCOUNT_MAINTENANCE_SECRET` and trusted POST schedule with that `x-dispatch-secret`. Push uses the existing `PUSH_DISPATCH_SECRET`; optionally set server-only `EXPO_ACCESS_TOKEN` when Expo enhanced push security is enabled. Neither endpoint accepts a client-selected user, recipient, message or deletion target. See [full rollout, moderation and deletion monitoring](../../docs/account-safety-rollout.md).
+
+## Strong worker secrets for seven-door hardening
+
+The updated `send-push`, `account-maintenance`, `notify-verification`
+and `review-verification` endpoints now fail closed if their required
+server-only dispatch/HMAC secrets are missing, shorter than 32 bytes or
+obvious placeholders. Generate strong **independent** random values and
+configure the matching trusted scheduler headers before deploying these
+functions. Do not place them in `EXPO_PUBLIC_*`, a static website, or GitHub.
+
+Keep review links signed and expiring. Nearry has no payment webhook to
+verify today; verify event signatures before adding one. See
+[security preflight](../../docs/seven-door-security-audit.md).
