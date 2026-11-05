@@ -21,6 +21,14 @@ state, not a certification that all phone journeys or Play declarations passed.
   the configured worker secret; secret values were not printed or committed.
 - Installed the missing `close-expired-posts` cron job, every minute, and observed
   successful runs. The existing booking-hold expiry job remains active.
+- After the owner explicitly approved the one waiting deletion, configured the
+  maintenance dispatch secret in the worker and Vault and processed it. The
+  worker reported one deletion and zero failures; database checks confirmed no
+  remaining sign-in record, profile, owned files or deletion job for that account.
+  Recurring future cleanup is still off pending a separate ongoing-scope approval.
+- Owner confirmed Nearry has never been uploaded to Play and that email/Google
+  sign-in both worked on the updated phone build. Created and verified a new
+  private RSA-2048 upload keystore locally; it has not been uploaded to Expo.
 - Added an in-app child-safety standards page, linked before login and under
   Safety & privacy for both account types. Reuses the existing private `safety`
   report category; no report-table migration is required.
@@ -37,14 +45,14 @@ they are scoped function/scheduler backups, not a complete database backup.
 
 | Item | What remains |
 | --- | --- |
-| Email delivery | Last live mail audit found Resend's test sender rejecting non-owner recipients. Verify a sending domain and update SMTP From; retest both signup and returning login on a phone. The October signup template was corrected to include a code. |
+| Email delivery | Owner reports email and Google sign-in worked on the updated phone build. Last live mail audit found Resend's test sender rejecting non-owner recipients; confirm a different recipient works or verify a sending domain/update SMTP From. The October signup template was corrected to include a code. |
 | Operator/support | Owner must supply the real legal operator and monitored support/child-safety contact. Local production preflight still rejects missing values; do not publish preview placeholders. |
 | Public policy URLs | Export reviewed pages and host privacy, deletion and child-safety pages on public HTTPS URLs. A purchased domain is not necessary for hosting these pages, but Resend separately requires a verified sending domain for its normal sender. |
-| Deletion activation | The worker is deployed but has no maintenance dispatch secret/schedule. A requested deletion is waiting. Obtain explicit approval before activating permanent cleanup, then verify file-before-Auth deletion with controlled accounts. |
+| Deletion activation | The worker and Vault secret are configured, and the one explicitly approved waiting deletion completed successfully. Scheduled processing of future owner-requested deletions awaits explicit approval. Do not claim cleanup is automatic until that schedule is enabled. |
 | Push activation | Push dispatch is deliberately paused; a backlog is waiting. Complete FCM credentials for the correct Expo project and test a phone before resuming delivery. Receipts and scheduler success do not prove device delivery. |
 | Business review | The review-email worker's required dispatch secret, allowed From address and schedule were not present in the inspected configuration. Configure them and test a proof submission/review before claiming Business publishing is ready. |
 | Expo production | CLI is signed out. Recheck the existing `sreerajsrees-team/nearry` production environment and set matching backend, operator and support values. Reuse EAS project `a220a973-0d77-4c81-ba3a-5df4bba83ce5`; Firebase client project is `nearry-43e80`. |
-| Android signing | Confirm whether `com.nearry.app` has ever been uploaded to Play. Reuse its existing upload key if so; otherwise create/back up a private key after owner approval. The debug APK is not a store release. |
+| Android signing | Owner confirmed this is Nearry's first Play upload. A private upload key and credential metadata are prepared in ignored `.release-private/` and were verified without printing passwords. Upload the key to the correct Expo project after sign-in and securely back it up. The debug APK is not a store release. |
 | Signed build | Build the production AAB, upload to internal testing and install the Play-signed app. Check the display version and remote Android version code against Play's existing history. |
 | Store setup | Complete actual developer/account verification, support details, store listing, screenshots, App access, Data safety, ads, audience, content rating and applicable child-safety declarations. |
 | Reviewer access | Supply a reliable way for reviewers to reach all restricted Personal/Business functionality. An expired OTP or sample-only demo does not establish full access. |
