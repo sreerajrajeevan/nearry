@@ -1,0 +1,39 @@
+name: Prepare Play listing files
+
+on:
+  workflow_dispatch:
+    inputs:
+      include_policies:
+        description: Include reviewed policy pages using the configured operator/support variables
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  listing-files:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: python3 -m pip install pillow && python3 assets/generate_store.py
+      - name: Add listing drafts
+        run: cp docs/play-store-listing.md docs/play-data-safety.md docs/play-release-status.md dist-store/
+      - name: Export reviewed policy pages
+        if: ${{ inputs.include_policies }}
+        run: npm run legal:export && cp -r dist-legal dist-store/policies
+        env:
+          EXPO_PUBLIC_LEGAL_OWNER: ${{ vars.EXPO_PUBLIC_LEGAL_OWNER }}
+          EXPO_PUBLIC_SUPPORT_EMAIL: ${{ vars.EXPO_PUBLIC_SUPPORT_EMAIL }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nearry-play-listing
+          path: dist-store/
+          if-no-files-found: error
+          retention-days: 30

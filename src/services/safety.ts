@@ -15,7 +15,7 @@ export const REPORT_REASONS = [
   { id: "harassment", label: "Harassment or bullying" },
   { id: "inappropriate", label: "Inappropriate content" },
   { id: "scam", label: "Scam or misleading information" },
-  { id: "safety", label: "Safety concern" },
+  { id: "safety", label: "Safety concern, including child safety" },
   { id: "other", label: "Something else" },
 ] as const;
 export type BlockedUser = { id: string; name: string; created_at: string };

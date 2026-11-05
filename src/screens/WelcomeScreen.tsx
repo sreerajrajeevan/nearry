@@ -87,6 +87,11 @@ export function WelcomeScreen({ navigation }: Props) {
           variant="ghost"
           onPress={() => navigation.navigate("Legal", { page: "terms" })}
         />
+        <Button
+          title="Child safety standards"
+          variant="ghost"
+          onPress={() => navigation.navigate("Legal", { page: "child-safety" })}
+        />
       </ScrollView>
     </Screen>
   );
