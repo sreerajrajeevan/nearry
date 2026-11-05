@@ -170,7 +170,7 @@ const styles = StyleSheet.create({
   },
   identity: { alignItems: "center", gap: 16 },
   symbol: { width: 112, height: 112 },
-  pin: { width: 112, height: 112 },
+  pin: { width: 112, height: 112, tintColor: colors.ink },
   dot: {
     position: "absolute",
     left: (112 * 198) / 256,
@@ -178,7 +178,7 @@ const styles = StyleSheet.create({
     width: (112 * 36) / 256,
     height: (112 * 36) / 256,
     borderRadius: 20,
-    backgroundColor: colors.clay,
+    backgroundColor: colors.coral,
   },
   wait: { position: "absolute", top: "67%", alignItems: "center", gap: 12 },
   note: { ...typography.bodySmall, textAlign: "center", color: colors.textDim },

@@ -50,7 +50,7 @@ export function VerifiedWelcome({ businessName }: { businessName: string }) {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: colors.claySoft,
+    backgroundColor: colors.tealSoft,
     borderRadius: 16,
     padding: spacing.lg,
     alignItems: "center",

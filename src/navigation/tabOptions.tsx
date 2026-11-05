@@ -31,9 +31,9 @@ export function tabOptions(
     title,
     headerShown: false,
     tabBarHideOnKeyboard: true,
-    tabBarActiveTintColor: colors.onAccent,
+    tabBarActiveTintColor: colors.ink,
     tabBarInactiveTintColor: colors.gray300,
-    tabBarActiveBackgroundColor: colors.accent,
+    tabBarActiveBackgroundColor: colors.yellow,
     tabBarLabelPosition: "below-icon",
     tabBarItemStyle: styles.item,
     // Keep tab switches inside the app on web as well; an anchor reload loses drafts.
@@ -47,8 +47,8 @@ export function tabOptions(
     tabBarLabelStyle: styles.label,
     tabBarIcon: ({ color }) => <Icon name={icon} size={21} color={color} />,
     tabBarBadgeStyle: {
-      backgroundColor: colors.accent,
-      color: colors.onAccent,
+      backgroundColor: colors.coral,
+      color: colors.onCoral,
     },
   };
 }

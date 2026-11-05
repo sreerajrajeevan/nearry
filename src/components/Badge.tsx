@@ -33,9 +33,9 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
   },
   neutral: { backgroundColor: colors.hairline },
-  red: { backgroundColor: colors.claySoft },
-  green: { backgroundColor: colors.hairline },
+  red: { backgroundColor: colors.coralSoft },
+  green: { backgroundColor: colors.tealSoft },
   text: { ...typography.bodySmall, color: colors.textDim, fontWeight: "500" },
-  redText: { color: colors.clayDeep },
+  redText: { color: colors.coralDeep },
   greenText: { color: colors.success },
 });

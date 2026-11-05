@@ -89,7 +89,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: spacing.md,
   },
-  primary: { backgroundColor: colors.red },
+  primary: { backgroundColor: colors.accent },
   secondary: {
     backgroundColor: "transparent",
     borderWidth: 1,

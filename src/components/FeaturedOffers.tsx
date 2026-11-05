@@ -186,7 +186,7 @@ const styles = StyleSheet.create({
   cover: {
     padding: 20,
     paddingTop: 45,
-    backgroundColor: "rgba(37,42,38,0.78)",
+    backgroundColor: colors.scrim,
   },
   illustratedCover: { backgroundColor: "transparent", paddingTop: 100 },
   kicker: {

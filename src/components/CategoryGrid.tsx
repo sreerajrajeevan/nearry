@@ -13,6 +13,13 @@ const categories: { key: DiscoveryCategory; hint: string }[] = [
   { key: "Unwind", hint: "Make time for yourself" },
 ];
 
+const categorySurfaces = {
+  Play: colors.yellow,
+  Meet: colors.coralSoft,
+  Explore: colors.teal,
+  Unwind: colors.surface,
+} as const;
+
 export function CategoryGrid({
   selected,
   onSelect,
@@ -33,7 +40,11 @@ export function CategoryGrid({
           accessibilityLabel={`${key}. ${hint}`}
           accessibilityState={{ selected: selected === key }}
           onPress={() => onSelect(selected === key ? null : key)}
-          style={[styles.tile, selected === key && styles.selected]}
+          style={[
+            styles.tile,
+            { backgroundColor: categorySurfaces[key] },
+            selected === key && styles.selected,
+          ]}
         >
           <View style={styles.art}>
             <CategoryArt category={key} size={112} />
@@ -42,7 +53,7 @@ export function CategoryGrid({
             <Icon
               name={selected === key ? "check" : "arrow-up-right"}
               size={14}
-              color={selected === key ? colors.accent : colors.textDim}
+              color={selected === key ? colors.accent : colors.ink}
             />
           </View>
           <Text style={styles.label}>{key}</Text>
@@ -66,7 +77,7 @@ const styles = StyleSheet.create({
     borderRadius: 23,
     overflow: "hidden",
   },
-  selected: { borderColor: colors.accent, backgroundColor: colors.claySoft },
+  selected: { borderColor: colors.accent, borderWidth: 2 },
   art: { position: "absolute", top: 0, right: 8 },
   arrow: { position: "absolute", left: 14, top: 17 },
   label: {
@@ -75,5 +86,5 @@ const styles = StyleSheet.create({
     color: colors.text,
     marginBottom: 3,
   },
-  hint: { ...typography.caption, lineHeight: 16, color: colors.textDim },
+  hint: { ...typography.caption, lineHeight: 16, color: colors.text },
 });

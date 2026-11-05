@@ -334,7 +334,7 @@ const styles = StyleSheet.create({
   bubbleRowMine: { alignItems: "flex-end" },
   bubble: {
     maxWidth: "80%",
-    backgroundColor: colors.claySoft,
+    backgroundColor: colors.tealSoft,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderRadius: 16,
@@ -378,7 +378,7 @@ const styles = StyleSheet.create({
     borderRadius: 23,
     width: 46,
     height: 46,
-    backgroundColor: colors.red,
+    backgroundColor: colors.accent,
     alignItems: "center",
     justifyContent: "center",
   },
