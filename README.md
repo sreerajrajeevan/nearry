@@ -2,7 +2,7 @@
 
 React Native + Expo SDK 54, with Personal and Business experiences and Supabase Auth, Postgres, Storage and Realtime. The Everyday Nearby UI uses the Current Clay palette: warm-white surfaces, dark ink and one burnt-orange accent. Both account experiences share the same type, icons, controls, and safe-area-aware navigation.
 
-See the [4 November Play release audit](docs/play-release-status.md) for completed backend repairs and the remaining release gates, [store listing draft](docs/play-store-listing.md) and [Data safety inventory](docs/play-data-safety.md).
+See the [5 November Play release audit](docs/play-release-status.md) for completed backend repairs and the remaining release gates, [store listing draft](docs/play-store-listing.md) and [Data safety inventory](docs/play-data-safety.md).
 
 ## Run
 

@@ -1,4 +1,4 @@
-# Google Play release status — 4 November 2026
+# Google Play release status — 5 November 2026
 
 **Not ready for public production submission.** This is the observed release
 state, not a certification that all phone journeys or Play declarations passed.
@@ -25,7 +25,10 @@ state, not a certification that all phone journeys or Play declarations passed.
   maintenance dispatch secret in the worker and Vault and processed it. The
   worker reported one deletion and zero failures; database checks confirmed no
   remaining sign-in record, profile, owned files or deletion job for that account.
-  Recurring future cleanup is still off pending a separate ongoing-scope approval.
+  After separate explicit approval for future owner-requested deletions, enabled
+  `account-maintenance-dispatcher` every five minutes using the Vault-held secret.
+  Three scheduled runs succeeded and the worker returned HTTP 200 without timeouts
+  or deletion failures; no new requests were pending during those runs.
 - Owner confirmed Nearry has never been uploaded to Play and that email/Google
   sign-in both worked on the updated phone build. Created and verified a new
   private RSA-2048 upload keystore locally; it has not been uploaded to Expo.
@@ -48,7 +51,6 @@ they are scoped function/scheduler backups, not a complete database backup.
 | Email delivery | Owner reports email and Google sign-in worked on the updated phone build. Last live mail audit found Resend's test sender rejecting non-owner recipients; confirm a different recipient works or verify a sending domain/update SMTP From. The October signup template was corrected to include a code. |
 | Operator/support | Owner must supply the real legal operator and monitored support/child-safety contact. Local production preflight still rejects missing values; do not publish preview placeholders. |
 | Public policy URLs | Export reviewed pages and host privacy, deletion and child-safety pages on public HTTPS URLs. A purchased domain is not necessary for hosting these pages, but Resend separately requires a verified sending domain for its normal sender. |
-| Deletion activation | The worker and Vault secret are configured, and the one explicitly approved waiting deletion completed successfully. Scheduled processing of future owner-requested deletions awaits explicit approval. Do not claim cleanup is automatic until that schedule is enabled. |
 | Push activation | Push dispatch is deliberately paused; a backlog is waiting. Complete FCM credentials for the correct Expo project and test a phone before resuming delivery. Receipts and scheduler success do not prove device delivery. |
 | Business review | The review-email worker's required dispatch secret, allowed From address and schedule were not present in the inspected configuration. Configure them and test a proof submission/review before claiming Business publishing is ready. |
 | Expo production | CLI is signed out. Recheck the existing `sreerajsrees-team/nearry` production environment and set matching backend, operator and support values. Reuse EAS project `a220a973-0d77-4c81-ba3a-5df4bba83ce5`; Firebase client project is `nearry-43e80`. |
