@@ -11,7 +11,7 @@ export const BRAND_ASSETS = [
 export function BrandMark({
   size = 48,
   color = colors.ink,
-  dotColor = colors.clay,
+  dotColor = colors.sand,
 }: {
   size?: number;
   color?: string;

@@ -23,7 +23,7 @@ export function Input({ label, error, containerStyle, style, ...rest }: Props) {
         accessibilityLabel={label || rest.placeholder}
         style={[styles.input, error && styles.inputError, style]}
         placeholderTextColor={colors.textFaint}
-        selectionColor={colors.red}
+        selectionColor={colors.accent}
         {...rest}
       />
       {error ? <Text style={styles.error}>{error}</Text> : null}

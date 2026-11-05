@@ -1,6 +1,6 @@
 # Nearry
 
-React Native + Expo SDK 54, with Personal and Business experiences and Supabase Auth, Postgres, Storage and Realtime. The Everyday Nearby UI uses the Current Clay palette: warm-white surfaces, dark ink and one burnt-orange accent. Both account experiences share the same type, icons, controls, and safe-area-aware navigation.
+React Native + Expo SDK 54, with Personal and Business experiences and Supabase Auth, Postgres, Storage and Realtime. The Everyday Nearby UI uses a Forest & Sand palette: warm neutral surfaces, deep green, sage, tan and restrained gold. Both account experiences share the same type, icons, controls, and safe-area-aware navigation.
 
 ## Run
 
@@ -116,11 +116,11 @@ Search treats punctuation and pattern characters as literal text, and keeps expi
 
 Expo SDK 54 / React Native 0.81 target Android API 36 with the New Architecture and edge-to-edge layout. Native packages follow Expo's supported versions. Photo/document uploads retain the compatible filesystem API, and foreground notifications use the banner/list API. CI compiles an unsigned native release and checks its manifest, permissions and 16 KB native alignment. This does not replace a signed release test on a phone. See [Android release setup](docs/android-release.md) for signing, environment variables and the first Play internal test. Do not use `npm audit fix --force` to change the framework blindly.
 
-## Everyday Nearby · Current Clay design
+## Everyday Nearby · Forest & Sand design
 
-- Palette: warm white `#FAF9F5`, ink `#252A26`, burnt orange `#C14D2F`. Statuses use explicit text, with no extra brand colours.
+- Palette: sage `#6D9773`, forest `#0C3B2E`, tan `#BB8A52`, gold `#FFBA00`, warm neutral `#F4F3EB`. Forest anchors text and introduction panels; sage buttons have dark accessible labels. Gold highlights are small, and statuses remain labelled in words.
 - Typography: Avenir Next on iOS, the system sans elsewhere; comfortable body text and medium-weight headlines. Native text scaling is retained.
-- Discovery: an illustrated Play / Meet / Explore / Unwind grid, original clay artwork, and larger rounded Plan / Place / Offer cards. Existing detail screens handle joining and booking; opening a card never submits a request. Offer cover photos use business uploads; illustrated venue covers are explicitly labelled as an overview.
+- Discovery: a compact Play / Meet / Explore / Unwind row, original category artwork, and quieter Plan / Place / Offer cards. Nearby plans appear before featured promotions. Existing detail screens handle joining and booking; opening a card never submits a request. Offer cover photos use business uploads; illustrated venue covers are explicitly labelled as an overview.
 - Nearby: category tiles filter the feed and bring it into view; tap the selected tile or Show all to reset. A horizontal featured rail uses the loaded, area-scoped live offers, preferring those marked spotlight. Its controls never auto-advance. When there are no offers, an invitation starts the real Create flow. Search, attribution, area selection, refresh and realtime updates retain their existing services.
 - Venue pages: cover/gallery photos, community rating (never labelled as Google), directions, actual amenities, live venue offers and plans, a full-screen photo viewer, and a bottom action that scrolls to available times/plans or starts a new plan. Absent photos/amenities/ratings have honest empty states. Directions open an external map search and need no map API key.
 - Layout: warm paper, raised ivory cards, dark ink and one burnt-orange accent; an uncluttered location header and a rounded dark-ink tab bar. All five tabs remain labelled, with height and bottom space reserved for device insets and scaled labels. The bar stays in normal layout, so content cannot slide underneath it.
