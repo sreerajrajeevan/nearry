@@ -268,11 +268,6 @@ export function NearbyScreen() {
             });
           }}
         />
-        <FeaturedOffers
-          offers={offers}
-          onOpen={(offerId) => navigation.navigate("OfferDetails", { offerId })}
-          onCreate={() => navigation.navigate("CreatePost")}
-        />
         <View
           onLayout={(event) => {
             feedTop.current = event.nativeEvent.layout.y;
@@ -365,6 +360,13 @@ export function NearbyScreen() {
                 />
               </>
             )}
+            <FeaturedOffers
+              offers={offers}
+              onOpen={(offerId) =>
+                navigation.navigate("OfferDetails", { offerId })
+              }
+              onCreate={() => navigation.navigate("CreatePost")}
+            />
             {visibleVenues.length > 0 && (
               <>
                 <Text style={styles.sectionHeading}>
@@ -421,16 +423,26 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg,
     marginBottom: spacing.md,
   },
-  intro: { marginTop: 8, marginBottom: 22 },
-  greeting: { ...typography.bodySmall, color: colors.textDim, marginBottom: 9 },
+  intro: {
+    marginTop: 8,
+    marginBottom: 16,
+    padding: 20,
+    borderRadius: 20,
+    backgroundColor: colors.forest,
+  },
+  greeting: {
+    ...typography.bodySmall,
+    color: colors.sageSoft,
+    marginBottom: 9,
+  },
   heroTitle: {
     ...typography.display,
-    fontSize: 34,
-    lineHeight: 39,
-    letterSpacing: -1.4,
-    color: colors.text,
+    fontSize: 30,
+    lineHeight: 35,
+    letterSpacing: -1,
+    color: colors.onAccent,
   },
-  heroAccent: { color: colors.accent },
+  heroAccent: { color: colors.gold },
   resetFilter: {
     minHeight: 44,
     justifyContent: "center",

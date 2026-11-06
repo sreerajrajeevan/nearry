@@ -1,9 +1,11 @@
 # Nearry · Around You
 
-Approved identity: an open dark-ink location pin and a separate burnt-orange nearby point.
+Approved geometry: an open location pin and a separate nearby point. The current palette displays the pin in forest green and the point in tan.
 The wordmark is original outlined lettering. No font needs installing.
 
-- Ink `#252A26`, clay `#C14D2F`, paper `#FAF9F5`.
+- Display colours: forest `#0C3B2E`, tan `#BB8A52`, warm neutral `#F4F3EB`.
+- Original SVG/PNG masters keep their source ink; React and the native asset
+  generator tint the alpha masks without changing the approved geometry.
 - The symbol canvas is 256 square. Its dot is centred at (216,114), radius18.
 - `pin.svg` omits the point so it can animate independently. `wordmark.svg` is tightly cropped.
 - `pin.png` is a 1024px export; `wordmark.png` is a 1722px export. Keep these committed.

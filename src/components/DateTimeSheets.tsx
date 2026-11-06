@@ -296,7 +296,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   sheetTitle: { ...typography.title, color: colors.text, fontSize: 18 },
-  doneBtn: { ...typography.label, color: colors.red },
+  doneBtn: { ...typography.label, color: colors.accent },
   monthRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -304,7 +304,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   monthLabel: { ...typography.body, color: colors.text },
-  monthNav: { ...typography.title, color: colors.red, paddingHorizontal: 12 },
+  monthNav: { ...typography.title, color: colors.accent, paddingHorizontal: 12 },
   grid: { flexDirection: "row", flexWrap: "wrap" },
   cell: {
     width: "14.28%",
@@ -316,7 +316,7 @@ const styles = StyleSheet.create({
   cellText: { ...typography.body, color: colors.text },
   cellDisabled: { color: colors.textFaint, opacity: 0.35 },
   cellSelected: {
-    backgroundColor: colors.red,
+    backgroundColor: colors.accent,
     borderRadius: 20,
   },
   cellTextSelected: { color: colors.onAccent },
@@ -357,7 +357,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     marginVertical: 4,
   },
-  periodActive: { backgroundColor: colors.red, borderColor: colors.red },
+  periodActive: { backgroundColor: colors.accent, borderColor: colors.accent },
   periodText: { ...typography.label, color: colors.textDim },
   periodTextActive: { color: colors.onAccent },
   hint: {
