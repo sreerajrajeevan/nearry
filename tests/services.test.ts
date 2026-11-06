@@ -414,3 +414,36 @@ test("shared realtime listeners reload after reconnect and remove a channel only
     db.removeChannel = originalRemove;
   }
 });
+
+test("conversation deletion uses the member RPC and surfaces errors", async () => {
+  handler = () => null;
+  await chat.deleteConversation("conv");
+  assert.equal(calls[0].url.pathname, "/rest/v1/rpc/delete_my_conversation");
+  assert.deepEqual(calls[0].body, { p_conversation_id: "conv" });
+  responseStatus = 403;
+  handler = () => ({ message: "not a conversation member" });
+  await assert.rejects(
+    chat.deleteConversation("private"),
+    /not a conversation member/,
+  );
+});
+
+test("conversation reports send the conversation target to the moderation RPC", async () => {
+  const { reportContent } = await import("../src/services/safety");
+  handler = () => "report-id";
+  assert.equal(
+    await reportContent(
+      { kind: "conversation", id: "conv" },
+      "harassment",
+      "  Concern  ",
+    ),
+    "report-id",
+  );
+  assert.equal(calls[0].url.pathname, "/rest/v1/rpc/submit_content_report");
+  assert.deepEqual(calls[0].body, {
+    p_kind: "conversation",
+    p_target: "conv",
+    p_reason: "harassment",
+    p_details: "Concern",
+  });
+});

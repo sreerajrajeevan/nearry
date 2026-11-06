@@ -3,7 +3,7 @@ import { notifyUnreadChanged } from "./unreadEvents";
 import { mockConversations } from "../data/mock";
 
 export type ReportKind =
-  "post" | "photo" | "offer" | "venue" | "user" | "message";
+  "post" | "photo" | "offer" | "venue" | "user" | "message" | "conversation";
 export type ReportTarget = {
   kind: ReportKind;
   id: string;

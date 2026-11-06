@@ -108,7 +108,7 @@ See the [core journey changes and phone checklist](docs/core-journey-checklist.m
 
 ## Backend audit
 
-See [audit scope, fixes, and remaining live checks](docs/backend-audit.md). Offer editing/publishing/cancellation now uses `update_offer`; cancelling an offer also cancels its future reservations. Customers keep the offer context in booking history. Chat loads the newest 200 messages, merges concurrent send/realtime results, and acknowledges only displayed messages while the conversation is focused. Older-message pagination remains future work.
+See [audit scope, fixes, and remaining live checks](docs/backend-audit.md). Offer editing/publishing/cancellation now uses `update_offer`; cancelling an offer also cancels its future reservations. Customers keep the offer context in booking history. Chat loads the newest 200 visible messages, discards stale reloads after sends, and acknowledges only displayed messages while the conversation is focused. Older-message pagination remains future work.
 
 Search treats punctuation and pattern characters as literal text, and keeps expiry and text conditions together. Optional post fields can be explicitly cleared. Badges refresh after local read actions; chat and notification lists refresh on incoming events and app resume. Remote push is owned by the server worker, avoiding duplicate local banners from the same database event.
 
@@ -136,3 +136,7 @@ Expo SDK 54 / React Native 0.81 target Android API 36 with the New Architecture 
 - Demo data uses valid local timestamps and associated venue IDs. Demo bookings use stable slots and their actual capacity. Live bookings send the selected slot ID to `book_offer_slot` instead of substituting the current timestamp. Demo mutations remain in memory.
 
 Review on a phone with both a short and a long display name. Check Nearby filters, the area picker, Search, details, Create, keyboard dismissal, Activity, and Profile; then check all five Business tabs. Verify the native safe areas and large-text setting on iOS and Android before release. Browser checks are useful for layout, but cannot verify native Google redirects, push permission, or device keyboard behavior.
+
+### Chat controls
+
+See [chat controls and phone checks](docs/chat-controls.md) for keyboard handling, per-member conversation deletion, long-press reporting/blocking and migration **00026**.
