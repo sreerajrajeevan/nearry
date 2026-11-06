@@ -20,7 +20,7 @@ import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
 import { Avatar } from "../../components/Avatar";
 import { Icon } from "../../components/Icon";
-import { colors, typography, spacing } from "../../theme";
+import { colors, typography, spacing, surfaces } from "../../theme";
 import { useAuth } from "../../store/AuthContext";
 import {
   listMessages,
@@ -322,19 +322,21 @@ const styles = StyleSheet.create({
   },
   backText: { ...typography.label, color: colors.textDim },
   heading: {
+    ...surfaces.hero,
+    padding: 14,
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
     marginBottom: spacing.lg,
   },
-  title: { ...typography.title, color: colors.text, flex: 1 },
+  title: { ...typography.heading, color: colors.onAccent, flex: 1 },
   status: { ...typography.label, color: colors.textDim, marginTop: spacing.xl },
   list: { paddingBottom: spacing.md, flexGrow: 1 },
   bubbleRow: { alignItems: "flex-start", marginBottom: spacing.sm },
   bubbleRowMine: { alignItems: "flex-end" },
   bubble: {
     maxWidth: "80%",
-    backgroundColor: colors.claySoft,
+    backgroundColor: colors.sandSoft,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderRadius: 16,

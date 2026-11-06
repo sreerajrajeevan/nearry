@@ -35,6 +35,8 @@ test("small body text, secondary text, links, placeholders and primary buttons m
     [colors.red, colors.dangerSoft],
     [colors.onAccent, colors.red],
     [colors.success, colors.sageSoft],
+    [colors.textDim, colors.sandSoft],
+    [colors.textDim, colors.goldSoft],
   ])
     assert.ok(
       contrast(foreground, background) >= 4.5,

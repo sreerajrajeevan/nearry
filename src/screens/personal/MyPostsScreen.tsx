@@ -21,7 +21,7 @@ import { useAuth } from "../../store/AuthContext";
 import { listPosts, subscribeToPosts } from "../../services/posts";
 import { NeedPost } from "../../services/mappers";
 import { formatWhen } from "../../utils/format";
-import { colors, typography, spacing } from "../../theme";
+import { colors, typography, spacing, surfaces } from "../../theme";
 
 type Props = NativeStackScreenProps<PersonalStackParamList, "MyPosts">;
 type Filter = "all" | "upcoming" | "past" | "cancelled";
@@ -224,6 +224,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.lg,
   },
   row: {
+    ...surfaces.card,
     paddingVertical: spacing.lg,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,

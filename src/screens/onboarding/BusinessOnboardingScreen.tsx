@@ -1,3 +1,4 @@
+import { PageHeading } from "../../components/PageHeading";
 import React, { useState } from "react";
 import { View, Text, TouchableOpacity, StyleSheet, Alert } from "react-native";
 import { useNavigation } from "@react-navigation/native";
@@ -77,12 +78,27 @@ export function BusinessOnboardingScreen() {
 
   return (
     <Screen padded scroll keyboard>
-      <Text style={styles.progress}>{progress}</Text>
+      <PageHeading
+        compact
+        greeting={`Business setup · ${progress}`}
+        title={
+          step === 1
+            ? "Tell us about your place"
+            : step === 2
+              ? "Where is it?"
+              : "Ready to meet your neighbourhood."
+        }
+        subtitle={
+          step === 1
+            ? "This is how explorers will find you."
+            : step === 2
+              ? "Set your area so nearby explorers can discover you."
+              : "Post offers, take bookings, watch footfall grow."
+        }
+      />
 
       {step === 1 && (
         <View style={styles.body}>
-          <Text style={styles.title}>Tell us about your place</Text>
-          <Text style={styles.sub}>This is how explorers will find you.</Text>
           <Input
             label="Business name"
             placeholder="e.g. Neon Arena"
@@ -114,10 +130,6 @@ export function BusinessOnboardingScreen() {
 
       {step === 2 && (
         <View style={styles.body}>
-          <Text style={styles.title}>Where is it?</Text>
-          <Text style={styles.sub}>
-            Set your area so nearby explorers can discover you.
-          </Text>
           <Input
             label="Area / locality"
             placeholder="e.g. Indiranagar, Bengaluru"
@@ -151,12 +163,6 @@ export function BusinessOnboardingScreen() {
 
       {step === 3 && (
         <View style={styles.done}>
-          <Text style={styles.doneTitle}>
-            Ready to meet your neighbourhood<Text style={styles.dot}>.</Text>
-          </Text>
-          <Text style={styles.sub}>
-            Post offers, take bookings, watch footfall grow.
-          </Text>
           <View style={styles.footerWide}>
             {agreementNeeded && (
               <TermsAgreement
@@ -212,7 +218,7 @@ const styles = StyleSheet.create({
   },
   body: {
     flex: 1,
-    marginTop: spacing.xl,
+    marginTop: spacing.sm,
   },
   title: {
     ...typography.title,
@@ -245,7 +251,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
   chipSelected: {
-    borderColor: colors.red,
+    borderColor: colors.goldDeep,
+    backgroundColor: colors.goldSoft,
   },
   chipText: {
     ...typography.label,
@@ -259,7 +266,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   footerWide: {
-    marginTop: spacing.xl,
+    marginTop: spacing.sm,
     width: "100%",
   },
   back: {
@@ -272,9 +279,9 @@ const styles = StyleSheet.create({
   },
   done: {
     flex: 1,
-    marginTop: spacing.xl,
-    alignItems: "center",
-    justifyContent: "center",
+    marginTop: spacing.sm,
+    alignItems: "stretch",
+    justifyContent: "flex-start",
   },
   doneTitle: {
     ...typography.display,

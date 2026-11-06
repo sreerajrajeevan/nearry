@@ -15,7 +15,7 @@ import { PageHeading } from "../../components/PageHeading";
 import { Icon } from "../../components/Icon";
 import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
-import { colors, typography, spacing } from "../../theme";
+import { colors, typography, spacing, surfaces } from "../../theme";
 import { useAuth } from "../../store/AuthContext";
 import { subscribeToNotifications } from "../../services/notifications";
 import { onUnreadChanged } from "../../services/unreadEvents";
@@ -185,6 +185,7 @@ const styles = StyleSheet.create({
   },
   status: { ...typography.label, color: colors.textDim, marginTop: spacing.xl },
   chatRow: {
+    ...surfaces.card,
     flexDirection: "row",
     gap: 12,
     alignItems: "center",
@@ -217,11 +218,11 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: colors.accent,
+    backgroundColor: colors.gold,
   },
   unreadText: {
     ...typography.caption,
-    color: colors.onAccent,
+    color: colors.onGold,
     fontWeight: "600",
   },
 });

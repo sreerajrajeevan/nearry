@@ -16,7 +16,7 @@ import { Button } from "../../components/Button";
 import { Badge } from "../../components/Badge";
 import { Input } from "../../components/Input";
 import { EmptyState } from "../../components/EmptyState";
-import { colors, typography, spacing } from "../../theme";
+import { colors, typography, spacing, surfaces } from "../../theme";
 import { PersonalStackParamList } from "../../navigation/types";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useAuth } from "../../store/AuthContext";
@@ -419,12 +419,19 @@ const styles = StyleSheet.create({
   },
   backText: { ...typography.label, color: colors.textDim },
   header: {
+    ...surfaces.hero,
+    flexWrap: "wrap",
     flexDirection: "row",
     alignItems: "flex-start",
     justifyContent: "space-between",
     gap: spacing.md,
   },
-  title: { ...typography.title, color: colors.text, flex: 1 },
+  title: {
+    ...typography.title,
+    color: colors.onAccent,
+    flex: 1,
+    minWidth: "65%",
+  },
   business: {
     ...typography.caption,
     color: colors.textDim,

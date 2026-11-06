@@ -1,3 +1,4 @@
+import { PageHeading } from "../../components/PageHeading";
 import React, { useState } from "react";
 import {
   View,
@@ -13,7 +14,7 @@ import { Button } from "../../components/Button";
 import { Input } from "../../components/Input";
 import { EmptyState } from "../../components/EmptyState";
 import { Avatar } from "../../components/Avatar";
-import { colors, typography, spacing } from "../../theme";
+import { colors, typography, spacing, surfaces } from "../../theme";
 import { PersonalStackParamList } from "../../navigation/types";
 import { useAuth } from "../../store/AuthContext";
 import { updateProfile } from "../../services/profile";
@@ -42,7 +43,9 @@ export function EditProfileScreen({ navigation }: Props) {
   const { profile, refreshProfile } = useAuth();
   const [name, setName] = useState(profile?.displayName ?? "");
   const [bio, setBio] = useState(profile?.bio ?? "");
-  const [interests, setInterests] = useState<string[]>(profile?.interests ?? []);
+  const [interests, setInterests] = useState<string[]>(
+    profile?.interests ?? [],
+  );
   const [gender, setGender] = useState<"male" | "female" | "other" | undefined>(
     profile?.gender,
   );
@@ -135,7 +138,7 @@ export function EditProfileScreen({ navigation }: Props) {
         >
           <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>
-        <Text style={styles.header}>Edit profile.</Text>
+        <PageHeading compact title="Edit profile." />
 
         <TouchableOpacity
           onPress={() => void onPickPhoto()}
@@ -249,9 +252,9 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: colors.surface,
   },
-  chipSel: { backgroundColor: colors.text, borderColor: colors.text },
+  chipSel: { ...surfaces.selected },
   chipText: { ...typography.bodySmall, color: colors.text },
-  chipTextSel: { color: colors.background },
+  chipTextSel: { color: colors.onGold },
   formError: {
     ...typography.body,
     color: colors.red,

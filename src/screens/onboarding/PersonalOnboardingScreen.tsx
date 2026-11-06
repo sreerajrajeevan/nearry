@@ -1,3 +1,4 @@
+import { PageHeading } from "../../components/PageHeading";
 import React, { useState } from "react";
 import { View, Text, TouchableOpacity, StyleSheet, Alert } from "react-native";
 import { useNavigation } from "@react-navigation/native";
@@ -78,14 +79,27 @@ export function PersonalOnboardingScreen() {
 
   return (
     <Screen padded scroll keyboard>
-      <Text style={styles.progress}>{progress}</Text>
+      <PageHeading
+        compact
+        greeting={`Personal setup · ${progress}`}
+        title={
+          step === 1
+            ? "What are you into?"
+            : step === 2
+              ? "Where are you?"
+              : "You’re in."
+        }
+        subtitle={
+          step === 1
+            ? "Pick a few. We use this to surface your kind of people."
+            : step === 2
+              ? "Enable location to see people and places around you, or skip and choose an area later."
+              : "Your people are already out there. Go find them."
+        }
+      />
 
       {step === 1 && (
         <View style={styles.body}>
-          <Text style={styles.title}>What are you into?</Text>
-          <Text style={styles.sub}>
-            Pick a few. We use this to surface your kind of people.
-          </Text>
           <View style={styles.chips}>
             {INTERESTS.map((item) => (
               <Chip
@@ -104,11 +118,6 @@ export function PersonalOnboardingScreen() {
 
       {step === 2 && (
         <View style={styles.body}>
-          <Text style={styles.title}>Where are you?</Text>
-          <Text style={styles.sub}>
-            Nearby runs on location. Enable it to see people and places around
-            you.
-          </Text>
           <View style={styles.footer}>
             <Button
               title="Enable location"
@@ -130,12 +139,6 @@ export function PersonalOnboardingScreen() {
 
       {step === 3 && (
         <View style={styles.done}>
-          <Text style={styles.doneTitle}>
-            You’re in<Text style={styles.dot}>.</Text>
-          </Text>
-          <Text style={styles.sub}>
-            Your people are already out there. Go find them.
-          </Text>
           <View style={styles.footer}>
             {agreementNeeded && (
               <TermsAgreement
@@ -186,7 +189,7 @@ const styles = StyleSheet.create({
   },
   body: {
     flex: 1,
-    marginTop: spacing.xl,
+    marginTop: spacing.sm,
   },
   title: {
     ...typography.title,
@@ -213,7 +216,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
   },
   chipSelected: {
-    borderColor: colors.red,
+    borderColor: colors.goldDeep,
+    backgroundColor: colors.goldSoft,
   },
   chipText: {
     ...typography.label,
@@ -240,9 +244,9 @@ const styles = StyleSheet.create({
   },
   done: {
     flex: 1,
-    marginTop: spacing.xl,
-    alignItems: "center",
-    justifyContent: "center",
+    marginTop: spacing.sm,
+    alignItems: "stretch",
+    justifyContent: "flex-start",
   },
   doneTitle: {
     ...typography.display,

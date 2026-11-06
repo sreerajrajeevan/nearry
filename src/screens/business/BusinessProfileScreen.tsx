@@ -16,7 +16,7 @@ import { Badge } from "../../components/Badge";
 import { Avatar } from "../../components/Avatar";
 import { VerifiedWelcome } from "../../components/VerifiedWelcome";
 import { Icon } from "../../components/Icon";
-import { colors, typography, spacing } from "../../theme";
+import { colors, typography, spacing, surfaces } from "../../theme";
 import { useAuth } from "../../store/AuthContext";
 import { useUnreadCounts } from "../../hooks/useUnreadCounts";
 import {
@@ -121,11 +121,6 @@ export function BusinessProfileScreen({ navigation }: Props) {
           />
         }
       >
-        <Button
-          title="My offers"
-          variant="secondary"
-          onPress={() => navigation.navigate("MyOffers")}
-        />
         <View style={styles.headerRow}>
           <Avatar name={name} size={64} uri={profile?.avatarUrl} />
           <View style={styles.nameBlock}>
@@ -139,7 +134,7 @@ export function BusinessProfileScreen({ navigation }: Props) {
 
         {isDemoMode() && (
           <View style={styles.demoRow}>
-            <Badge label="Demo mode" tone="red" />
+            <Badge label="Demo mode" />
           </View>
         )}
 
@@ -263,16 +258,17 @@ export function BusinessProfileScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   scroll: { paddingBottom: spacing.xl },
   headerRow: {
+    ...surfaces.hero,
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.md,
     marginTop: spacing.sm,
   },
   nameBlock: { flex: 1 },
-  name: { ...typography.title, color: colors.text },
+  name: { ...typography.title, color: colors.onAccent },
   category: {
     ...typography.caption,
-    color: colors.textDim,
+    color: colors.goldSoft,
     marginTop: spacing.xs,
   },
   demoRow: { marginTop: spacing.md, alignItems: "flex-start" },

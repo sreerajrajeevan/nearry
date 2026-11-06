@@ -27,7 +27,7 @@ import {
 } from "../../services/offers";
 import { Offer } from "../../services/mappers";
 import { formatWhen } from "../../utils/format";
-import { colors, typography, spacing } from "../../theme";
+import { colors, typography, spacing, surfaces } from "../../theme";
 
 type Props = NativeStackScreenProps<BusinessStackParamList, "MyOffers">;
 type Filter = "all" | "live" | "drafts" | "ended";
@@ -299,6 +299,7 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.lg,
   },
   row: {
+    ...surfaces.card,
     paddingVertical: spacing.lg,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,

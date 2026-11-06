@@ -30,6 +30,7 @@ export function FilterTabs<T extends string>({
             key={option.key}
             accessibilityRole="tab"
             accessibilityState={{ selected: active }}
+            aria-selected={active}
             onPress={() => onSelect(option.key)}
             activeOpacity={0.65}
             style={[styles.tab, active && styles.active]}
@@ -38,7 +39,7 @@ export function FilterTabs<T extends string>({
               <Icon
                 name={option.icon}
                 size={15}
-                color={active ? colors.onAccent : colors.textDim}
+                color={active ? colors.onGold : colors.textDim}
               />
             )}
             <Text style={[styles.label, active && styles.activeLabel]}>
@@ -67,10 +68,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 13,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 24,
+    borderRadius: 12,
     backgroundColor: colors.card,
   },
-  active: { backgroundColor: colors.accent, borderColor: colors.accent },
+  active: { backgroundColor: colors.goldSoft, borderColor: colors.goldDeep },
   label: { ...typography.bodySmall, color: colors.textDim },
-  activeLabel: { color: colors.onAccent, fontWeight: "500" },
+  activeLabel: { color: colors.onGold, fontWeight: "500" },
 });

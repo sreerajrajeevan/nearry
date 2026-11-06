@@ -1,3 +1,4 @@
+import { PageHeading } from "../../components/PageHeading";
 import React, { useEffect, useState } from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { useNavigation } from "@react-navigation/native";
@@ -139,21 +140,22 @@ export function AuthScreen({
         <Icon name="arrow-left" size={16} />
         <Text style={styles.linkText}>Back</Text>
       </TouchableOpacity>
-      <View style={styles.header}>
-        <Text style={styles.kicker}>{kicker}</Text>
-        <Text style={styles.title}>
-          {step === "email"
+      <PageHeading
+        compact
+        greeting={kicker}
+        title={
+          step === "email"
             ? isLogin
               ? "Welcome back"
               : "Create account"
-            : "Check your inbox"}
-        </Text>
-        {step === "code" && sentTo && (
-          <Text style={styles.sub}>
-            Code requested for {sentTo}. Check your inbox and spam folder.
-          </Text>
-        )}
-      </View>
+            : "Check your inbox"
+        }
+        subtitle={
+          step === "code" && sentTo
+            ? `Code requested for ${sentTo}. Check your inbox and spam folder.`
+            : undefined
+        }
+      />
 
       {!isSupabaseConfigured && (
         <View style={styles.warn}>

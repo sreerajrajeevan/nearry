@@ -16,7 +16,7 @@ import { PersonalHeader } from "../../components/PersonalHeader";
 import { Input } from "../../components/Input";
 import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
-import { colors, typography, spacing } from "../../theme";
+import { colors, typography, spacing, surfaces } from "../../theme";
 import { useAuth } from "../../store/AuthContext";
 import { PersonalTabNav } from "../../navigation/types";
 import { createPost } from "../../services/posts";
@@ -595,17 +595,16 @@ const styles = StyleSheet.create({
     width: 22,
     height: 22,
     borderRadius: 11,
-    backgroundColor: "rgba(0,0,0,0.6)",
+    backgroundColor: colors.scrim,
     alignItems: "center",
     justifyContent: "center",
   },
-  thumbDeleteText: { color: "#fff", fontSize: 14, lineHeight: 18 },
+  thumbDeleteText: { color: colors.onAccent, fontSize: 14, lineHeight: 18 },
   addThumb: {
+    ...surfaces.field,
     width: 80,
     height: 80,
-    borderRadius: 8,
     borderWidth: 1,
-    borderColor: colors.border,
     borderStyle: "dashed",
     alignItems: "center",
     justifyContent: "center",
@@ -614,11 +613,11 @@ const styles = StyleSheet.create({
   row: { flexDirection: "row", gap: 12, alignItems: "flex-start" },
   half: { flex: 1 },
   venuePick: {
+    ...surfaces.field,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     borderWidth: 1,
-    borderColor: colors.red,
     padding: spacing.md,
     marginBottom: spacing.sm,
   },
@@ -672,9 +671,9 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.sm,
     backgroundColor: colors.background,
   },
-  chipSelected: { borderColor: colors.clay, backgroundColor: colors.claySoft },
+  chipSelected: { ...surfaces.selected },
   chipText: { ...typography.bodySmall, color: colors.textDim },
-  chipTextSelected: { color: colors.clayDeep, fontWeight: "600" },
+  chipTextSelected: { color: colors.onGold, fontWeight: "600" },
   formError: {
     ...typography.body,
     color: colors.red,
@@ -682,12 +681,10 @@ const styles = StyleSheet.create({
   },
   publish: { marginTop: spacing.md },
   pickerBox: {
+    ...surfaces.field,
     height: 52,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 8,
     paddingHorizontal: spacing.md,
-    backgroundColor: colors.background,
     justifyContent: "center",
     marginBottom: spacing.md,
   },
