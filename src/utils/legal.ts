@@ -1,18 +1,55 @@
-export type LegalPage = "privacy" | "terms";
+export type LegalPage = "privacy" | "terms" | "child-safety";
 export const POLICY_VERSION = "2026-10-19";
+export function legalUpdated(page: LegalPage): string {
+  return page === "child-safety" ? "4 November 2026" : "19 October 2026";
+}
+export function legalTitle(page: LegalPage): string {
+  return page === "privacy"
+    ? "Your privacy"
+    : page === "child-safety"
+      ? "Child safety standards"
+      : "Community guidelines & terms";
+}
 export const legalContact = {
   owner: process.env.EXPO_PUBLIC_LEGAL_OWNER?.trim() || "Nearry",
   email: process.env.EXPO_PUBLIC_SUPPORT_EMAIL?.trim() || "",
 };
 export const legalConfigured =
   !!process.env.EXPO_PUBLIC_LEGAL_OWNER?.trim() &&
-  /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(legalContact.email);
+  !/^(your |example|todo|change.?me)/i.test(legalContact.owner) &&
+  /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(legalContact.email) &&
+  !/(^|\.)(localhost|example\.(com|org|net)|invalid|test)$/.test(
+    legalContact.email.split("@")[1].toLowerCase(),
+  );
 export function legalSections(
   page: LegalPage,
 ): { title: string; body: string }[] {
   const contact = legalContact.email
     ? `Contact ${legalContact.owner} at ${legalContact.email} for support, privacy requests or safety concerns.`
     : "Public support contact details will be provided before Nearry is released. This preview policy is not yet ready for public launch.";
+  if (page === "child-safety")
+    return [
+      {
+        title: "An adult community with standards that protect children",
+        body: `Nearry is operated by ${legalContact.owner} and is intended for people aged 18 and over. Child sexual abuse and exploitation (CSAE) are prohibited on Nearry, including in profiles, photos, posts, offers and private messages. These standards apply even though Nearry does not allow children to create accounts.`,
+      },
+      {
+        title: "Prohibited content and behaviour",
+        body: "Do not create, upload, request, promote or share child sexual abuse material (CSAM), including computer-generated material. Grooming, sexual solicitation of a child, sextortion, trafficking and any behaviour that sexually exploits or endangers a child are prohibited. Do not use Nearry to arrange or facilitate these activities elsewhere.",
+      },
+      {
+        title: "Report a concern in the app",
+        body: "Use Report on a post, photo, offer, venue, message or person and choose Safety concern, including child safety. For a message, hold the message bubble to open its report option. You can also block the person from the conversation. Reports are private and the reported person cannot see who submitted them. Provide enough context to locate the concern, but do not download, copy, forward or upload suspected illegal images as evidence. Nearry is not an emergency service; contact local emergency services if someone is in immediate danger.",
+      },
+      {
+        title: "How concerns are handled",
+        body: "We review reports, remove confirmed violating content and restrict or suspend responsible accounts. When we obtain actual knowledge of CSAM on Nearry, we take appropriate action and report it to the relevant regional authority or the National Center for Missing & Exploited Children, as applicable under law. We preserve and disclose evidence only as required or permitted by law. We cooperate with lawful requests from competent authorities. Submitting a report in Nearry does not contact emergency services or law enforcement on your behalf.",
+      },
+      {
+        title: "Child safety contact",
+        body: `${contact} For a child-safety concern, use the subject “Nearry child safety” and describe where the concern appears. Do not email suspected CSAM, passwords or sign-in codes. This contact also handles questions from the relevant child-safety authorities.`,
+      },
+    ];
   if (page === "terms")
     return [
       {
@@ -64,7 +101,7 @@ export function legalSections(
     },
     {
       title: "Service providers",
-      body: "Supabase provides authentication, database, file storage and server functions. Geoapify provides searched-place suggestions. Expo and the phone platform’s Apple/Google push services deliver notifications. Resend is used to email business-review links to authorised reviewers. Google is used when you choose Google sign-in. These providers process relevant data to deliver those services; processing locations depend on the configured provider infrastructure.",
+      body: "Supabase provides authentication, database, file storage and server functions. Geoapify provides searched-place suggestions. Expo and the phone platform’s Apple/Google push services deliver notifications. Resend delivers email sign-in codes through Supabase Auth and business-review links to authorised reviewers. Google is used when you choose Google sign-in. These providers process relevant data to deliver those services; processing locations depend on the configured provider infrastructure.",
     },
     {
       title: "Retention and account deletion",
