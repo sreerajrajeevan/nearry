@@ -102,13 +102,6 @@ export function ProfileScreen({ navigation }: Props) {
         </Text>
         <View style={styles.group}>
           <AccountMenuRow
-            icon="file-text"
-            title="My posts"
-            hint="Manage the plans you posted"
-            onPress={() => navigation.navigate("MyPosts")}
-          />
-          <View style={styles.divider} />
-          <AccountMenuRow
             icon="calendar"
             title="My activity"
             hint="Joined plans, requests and bookings"
