@@ -238,3 +238,55 @@ test("demo attachments appear in the gallery and feed without network requests",
     setDemoMode(false);
   }
 });
+
+test("editing a photo selection retains uploaded files for retries and never saves a partial selection", async () => {
+  let uploads = 0,
+    attempt = 0;
+  handler = () => ({
+    body: { message: "Temporary save failure" },
+    status: 500,
+  });
+  const result = await photos.savePhotoSelection(
+    "post",
+    [
+      { uri: "original", uploadedUrl: "https://photos.test/original.jpg" },
+      { uri: "new-crop" },
+    ],
+    async () => {
+      uploads++;
+      return "https://photos.test/new.jpg";
+    },
+  );
+  assert.match(result.error, /Temporary save failure/);
+  assert.equal(uploads, 1);
+  const request = calls.find((c) =>
+    c.url.pathname.endsWith("/rpc/set_post_photos"),
+  )!;
+  assert.deepEqual(JSON.parse(request.body as string), {
+    p_post_id: "post",
+    p_urls: ["https://photos.test/original.jpg", "https://photos.test/new.jpg"],
+  });
+  handler = () => ({ body: null });
+  const saved = await photos.savePhotoSelection(
+    "post",
+    result.photos,
+    async () => {
+      uploads++;
+      return "unexpected";
+    },
+  );
+  assert.equal(saved.error, "");
+  assert.equal(uploads, 1);
+  calls.length = 0;
+  const failed = await photos.savePhotoSelection(
+    "post",
+    [{ uri: "first" }, { uri: "second" }],
+    async () => {
+      if (++attempt === 2) throw new Error("Upload interrupted");
+      return "https://photos.test/first.jpg";
+    },
+  );
+  assert.match(failed.error, /Upload interrupted/);
+  assert.equal(failed.photos[0].uploadedUrl, "https://photos.test/first.jpg");
+  assert.equal(calls.length, 0);
+});

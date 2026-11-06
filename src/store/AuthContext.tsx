@@ -34,6 +34,7 @@ import {
   clearSignupAgreement,
   configureSignupAgreementStorage,
 } from "../services/terms";
+import { completePersonalProfile as savePersonalDetails } from "../services/profile";
 import { RequestVersion } from "../utils/requestVersion";
 configureAuthStorage(AsyncStorage);
 configureSignupAgreementStorage(AsyncStorage);
@@ -77,6 +78,9 @@ type AuthState = {
   exitDemoMode: () => void;
   completeOnboarding: (data: OnboardingData) => Promise<void>;
   refreshProfile: () => Promise<void>;
+  savePersonalProfile: (
+    input: Parameters<typeof savePersonalDetails>[0],
+  ) => Promise<void>;
   selectAccountType: (role: AccountType) => Promise<void>;
 };
 const AuthContext = createContext<AuthState | null>(null);
@@ -89,11 +93,15 @@ const demoProfile: Profile = {
   verificationStatus: "unverified",
   onboardingCompleted: true,
   roleSelected: true,
+  gender: "female",
+  age: 25,
+  termsVersion: POLICY_VERSION,
   createdAt: new Date().toISOString(),
 };
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null),
     [profile, setProfile] = useState<Profile | null>(null);
+  const [demoDetails, setDemoDetails] = useState<Partial<Profile>>({});
   const [demoMode, setDemo] = useState(false),
     [demoRole, setDemoRole] = useState<AccountType>("personal");
   const [bootstrapping, setBootstrapping] = useState(true),
@@ -340,6 +348,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   function enterDemoMode(role: AccountType = "personal") {
     version.current.invalidate();
     demoRef.current = true;
+    setDemoDetails({});
     setDemoRole(role);
     setDemo(true);
     setDemoMode(true);
@@ -386,10 +395,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               : {
                   displayName: "Sree",
                   interests: ["Football", "Coffee", "Walks"],
+                  ...demoDetails,
                 }),
           }
         : profile,
-    [demoMode, demoRole, profile],
+    [demoMode, demoRole, profile, demoDetails],
   );
   const accountType = resolved?.accountType ?? null;
   const needsOnboarding =
@@ -453,6 +463,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         },
         completeOnboarding,
         refreshProfile,
+        savePersonalProfile: (input) =>
+          action(async () => {
+            if (demoRef.current) {
+              setDemoDetails({
+                displayName: input.displayName,
+                gender: input.gender,
+                age: input.age,
+                termsVersion: POLICY_VERSION,
+                onboardingCompleted: true,
+                roleSelected: true,
+              });
+              return;
+            }
+            await savePersonalDetails(input);
+            await refreshProfile();
+          }),
         selectAccountType,
       }}
     >

@@ -135,7 +135,7 @@ before(async () => {
       ],
     );
     await db.query(
-      "update profiles set onboarding_completed=true,business_name='Test Salon',business_details='{}',verification_status=$2 where id=$1",
+      "update profiles set age=25,gender='male',terms_version='2026-10-19',onboarding_completed=true,business_name='Test Salon',business_details='{}',verification_status=$2 where id=$1",
       [id, role === "business" ? "verified" : "unverified"],
     );
   }
@@ -1250,9 +1250,10 @@ async function corePersonal() {
     'insert into auth.users(id,email,raw_user_meta_data) values($1,$2,\'{"account_type":"personal","display_name":"Neighbour"}\')',
     [id, `${id}@test.example`],
   );
-  await db.query("update profiles set onboarding_completed=true where id=$1", [
-    id,
-  ]);
+  await db.query(
+    "update profiles set age=25,gender='male',terms_version='2026-10-19',onboarding_completed=true where id=$1",
+    [id],
+  );
   return id;
 }
 
@@ -2227,4 +2228,285 @@ test("conversation reports protect private history and retain a deduplicated mod
     "resolved",
   );
   assert.equal(await f.inbox(f.member), undefined); // inactive peers remain filtered
+});
+
+test("participation: Google-style incomplete accounts can browse but must supply age/gender before creating or joining", async () => {
+  const user = (await db.query("select gen_random_uuid() id")).rows[0].id;
+  await db.query(
+    'insert into auth.users(id,email,raw_user_meta_data) values($1,\'new-google@test.example\',\'{"account_type":"personal","full_name":"Google Neighbour"}\')',
+    [user],
+  );
+  const pid = await post();
+  assert.equal(
+    (
+      await asUser(user, (tx) =>
+        tx.query("select id from post_cards where id=$1", [pid]),
+      )
+    ).rows.length,
+    1,
+  );
+  await assert.rejects(
+    asUser(user, (tx) => tx.query("select request_join($1)", [pid])),
+    /onboarding|profile/i,
+  );
+  await assert.rejects(
+    asUser(user, (tx) =>
+      tx.query(
+        "insert into posts(author_id,title,description,starts_at,vacancies) values($1,'My first plan','A friendly first plan',now()+interval '4 hours',2)",
+        [user],
+      ),
+    ),
+    /onboarding|row-level security|profile/i,
+  );
+  await assert.rejects(
+    asUser(user, (tx) =>
+      tx.query(
+        "select complete_personal_profile('New Person','female',17,true)",
+      ),
+    ),
+    /18 and 100/,
+  );
+  await assert.rejects(
+    asUser(user, (tx) =>
+      tx.query("select complete_personal_profile('New Person',null,25,true)"),
+    ),
+    /name, gender/,
+  );
+  await assert.rejects(
+    asUser(user, (tx) =>
+      tx.query(
+        "select complete_personal_profile('New Person','female',25,false)",
+      ),
+    ),
+    /accept/,
+  );
+  await asUser(user, (tx) =>
+    tx.query("select complete_personal_profile('New Person','female',25,true)"),
+  );
+  const own = (
+    await asUser(user, (tx) => tx.query("select get_my_profile() p"))
+  ).rows[0].p;
+  assert.equal(own.age, 25);
+  assert.equal(own.gender, "female");
+  assert.equal(own.onboarding_completed, true);
+  await assert.rejects(
+    asUser(host, (tx) =>
+      tx.query("select age from profiles where id=$1", [user]),
+    ),
+    /permission denied/,
+  );
+  await assert.rejects(
+    asUser(host, (tx) => tx.query("select personal_profile_ready($1)", [user])),
+    /permission denied/,
+  );
+  await assert.rejects(
+    asUser(
+      null,
+      (tx) =>
+        tx.query("select complete_personal_profile('Person','female',25,true)"),
+      "anon",
+    ),
+    /permission denied/,
+  );
+  await request(user, pid);
+  await asUser(user, (tx) =>
+    tx.query(
+      "insert into posts(author_id,title,description,starts_at,vacancies) values($1,'My first plan','A friendly first plan',now()+interval '4 hours',2)",
+      [user],
+    ),
+  );
+  // An old onboarding flag alone cannot bypass the new required details.
+  await asUser(user, (tx) =>
+    tx.query("update profiles set age=null where id=$1", [user]),
+  );
+  await assert.rejects(
+    asUser(user, (tx) =>
+      tx.query(
+        "insert into posts(author_id,title,description,starts_at,vacancies) values($1,'Bypass attempt','A friendly first plan',now()+interval '4 hours',2)",
+        [user],
+      ),
+    ),
+    /row-level security/,
+  );
+});
+
+test("audience: requests and approvals enforce gender; Anyone includes Other; audience edits preserve approved participants", async () => {
+  const owner = await corePersonal(),
+    woman = await corePersonal(),
+    man = await corePersonal(),
+    other = await corePersonal();
+  await db.query("update profiles set gender='female' where id=$1", [woman]);
+  await db.query("update profiles set gender='other' where id=$1", [other]);
+  const pid = (
+    await db.query(
+      "insert into posts(author_id,title,description,starts_at,vacancies,gender_preference) values($1,'Women’s game','A friendly game for women',now()+interval '4 hours',4,'female') returning id",
+      [owner],
+    )
+  ).rows[0].id;
+  await assert.rejects(request(man, pid), /females only/);
+  await assert.rejects(request(other, pid), /females only/);
+  const wr = await request(woman, pid);
+  await db.query("update profiles set gender='male' where id=$1", [woman]);
+  await assert.rejects(
+    asUser(owner, (tx) => tx.query("select approve_join_request($1)", [wr])),
+    /females only/,
+  );
+  await db.query("update profiles set gender='female' where id=$1", [woman]);
+  await asUser(owner, (tx) =>
+    tx.query("select approve_join_request($1)", [wr]),
+  );
+  await assert.rejects(
+    asUser(owner, (tx) =>
+      tx.query("update posts set gender_preference='male' where id=$1", [pid]),
+    ),
+    /Approved participants/,
+  );
+  await asUser(owner, (tx) =>
+    tx.query("update posts set gender_preference='any' where id=$1", [pid]),
+  );
+  const mr = await request(man, pid),
+    or = await request(other, pid);
+  await asUser(owner, (tx) =>
+    tx.query("update posts set gender_preference='female' where id=$1", [pid]),
+  );
+  const affected = (
+    await db.query(
+      "select id,status,decline_count from join_requests where id=any($1::uuid[])",
+      [[mr, or]],
+    )
+  ).rows;
+  assert(
+    affected.every(
+      (row: any) => row.status === "declined" && row.decline_count === 0,
+    ),
+  );
+  await asUser(owner, (tx) =>
+    tx.query("update posts set gender_preference='any' where id=$1", [pid]),
+  );
+  await request(other, pid);
+  const men = (
+    await db.query(
+      "insert into posts(author_id,title,description,starts_at,vacancies,gender_preference) values($1,'Men’s game','A friendly game for men',now()+interval '4 hours',2,'male') returning id",
+      [owner],
+    )
+  ).rows[0].id;
+  await request(man, men);
+  await assert.rejects(request(woman, men), /males only/);
+});
+
+test("photos: atomic edit keeps existing photos on failure, validates ownership, and changes order and cover without replacing retained IDs", async () => {
+  const owner = await corePersonal(),
+    pid = (
+      await db.query(
+        "insert into posts(author_id,title,description,starts_at,vacancies) values($1,'Photo edit','A photo editing regression',now()+interval '4 hours',2) returning id",
+        [owner],
+      )
+    ).rows[0].id;
+  const path = (suffix: string) => `${owner}/posts/${suffix}.jpg`;
+  const url = (suffix: string) =>
+    `https://photos.test/storage/v1/object/public/photos/${path(suffix)}`;
+  for (const suffix of ["first", "second", "third"])
+    await db.query(
+      "insert into storage.objects(bucket_id,name)values('photos',$1)",
+      [path(suffix)],
+    );
+  await asUser(owner, (tx) =>
+    tx.query("select set_post_photos($1,$2)", [
+      pid,
+      [url("first"), url("second")],
+    ]),
+  );
+  const before = (
+    await db.query(
+      "select id,photo_url,sort_order from post_photos where post_id=$1 order by sort_order",
+      [pid],
+    )
+  ).rows;
+  await assert.rejects(
+    asUser(outsider, (tx) =>
+      tx.query("select set_post_photos($1,$2)", [pid, []]),
+    ),
+    /active host/,
+  );
+  await assert.rejects(
+    asUser(owner, (tx) =>
+      tx.query("select set_post_photos($1,$2)", [
+        pid,
+        [url("third"), url("missing")],
+      ]),
+    ),
+    /Upload your own/,
+  );
+  assert.deepEqual(
+    (
+      await db.query(
+        "select id,photo_url,sort_order from post_photos where post_id=$1 order by sort_order",
+        [pid],
+      )
+    ).rows,
+    before,
+  );
+  await assert.rejects(
+    asUser(owner, (tx) =>
+      tx.query("select set_post_photos($1,$2)", [
+        pid,
+        [url("first"), url("first")],
+      ]),
+    ),
+    /different photos/,
+  );
+  await assert.rejects(
+    asUser(owner, (tx) =>
+      tx.query("select set_post_photos($1,$2)", [
+        pid,
+        [
+          "https://fake.test/a",
+          "https://fake.test/b",
+          "https://fake.test/c",
+          "https://fake.test/d",
+          "https://fake.test/e",
+          "https://fake.test/f",
+        ],
+      ]),
+    ),
+    /5 different/,
+  );
+  await asUser(owner, (tx) =>
+    tx.query("select set_post_photos($1,$2)", [
+      pid,
+      [url("third"), url("second")],
+    ]),
+  );
+  const after = (
+    await db.query(
+      "select id,photo_url,sort_order from post_photos where post_id=$1 order by sort_order",
+      [pid],
+    )
+  ).rows;
+  assert.equal(after.length, 2);
+  assert.equal(after[0].photo_url, url("third"));
+  assert.equal(after[1].id, before[1].id);
+  await asUser(owner, (tx) =>
+    tx.query("select set_post_photos($1,$2)", [
+      pid,
+      [url("third"), url("second")],
+    ]),
+  );
+  assert.deepEqual(
+    (
+      await db.query(
+        "select id,photo_url,sort_order from post_photos where post_id=$1 order by sort_order",
+        [pid],
+      )
+    ).rows,
+    after,
+  );
+  await asUser(owner, (tx) =>
+    tx.query("select set_post_photos($1,$2)", [pid, []]),
+  );
+  assert.equal(
+    (await db.query("select id from post_photos where post_id=$1", [pid])).rows
+      .length,
+    0,
+  );
 });

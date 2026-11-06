@@ -32,6 +32,7 @@ export function PostRow({
   return (
     <DiscoveryCard
       kind="Plan"
+      audience={post.genderPreference ?? "any"}
       artwork={activityArtwork(post)}
       imageUrl={post.coverPhotoUrl}
       icon={

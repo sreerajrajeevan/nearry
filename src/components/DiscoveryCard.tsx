@@ -1,3 +1,4 @@
+import { AudienceBadge, audienceLabel } from "./AudienceBadge";
 import { LoadingImage } from "./LoadingImage";
 import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet } from "react-native";
@@ -17,6 +18,7 @@ type Props = {
   onPress: () => void;
   imageUrl?: string;
   artwork?: ActivityArtwork;
+  audience?: "female" | "male" | "any";
 };
 
 /** One generous tap target; the text action opens the existing details flow. */
@@ -30,13 +32,20 @@ export function DiscoveryCard({
   onPress,
   imageUrl,
   artwork,
+  audience,
 }: Props) {
   const [photoFailed, setPhotoFailed] = useState(false);
   useEffect(() => setPhotoFailed(false), [imageUrl]);
   return (
     <MotionPressable
       accessibilityRole="button"
-      accessibilityLabel={[`${kind}: ${title}`, meta, detail, action]
+      accessibilityLabel={[
+        `${kind}: ${title}`,
+        meta,
+        detail,
+        audience && audienceLabel(audience),
+        action,
+      ]
         .filter(Boolean)
         .join(". ")}
       onPress={onPress}
@@ -60,6 +69,7 @@ export function DiscoveryCard({
         <Text style={styles.kind}>{kind}</Text>
         <Text style={styles.title}>{title}</Text>
         <Text style={styles.meta}>{meta}</Text>
+        {audience && <AudienceBadge preference={audience} />}
         <View style={styles.bottom}>
           {!!detail && <Text style={styles.detail}>{detail}</Text>}
           <View style={styles.link}>

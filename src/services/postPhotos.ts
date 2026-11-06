@@ -115,3 +115,46 @@ export async function savePostPhotos(
   }
   return { pending, error };
 }
+
+export type EditablePostPhoto = { uri: string; uploadedUrl?: string };
+/** Upload first, then atomically replace the selection. Existing photos survive a failed upload/save. */
+export async function savePhotoSelection(
+  postId: string,
+  photos: EditablePostPhoto[],
+  upload: (uri: string) => Promise<string>,
+): Promise<{ photos: EditablePostPhoto[]; error: string }> {
+  const next = photos.map((photo) => ({ ...photo }));
+  try {
+    if (next.length > MAX_POST_PHOTOS)
+      throw new Error("A post can have up to 5 photos.");
+    for (const photo of next) photo.uploadedUrl ??= await upload(photo.uri);
+    const urls = next.map((photo) => photo.uploadedUrl!);
+    if (isDemoMode()) {
+      const existing = demoPhotos.get(postId) ?? [];
+      demoPhotos.set(
+        postId,
+        urls.map((url, index) => ({
+          ...existing.find((photo) => photo.photo_url === url),
+          id:
+            existing.find((photo) => photo.photo_url === url)?.id ??
+            `demo-photo-${Date.now()}-${index}`,
+          photo_url: url,
+          sort_order: index,
+        })),
+      );
+    } else {
+      const { error } = await getSupabase()!.rpc("set_post_photos", {
+        p_post_id: postId,
+        p_urls: urls,
+      });
+      if (error) throw new Error(error.message);
+    }
+    return { photos: next, error: "" };
+  } catch (e) {
+    return {
+      photos: next,
+      error:
+        e instanceof Error ? e.message : "Could not save photos. Please retry.",
+    };
+  }
+}

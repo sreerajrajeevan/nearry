@@ -48,7 +48,7 @@ export function legalSections(
     },
     {
       title: "Account and activity data",
-      body: "We store your email and sign-in identifiers, name, account type and the profile details you choose to provide, such as your photo, bio, interests, gender or business information. Google sign-in provides identity information through Supabase Auth. We do not ask for a phone number or store a Google password. Posts, uploads, requests, bookings, chat messages, reports, blocks and notification read states are stored to operate those features.",
+      body: "We store your email and sign-in identifiers, name, account type and the profile details you choose to provide, such as your photo, bio, interests, gender, self-declared age or business information. Age is private and is required with gender before creating or joining a plan. Google sign-in provides identity information through Supabase Auth. We do not ask for a phone number or store a Google password. Posts, uploads, requests, bookings, chat messages, reports, blocks and notification read states are stored to operate those features.",
     },
     {
       title: "Location and permissions",

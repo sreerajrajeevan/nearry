@@ -1,3 +1,6 @@
+import { personalProfileReady } from "../../utils/profileReadiness";
+import { PageHeading } from "../../components/PageHeading";
+
 import React, { useRef, useState } from "react";
 import { View, Text, ScrollView, StyleSheet, Alert } from "react-native";
 import { Screen } from "../../components/Screen";
@@ -8,7 +11,7 @@ import { EmptyState } from "../../components/EmptyState";
 import { AccountMenuRow } from "../../components/AccountMenuRow";
 import { MotionPressable } from "../../components/Motion";
 import { Icon } from "../../components/Icon";
-import { colors, typography, spacing } from "../../theme";
+import { colors, typography, spacing, surfaces } from "../../theme";
 import { useAuth } from "../../store/AuthContext";
 import { useUnreadCounts } from "../../hooks/useUnreadCounts";
 import { PersonalTabNav } from "../../navigation/types";
@@ -49,10 +52,11 @@ export function ProfileScreen({ navigation }: Props) {
         contentContainerStyle={styles.scroll}
       >
         <PersonalHeader />
-        <Text style={styles.title} accessibilityRole="header">
-          Profile
-        </Text>
-        <Text style={styles.intro}>Your space. Everything in one place.</Text>
+        <PageHeading
+          compact
+          title="Profile"
+          subtitle="Your space. Everything in one place."
+        />
         {demoMode && (
           <View style={styles.demo}>
             <Icon name="info" size={16} color={colors.clayDeep} />
@@ -89,11 +93,25 @@ export function ProfileScreen({ navigation }: Props) {
           <MotionPressable
             style={styles.edit}
             accessibilityRole="button"
-            accessibilityLabel="Edit profile"
-            onPress={() => navigation.navigate("EditProfile")}
+            accessibilityLabel={
+              personalProfileReady(profile)
+                ? "Edit profile"
+                : "Complete profile"
+            }
+            onPress={() =>
+              navigation.navigate(
+                personalProfileReady(profile)
+                  ? "EditProfile"
+                  : "CompleteProfile",
+              )
+            }
           >
             <Icon name="edit-2" size={15} color={colors.accent} />
-            <Text style={styles.editText}>Edit profile</Text>
+            <Text style={styles.editText}>
+              {personalProfileReady(profile)
+                ? "Edit profile"
+                : "Complete profile to host or join"}
+            </Text>
             <Icon name="chevron-right" size={16} color={colors.accent} />
           </MotionPressable>
         </View>
@@ -205,6 +223,7 @@ const styles = StyleSheet.create({
   },
   demoCopy: { ...typography.caption, color: colors.clayDeep, flex: 1 },
   identity: {
+    ...surfaces.card,
     backgroundColor: colors.white,
     borderWidth: 1,
     borderColor: colors.border,
@@ -251,6 +270,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   group: {
+    ...surfaces.card,
     backgroundColor: colors.white,
     borderWidth: 1,
     borderColor: colors.border,

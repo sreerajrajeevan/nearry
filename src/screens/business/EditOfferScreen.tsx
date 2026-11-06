@@ -1,3 +1,4 @@
+import { PageHeading } from "../../components/PageHeading";
 import { LoadingState } from "../../components/LoadingState";
 import { DateSheet, TimeSheet } from "../../components/DateTimeSheets";
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -15,7 +16,7 @@ import { Screen } from "../../components/Screen";
 import { Button } from "../../components/Button";
 import { Input } from "../../components/Input";
 import { EmptyState } from "../../components/EmptyState";
-import { colors, typography, spacing } from "../../theme";
+import { colors, typography, spacing, surfaces } from "../../theme";
 import { BusinessStackParamList } from "../../navigation/types";
 import { getOffer, updateOffer, publishOffer } from "../../services/offers";
 import { useAuth } from "../../store/AuthContext";
@@ -285,7 +286,7 @@ export function EditOfferScreen({ route, navigation }: Props) {
         >
           <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>
-        <Text style={styles.header}>Edit offer.</Text>
+        <PageHeading compact title="Edit offer." />
         {isLive && (
           <Text style={styles.liveNote}>
             Live offers can change their title, description and price — the
@@ -487,10 +488,9 @@ const styles = StyleSheet.create({
   multiline: { height: 110, textAlignVertical: "top", paddingTop: spacing.md },
   label: { ...typography.label, color: colors.text, marginBottom: spacing.sm },
   coverPicker: {
+    ...surfaces.field,
     height: 160,
-    borderRadius: 12,
     borderWidth: 1,
-    borderColor: colors.border,
     borderStyle: "dashed",
     alignItems: "center",
     justifyContent: "center",
@@ -523,7 +523,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.accent,
     borderColor: colors.accent,
   },
-  checkmark: { color: "#fff", fontSize: 14, lineHeight: 18 },
+  checkmark: { color: colors.onAccent, fontSize: 14, lineHeight: 18 },
   spotlightLabel: { ...typography.body, color: colors.text, flex: 1 },
   row: { flexDirection: "row", gap: spacing.md },
   half: { flex: 1 },
@@ -534,12 +534,10 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg,
   },
   pickerBox: {
+    ...surfaces.field,
     height: 52,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 8,
     paddingHorizontal: spacing.md,
-    backgroundColor: colors.surface,
     justifyContent: "center",
     marginBottom: spacing.md,
   },

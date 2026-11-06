@@ -96,6 +96,7 @@ export function DashboardScreen({ navigation }: Props) {
       >
         <BrandHeader context={name} />
         <PageHeading
+          tone="plain"
           greeting={`Hello, ${name}.`}
           title={"Make room\nfor a new face."}
         />
