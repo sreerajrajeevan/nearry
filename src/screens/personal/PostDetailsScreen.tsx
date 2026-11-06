@@ -17,7 +17,7 @@ import { Badge } from "../../components/Badge";
 import { EmptyState } from "../../components/EmptyState";
 import { Avatar } from "../../components/Avatar";
 import { PostPhotoGallery } from "../../components/PostPhotoGallery";
-import { colors, typography, spacing } from "../../theme";
+import { colors, typography, spacing, surfaces } from "../../theme";
 import { getOrCreateConversation } from "../../services/chat";
 import { PostDetailsProps } from "../../navigation/types";
 import { useAuth } from "../../store/AuthContext";
@@ -436,12 +436,19 @@ const styles = StyleSheet.create({
   back: { marginBottom: spacing.md, alignSelf: "flex-start" },
   backText: { ...typography.label, color: colors.textDim },
   header: {
+    ...surfaces.hero,
+    flexWrap: "wrap",
     flexDirection: "row",
     alignItems: "flex-start",
     justifyContent: "space-between",
     gap: spacing.md,
   },
-  title: { ...typography.title, color: colors.text, flex: 1 },
+  title: {
+    ...typography.title,
+    color: colors.onAccent,
+    flex: 1,
+    minWidth: "65%",
+  },
   authorRow: {
     flexDirection: "row",
     alignItems: "center",

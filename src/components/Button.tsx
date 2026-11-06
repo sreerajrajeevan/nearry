@@ -91,7 +91,7 @@ const styles = StyleSheet.create({
   },
   primary: { backgroundColor: colors.sage },
   secondary: {
-    backgroundColor: "transparent",
+    backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.borderStrong,
   },

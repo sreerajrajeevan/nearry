@@ -15,7 +15,7 @@ import { Button } from "../../components/Button";
 import { Input } from "../../components/Input";
 import { Badge } from "../../components/Badge";
 import { EmptyState } from "../../components/EmptyState";
-import { colors, typography, spacing } from "../../theme";
+import { colors, typography, spacing, surfaces } from "../../theme";
 import { useAuth } from "../../store/AuthContext";
 import {
   createDraft,
@@ -244,7 +244,10 @@ export function CreateOfferScreen({ navigation }: Props) {
           disabled={uploadingCover}
         >
           {coverPhotoUrl ? (
-            <Image source={{ uri: coverPhotoUrl }} style={styles.coverPreview} />
+            <Image
+              source={{ uri: coverPhotoUrl }}
+              style={styles.coverPreview}
+            />
           ) : (
             <Text style={styles.coverPlaceholder}>
               {uploadingCover ? "Uploading…" : "+ Add cover photo"}
@@ -260,9 +263,7 @@ export function CreateOfferScreen({ navigation }: Props) {
           onPress={() => setIsSpotlight(!isSpotlight)}
           style={styles.spotlightRow}
         >
-          <View
-            style={[styles.checkbox, isSpotlight && styles.checkboxActive]}
-          >
+          <View style={[styles.checkbox, isSpotlight && styles.checkboxActive]}>
             {isSpotlight && <Text style={styles.checkmark}>✓</Text>}
           </View>
           <Text style={styles.spotlightLabel}>
@@ -395,6 +396,7 @@ const styles = StyleSheet.create({
   multiline: { height: 110, textAlignVertical: "top", paddingTop: spacing.md },
   label: { ...typography.label, color: colors.text, marginBottom: spacing.sm },
   coverPicker: {
+    ...surfaces.field,
     height: 160,
     borderRadius: 12,
     borderWidth: 1,
@@ -427,8 +429,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  checkboxActive: { backgroundColor: colors.accent, borderColor: colors.accent },
-  checkmark: { color: "#fff", fontSize: 14, lineHeight: 18 },
+  checkboxActive: {
+    backgroundColor: colors.accent,
+    borderColor: colors.accent,
+  },
+  checkmark: { color: colors.onAccent, fontSize: 14, lineHeight: 18 },
   spotlightLabel: { ...typography.body, color: colors.text, flex: 1 },
   row: { flexDirection: "row", gap: spacing.md },
   half: { flex: 1 },
@@ -439,6 +444,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
   pickerBox: {
+    ...surfaces.field,
     height: 52,
     borderWidth: 1,
     borderColor: colors.border,

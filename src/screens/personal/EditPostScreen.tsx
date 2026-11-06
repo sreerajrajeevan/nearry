@@ -1,3 +1,4 @@
+import { PageHeading } from "../../components/PageHeading";
 import { LoadingState } from "../../components/LoadingState";
 import { parseDateTime } from "../../utils/dateTime";
 import React, { useEffect, useState } from "react";
@@ -13,7 +14,7 @@ import { Screen } from "../../components/Screen";
 import { Input } from "../../components/Input";
 import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
-import { colors, typography, spacing } from "../../theme";
+import { colors, typography, spacing, surfaces } from "../../theme";
 import { EditPostProps } from "../../navigation/types";
 import { getPost, updatePost } from "../../services/posts";
 import { NeedPost } from "../../services/mappers";
@@ -207,7 +208,7 @@ export function EditPostScreen({ route, navigation }: EditPostProps) {
         >
           <Text style={styles.backText}>← BACK</Text>
         </TouchableOpacity>
-        <Text style={styles.header}>Edit post</Text>
+        <PageHeading compact title="Edit post" />
         {post.joinedCount > 0 && (
           <Text style={styles.note}>
             {post.joinedCount}{" "}
@@ -375,9 +376,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
   },
-  chipSelected: { borderColor: colors.red },
+  chipSelected: { ...surfaces.selected },
   chipText: { ...typography.caption, color: colors.textDim },
-  chipTextSelected: { color: colors.red },
+  chipTextSelected: { color: colors.onGold },
   formError: {
     ...typography.body,
     color: colors.red,

@@ -1,5 +1,12 @@
 import React, { useState } from "react";
-import { View, Text, Modal, TouchableOpacity, TextInput, StyleSheet } from "react-native";
+import {
+  View,
+  Text,
+  Modal,
+  TouchableOpacity,
+  TextInput,
+  StyleSheet,
+} from "react-native";
 import { colors, typography, spacing } from "../theme";
 
 const WEEKDAYS = ["S", "M", "T", "W", "T", "F", "S"];
@@ -51,7 +58,12 @@ function Sheet({
         <View style={styles.sheet}>
           <View style={styles.sheetHead}>
             <Text style={styles.sheetTitle}>{title}</Text>
-            <TouchableOpacity onPress={onClose} hitSlop={12}>
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Done"
+              onPress={onClose}
+              hitSlop={12}
+            >
               <Text style={styles.doneBtn}>Done</Text>
             </TouchableOpacity>
           </View>
@@ -277,7 +289,7 @@ export function TimeSheet({
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.6)",
+    backgroundColor: colors.scrim,
     justifyContent: "flex-end",
   },
   sheet: {
@@ -294,9 +306,18 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: spacing.md,
+    backgroundColor: colors.forest,
+    borderRadius: 14,
+    padding: 16,
+    gap: 12,
   },
-  sheetTitle: { ...typography.title, color: colors.text, fontSize: 18 },
-  doneBtn: { ...typography.label, color: colors.accent },
+  sheetTitle: {
+    ...typography.title,
+    color: colors.onAccent,
+    fontSize: 18,
+    flex: 1,
+  },
+  doneBtn: { ...typography.label, color: colors.gold },
   monthRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -304,7 +325,11 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   monthLabel: { ...typography.body, color: colors.text },
-  monthNav: { ...typography.title, color: colors.accent, paddingHorizontal: 12 },
+  monthNav: {
+    ...typography.title,
+    color: colors.accent,
+    paddingHorizontal: 12,
+  },
   grid: { flexDirection: "row", flexWrap: "wrap" },
   cell: {
     width: "14.28%",
@@ -316,17 +341,17 @@ const styles = StyleSheet.create({
   cellText: { ...typography.body, color: colors.text },
   cellDisabled: { color: colors.textFaint, opacity: 0.35 },
   cellSelected: {
-    backgroundColor: colors.accent,
+    backgroundColor: colors.gold,
     borderRadius: 20,
   },
-  cellTextSelected: { color: colors.onAccent },
+  cellTextSelected: { color: colors.onGold },
   timeRow: {
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
     marginVertical: spacing.md,
   },
-  stepCol: { alignItems: "center", marginHorizontal: spacing.lg },
+  stepCol: { alignItems: "center", marginHorizontal: spacing.sm },
   stepLabel: { ...typography.label, color: colors.textDim, marginBottom: 4 },
   stepBtn: {
     width: 56,
@@ -344,11 +369,12 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 28,
     minWidth: 56,
+    width: 56,
     textAlign: "center",
     paddingVertical: 2,
   },
   colon: { ...typography.title, color: colors.textDim, fontSize: 28 },
-  periodCol: { alignItems: "center", marginLeft: spacing.lg },
+  periodCol: { alignItems: "center", marginLeft: spacing.sm },
   periodBtn: {
     borderWidth: 1,
     borderColor: colors.border,
@@ -357,9 +383,12 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     marginVertical: 4,
   },
-  periodActive: { backgroundColor: colors.accent, borderColor: colors.accent },
+  periodActive: {
+    backgroundColor: colors.goldSoft,
+    borderColor: colors.goldDeep,
+  },
   periodText: { ...typography.label, color: colors.textDim },
-  periodTextActive: { color: colors.onAccent },
+  periodTextActive: { color: colors.onGold },
   hint: {
     ...typography.caption,
     color: colors.textFaint,
