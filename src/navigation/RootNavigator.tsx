@@ -16,7 +16,6 @@ import { LoadingState } from "../components/LoadingState";
 import { WelcomeScreen } from "../screens/WelcomeScreen";
 import { PersonalAuthScreen } from "../screens/auth/PersonalAuthScreen";
 import { BusinessAuthScreen } from "../screens/auth/BusinessAuthScreen";
-import { PersonalOnboardingScreen } from "../screens/onboarding/PersonalOnboardingScreen";
 import { BusinessOnboardingScreen } from "../screens/onboarding/BusinessOnboardingScreen";
 import { PersonalStack } from "./PersonalStack";
 import { BusinessStack } from "./BusinessStack";
@@ -28,7 +27,8 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
  * - bootstrapping              -> branded loading state
  * - demo mode                  -> demo lane tabs (explicitly separate)
  * - no session                 -> Welcome / auth
- * - session, onboarding needed -> resume onboarding (lane from saved profile)
+ * - Personal accounts may browse before completing their profile.
+ * - Business onboarding remains mandatory before its management experience.
  * - session, onboarded         -> lane from SAVED profile account type,
  *                                 regardless of which auth screen was used
  */
@@ -106,12 +106,7 @@ export function RootNavigator() {
       }}
     >
       {demoMode || (session && accountType) ? (
-        needsOnboarding && pendingOnboarding === "personal" ? (
-          <Stack.Screen
-            name="PersonalOnboarding"
-            component={PersonalOnboardingScreen}
-          />
-        ) : needsOnboarding && pendingOnboarding === "business" ? (
+        needsOnboarding && pendingOnboarding === "business" ? (
           <Stack.Screen
             name="BusinessOnboarding"
             component={BusinessOnboardingScreen}

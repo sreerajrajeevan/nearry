@@ -19,6 +19,7 @@ export type DbProfile = {
   bio: string | null;
   interests: string[] | null;
   gender?: "male" | "female" | "other" | null;
+  age?: number | null;
   business_name: string | null;
   business_details: Record<string, unknown> | null;
   verification_status: "unverified" | "pending" | "verified" | "rejected";
@@ -38,6 +39,7 @@ export type Profile = {
   bio?: string;
   interests: string[];
   gender?: "male" | "female" | "other";
+  age?: number;
   businessName?: string;
   businessDetails: Record<string, unknown>;
   verificationStatus: DbProfile["verification_status"];
@@ -58,6 +60,7 @@ export function toProfile(row: DbProfile): Profile {
     bio: row.bio ?? undefined,
     interests: row.interests ?? [],
     gender: row.gender ?? undefined,
+    age: row.age ?? undefined,
     businessName: row.business_name ?? undefined,
     businessDetails: row.business_details ?? {},
     verificationStatus: row.verification_status,

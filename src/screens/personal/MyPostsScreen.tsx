@@ -1,3 +1,4 @@
+import { AudienceBadge } from "../../components/AudienceBadge";
 import { LoadingState } from "../../components/LoadingState";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -188,6 +189,7 @@ export function MyPostsScreen({ navigation }: Props) {
                 tone={post.status === "cancelled" ? "red" : "neutral"}
               />
             </View>
+            <AudienceBadge preference={post.genderPreference} />
             <Text style={styles.meta}>{formatWhen(post.startsAt)}</Text>
             {!!post.venueName && (
               <Text style={styles.meta}>{post.venueName}</Text>

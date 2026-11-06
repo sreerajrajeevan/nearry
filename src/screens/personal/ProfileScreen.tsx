@@ -1,4 +1,6 @@
+import { personalProfileReady } from "../../utils/profileReadiness";
 import { PageHeading } from "../../components/PageHeading";
+
 import React, { useRef, useState } from "react";
 import { View, Text, ScrollView, StyleSheet, Alert } from "react-native";
 import { Screen } from "../../components/Screen";
@@ -91,11 +93,25 @@ export function ProfileScreen({ navigation }: Props) {
           <MotionPressable
             style={styles.edit}
             accessibilityRole="button"
-            accessibilityLabel="Edit profile"
-            onPress={() => navigation.navigate("EditProfile")}
+            accessibilityLabel={
+              personalProfileReady(profile)
+                ? "Edit profile"
+                : "Complete profile"
+            }
+            onPress={() =>
+              navigation.navigate(
+                personalProfileReady(profile)
+                  ? "EditProfile"
+                  : "CompleteProfile",
+              )
+            }
           >
             <Icon name="edit-2" size={15} color={colors.accent} />
-            <Text style={styles.editText}>Edit profile</Text>
+            <Text style={styles.editText}>
+              {personalProfileReady(profile)
+                ? "Edit profile"
+                : "Complete profile to host or join"}
+            </Text>
             <Icon name="chevron-right" size={16} color={colors.accent} />
           </MotionPressable>
         </View>

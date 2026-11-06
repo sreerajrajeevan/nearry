@@ -1,3 +1,9 @@
+import { AudienceBadge, audienceLabel } from "../../components/AudienceBadge";
+import { ProfileRequired } from "../../components/ProfileRequired";
+import {
+  personalProfileReady,
+  matchesPostAudience,
+} from "../../utils/profileReadiness";
 import { LoadingState } from "../../components/LoadingState";
 import { SafetyActions } from "../../components/SafetyActions";
 import React, { useState } from "react";
@@ -49,6 +55,7 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
   const { profile } = useAuth();
   const myId = profile?.id;
 
+  const [profilePrompt, setProfilePrompt] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const {
     data,
@@ -222,11 +229,7 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
           </View>
         )}
 
-        {post.genderPreference && post.genderPreference !== "any" && (
-          <Text style={styles.pref}>
-            {post.genderPreference === "male" ? "Men only" : "Women only"}
-          </Text>
-        )}
+        <AudienceBadge preference={post.genderPreference} />
 
         {isHost ? (
           <View style={styles.section}>
@@ -375,12 +378,28 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
               myRequest.status === "declined" ||
               myRequest.status === "withdrawn" ? (
               <Button
-                title="Request to join"
-                loading={busy === "join"}
-                onPress={() =>
-                  myId &&
-                  run("join", () => requestToJoin(postId, myId).then(() => {}))
+                title={
+                  !personalProfileReady(profile)
+                    ? "Complete profile to join"
+                    : matchesPostAudience(post, profile?.gender)
+                      ? "Request to join"
+                      : audienceLabel(post.genderPreference)
                 }
+                disabled={
+                  personalProfileReady(profile) &&
+                  !matchesPostAudience(post, profile?.gender)
+                }
+                loading={busy === "join"}
+                onPress={() => {
+                  if (!personalProfileReady(profile)) {
+                    setProfilePrompt(true);
+                    return;
+                  }
+                  if (myId && matchesPostAudience(post, profile?.gender))
+                    void run("join", () =>
+                      requestToJoin(postId, myId).then(() => {}),
+                    );
+                }}
               />
             ) : myRequest.status === "full" ? (
               <Badge label="Slot full" tone="neutral" />
@@ -426,6 +445,14 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
           </View>
         )}
       </ScrollView>
+      <ProfileRequired
+        visible={profilePrompt}
+        onComplete={() => {
+          setProfilePrompt(false);
+          navigation.navigate("CompleteProfile");
+        }}
+        onBrowse={() => setProfilePrompt(false)}
+      />
     </Screen>
   );
 }

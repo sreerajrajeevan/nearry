@@ -11,6 +11,9 @@ import {
   toConversation,
 } from "./mappers";
 
+// Demo clear boundaries mirror the server-owned inbox state.
+const demoClears = new Map<string, Set<string>>();
+
 const useMock = () => {
   if (isDemoMode()) return true;
   if (!isSupabaseConfigured)
@@ -71,12 +74,47 @@ export async function listConversations(): Promise<Conversation[]> {
   // Return snapshots, as the live RPC does, so read/sent mutations refresh lists.
   if (useMock())
     return mockConversations
-      .filter((c) => !demoUserBlocked(c.otherUserId))
+      .filter(
+        (c) =>
+          !demoUserBlocked(c.otherUserId) &&
+          (!demoClears.has(c.id) ||
+            mockMessages.some(
+              (m) =>
+                m.conversationId === c.id && !demoClears.get(c.id)!.has(m.id),
+            )),
+      )
       .map((conversation) => ({ ...conversation }));
   const supabase = getSupabase()!;
   const { data, error } = await supabase.rpc("list_my_conversations");
   if (error) throw new Error(error.message);
   return ((data ?? []) as Record<string, unknown>[]).map(toConversation);
+}
+
+/** Clear only the signed-in member's history and inbox, never the other person's. */
+export async function deleteConversation(
+  conversationId: string,
+): Promise<void> {
+  if (useMock()) {
+    const conversation = mockConversations.find((c) => c.id === conversationId);
+    if (!conversation) throw new Error("Conversation not found.");
+    demoClears.set(
+      conversationId,
+      new Set(
+        mockMessages
+          .filter((m) => m.conversationId === conversationId)
+          .map((m) => m.id),
+      ),
+    );
+    conversation.unreadCount = 0;
+    conversation.lastBody = undefined;
+    conversation.lastAt = undefined;
+  } else {
+    const { error } = await getSupabase()!.rpc("delete_my_conversation", {
+      p_conversation_id: conversationId,
+    });
+    if (error) throw new Error(error.message);
+  }
+  notifyUnreadChanged();
 }
 
 /** Total unread messages across conversations (for badges). */
@@ -91,7 +129,11 @@ export async function listMessages(
 ): Promise<ChatMessage[]> {
   if (useMock()) {
     return mockMessages
-      .filter((m) => m.conversationId === conversationId)
+      .filter(
+        (m) =>
+          m.conversationId === conversationId &&
+          !demoClears.get(conversationId)?.has(m.id),
+      )
       .map((m) => ({ ...m, mine: m.senderId === myId }));
   }
   const supabase = getSupabase()!;
@@ -135,6 +177,7 @@ export async function sendMessage(
       conv.lastBody = text;
       conv.lastAt = msg.createdAt;
     }
+    notifyUnreadChanged();
     return msg;
   }
   const supabase = getSupabase()!;

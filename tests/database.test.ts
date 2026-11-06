@@ -135,7 +135,7 @@ before(async () => {
       ],
     );
     await db.query(
-      "update profiles set onboarding_completed=true,business_name='Test Salon',business_details='{}',verification_status=$2 where id=$1",
+      "update profiles set age=25,gender='male',terms_version='2026-10-19',onboarding_completed=true,business_name='Test Salon',business_details='{}',verification_status=$2 where id=$1",
       [id, role === "business" ? "verified" : "unverified"],
     );
   }
@@ -1250,9 +1250,10 @@ async function corePersonal() {
     'insert into auth.users(id,email,raw_user_meta_data) values($1,$2,\'{"account_type":"personal","display_name":"Neighbour"}\')',
     [id, `${id}@test.example`],
   );
-  await db.query("update profiles set onboarding_completed=true where id=$1", [
-    id,
-  ]);
+  await db.query(
+    "update profiles set age=25,gender='male',terms_version='2026-10-19',onboarding_completed=true where id=$1",
+    [id],
+  );
   return id;
 }
 
@@ -1980,5 +1981,532 @@ test("moderation: removing a reported photo hides metadata and queues its owned 
       ])
     ).rows[0].path,
     path,
+  );
+});
+
+async function chatFixture() {
+  const owner = await corePersonal(),
+    member = await corePersonal();
+  const pid = (
+    await db.query(
+      "insert into posts(author_id,title,description,starts_at,vacancies) values($1,'Chat test','A private chat for regression tests',now()+interval '4 hours',2) returning id",
+      [owner],
+    )
+  ).rows[0].id;
+  const rid = await request(member, pid);
+  await asUser(owner, (tx) =>
+    tx.query("select approve_join_request($1)", [rid]),
+  );
+  const conv = (
+    await asUser(member, (tx) =>
+      tx.query("select get_or_create_conversation($1,$2,null) id", [
+        owner,
+        pid,
+      ]),
+    )
+  ).rows[0].id;
+  const send = (sender: string, body: string) =>
+    asUser(sender, (tx) =>
+      tx.query(
+        "insert into messages(conversation_id,sender_id,body) values($1,$2,$3) returning id",
+        [conv, sender, body],
+      ),
+    );
+  const inbox = async (user: string) =>
+    (
+      await asUser(user, (tx) =>
+        tx.query("select list_my_conversations() result"),
+      )
+    ).rows[0].result.find((row: any) => row.id === conv);
+  const history = async (user: string) =>
+    (
+      await asUser(user, (tx) =>
+        tx.query(
+          "select body from messages where conversation_id=$1 order by created_at,id",
+          [conv],
+        ),
+      )
+    ).rows.map((m: any) => m.body);
+  return { owner, member, conv, send, inbox, history };
+}
+
+test("chat deletion clears only the member's inbox/history and new messages revive a clean chat", async () => {
+  const f = await chatFixture();
+  await f.send(f.owner, "Old incoming message");
+  await f.send(f.member, "Old reply");
+  const before = Number(
+    (await asUser(f.member, (tx) => tx.query("select unread_counts() counts")))
+      .rows[0].counts.messages,
+  );
+  await asUser(f.member, (tx) =>
+    tx.query("select delete_my_conversation($1)", [f.conv]),
+  );
+  assert.equal(await f.inbox(f.member), undefined);
+  assert.ok(await f.inbox(f.owner));
+  assert.deepEqual(await f.history(f.member), []);
+  assert.deepEqual(await f.history(f.owner), [
+    "Old incoming message",
+    "Old reply",
+  ]);
+  assert.equal(
+    Number(
+      (
+        await asUser(f.member, (tx) =>
+          tx.query("select unread_counts() counts"),
+        )
+      ).rows[0].counts.messages,
+    ),
+    before - 1,
+  );
+  assert.equal(
+    Number(
+      (
+        await db.query(
+          "select count(*)::int n from notifications where user_id=$1 and ref_id=$2 and kind='message' and read_at is null",
+          [f.member, f.conv],
+        )
+      ).rows[0].n,
+    ),
+    0,
+  );
+  await f.send(f.owner, "New incoming message");
+  assert.deepEqual(await f.history(f.member), ["New incoming message"]);
+  assert.equal((await f.inbox(f.member)).last_body, "New incoming message");
+  assert.equal(Number((await f.inbox(f.member)).unread_count), 1);
+  assert.equal((await f.history(f.owner)).length, 3);
+  await asUser(f.owner, (tx) =>
+    tx.query("select delete_my_conversation($1)", [f.conv]),
+  );
+  assert.deepEqual(await f.history(f.owner), []);
+  assert.deepEqual(await f.history(f.member), ["New incoming message"]);
+  await f.send(f.member, "New outgoing message");
+  assert.deepEqual(await f.history(f.owner), ["New outgoing message"]);
+  assert.deepEqual(await f.history(f.member), [
+    "New incoming message",
+    "New outgoing message",
+  ]);
+});
+
+test("chat deletion validates membership and rejects forged clear boundaries", async () => {
+  const f = await chatFixture();
+  await assert.rejects(
+    asUser(outsider, (tx) =>
+      tx.query("select delete_my_conversation($1)", [f.conv]),
+    ),
+    /not a conversation member/,
+  );
+  await assert.rejects(
+    asUser(
+      null,
+      (tx) => tx.query("select delete_my_conversation($1)", [f.conv]),
+      "anon",
+    ),
+    /permission denied/,
+  );
+  await assert.rejects(
+    asUser(f.member, (tx) =>
+      tx.query(
+        "insert into conversation_clears(conversation_id,user_id,cleared_at) values($1,$2,now()+interval '1 year')",
+        [f.conv, f.member],
+      ),
+    ),
+    /permission denied/,
+  );
+  await asUser(f.member, (tx) =>
+    tx.query("select delete_my_conversation($1)", [f.conv]),
+  );
+  assert.equal(await f.inbox(f.member), undefined); // empty chats can also be deleted
+  assert.equal(
+    (
+      await asUser(f.owner, (tx) =>
+        tx.query("select * from conversation_clears where conversation_id=$1", [
+          f.conv,
+        ]),
+      )
+    ).rows.length,
+    0,
+  );
+  await asUser(f.member, (tx) =>
+    tx.query("delete from conversation_clears where conversation_id=$1", [
+      f.conv,
+    ]),
+  ).then(
+    () => assert.fail("raw delete allowed"),
+    (e) => assert.match(e.message, /permission denied/),
+  );
+  await asUser(f.member, (tx) =>
+    tx.query("select delete_my_conversation($1)", [f.conv]),
+  ); // safe repeat
+  await db.query("delete from conversations where id=$1", [f.conv]);
+  assert.equal(
+    (
+      await db.query(
+        "select * from conversation_clears where conversation_id=$1",
+        [f.conv],
+      )
+    ).rows.length,
+    0,
+  );
+});
+
+test("conversation reports protect private history and retain a deduplicated moderation snapshot", async () => {
+  const f = await chatFixture();
+  await f.send(f.owner, "Message that needs review");
+  await f.send(f.member, "My context");
+  await assert.rejects(
+    asUser(outsider, (tx) =>
+      tx.query(
+        "select submit_content_report('conversation',$1,'harassment','')",
+        [f.conv],
+      ),
+    ),
+    /not found or not accessible/,
+  );
+  const report = (
+    await asUser(f.member, (tx) =>
+      tx.query(
+        "select submit_content_report('conversation',$1,'harassment','Concern in this chat') id",
+        [f.conv],
+      ),
+    )
+  ).rows[0].id;
+  const repeated = (
+    await asUser(f.member, (tx) =>
+      tx.query(
+        "select submit_content_report('conversation',$1,'spam','Retry') id",
+        [f.conv],
+      ),
+    )
+  ).rows[0].id;
+  assert.equal(report, repeated);
+  const row = (
+    await db.query("select * from content_reports where id=$1", [report])
+  ).rows[0];
+  assert.equal(row.subject_user_id, f.owner);
+  assert.match(row.snapshot, /Message that needs review/);
+  assert.match(row.snapshot, /My context/);
+  assert.equal(
+    (
+      await asUser(f.owner, (tx) =>
+        tx.query("select id from content_reports where id=$1", [report]),
+      )
+    ).rows.length,
+    0,
+  );
+  await asUser(f.member, (tx) =>
+    tx.query("select delete_my_conversation($1)", [f.conv]),
+  );
+  assert.match(
+    (
+      await db.query("select snapshot from content_reports where id=$1", [
+        report,
+      ])
+    ).rows[0].snapshot,
+    /Message that needs review/,
+  );
+  await assert.rejects(
+    asUser(
+      null,
+      (tx) =>
+        tx.query("select review_content_report($1,'remove','')", [report]),
+      "service_role",
+    ),
+    /specific message/,
+  );
+  await asUser(
+    null,
+    (tx) =>
+      tx.query(
+        "select review_content_report($1,'suspend','Reviewed concern')",
+        [report],
+      ),
+    "service_role",
+  );
+  assert.equal(
+    (await db.query("select status from content_reports where id=$1", [report]))
+      .rows[0].status,
+    "resolved",
+  );
+  assert.equal(await f.inbox(f.member), undefined); // inactive peers remain filtered
+});
+
+test("participation: Google-style incomplete accounts can browse but must supply age/gender before creating or joining", async () => {
+  const user = (await db.query("select gen_random_uuid() id")).rows[0].id;
+  await db.query(
+    'insert into auth.users(id,email,raw_user_meta_data) values($1,\'new-google@test.example\',\'{"account_type":"personal","full_name":"Google Neighbour"}\')',
+    [user],
+  );
+  const pid = await post();
+  assert.equal(
+    (
+      await asUser(user, (tx) =>
+        tx.query("select id from post_cards where id=$1", [pid]),
+      )
+    ).rows.length,
+    1,
+  );
+  await assert.rejects(
+    asUser(user, (tx) => tx.query("select request_join($1)", [pid])),
+    /onboarding|profile/i,
+  );
+  await assert.rejects(
+    asUser(user, (tx) =>
+      tx.query(
+        "insert into posts(author_id,title,description,starts_at,vacancies) values($1,'My first plan','A friendly first plan',now()+interval '4 hours',2)",
+        [user],
+      ),
+    ),
+    /onboarding|row-level security|profile/i,
+  );
+  await assert.rejects(
+    asUser(user, (tx) =>
+      tx.query(
+        "select complete_personal_profile('New Person','female',17,true)",
+      ),
+    ),
+    /18 and 100/,
+  );
+  await assert.rejects(
+    asUser(user, (tx) =>
+      tx.query("select complete_personal_profile('New Person',null,25,true)"),
+    ),
+    /name, gender/,
+  );
+  await assert.rejects(
+    asUser(user, (tx) =>
+      tx.query(
+        "select complete_personal_profile('New Person','female',25,false)",
+      ),
+    ),
+    /accept/,
+  );
+  await asUser(user, (tx) =>
+    tx.query("select complete_personal_profile('New Person','female',25,true)"),
+  );
+  const own = (
+    await asUser(user, (tx) => tx.query("select get_my_profile() p"))
+  ).rows[0].p;
+  assert.equal(own.age, 25);
+  assert.equal(own.gender, "female");
+  assert.equal(own.onboarding_completed, true);
+  await assert.rejects(
+    asUser(host, (tx) =>
+      tx.query("select age from profiles where id=$1", [user]),
+    ),
+    /permission denied/,
+  );
+  await assert.rejects(
+    asUser(host, (tx) => tx.query("select personal_profile_ready($1)", [user])),
+    /permission denied/,
+  );
+  await assert.rejects(
+    asUser(
+      null,
+      (tx) =>
+        tx.query("select complete_personal_profile('Person','female',25,true)"),
+      "anon",
+    ),
+    /permission denied/,
+  );
+  await request(user, pid);
+  await asUser(user, (tx) =>
+    tx.query(
+      "insert into posts(author_id,title,description,starts_at,vacancies) values($1,'My first plan','A friendly first plan',now()+interval '4 hours',2)",
+      [user],
+    ),
+  );
+  // An old onboarding flag alone cannot bypass the new required details.
+  await asUser(user, (tx) =>
+    tx.query("update profiles set age=null where id=$1", [user]),
+  );
+  await assert.rejects(
+    asUser(user, (tx) =>
+      tx.query(
+        "insert into posts(author_id,title,description,starts_at,vacancies) values($1,'Bypass attempt','A friendly first plan',now()+interval '4 hours',2)",
+        [user],
+      ),
+    ),
+    /row-level security/,
+  );
+});
+
+test("audience: requests and approvals enforce gender; Anyone includes Other; audience edits preserve approved participants", async () => {
+  const owner = await corePersonal(),
+    woman = await corePersonal(),
+    man = await corePersonal(),
+    other = await corePersonal();
+  await db.query("update profiles set gender='female' where id=$1", [woman]);
+  await db.query("update profiles set gender='other' where id=$1", [other]);
+  const pid = (
+    await db.query(
+      "insert into posts(author_id,title,description,starts_at,vacancies,gender_preference) values($1,'Women’s game','A friendly game for women',now()+interval '4 hours',4,'female') returning id",
+      [owner],
+    )
+  ).rows[0].id;
+  await assert.rejects(request(man, pid), /females only/);
+  await assert.rejects(request(other, pid), /females only/);
+  const wr = await request(woman, pid);
+  await db.query("update profiles set gender='male' where id=$1", [woman]);
+  await assert.rejects(
+    asUser(owner, (tx) => tx.query("select approve_join_request($1)", [wr])),
+    /females only/,
+  );
+  await db.query("update profiles set gender='female' where id=$1", [woman]);
+  await asUser(owner, (tx) =>
+    tx.query("select approve_join_request($1)", [wr]),
+  );
+  await assert.rejects(
+    asUser(owner, (tx) =>
+      tx.query("update posts set gender_preference='male' where id=$1", [pid]),
+    ),
+    /Approved participants/,
+  );
+  await asUser(owner, (tx) =>
+    tx.query("update posts set gender_preference='any' where id=$1", [pid]),
+  );
+  const mr = await request(man, pid),
+    or = await request(other, pid);
+  await asUser(owner, (tx) =>
+    tx.query("update posts set gender_preference='female' where id=$1", [pid]),
+  );
+  const affected = (
+    await db.query(
+      "select id,status,decline_count from join_requests where id=any($1::uuid[])",
+      [[mr, or]],
+    )
+  ).rows;
+  assert(
+    affected.every(
+      (row: any) => row.status === "declined" && row.decline_count === 0,
+    ),
+  );
+  await asUser(owner, (tx) =>
+    tx.query("update posts set gender_preference='any' where id=$1", [pid]),
+  );
+  await request(other, pid);
+  const men = (
+    await db.query(
+      "insert into posts(author_id,title,description,starts_at,vacancies,gender_preference) values($1,'Men’s game','A friendly game for men',now()+interval '4 hours',2,'male') returning id",
+      [owner],
+    )
+  ).rows[0].id;
+  await request(man, men);
+  await assert.rejects(request(woman, men), /males only/);
+});
+
+test("photos: atomic edit keeps existing photos on failure, validates ownership, and changes order and cover without replacing retained IDs", async () => {
+  const owner = await corePersonal(),
+    pid = (
+      await db.query(
+        "insert into posts(author_id,title,description,starts_at,vacancies) values($1,'Photo edit','A photo editing regression',now()+interval '4 hours',2) returning id",
+        [owner],
+      )
+    ).rows[0].id;
+  const path = (suffix: string) => `${owner}/posts/${suffix}.jpg`;
+  const url = (suffix: string) =>
+    `https://photos.test/storage/v1/object/public/photos/${path(suffix)}`;
+  for (const suffix of ["first", "second", "third"])
+    await db.query(
+      "insert into storage.objects(bucket_id,name)values('photos',$1)",
+      [path(suffix)],
+    );
+  await asUser(owner, (tx) =>
+    tx.query("select set_post_photos($1,$2)", [
+      pid,
+      [url("first"), url("second")],
+    ]),
+  );
+  const before = (
+    await db.query(
+      "select id,photo_url,sort_order from post_photos where post_id=$1 order by sort_order",
+      [pid],
+    )
+  ).rows;
+  await assert.rejects(
+    asUser(outsider, (tx) =>
+      tx.query("select set_post_photos($1,$2)", [pid, []]),
+    ),
+    /active host/,
+  );
+  await assert.rejects(
+    asUser(owner, (tx) =>
+      tx.query("select set_post_photos($1,$2)", [
+        pid,
+        [url("third"), url("missing")],
+      ]),
+    ),
+    /Upload your own/,
+  );
+  assert.deepEqual(
+    (
+      await db.query(
+        "select id,photo_url,sort_order from post_photos where post_id=$1 order by sort_order",
+        [pid],
+      )
+    ).rows,
+    before,
+  );
+  await assert.rejects(
+    asUser(owner, (tx) =>
+      tx.query("select set_post_photos($1,$2)", [
+        pid,
+        [url("first"), url("first")],
+      ]),
+    ),
+    /different photos/,
+  );
+  await assert.rejects(
+    asUser(owner, (tx) =>
+      tx.query("select set_post_photos($1,$2)", [
+        pid,
+        [
+          "https://fake.test/a",
+          "https://fake.test/b",
+          "https://fake.test/c",
+          "https://fake.test/d",
+          "https://fake.test/e",
+          "https://fake.test/f",
+        ],
+      ]),
+    ),
+    /5 different/,
+  );
+  await asUser(owner, (tx) =>
+    tx.query("select set_post_photos($1,$2)", [
+      pid,
+      [url("third"), url("second")],
+    ]),
+  );
+  const after = (
+    await db.query(
+      "select id,photo_url,sort_order from post_photos where post_id=$1 order by sort_order",
+      [pid],
+    )
+  ).rows;
+  assert.equal(after.length, 2);
+  assert.equal(after[0].photo_url, url("third"));
+  assert.equal(after[1].id, before[1].id);
+  await asUser(owner, (tx) =>
+    tx.query("select set_post_photos($1,$2)", [
+      pid,
+      [url("third"), url("second")],
+    ]),
+  );
+  assert.deepEqual(
+    (
+      await db.query(
+        "select id,photo_url,sort_order from post_photos where post_id=$1 order by sort_order",
+        [pid],
+      )
+    ).rows,
+    after,
+  );
+  await asUser(owner, (tx) =>
+    tx.query("select set_post_photos($1,$2)", [pid, []]),
+  );
+  assert.equal(
+    (await db.query("select id from post_photos where post_id=$1", [pid])).rows
+      .length,
+    0,
   );
 });

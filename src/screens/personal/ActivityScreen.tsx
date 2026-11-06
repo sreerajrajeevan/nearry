@@ -1,4 +1,6 @@
+import { AudienceBadge } from "../../components/AudienceBadge";
 import { PageHeading } from "../../components/PageHeading";
+
 import React, { useEffect, useRef, useState } from "react";
 import {
   View,
@@ -442,6 +444,7 @@ export function ActivityScreen() {
                     <View style={styles.flex}>
                       <Text style={styles.eyebrow}>You’re hosting</Text>
                       <Text style={styles.cardTitle}>{post.title}</Text>
+                      <AudienceBadge preference={post.genderPreference} />
                       <Text style={styles.copy}>
                         {formatWhen(post.startsAt)}
                       </Text>

@@ -6,7 +6,11 @@ import {
   TouchableOpacity,
   TextInput,
   StyleSheet,
+  Pressable,
+  ScrollView,
+  KeyboardAvoidingView,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, typography, spacing } from "../theme";
 
 const WEEKDAYS = ["S", "M", "T", "W", "T", "F", "S"];
@@ -50,26 +54,37 @@ function Sheet({
       animationType="slide"
       onRequestClose={onClose}
     >
-      <TouchableOpacity
-        style={styles.backdrop}
-        activeOpacity={1}
-        onPress={onClose}
-      >
-        <View style={styles.sheet}>
+      <KeyboardAvoidingView style={styles.backdrop} behavior="padding">
+        <Pressable
+          style={StyleSheet.absoluteFill}
+          accessibilityRole="button"
+          accessibilityLabel="Close picker"
+          onPress={onClose}
+        />
+        <SafeAreaView
+          edges={["bottom", "left", "right"]}
+          style={styles.sheet}
+          accessibilityViewIsModal
+        >
           <View style={styles.sheetHead}>
             <Text style={styles.sheetTitle}>{title}</Text>
-            <TouchableOpacity
+            <Pressable
               accessibilityRole="button"
               accessibilityLabel="Done"
               onPress={onClose}
-              hitSlop={12}
+              style={styles.doneTouch}
             >
               <Text style={styles.doneBtn}>Done</Text>
-            </TouchableOpacity>
+            </Pressable>
           </View>
-          {children}
-        </View>
-      </TouchableOpacity>
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            {children}
+          </ScrollView>
+        </SafeAreaView>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -201,7 +216,11 @@ function Stepper({
         keyboardType="number-pad"
         maxLength={2}
         selectTextOnFocus
-        onChangeText={setDraft}
+        onChangeText={(text) => {
+          setDraft(text);
+          const n = parseInt(text.replace(/\D/g, ""), 10);
+          if (!Number.isNaN(n)) onChange(Math.min(max, Math.max(min, n)));
+        }}
         onBlur={commitDraft}
         onSubmitEditing={commitDraft}
         accessibilityLabel={`${label} value, type to change`}
@@ -289,10 +308,11 @@ export function TimeSheet({
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: colors.scrim,
+    backgroundColor: "rgba(0,0,0,0.6)",
     justifyContent: "flex-end",
   },
   sheet: {
+    maxHeight: "90%",
     backgroundColor: colors.surface,
     borderTopWidth: 1,
     borderTopColor: colors.border,
@@ -308,14 +328,20 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     backgroundColor: colors.forest,
     borderRadius: 14,
-    padding: 16,
-    gap: 12,
+    padding: 12,
+    gap: 8,
   },
   sheetTitle: {
     ...typography.title,
     color: colors.onAccent,
     fontSize: 18,
     flex: 1,
+  },
+  doneTouch: {
+    minWidth: 60,
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
   },
   doneBtn: { ...typography.label, color: colors.gold },
   monthRow: {
@@ -341,17 +367,18 @@ const styles = StyleSheet.create({
   cellText: { ...typography.body, color: colors.text },
   cellDisabled: { color: colors.textFaint, opacity: 0.35 },
   cellSelected: {
-    backgroundColor: colors.gold,
+    backgroundColor: colors.accent,
     borderRadius: 20,
   },
-  cellTextSelected: { color: colors.onGold },
+  cellTextSelected: { color: colors.onAccent },
   timeRow: {
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
     marginVertical: spacing.md,
+    gap: 8,
   },
-  stepCol: { alignItems: "center", marginHorizontal: spacing.sm },
+  stepCol: { alignItems: "center", flex: 1, minWidth: 0 },
   stepLabel: { ...typography.label, color: colors.textDim, marginBottom: 4 },
   stepBtn: {
     width: 56,
@@ -368,13 +395,14 @@ const styles = StyleSheet.create({
     ...typography.title,
     color: colors.text,
     fontSize: 28,
-    minWidth: 56,
     width: 56,
+    minWidth: 0,
+    flexShrink: 1,
     textAlign: "center",
     paddingVertical: 2,
   },
   colon: { ...typography.title, color: colors.textDim, fontSize: 28 },
-  periodCol: { alignItems: "center", marginLeft: spacing.sm },
+  periodCol: { alignItems: "center", flexShrink: 0 },
   periodBtn: {
     borderWidth: 1,
     borderColor: colors.border,
@@ -383,12 +411,9 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     marginVertical: 4,
   },
-  periodActive: {
-    backgroundColor: colors.goldSoft,
-    borderColor: colors.goldDeep,
-  },
+  periodActive: { backgroundColor: colors.accent, borderColor: colors.accent },
   periodText: { ...typography.label, color: colors.textDim },
-  periodTextActive: { color: colors.onGold },
+  periodTextActive: { color: colors.onAccent },
   hint: {
     ...typography.caption,
     color: colors.textFaint,

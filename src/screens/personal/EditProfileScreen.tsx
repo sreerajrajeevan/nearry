@@ -42,6 +42,7 @@ const GENDERS = [
 export function EditProfileScreen({ navigation }: Props) {
   const { profile, refreshProfile } = useAuth();
   const [name, setName] = useState(profile?.displayName ?? "");
+  const [age, setAge] = useState(profile?.age?.toString() ?? "");
   const [bio, setBio] = useState(profile?.bio ?? "");
   const [interests, setInterests] = useState<string[]>(
     profile?.interests ?? [],
@@ -96,6 +97,13 @@ export function EditProfileScreen({ navigation }: Props) {
       setFormError("Keep the name under 40 characters.");
       return;
     }
+    if (
+      age &&
+      (!/^\d{2,3}$/.test(age) || Number(age) < 18 || Number(age) > 100)
+    ) {
+      setFormError("Enter an age between 18 and 100.");
+      return;
+    }
     setSaving(true);
     try {
       let avatarUrl = profile.avatarUrl;
@@ -110,6 +118,7 @@ export function EditProfileScreen({ navigation }: Props) {
         bio: bio.trim(),
         interests,
         gender: gender ?? null,
+        age: age ? Number(age) : null,
       });
       await refreshProfile();
       navigation.goBack();
@@ -185,6 +194,13 @@ export function EditProfileScreen({ navigation }: Props) {
           })}
         </View>
 
+        <Input
+          label="Age (private)"
+          value={age}
+          onChangeText={(text) => setAge(text.replace(/\D/g, ""))}
+          keyboardType="number-pad"
+          maxLength={3}
+        />
         <Text style={styles.fieldLabel}>Interests</Text>
         <View style={styles.chips}>
           {INTERESTS.map((tag) => {
