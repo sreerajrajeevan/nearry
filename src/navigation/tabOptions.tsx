@@ -34,7 +34,7 @@ export function tabOptions(
     tabBarHideOnKeyboard: true,
     tabBarActiveTintColor: colors.forest,
     tabBarInactiveTintColor: colors.textDim,
-    tabBarActiveBackgroundColor: colors.sageSoft,
+    tabBarActiveBackgroundColor: "transparent",
     tabBarLabelPosition: "below-icon",
     tabBarLabel: title === "Create Offer" ? "Create" : title,
     tabBarItemStyle: styles.item,

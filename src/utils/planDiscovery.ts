@@ -1,6 +1,29 @@
 import type { NeedPost } from "../services/mappers";
+import { postCategory, type DiscoveryCategory } from "./discovery";
 
 export type PlanDateFilter = "all" | "today" | "weekend";
+
+/** Share one clock across all conditions; stale cached plans must not reappear. */
+export function discoveryPlans(
+  posts: NeedPost[],
+  filters: {
+    date: PlanDateFilter;
+    category: DiscoveryCategory | null;
+    freeOnly: boolean;
+  },
+  now = new Date(),
+) {
+  const timestamp = now.getTime();
+  return posts.filter(
+    (post) =>
+      post.status === "open" &&
+      new Date(post.startsAt).getTime() > timestamp &&
+      (!post.expiresAt || new Date(post.expiresAt).getTime() > timestamp) &&
+      (!filters.category || postCategory(post) === filters.category) &&
+      matchesPlanDate(post.startsAt, filters.date, now) &&
+      (!filters.freeOnly || post.costCents === 0),
+  );
+}
 
 /** Local calendar boundaries, including this weekend when it is already Saturday/Sunday. */
 export function matchesPlanDate(

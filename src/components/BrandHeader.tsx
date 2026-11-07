@@ -12,6 +12,7 @@ type Props = {
   unreadMessages?: number;
   onNotificationsPress?: () => void;
   unreadNotifications?: number;
+  compact?: boolean;
 };
 
 export function BrandHeader({
@@ -22,6 +23,7 @@ export function BrandHeader({
   unreadMessages = 0,
   onNotificationsPress,
   unreadNotifications = 0,
+  compact = false,
 }: Props) {
   const unread = Math.max(0, Math.floor(unreadMessages));
   const unreadNotifs = Math.max(0, Math.floor(unreadNotifications));
@@ -35,9 +37,9 @@ export function BrandHeader({
     </>
   );
   return (
-    <View style={styles.header}>
+    <View style={[styles.header, compact && styles.compactHeader]}>
       <View style={styles.identity}>
-        <BrandLogo />
+        <BrandLogo width={compact ? 128 : 148} />
         {!!context &&
           (onContextPress ? (
             <TouchableOpacity
@@ -45,13 +47,17 @@ export function BrandHeader({
               accessibilityLabel={`Change location, ${context}`}
               hitSlop={4}
               onPress={onContextPress}
-              style={styles.contextButton}
+              style={[styles.contextButton, compact && styles.compactContext]}
               activeOpacity={0.65}
             >
               {contextContent}
             </TouchableOpacity>
           ) : (
-            <View style={styles.contextButton}>{contextContent}</View>
+            <View
+              style={[styles.contextButton, compact && styles.compactContext]}
+            >
+              {contextContent}
+            </View>
           ))}
       </View>
       <View style={styles.actions}>
@@ -115,6 +121,13 @@ export function BrandHeader({
 }
 
 const styles = StyleSheet.create({
+  compactHeader: { paddingTop: 4, paddingBottom: 4 },
+  compactContext: {
+    backgroundColor: "transparent",
+    marginTop: 0,
+    paddingHorizontal: 0,
+    minHeight: 44,
+  },
   header: {
     flexDirection: "row",
     alignItems: "flex-start",

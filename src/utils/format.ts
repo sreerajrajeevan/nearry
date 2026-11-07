@@ -34,11 +34,9 @@ export function formatTime(iso: string): string {
 export function formatWhen(iso: string, now = new Date()): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return "";
+  // Compare local calendar dates, not elapsed hours or year-relative ordinals.
   const day = (x: Date) =>
-    x.getFullYear() * 1000 +
-    Math.floor(
-      (x.getTime() - new Date(x.getFullYear(), 0, 0).getTime()) / 86_400_000,
-    );
+    Date.UTC(x.getFullYear(), x.getMonth(), x.getDate()) / 86_400_000;
   const diff = day(d) - day(now);
   const t = twelveHour(d);
   if (diff === 0) return `${d.getHours() >= 17 ? "Tonight" : "Today"}, ${t}`;
