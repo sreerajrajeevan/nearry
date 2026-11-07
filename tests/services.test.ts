@@ -77,6 +77,57 @@ test("My posts requests only the host's posts without hiding past or cancelled l
   );
 });
 
+test("publishing, reloading and editing preserve every post audience through the live service paths", async () => {
+  for (const audience of ["female", "male", "any"] as const) {
+    calls.length = 0;
+    let row: any = {
+      id: "audience-post",
+      author_id: "host",
+      author_name: "Host",
+      approved_count: 0,
+      status: "open",
+      created_at: new Date().toISOString(),
+    };
+    handler = (url) => {
+      const call = calls[calls.length - 1];
+      if (url.pathname.endsWith("/posts")) {
+        Object.assign(row, call.body);
+        return { ...row };
+      }
+      if (url.pathname.endsWith("/post_cards"))
+        return url.searchParams.has("id") ? { ...row } : [{ ...row }];
+      return [];
+    };
+    const created = await posts.createPost("host", {
+      title: "Audience selection",
+      description: "A friendly plan with the selected audience",
+      startsAt: new Date(Date.now() + 14400000).toISOString(),
+      vacancies: 4,
+      tags: [],
+      genderPreference: audience,
+    });
+    assert.equal(calls[0].body.gender_preference, audience);
+    assert.equal(created.genderPreference, audience);
+    assert.equal((await posts.getPost(created.id))!.genderPreference, audience);
+    assert.equal((await posts.listPosts())[0].genderPreference, audience);
+    assert.equal(
+      (await posts.listPosts({ authorId: "host", status: "all" }))[0]
+        .genderPreference,
+      audience,
+    );
+    const changed = audience === "female" ? "male" : "female";
+    const edited = await posts.updatePost(created.id, {
+      genderPreference: changed,
+    });
+    assert.equal(
+      calls.find((call) => call.method === "PATCH")!.body.gender_preference,
+      changed,
+    );
+    assert.equal(edited.genderPreference, changed);
+    assert.equal((await posts.getPost(created.id))!.genderPreference, changed);
+  }
+});
+
 test("long conversations fetch the newest page and display it chronologically", async () => {
   handler = () => [
     {

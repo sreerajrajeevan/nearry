@@ -22,6 +22,8 @@ The server enforces a complete Personal profile for posting and join requests/ap
 
 ## Rollout and verification
 
+Apply `00028_post_audience_readmodel.sql` after 00027, including on existing projects. The original `post_cards` view expanded `posts.*` before `gender_preference` existed, so detail/feed/My posts lost the saved audience and displayed Anyone. The forward migration appends the saved field while preserving view columns, grants and caller RLS; it refreshes the API schema cache. No posts or participation records are rewritten. Existing saved female/male restrictions display correctly after reloading the post; legacy null audiences remain unrestricted. This database-only correction needs no additional native build. Regression tests exercise real insert → view reads → edit → view rereads for all three audiences, alongside service serialization and existing join enforcement.
+
 Apply only migration `00027_post_participation_and_photos.sql` after 00026. Do not replay run-all.sql. It adds the private age column, completion RPC, eligibility policies/triggers and atomic photo RPC. It does not infer missing details, change existing profiles, remove photos, or cancel existing participation during installation. Existing pending requests are rechecked at approval.
 
 **An updated native app build is required** because `expo-image-manipulator` is new. Coordinate the new build with the backend rollout: older clients cannot complete the new required fields. Reloading an old standalone binary is insufficient.
