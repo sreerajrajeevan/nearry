@@ -8,13 +8,17 @@ import {
 } from "../../utils/profileReadiness";
 import { LoadingState } from "../../components/LoadingState";
 import { SafetyActions } from "../../components/SafetyActions";
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import {
   View,
   Text,
   ScrollView,
   TouchableOpacity,
   StyleSheet,
+  Share,
+  Linking,
+  Modal,
+  Pressable,
 } from "react-native";
 import { useLiveQuery } from "../../hooks/useLiveQuery";
 import { postState } from "../../utils/flowState";
@@ -25,7 +29,7 @@ import { isPersonalSelfieChecked } from "../../services/selfieVerification";
 import { EmptyState } from "../../components/EmptyState";
 import { Avatar } from "../../components/Avatar";
 import { PostPhotoGallery } from "../../components/PostPhotoGallery";
-import { colors, typography, spacing, surfaces } from "../../theme";
+import { colors, typography, spacing } from "../../theme";
 import { getOrCreateConversation } from "../../services/chat";
 import { PostDetailsProps } from "../../navigation/types";
 import { useAuth } from "../../store/AuthContext";
@@ -46,7 +50,17 @@ import {
 } from "../../services/joinRequests";
 import { NeedPost } from "../../services/mappers";
 import { JoinRequest } from "../../services/mappers";
-import { timeLeft, formatWhen } from "../../utils/format";
+import { formatWhen, formatTime } from "../../utils/format";
+
+import { Icon } from "../../components/Icon";
+import { MotionPressable } from "../../components/Motion";
+import { PlanCover } from "../../components/PlanCover";
+import { postCategory } from "../../utils/discovery";
+import { planCost } from "../../utils/planDiscovery";
+import { getVenue } from "../../services/venues";
+import { publicAvatars } from "../../services/profile";
+import { useReducedMotion } from "../../store/MotionContext";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 /**
  * Post details: host manages requests, participants request/withdraw.
@@ -58,6 +72,10 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
   const myId = profile?.id;
 
   const [profilePrompt, setProfilePrompt] = useState(false);
+  const [optionsOpen, setOptionsOpen] = useState(false);
+  const scroll = useRef<ScrollView>(null);
+  const requestsTop = useRef(0);
+  const reduced = useReducedMotion();
   const [busy, setBusy] = useState<string | null>(null);
   const {
     data,
@@ -69,12 +87,23 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
     async () => {
       const p = await getPost(postId);
       if (!p) throw new Error("Post not found.");
-      const [reqs, mine, selfieChecked] = await Promise.all([
+      const [reqs, mine, selfieChecked, venue, avatars] = await Promise.all([
         listRequestsForPost(postId),
         myId ? myRequestForPost(postId, myId) : Promise.resolve(null),
         isPersonalSelfieChecked(p.authorId).catch(() => false),
+        p.venueId
+          ? getVenue(p.venueId).catch(() => null)
+          : Promise.resolve(null),
+        publicAvatars([p.authorId]).catch(() => new Map<string, string>()),
       ]);
-      return { post: p, requests: reqs, myRequest: mine, selfieChecked };
+      return {
+        post: p,
+        requests: reqs,
+        myRequest: mine,
+        selfieChecked,
+        venue,
+        authorAvatar: avatars.get(p.authorId),
+      };
     },
     subscribeToPosts,
   );
@@ -169,59 +198,65 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
     ? `${post.spotsLeft} spot${post.spotsLeft === 1 ? "" : "s"} left`
     : flow.label;
 
+  const locationName = post.venueName || data?.venue?.name;
+  const goToRequests = () =>
+    scroll.current?.scrollTo({ y: requestsTop.current, animated: !reduced });
+  const share = () =>
+    void Share.share({
+      message: [
+        post.title,
+        formatWhen(post.startsAt),
+        locationName,
+        "Join me on Nearry.",
+      ]
+        .filter(Boolean)
+        .join("\n"),
+    }).catch(() => Alert.alert("Could not share", "Please try again."));
+
   return (
-    <Screen>
+    <Screen padded={false}>
+      <View style={styles.toolbar}>
+        <MotionPressable
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+          onPress={() => navigation.goBack()}
+          style={styles.iconButton}
+        >
+          <Icon name="arrow-left" size={23} color={colors.text} />
+        </MotionPressable>
+        <Text accessibilityRole="header" style={styles.toolbarTitle}>
+          Plan details
+        </Text>
+        <MotionPressable
+          accessibilityRole="button"
+          accessibilityLabel="Share plan"
+          onPress={share}
+          style={styles.iconButton}
+        >
+          <Icon name="share-2" size={21} color={colors.text} />
+        </MotionPressable>
+        <MotionPressable
+          accessibilityRole="button"
+          accessibilityLabel="Plan options"
+          onPress={() => setOptionsOpen(true)}
+          style={styles.iconButton}
+        >
+          <Icon name="more-horizontal" size={23} color={colors.text} />
+        </MotionPressable>
+      </View>
       <ScrollView
+        ref={scroll}
+        style={styles.flex}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scroll}
       >
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          activeOpacity={0.7}
-          style={styles.back}
-        >
-          <Text style={styles.backText}>← Back</Text>
-        </TouchableOpacity>
-
-        <View style={styles.header}>
-          <Text style={styles.title}>{post.title}</Text>
-          <Badge
-            label={spotsBadge}
-            tone={
-              post.status === "open" && post.spotsLeft > 0 ? "green" : "red"
-            }
-          />
-        </View>
-        <View style={styles.authorRow}>
-          <Avatar name={post.authorName} size={28} />
-          <Text style={styles.authorName}>{post.authorName}</Text>
-          {data?.selfieChecked && <Badge label="Selfie checked" tone="green" />}
-          {post.venueName && (
-            <Text style={styles.meta}> · {post.venueName}</Text>
-          )}
-        </View>
-        <Text style={styles.meta}>{formatWhen(post.startsAt)}</Text>
-        {post.expiresAt && (
-          <Text style={styles.meta}>
-            Requests close {timeLeft(post.expiresAt)}
-          </Text>
-        )}
-        <SafetyActions
-          target={{
-            kind: "post",
-            id: postId,
-            userId: post.authorId,
-            name: post.authorName,
-          }}
-          onReport={() =>
-            navigation.navigate("Report", {
-              target: { kind: "post", id: postId, name: post.title },
-            })
-          }
-          onBlocked={() => navigation.goBack()}
-        />
         <PostPhotoGallery
           postId={postId}
+          fallback={
+            <View style={styles.cover}>
+              <PlanCover post={post} />
+            </View>
+          }
           onReportPhoto={
             isHost
               ? undefined
@@ -231,19 +266,113 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
                   })
           }
         />
+        <View style={styles.categoryRow}>
+          <Text style={styles.category}>{postCategory(post)}</Text>
+          <Badge
+            label={spotsBadge}
+            tone={flow.accepting ? "green" : "neutral"}
+          />
+        </View>
+        <Text accessibilityRole="header" style={styles.title}>
+          {post.title}
+        </Text>
+        <View style={styles.authorRow}>
+          <Avatar name={post.authorName} uri={data?.authorAvatar} size={40} />
+          <View style={styles.flex}>
+            <Text style={styles.hostLabel}>Hosted by</Text>
+            <Text style={styles.authorName}>{post.authorName}</Text>
+          </View>
+          {data?.selfieChecked && <Badge label="Selfie checked" tone="green" />}
+        </View>
+        <View style={styles.facts}>
+          <View style={styles.factRow}>
+            <Icon name="calendar" size={22} color={colors.text} />
+            <View style={styles.flex}>
+              <Text style={styles.factTitle}>
+                {new Date(post.startsAt).toLocaleDateString("en-IN", {
+                  weekday: "long",
+                  day: "numeric",
+                  month: "short",
+                  year: "numeric",
+                })}
+              </Text>
+              <Text style={styles.meta}>{formatTime(post.startsAt)}</Text>
+            </View>
+          </View>
+          <View style={styles.factRow}>
+            <Icon name="map-pin" size={22} color={colors.text} />
+            <View style={styles.flex}>
+              <Text style={styles.factTitle}>
+                {locationName || "Location to be confirmed"}
+              </Text>
+              {!!data?.venue?.area && (
+                <Text style={styles.meta}>{data.venue.area}</Text>
+              )}
+            </View>
+            {!!locationName && (
+              <MotionPressable
+                accessibilityRole="button"
+                accessibilityLabel={`Directions to ${locationName}`}
+                onPress={() =>
+                  void Linking.openURL(
+                    `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([locationName, data?.venue?.area].filter(Boolean).join(" "))}`,
+                  ).catch(() =>
+                    Alert.alert("Couldn’t open maps", "Please try again."),
+                  )
+                }
+                style={styles.directions}
+              >
+                <Text style={styles.directionsText}>Directions</Text>
+              </MotionPressable>
+            )}
+          </View>
+          <View style={[styles.factRow, styles.lastFact]}>
+            <Icon name="users" size={22} color={colors.text} />
+            <View style={styles.flex}>
+              <Text style={styles.factTitle}>
+                {flow.accepting
+                  ? `${post.spotsLeft} spot${post.spotsLeft === 1 ? "" : "s"} available`
+                  : flow.label}
+              </Text>
+              <Text style={styles.meta}>The host approves join requests.</Text>
+            </View>
+          </View>
+        </View>
+        <Text accessibilityRole="header" style={styles.sectionHeading}>
+          About the plan
+        </Text>
         <Text style={styles.desc}>{post.description}</Text>
+        <View style={styles.audience}>
+          <AudienceBadge preference={post.genderPreference} />
+        </View>
         {post.tags.length > 0 && (
           <View style={styles.tags}>
-            {post.tags.map((t) => (
-              <Badge key={t} label={`#${t}`} />
+            {post.tags.map((tag) => (
+              <Text key={tag} style={styles.tag}>
+                #{tag}
+              </Text>
             ))}
           </View>
         )}
-
-        <AudienceBadge preference={post.genderPreference} />
-
-        {isHost ? (
-          <View style={styles.section}>
+        {post.expiresAt && (
+          <Text style={styles.expiry}>
+            Requests close {formatWhen(post.expiresAt)}
+          </Text>
+        )}
+        {post.joinedCount > 0 && (
+          <Text style={styles.meta}>
+            {post.joinedCount}{" "}
+            {post.joinedCount === 1 ? "person has" : "people have"} been
+            approved.
+          </Text>
+        )}
+        {isHost && (
+          <View
+            style={styles.section}
+            onLayout={(event) => {
+              requestsTop.current = event.nativeEvent.layout.y;
+            }}
+          >
             <Text style={styles.sectionTitle}>
               Requests · {pending.length} pending · {approved.length} in
             </Text>
@@ -260,6 +389,7 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
                   <Text style={styles.reqName}>{r.requesterName}</Text>
                   <View style={styles.flex} />
                   <TouchableOpacity
+                    accessibilityRole="button"
                     activeOpacity={0.7}
                     disabled={busy !== null}
                     onPress={() => run(`d${r.id}`, () => declineRequest(r.id))}
@@ -269,6 +399,7 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
                     </Text>
                   </TouchableOpacity>
                   <TouchableOpacity
+                    accessibilityRole="button"
                     activeOpacity={0.7}
                     disabled={busy !== null || !flow.accepting}
                     onPress={() =>
@@ -307,6 +438,7 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
                 <Text style={styles.approvedName}>{r.requesterName}</Text>
                 <Badge label="In" tone="green" />
                 <TouchableOpacity
+                  accessibilityRole="button"
                   activeOpacity={0.7}
                   onPress={() => openChat(r.requesterId, r.requesterName)}
                 >
@@ -360,35 +492,43 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
               </View>
             )}
           </View>
+        )}
+      </ScrollView>
+      <View style={styles.footer}>
+        <Text style={styles.cost}>{planCost(post)}</Text>
+        {isHost ? (
+          <View style={styles.participantActions}>
+            <Button
+              title={requests.length ? "Manage requests" : "Manage plan"}
+              variant="solid"
+              onPress={goToRequests}
+            />
+          </View>
         ) : (
-          <View style={styles.section}>
+          <View style={styles.participantActions}>
             {post.status === "cancelled" ? (
-              <EmptyState
-                title="This plan was cancelled"
-                hint="The host cancelled this plan. Find another hello nearby."
-              />
+              <Text style={styles.footerStatus}>
+                This plan was cancelled by the host.
+              </Text>
             ) : myRequest?.declineCount !== undefined &&
               myRequest.declineCount >= 2 ? (
-              <EmptyState
-                title="No more requests"
-                hint="The host passed on your requests for this plan."
-              />
+              <Text style={styles.footerStatus}>
+                No more requests for this plan.
+              </Text>
             ) : (!myRequest ||
                 myRequest.status === "declined" ||
                 myRequest.status === "withdrawn") &&
               !flow.accepting ? (
-              <EmptyState
-                title={
-                  flow.label === "Past"
-                    ? "This plan has passed"
-                    : "Requests are closed"
-                }
-                hint="Keep an eye out for the next one."
-              />
+              <Text style={styles.footerStatus}>
+                {flow.label === "Past"
+                  ? "This plan has passed."
+                  : "Requests are closed."}
+              </Text>
             ) : !myRequest ||
               myRequest.status === "declined" ||
               myRequest.status === "withdrawn" ? (
               <Button
+                variant="solid"
                 title={
                   !personalProfileReady(profile)
                     ? "Complete profile to join"
@@ -455,7 +595,7 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
             )}
           </View>
         )}
-      </ScrollView>
+      </View>
       <ProfileRequired
         intent="join"
         visible={profilePrompt}
@@ -465,94 +605,242 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
         }}
         onBrowse={() => setProfilePrompt(false)}
       />
+      <Modal
+        visible={optionsOpen}
+        transparent
+        animationType={reduced ? "none" : "fade"}
+        statusBarTranslucent
+        navigationBarTranslucent
+        onRequestClose={() => setOptionsOpen(false)}
+      >
+        <View style={styles.scrim}>
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            accessible={false}
+            onPress={() => setOptionsOpen(false)}
+          />
+          <SafeAreaView
+            edges={["bottom", "left", "right"]}
+            style={styles.sheet}
+            accessibilityViewIsModal
+          >
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={styles.sheetContent}
+            >
+              <View style={styles.sheetHeader}>
+                <Text accessibilityRole="header" style={styles.sectionHeading}>
+                  Plan options
+                </Text>
+                <MotionPressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Close plan options"
+                  style={styles.iconButton}
+                  onPress={() => setOptionsOpen(false)}
+                >
+                  <Icon name="x" size={22} />
+                </MotionPressable>
+              </View>
+              <Button
+                title="Share plan"
+                variant="secondary"
+                onPress={() => {
+                  setOptionsOpen(false);
+                  share();
+                }}
+              />
+              {isHost ? (
+                <Button
+                  title="Manage my plan"
+                  variant="ghost"
+                  onPress={() => {
+                    setOptionsOpen(false);
+                    goToRequests();
+                  }}
+                />
+              ) : (
+                <SafetyActions
+                  target={{
+                    kind: "post",
+                    id: postId,
+                    userId: post.authorId,
+                    name: post.authorName,
+                  }}
+                  onReport={() => {
+                    setOptionsOpen(false);
+                    navigation.navigate("Report", {
+                      target: { kind: "post", id: postId, name: post.title },
+                    });
+                  }}
+                  onBlocked={() => {
+                    setOptionsOpen(false);
+                    navigation.goBack();
+                  }}
+                />
+              )}
+            </ScrollView>
+          </SafeAreaView>
+        </View>
+      </Modal>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  scroll: { paddingTop: spacing.sm, paddingBottom: spacing.xl * 2 },
-  status: { ...typography.label, color: colors.textDim, marginTop: spacing.xl },
-  back: { marginBottom: spacing.md, alignSelf: "flex-start" },
-  backText: { ...typography.label, color: colors.textDim },
-  header: {
-    ...surfaces.hero,
-    flexWrap: "wrap",
+  flex: { flex: 1 },
+  scroll: { paddingHorizontal: 20, paddingBottom: 28 },
+  toolbar: {
     flexDirection: "row",
-    alignItems: "flex-start",
+    alignItems: "center",
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    gap: 2,
+  },
+  toolbarTitle: {
+    ...typography.heading,
+    color: colors.forest,
+    flex: 1,
+    paddingLeft: 6,
+  },
+  iconButton: {
+    width: 44,
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  cover: { borderRadius: 20, overflow: "hidden" },
+  categoryRow: {
+    flexDirection: "row",
+    alignItems: "center",
     justifyContent: "space-between",
-    gap: spacing.md,
+    gap: 10,
+    marginTop: 20,
+    marginBottom: 10,
+  },
+  category: {
+    ...typography.caption,
+    color: colors.sageDeep,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 1,
   },
   title: {
     ...typography.title,
-    color: colors.onAccent,
-    flex: 1,
-    minWidth: "65%",
+    fontSize: 28,
+    lineHeight: 35,
+    color: colors.forest,
   },
   authorRow: {
     flexDirection: "row",
     alignItems: "center",
     flexWrap: "wrap",
-    marginTop: spacing.md,
+    gap: 10,
+    marginVertical: 20,
   },
-  authorName: {
-    ...typography.body,
-    color: colors.text,
-    marginLeft: spacing.sm,
+  hostLabel: { ...typography.caption, color: colors.textDim },
+  authorName: { ...typography.body, color: colors.text, fontWeight: "600" },
+  facts: {
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: colors.border,
   },
-  meta: { ...typography.caption, color: colors.textDim, marginTop: spacing.xs },
-  desc: {
-    ...typography.body,
-    color: colors.text,
-    marginTop: spacing.lg,
-    lineHeight: 22,
-  },
-  tags: {
+  factRow: {
     flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.xs,
-    marginTop: spacing.md,
-  },
-  pref: {
-    ...typography.label,
-    color: colors.clayDeep,
-    marginTop: spacing.sm,
-  },
-  section: { marginTop: spacing.xl },
-  sectionTitle: {
-    ...typography.label,
-    color: colors.textDim,
-    marginBottom: spacing.md,
-  },
-  reqName: { ...typography.body, color: colors.text, marginLeft: spacing.sm },
-  approvedRow: {
-    flexDirection: "row",
+    gap: 14,
     alignItems: "center",
-    gap: spacing.sm,
-    marginBottom: spacing.sm,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderColor: colors.border,
   },
-  approvedName: { ...typography.body, color: colors.text, flex: 1 },
-  messageLink: { ...typography.body, color: colors.clay, fontWeight: "600" },
-  flex: { flex: 1 },
+  lastFact: { borderBottomWidth: 0 },
+  factTitle: { ...typography.body, fontWeight: "600", color: colors.text },
+  meta: { ...typography.bodySmall, color: colors.textDim, marginTop: 3 },
+  directions: { minHeight: 44, justifyContent: "center", paddingLeft: 4 },
+  directionsText: {
+    ...typography.bodySmall,
+    color: colors.forest,
+    fontWeight: "600",
+    textDecorationLine: "underline",
+  },
+  sectionHeading: {
+    ...typography.heading,
+    fontSize: 21,
+    lineHeight: 28,
+    color: colors.forest,
+    marginTop: 24,
+    marginBottom: 10,
+  },
+  desc: { ...typography.body, color: colors.text, lineHeight: 25 },
+  tags: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 14 },
+  tag: { ...typography.bodySmall, color: colors.textDim },
+  audience: { marginTop: 14 },
+  expiry: { ...typography.caption, color: colors.textDim, marginVertical: 16 },
+  footer: {
+    borderTopWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.background,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    gap: 10,
+  },
+  cost: { ...typography.bodySmall, color: colors.text, fontWeight: "600" },
+  participantActions: { gap: 4 },
+  footerStatus: { ...typography.body, color: colors.textDim },
+  section: { marginTop: 26 },
+  sectionTitle: { ...typography.heading, color: colors.text, marginBottom: 12 },
+  reqName: { ...typography.body, color: colors.text, flex: 1 },
   reqRow2: {
     flexDirection: "row",
+    flexWrap: "wrap",
     alignItems: "center",
-    gap: spacing.sm,
-    paddingVertical: spacing.md,
+    gap: 10,
+    paddingVertical: 16,
     borderBottomWidth: 1,
-    borderBottomColor: colors.hairline,
+    borderColor: colors.border,
   },
-  declineLink: { ...typography.body, color: colors.textDim },
+  declineLink: { ...typography.bodySmall, color: colors.textDim },
   approvePill: {
-    backgroundColor: colors.clay,
-    borderRadius: 999,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    backgroundColor: colors.forest,
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
   },
   approveText: {
-    ...typography.body,
+    ...typography.bodySmall,
     color: colors.onAccent,
     fontWeight: "600",
   },
-  hostActions: { marginTop: spacing.lg },
-  gap: { height: spacing.md },
+  approvedRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 8,
+    marginBottom: 12,
+  },
+  approvedName: { ...typography.bodySmall, color: colors.text, flex: 1 },
+  messageLink: {
+    ...typography.bodySmall,
+    color: colors.forest,
+    fontWeight: "600",
+  },
+  hostActions: { marginTop: 20, gap: 8 },
+  gap: { height: spacing.sm },
+  scrim: {
+    flex: 1,
+    backgroundColor: "rgba(8,37,27,0.38)",
+    justifyContent: "flex-end",
+  },
+  sheet: {
+    backgroundColor: colors.background,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    maxHeight: "90%",
+  },
+  sheetContent: { padding: 24 },
+  sheetHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 12,
+  },
 });

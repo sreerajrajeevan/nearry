@@ -20,7 +20,7 @@ export function PersonalTabs() {
         <Tab.Screen
           name="Nearby"
           component={NearbyScreen}
-          options={tabOptions("home", "Nearby")}
+          options={tabOptions("map-pin", "Nearby")}
         />
         <Tab.Screen
           name="Search"
@@ -30,7 +30,7 @@ export function PersonalTabs() {
         <Tab.Screen
           name="CreatePost"
           component={CreatePostScreen}
-          options={tabOptions("plus", "Create")}
+          options={tabOptions("plus", "Create", true)}
         />
         <Tab.Screen
           name="Activity"

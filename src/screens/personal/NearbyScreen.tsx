@@ -42,7 +42,8 @@ import {
 import { useAuth } from "../../store/AuthContext";
 import { PersonalTabNav, PersonalTabParamList } from "../../navigation/types";
 import { CategoryGrid } from "../../components/CategoryGrid";
-import { FeaturedOffers } from "../../components/FeaturedOffers";
+import { Icon } from "../../components/Icon";
+import { matchesPlanDate, PlanDateFilter } from "../../utils/planDiscovery";
 import { MotionPressable } from "../../components/Motion";
 import { useReducedMotion } from "../../store/MotionContext";
 
@@ -63,6 +64,9 @@ export function NearbyScreen() {
   const [locating, setLocating] = useState(false);
   const [locationError, setLocationError] = useState("");
   const [category, setCategory] = useState<DiscoveryCategory | null>(null);
+  const [dateFilter, setDateFilter] = useState<PlanDateFilter>("all");
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [freeOnly, setFreeOnly] = useState(false);
   const request = useRef(0);
   const scroll = useRef<ScrollView>(null);
   const feedTop = useRef(0);
@@ -156,7 +160,10 @@ export function NearbyScreen() {
 
   const distances = new Map(venues.map((v) => [v.id, v.distanceKm]));
   const visiblePosts = posts.filter(
-    (p) => !category || postCategory(p) === category,
+    (p) =>
+      (!category || postCategory(p) === category) &&
+      matchesPlanDate(p.startsAt, dateFilter) &&
+      (!freeOnly || p.costCents === 0),
   );
   const visibleOffers = offers.filter(
     (o) =>
@@ -177,16 +184,13 @@ export function NearbyScreen() {
       ? "Within 5 km"
       : appliedArea || "All locations";
   const firstName = profile?.displayName?.trim().split(/\s+/)[0] || "there";
-  const feedTitle =
-    category === "Play"
-      ? "A game nearby"
-      : category === "Meet"
-        ? "Good company nearby"
-        : category === "Explore"
-          ? "A little discovery nearby"
-          : category === "Unwind"
-            ? "A little time for yourself"
-            : "Nearby for you";
+  const feedTitle = category ? `${category} plans` : "Plans near you";
+  const hasFilters = !!category || dateFilter !== "all" || freeOnly;
+  const clearFilters = () => {
+    setCategory(null);
+    setDateFilter("all");
+    setFreeOnly(false);
+  };
 
   return (
     <Screen>
@@ -253,8 +257,7 @@ export function NearbyScreen() {
         <View style={styles.intro}>
           <Text style={styles.greeting}>Hello, {firstName}.</Text>
           <Text accessibilityRole="header" style={styles.heroTitle}>
-            A little more{"\n"}life,{" "}
-            <Text style={styles.heroAccent}>nearby.</Text>
+            Find your next plan.
           </Text>
         </View>
         <DiscoverySearch onPress={() => navigation.navigate("Search")} />
@@ -305,20 +308,81 @@ export function NearbyScreen() {
               </View>
             )}
             <View style={styles.sectionRow}>
-              <Text style={styles.sectionTitle}>{feedTitle}</Text>
-              {category ? (
-                <MotionPressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Show all nearby results"
-                  onPress={() => setCategory(null)}
-                  style={styles.resetFilter}
-                >
-                  <Text style={styles.resetText}>Show all</Text>
-                </MotionPressable>
-              ) : (
+              <View style={styles.flex}>
+                <Text accessibilityRole="header" style={styles.sectionTitle}>
+                  {feedTitle}
+                </Text>
                 <Text style={styles.sectionMeta}>{scope}</Text>
-              )}
+              </View>
+              <MotionPressable
+                accessibilityRole="button"
+                accessibilityLabel="Filter plans"
+                accessibilityState={{ expanded: filtersOpen }}
+                onPress={() => setFiltersOpen((v) => !v)}
+                style={[styles.filterButton, freeOnly && styles.filterSelected]}
+              >
+                <Icon name="sliders" size={20} color={colors.forest} />
+              </MotionPressable>
             </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.dateFilters}
+            >
+              {(
+                [
+                  { key: "all", label: "All plans" },
+                  { key: "today", label: "Today" },
+                  { key: "weekend", label: "This weekend" },
+                ] as const
+              ).map((item) => (
+                <MotionPressable
+                  key={item.key}
+                  accessibilityRole="button"
+                  accessibilityLabel={item.label}
+                  aria-pressed={dateFilter === item.key}
+                  accessibilityState={{ selected: dateFilter === item.key }}
+                  onPress={() => setDateFilter(item.key)}
+                  style={[
+                    styles.dateChip,
+                    dateFilter === item.key && styles.dateChipSelected,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.dateText,
+                      dateFilter === item.key && styles.dateTextSelected,
+                    ]}
+                  >
+                    {item.label}
+                  </Text>
+                </MotionPressable>
+              ))}
+            </ScrollView>
+            {filtersOpen && (
+              <View style={styles.filterPanel}>
+                <MotionPressable
+                  accessibilityRole="checkbox"
+                  accessibilityLabel="Free plans only"
+                  aria-checked={freeOnly}
+                  accessibilityState={{ checked: freeOnly }}
+                  onPress={() => setFreeOnly((v) => !v)}
+                  style={styles.freeFilter}
+                >
+                  <Icon
+                    name={freeOnly ? "check-square" : "square"}
+                    size={20}
+                    color={colors.forest}
+                  />
+                  <Text style={styles.resetText}>Free plans only</Text>
+                </MotionPressable>
+                <Button
+                  title="Reset filters"
+                  variant="ghost"
+                  onPress={clearFilters}
+                />
+              </View>
+            )}
             {visiblePosts.map((post) => (
               <PostRow
                 key={post.id}
@@ -331,8 +395,36 @@ export function NearbyScreen() {
                 }
               />
             ))}
+            {visiblePosts.length === 0 && (
+              <>
+                <EmptyState
+                  title={
+                    hasFilters
+                      ? "No plans for these filters"
+                      : "No plans here yet"
+                  }
+                  hint={
+                    hasFilters
+                      ? "Try another day or category."
+                      : "Start a plan and invite someone nearby."
+                  }
+                />
+                <Button
+                  title={hasFilters ? "Clear filters" : "Start a plan"}
+                  variant="ghost"
+                  onPress={
+                    hasFilters
+                      ? clearFilters
+                      : () => navigation.navigate("CreatePost")
+                  }
+                />
+              </>
+            )}
             {visibleOffers.length > 0 && (
               <>
+                <Text accessibilityRole="header" style={styles.sectionHeading}>
+                  Offers nearby
+                </Text>
                 {visibleOffers.map((offer) => (
                   <OfferRow
                     key={offer.id}
@@ -347,26 +439,6 @@ export function NearbyScreen() {
                 ))}
               </>
             )}
-            {visiblePosts.length === 0 && visibleOffers.length === 0 && (
-              <>
-                <EmptyState
-                  title="Room for a new hello"
-                  hint="Start a plan and invite someone nearby."
-                />
-                <Button
-                  title="Start a plan"
-                  variant="ghost"
-                  onPress={() => navigation.navigate("CreatePost")}
-                />
-              </>
-            )}
-            <FeaturedOffers
-              offers={offers}
-              onOpen={(offerId) =>
-                navigation.navigate("OfferDetails", { offerId })
-              }
-              onCreate={() => navigation.navigate("CreatePost")}
-            />
             {visibleVenues.length > 0 && (
               <>
                 <Text style={styles.sectionHeading}>
@@ -398,24 +470,19 @@ const styles = StyleSheet.create({
     color: colors.clayDeep,
     marginVertical: spacing.sm,
   },
-  status: {
-    ...typography.bodySmall,
-    color: colors.textDim,
-    marginTop: spacing.lg,
-  },
   sectionRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     gap: spacing.sm,
-    marginBottom: spacing.md,
+    marginBottom: 10,
   },
-  sectionTitle: { ...typography.heading, color: colors.text, flex: 1 },
+  sectionTitle: { ...typography.title, fontSize: 22, color: colors.text },
   sectionMeta: {
     ...typography.caption,
     color: colors.textDim,
     flexShrink: 1,
-    textAlign: "right",
+    marginTop: 3,
   },
   sectionHeading: {
     ...typography.heading,
@@ -423,30 +490,51 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg,
     marginBottom: spacing.md,
   },
-  intro: {
-    marginTop: 8,
-    marginBottom: 16,
-    padding: 20,
-    borderRadius: 20,
+  intro: { marginTop: 4, marginBottom: 18 },
+  greeting: { ...typography.bodySmall, color: colors.textDim, marginBottom: 5 },
+  heroTitle: {
+    ...typography.title,
+    fontSize: 27,
+    lineHeight: 33,
+    letterSpacing: -0.8,
+    color: colors.forest,
+  },
+  flex: { flex: 1 },
+  filterButton: {
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 12,
+  },
+  filterSelected: { backgroundColor: colors.sageSoft },
+  dateFilters: { gap: 8, paddingBottom: 18 },
+  dateChip: {
+    minHeight: 42,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+    justifyContent: "center",
+  },
+  dateChipSelected: {
+    borderColor: colors.forest,
     backgroundColor: colors.forest,
   },
-  greeting: {
-    ...typography.bodySmall,
-    color: colors.sageSoft,
-    marginBottom: 9,
+  dateText: { ...typography.bodySmall, fontWeight: "600", color: colors.text },
+  dateTextSelected: { color: colors.onAccent },
+  filterPanel: {
+    backgroundColor: colors.sageSoft,
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 18,
   },
-  heroTitle: {
-    ...typography.display,
-    fontSize: 30,
-    lineHeight: 35,
-    letterSpacing: -1,
-    color: colors.onAccent,
-  },
-  heroAccent: { color: colors.gold },
-  resetFilter: {
+  freeFilter: {
     minHeight: 44,
-    justifyContent: "center",
-    paddingHorizontal: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
   },
   resetText: { ...typography.bodySmall, color: colors.accent },
 });

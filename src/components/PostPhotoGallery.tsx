@@ -21,12 +21,15 @@ import { Icon } from "./Icon";
 export function PostPhotoGallery({
   postId,
   onReportPhoto,
+  fallback,
 }: {
   postId: string;
   onReportPhoto?: (id: string) => void;
+  fallback?: React.ReactNode;
 }) {
   const { width } = useWindowDimensions();
   const reduced = useReducedMotion();
+  const [galleryWidth, setGalleryWidth] = useState(Math.min(672, width - 40));
   const [selected, setSelected] = useState<string | null>(null);
   const [failed, setFailed] = useState<string[]>([]);
   const {
@@ -39,22 +42,29 @@ export function PostPhotoGallery({
     void refresh();
   };
   if (state === "loading" && !photos)
-    return <LoadingState label="Loading photos…" layout="compact" />;
+    return (
+      <View style={styles.loadingCover}>
+        <LoadingState label="Loading photos…" layout="compact" />
+      </View>
+    );
   if (state === "error")
     return (
       <View style={styles.section}>
+        {fallback}
         <Text style={styles.note}>Couldn't load this post's photos.</Text>
         <Button title="Retry photos" variant="ghost" onPress={retry} />
       </View>
     );
-  if (!photos?.length) return null;
+  if (!photos?.length) return <>{fallback}</>;
   return (
-    <View style={styles.section}>
-      <Text accessibilityRole="header" style={styles.heading}>
-        A look at the plan
-      </Text>
+    <View
+      style={styles.section}
+      onLayout={(event) => setGalleryWidth(event.nativeEvent.layout.width)}
+    >
       <ScrollView
         horizontal
+        snapToInterval={galleryWidth + 12}
+        decelerationRate="fast"
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.rail}
       >
@@ -64,7 +74,10 @@ export function PostPhotoGallery({
             accessibilityRole="button"
             accessibilityLabel={`Open post photo ${index + 1} of ${photos.length}`}
             onPress={() => setSelected(photo.photo_url)}
-            style={[styles.tile, { width: Math.min(560, width - 48) }]}
+            style={[
+              styles.tile,
+              { width: galleryWidth, height: galleryWidth / 1.55 },
+            ]}
           >
             {failed.includes(photo.photo_url) ? (
               <Text style={styles.note}>Photo unavailable</Text>
@@ -130,7 +143,14 @@ export function PostPhotoGallery({
 }
 
 const styles = StyleSheet.create({
-  section: { marginTop: 20 },
+  section: { marginBottom: 4 },
+  loadingCover: {
+    width: "100%",
+    aspectRatio: 1.55,
+    backgroundColor: colors.surfaceRaised,
+    borderRadius: 20,
+    justifyContent: "center",
+  },
   heading: { ...typography.heading, color: colors.text, marginBottom: 12 },
   rail: { gap: 12 },
   tile: {

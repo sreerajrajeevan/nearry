@@ -11,7 +11,7 @@ import { colors, typography, spacing, radius } from "../theme";
 import { MotionPressable } from "./Motion";
 import { LoadingDots } from "./LoadingDots";
 
-type Variant = "primary" | "secondary" | "ghost" | "danger";
+type Variant = "primary" | "secondary" | "ghost" | "danger" | "solid";
 
 type Props = {
   title: string;
@@ -51,11 +51,13 @@ export function Button({
         {loading && (
           <LoadingDots
             color={
-              variant === "primary"
-                ? colors.onSage
-                : variant === "danger"
-                  ? colors.red
-                  : colors.text
+              variant === "solid"
+                ? colors.onAccent
+                : variant === "primary"
+                  ? colors.onSage
+                  : variant === "danger"
+                    ? colors.red
+                    : colors.text
             }
           />
         )}
@@ -90,6 +92,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
   },
   primary: { backgroundColor: colors.sage },
+  solid: { backgroundColor: colors.forest },
   secondary: {
     backgroundColor: colors.surface,
     borderWidth: 1,
@@ -110,6 +113,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   primaryText: { color: colors.onSage },
+  solidText: { color: colors.onAccent },
   secondaryText: { color: colors.text },
   ghostText: { color: colors.textDim },
   dangerText: { color: colors.red },

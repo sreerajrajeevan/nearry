@@ -59,7 +59,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 7,
-    backgroundColor: "transparent",
+    backgroundColor: colors.sageSoft,
     borderWidth: 1,
     borderColor: "transparent",
     borderRadius: 14,

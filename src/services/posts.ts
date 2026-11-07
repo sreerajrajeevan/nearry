@@ -12,13 +12,22 @@ import {
 import { searchLiteral } from "../utils/searchFilter";
 import { validatePostDraft } from "../utils/validation";
 import { postPhotoCovers } from "./postPhotos";
+import { publicAvatars } from "./profile";
 
 async function withPhotoCovers(posts: NeedPost[]): Promise<NeedPost[]> {
   try {
-    const covers = await postPhotoCovers(posts.map((post) => post.id));
+    const [covers, avatars] = await Promise.all([
+      postPhotoCovers(posts.map((post) => post.id)).catch(
+        () => new Map<string, string>(),
+      ),
+      publicAvatars(posts.map((post) => post.authorId)).catch(
+        () => new Map<string, string>(),
+      ),
+    ]);
     return posts.map((post) => ({
       ...post,
       coverPhotoUrl: covers.get(post.id),
+      authorAvatarUrl: avatars.get(post.authorId),
     }));
   } catch {
     // Optional thumbnails must not hide otherwise usable plans. The details

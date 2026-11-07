@@ -23,7 +23,7 @@ export function DiscoverySearch(props: Props) {
         style={styles.field}
       >
         <Icon name="search" size={18} />
-        <Text style={styles.placeholder}>Places, plans or a little time…</Text>
+        <Text style={styles.placeholder}>Search places or plans</Text>
       </TouchableOpacity>
     );
   return (
@@ -33,7 +33,7 @@ export function DiscoverySearch(props: Props) {
         accessibilityLabel="Search nearby"
         value={props.value}
         onChangeText={props.onChangeText}
-        placeholder="Places, plans or a little time…"
+        placeholder="Search places or plans"
         placeholderTextColor={colors.textDim}
         style={styles.input}
         autoCapitalize="none"
