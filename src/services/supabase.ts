@@ -1,3 +1,4 @@
+import { createSignInFetch } from "./signInTransport";
 import {
   createClient,
   SupabaseClient,
@@ -43,6 +44,7 @@ export function getSupabase(): SupabaseClient | null {
   if (!isSupabaseConfigured) return null;
   if (!client) {
     client = createClient(url, anonKey, {
+      global: { fetch: createSignInFetch(url) },
       auth: {
         storage: authStorage,
         persistSession: true,

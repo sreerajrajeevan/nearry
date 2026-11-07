@@ -45,3 +45,5 @@ to a real inbox.
 References: [Supabase custom SMTP](https://supabase.com/docs/guides/auth/auth-smtp),
 [email OTP](https://supabase.com/docs/guides/auth/auth-email-passwordless),
 [Auth errors](https://supabase.com/docs/guides/auth/debugging/error-codes).
+
+See [the current sign-in investigation](sign-in-reliability.md) for app timeout/cooldown fixes, Google branding, and the confirmed Resend test-sender restriction.

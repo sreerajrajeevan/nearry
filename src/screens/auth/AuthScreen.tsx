@@ -1,5 +1,10 @@
+import {
+  EmailCodeCooldowns,
+  normalizeEmail,
+  normalizeEmailCode,
+} from "../../utils/emailSignIn";
 import { PageHeading } from "../../components/PageHeading";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -54,6 +59,14 @@ export function AuthScreen({
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [sentTo, setSentTo] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<
+    "send" | "verify" | "google" | null
+  >(null);
+  const [errorFor, setErrorFor] = useState<"email" | "google">("email");
+  const actionLock = useRef(false);
+  const version = useRef(0);
+  const cooldowns = useRef(new EmailCodeCooldowns());
+  const busy = loading || pendingAction !== null;
   const [resendAt, setResendAt] = useState(0);
   const [resendSeconds, setResendSeconds] = useState(0);
   useEffect(() => {
@@ -65,26 +78,34 @@ export function AuthScreen({
     return () => clearInterval(timer);
   }, [resendAt]);
   useEffect(() => {
+    version.current++;
     setAgreed(false);
     setStep("email");
     setCode("");
     setSentTo(null);
     setError(null);
+    return () => {
+      version.current++;
+    };
   }, [mode, accountType]);
 
   const fail = (e: unknown) =>
     setError(e instanceof Error ? e.message : "Something went wrong.");
 
   const sendCode = async () => {
-    if (loading) return;
+    if (busy || actionLock.current) return;
+    setErrorFor("email");
     setError(null);
-    if (Date.now() < resendAt)
+    if (Date.now() < cooldowns.current.expiresAt(email))
       return setError("Please wait before requesting another code.");
     if (!isLogin && !agreed) return setError(AGREEMENT_REQUIRED);
-    const clean = email.trim();
+    const clean = normalizeEmail(email);
     if (!isValidEmail(clean)) return setError("Enter a valid email address.");
     if (!isLogin && !isValidDisplayName(displayName))
       return setError("Display name must be 2–40 characters.");
+    const run = version.current;
+    actionLock.current = true;
+    setPendingAction("send");
     try {
       await sendOtp(
         clean,
@@ -93,40 +114,72 @@ export function AuthScreen({
         !isLogin,
         agreed,
       );
+      cooldowns.current.record(clean);
+      if (run !== version.current) return;
       setSentTo(clean);
-      setResendAt(Date.now() + 60_000);
+      setResendAt(cooldowns.current.expiresAt(clean));
       setCode("");
       setStep("code");
     } catch (e) {
-      fail(e);
+      if (run === version.current) fail(e);
+    } finally {
+      actionLock.current = false;
+      if (run === version.current) setPendingAction(null);
     }
   };
 
   const confirmCode = async () => {
-    if (loading) return;
+    if (busy || actionLock.current) return;
+    setErrorFor("email");
     setError(null);
     if (!isLogin && !agreed) return setError(AGREEMENT_REQUIRED);
     if (!isValidOtp(code))
       return setError("Enter the full code from your email (6–10 digits).");
+    const run = version.current;
+    actionLock.current = true;
+    setPendingAction("verify");
     try {
-      await verifyOtp(sentTo ?? email.trim(), code.trim());
+      await verifyOtp(
+        sentTo ?? normalizeEmail(email),
+        normalizeEmailCode(code),
+      );
       // RootNavigator routes on session+profile automatically.
     } catch (e) {
-      fail(e);
+      if (run === version.current) fail(e);
+    } finally {
+      actionLock.current = false;
+      if (run === version.current) setPendingAction(null);
     }
   };
 
   const google = async () => {
-    if (loading) return;
+    if (busy || actionLock.current) return;
+    setErrorFor("google");
     setError(null);
+    if (!isLogin && !agreed) return setError(AGREEMENT_REQUIRED);
+    const run = version.current;
+    actionLock.current = true;
+    setPendingAction("google");
     try {
-      if (!isLogin && !agreed) return setError(AGREEMENT_REQUIRED);
       await signInGoogle(accountType, !isLogin, agreed);
     } catch (e) {
-      fail(e);
+      if (run === version.current) fail(e);
+    } finally {
+      actionLock.current = false;
+      if (run === version.current) setPendingAction(null);
     }
   };
 
+  const emailError =
+    error && errorFor === "email" ? (
+      <Text
+        accessibilityRole="alert"
+        accessibilityLiveRegion="polite"
+        style={styles.error}
+      >
+        {error}
+      </Text>
+    ) : null;
   return (
     <Screen padded scroll keyboard>
       <BrandHeader context={kicker} />
@@ -134,7 +187,7 @@ export function AuthScreen({
         accessibilityRole="button"
         accessibilityLabel="Back to welcome"
         onPress={onBack}
-        disabled={loading}
+        disabled={busy}
         style={styles.back}
       >
         <Icon name="arrow-left" size={16} />
@@ -173,6 +226,7 @@ export function AuthScreen({
             <Input
               label="Display name"
               placeholder="What should we call you?"
+              editable={!busy}
               value={displayName}
               onChangeText={setDisplayName}
               autoCapitalize="words"
@@ -183,12 +237,20 @@ export function AuthScreen({
             label="Email"
             placeholder="you@example.com"
             value={email}
-            onChangeText={setEmail}
+            editable={!busy}
+            autoCorrect={false}
+            autoComplete="email"
+            onChangeText={(value) => {
+              setEmail(value);
+              setError(null);
+              setResendAt(cooldowns.current.expiresAt(value));
+            }}
             keyboardType="email-address"
             autoCapitalize="none"
             returnKeyType="send"
             onSubmitEditing={sendCode}
           />
+          {emailError}
           <View style={styles.gap} />
           {!isLogin && (
             <TermsAgreement
@@ -197,7 +259,7 @@ export function AuthScreen({
                 setAgreed(checked);
                 setError(null);
               }}
-              disabled={loading}
+              disabled={busy}
               onTerms={() => navigation.navigate("Legal", { page: "terms" })}
               onPrivacy={() =>
                 navigation.navigate("Legal", { page: "privacy" })
@@ -205,10 +267,12 @@ export function AuthScreen({
             />
           )}
           <Button
-            title="Send code"
+            title={
+              resendSeconds > 0 ? `Send code in ${resendSeconds}s` : "Send code"
+            }
             onPress={sendCode}
-            loading={loading}
-            disabled={!isLogin && !agreed}
+            loading={pendingAction === "send"}
+            disabled={busy || resendSeconds > 0 || (!isLogin && !agreed)}
           />
         </>
       ) : (
@@ -217,9 +281,11 @@ export function AuthScreen({
             label="Email code"
             placeholder="Enter your code"
             value={code}
-            onChangeText={(t: string) =>
-              setCode(t.replace(/[^0-9]/g, "").slice(0, 10))
-            }
+            editable={!busy}
+            onChangeText={(value: string) => {
+              setCode(normalizeEmailCode(value));
+              setError(null);
+            }}
             keyboardType="number-pad"
             returnKeyType="send"
             onSubmitEditing={confirmCode}
@@ -228,10 +294,16 @@ export function AuthScreen({
             autoFocus
           />
           <View style={styles.gap} />
-          <Button title="Verify" onPress={confirmCode} loading={loading} />
+          {emailError}
+          <Button
+            title="Verify code"
+            onPress={confirmCode}
+            loading={pendingAction === "verify"}
+            disabled={busy}
+          />
           <TouchableOpacity
             onPress={sendCode}
-            disabled={loading || resendSeconds > 0}
+            disabled={busy || resendSeconds > 0}
             accessibilityRole="button"
             activeOpacity={0.7}
             style={styles.link}
@@ -243,17 +315,26 @@ export function AuthScreen({
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
-            disabled={loading}
+            disabled={busy}
             onPress={() => {
               setStep("email");
               setCode("");
               setError(null);
+              setResendAt(cooldowns.current.expiresAt(email));
             }}
             activeOpacity={0.7}
             style={styles.link}
           >
             <Text style={styles.linkText}>Use a different email</Text>
           </TouchableOpacity>
+          {isLogin && (
+            <Button
+              title="New here? Create an account"
+              variant="ghost"
+              disabled={busy}
+              onPress={onSwitchMode}
+            />
+          )}
         </>
       )}
 
@@ -266,29 +347,31 @@ export function AuthScreen({
         title="Continue with Google"
         variant="secondary"
         onPress={google}
-        loading={loading}
-        disabled={!isLogin && !agreed}
+        loading={pendingAction === "google"}
+        disabled={busy || (!isLogin && !agreed)}
       />
 
-      {error && (
+      {error && errorFor === "google" && (
         <Text accessibilityRole="alert" style={styles.error}>
           {error}
         </Text>
       )}
 
-      <TouchableOpacity
-        onPress={onSwitchMode}
-        disabled={loading}
-        activeOpacity={0.7}
-        style={styles.switch}
-        accessibilityRole="button"
-      >
-        <Text style={styles.switchText}>
-          {isLogin
-            ? "New here? Create an account"
-            : "Already have an account? Log in"}
-        </Text>
-      </TouchableOpacity>
+      {!(isLogin && step === "code") && (
+        <TouchableOpacity
+          onPress={onSwitchMode}
+          disabled={busy}
+          activeOpacity={0.7}
+          style={styles.switch}
+          accessibilityRole="button"
+        >
+          <Text style={styles.switchText}>
+            {isLogin
+              ? "New here? Create an account"
+              : "Already have an account? Log in"}
+          </Text>
+        </TouchableOpacity>
+      )}
     </Screen>
   );
 }
@@ -324,8 +407,8 @@ const styles = StyleSheet.create({
   error: {
     ...typography.body,
     color: colors.red,
-    marginTop: spacing.lg,
-    textAlign: "center",
+    marginTop: spacing.sm,
+    marginBottom: spacing.sm,
   },
   switch: { marginTop: spacing.xl, alignItems: "center" },
   switchText: { ...typography.label, color: colors.text },

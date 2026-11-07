@@ -1,3 +1,4 @@
+import { GOOGLE_SIGN_IN_PARAMS } from "../utils/emailSignIn";
 import { completeSignupAgreement } from "./terms";
 import * as WebBrowser from "expo-web-browser";
 import * as Linking from "expo-linking";
@@ -41,7 +42,7 @@ export async function signInWithGoogle(
     options: {
       redirectTo,
       skipBrowserRedirect: true,
-      queryParams: { access_type: "offline", prompt: "consent" },
+      queryParams: GOOGLE_SIGN_IN_PARAMS,
     },
   });
   if (error) throw new Error(friendlyAuthError(error.message));

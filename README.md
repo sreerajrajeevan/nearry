@@ -31,7 +31,7 @@ Migrations `00011`–`00018` introduce required RPCs, so deploy migrations and t
 ## Authentication
 
 - Email uses a numeric OTP (6–10 digits, as configured in Supabase). Enable the Supabase Email provider and include `{{ .Token }}` in both the Magic Link and Confirm signup templates. Configure custom SMTP with a verified sender for real recipients.
-- Codes not arriving? See [email delivery checks](docs/email-otp.md). Firebase notification credentials do not configure Supabase email delivery.
+- Codes not arriving? See [email delivery checks](docs/email-otp.md) and [sign-in reliability / Google branding](docs/sign-in-reliability.md). Firebase notification credentials do not configure Supabase email delivery.
 - Log in uses `shouldCreateUser: false`; Sign up allows account creation. Neither asks for passwords or phone numbers.
 - Google uses Supabase OAuth with explicit PKCE. Enable Google using a Google Cloud Web OAuth client and the callback URL displayed by Supabase. Keep the Google secret only in Supabase.
 - Allow-list `nearry://auth/callback` in Supabase Auth redirects. For web, add your exact `/auth/callback` URL and configure hosting to serve the app at that path.
