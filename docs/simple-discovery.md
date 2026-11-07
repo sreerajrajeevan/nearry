@@ -1,20 +1,22 @@
 # Simple Nearby and plan details
 
 The Nearby feed and plan details use the existing forest/cream theme with quieter
-headers, wide photo notes, activity categories, readable metadata and fewer
+headers, generous side photos, activity categories, readable metadata and fewer
 competing panels. `PostRow` is shared with Search so plan results stay consistent.
 The Personal Create tab has a small solid green plus button.
 
-Feed notes use wide uploaded covers (2.85:1), simple mixed-case date/category
-captions, clear titles, location, host and spots. There are no enclosing card
+Feed rows place an uploaded photo on the left (40% of the row width, at least
+154 pixels tall) and the category, title, date, location, host and spots on the
+right. Covers stretch with the text instead of becoming thin horizontal strips.
+The default cover aspect ratio used elsewhere remains unchanged. There are no enclosing card
 panels or decorative badges, apart from audience restrictions that remain visible.
 The compact header keeps the existing logo, location picker, messages and unread
 notifications. Search and a separate 44-pixel filter button share one quiet field.
 Categories and the free-only toggle live inside the filter panel; an applied-filter
 indicator and summary keep their state visible when the panel closes. Date tabs
 remain directly on the feed. Changing filters does not force a scroll jump.
-Two short plan notes fit at 390×844, with the next beginning below; longer titles,
-audience restrictions and larger system text can need more room. Text is allowed
+Three sample rows fit at 390×844; narrower phones, longer titles, audience
+restrictions and larger system text can need more room. Text is allowed
 to grow rather than being forced into a fixed card height. Details retain their
 larger gallery, and the safe-area-aware tab bar has no selected background pill.
 
@@ -50,8 +52,12 @@ skips); Android/web production exports passed. Date regression tests also passed
 separately under Asia/Kolkata and America/New_York, covering every weekday,
 weekend midnight bounds, year/DST changes, combined filters/reset, cached expiry,
 invalid timestamps, cancelled/closed plans, full plans and unknown costs.
-Actual app checks in an isolated demo at 390×844 and 320×600 covered date/category/
-free controls and reset, empty results, search navigation and safe-area tab labels.
+Actual app checks in an isolated demo at 390×844 and 320×600 covered photo/text
+placement, audience badges, no horizontal overflow and fully visible tab labels.
+A local attached-image fixture rendered at 142×154 pixels and the row opened the
+full gallery and participation footer. Today/weekend were rechecked after the
+layout change. Earlier passes also checked category/free filters and reset, empty
+results and search navigation.
 The earlier checks in this PR covered request/withdraw, gender/profile gates,
 host approval/edit and photo/safety reporting. No production records were modified.
 Native share/maps, large system fonts, TalkBack/VoiceOver and gesture navigation

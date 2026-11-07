@@ -12,10 +12,13 @@ export function PlanCover({
   post,
   aspectRatio = 1.95,
   artworkSize = 112,
+  fill = false,
 }: {
   post: NeedPost;
   aspectRatio?: number;
   artworkSize?: number;
+  /** Stretch inside a side-photo row as its text grows (including system text). */
+  fill?: boolean;
 }) {
   const [failed, setFailed] = useState(false);
   useEffect(() => setFailed(false), [post.coverPhotoUrl]);
@@ -24,7 +27,7 @@ export function PlanCover({
     <View
       style={[
         styles.cover,
-        { aspectRatio },
+        fill ? styles.fill : { aspectRatio },
         {
           backgroundColor:
             category === "Meet"
@@ -51,10 +54,10 @@ export function PlanCover({
 const styles = StyleSheet.create({
   cover: {
     width: "100%",
-    aspectRatio: 1.95,
     alignItems: "center",
     justifyContent: "center",
     overflow: "hidden",
   },
+  fill: { flex: 1 },
   image: { width: "100%", height: "100%" },
 });

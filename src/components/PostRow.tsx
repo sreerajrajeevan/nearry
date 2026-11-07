@@ -12,7 +12,7 @@ import { Avatar } from "./Avatar";
 import { AudienceBadge, audienceLabel } from "./AudienceBadge";
 import { Icon } from "./Icon";
 
-/** A photo-led community note; the whole card opens the full plan. */
+/** A generous left photo with a readable plan summary alongside it. */
 export function PostRow({
   post,
   distanceKm,
@@ -54,15 +54,17 @@ export function PostRow({
       style={styles.card}
     >
       <View style={styles.cover}>
-        <PlanCover post={post} aspectRatio={2.85} artworkSize={84} />
+        <PlanCover post={post} fill artworkSize={84} />
       </View>
       <View style={styles.content}>
-        <Text style={styles.category}>
-          {postCategory(post)} · {formatWhen(post.startsAt, now)}
-        </Text>
+        <Text style={styles.category}>{postCategory(post)}</Text>
         <Text style={styles.title} numberOfLines={2}>
           {post.title}
         </Text>
+        <View style={styles.metaRow}>
+          <Icon name="calendar" size={13} />
+          <Text style={styles.meta}>{formatWhen(post.startsAt, now)}</Text>
+        </View>
         {!!place && (
           <View style={styles.metaRow}>
             <Icon name="map-pin" size={13} />
@@ -79,6 +81,8 @@ export function PostRow({
           <Text style={styles.author} numberOfLines={1}>
             {post.authorName}
           </Text>
+        </View>
+        <View style={styles.availability}>
           <Text style={[styles.spots, !status.accepting && styles.closed]}>
             {spots}
           </Text>
@@ -90,13 +94,22 @@ export function PostRow({
 }
 const styles = StyleSheet.create({
   card: {
+    flexDirection: "row",
+    alignItems: "stretch",
+    gap: 14,
     paddingTop: 12,
     paddingBottom: 14,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
   },
-  cover: { borderRadius: 8, overflow: "hidden", marginBottom: 7 },
-  content: { minWidth: 0 },
+  cover: {
+    width: "40%",
+    maxWidth: 200,
+    minHeight: 154,
+    borderRadius: 8,
+    overflow: "hidden",
+  },
+  content: { flex: 1, minWidth: 0, justifyContent: "center" },
   category: {
     ...typography.caption,
     fontSize: 12,
@@ -126,6 +139,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   footer: { flexDirection: "row", alignItems: "center", gap: 7, marginTop: 9 },
+  availability: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 6,
+    marginTop: 5,
+  },
   author: { ...typography.bodySmall, color: colors.textDim, flex: 1 },
   spots: {
     ...typography.caption,
