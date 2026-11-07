@@ -2894,8 +2894,276 @@ end;
 $$ language plpgsql security definer set search_path=public;
 
 
--- 00027_admin_console.sql
--- 00027: Private, explicitly allowlisted Nearry operations dashboard.
+-- 00026_chat_inbox_controls.sql
+-- Member-specific chat deletion. Shared messages are preserved for the other member.
+
+create table conversation_clears (
+  conversation_id uuid not null references conversations(id) on delete cascade,
+  user_id uuid not null references profiles(id) on delete cascade,
+  cleared_at timestamptz not null,
+  primary key(conversation_id,user_id)
+);
+alter table conversation_clears enable row level security;
+revoke all on conversation_clears from public,anon,authenticated;
+grant select on conversation_clears to authenticated;
+grant all on conversation_clears to service_role;
+create policy "own conversation clears" on conversation_clears for select using(user_id=auth.uid());
+
+-- The boundary is server-owned; direct message reads cannot restore cleared history.
+create policy "uncleared messages" on messages as restrictive for select using (
+  not exists(select 1 from conversation_clears d where d.conversation_id=messages.conversation_id
+    and d.user_id=auth.uid() and messages.created_at<=d.cleared_at)
+);
+create function delete_my_conversation(p_conversation_id uuid) returns void as $$
+declare cutoff timestamptz;
+begin
+ if not account_active(auth.uid()) then raise exception 'account unavailable';end if;
+ perform 1 from conversations where id=p_conversation_id and auth.uid() in(user_a,user_b) for update;
+ if not found then raise exception 'not a conversation member';end if;
+ cutoff:=clock_timestamp();
+ insert into conversation_clears(conversation_id,user_id,cleared_at) values(p_conversation_id,auth.uid(),cutoff)
+ on conflict(conversation_id,user_id) do update set cleared_at=greatest(conversation_clears.cleared_at,excluded.cleared_at);
+ insert into conversation_reads(conversation_id,user_id,last_read_at) values(p_conversation_id,auth.uid(),cutoff)
+ on conflict(conversation_id,user_id) do update set last_read_at=greatest(conversation_reads.last_read_at,excluded.last_read_at);
+ update notifications set read_at=cutoff where user_id=auth.uid() and kind='message'
+   and ref_id=p_conversation_id and read_at is null and created_at<=cutoff;
+end;
+$$ language plpgsql security definer set search_path=public;
+revoke all on function delete_my_conversation(uuid) from public,anon;
+grant execute on function delete_my_conversation(uuid) to authenticated;
+
+-- Filter both history and previews. A new message revives the inbox entry,
+-- but never revives the deleting member's old messages.
+create or replace function list_my_conversations() returns json as $$
+ select coalesce(json_agg(row_to_json(t) order by t.last_at desc nulls last,t.id),'[]'::json) from (
+  select c.id, p.id as other_user_id,p.display_name as other_name,c.post_id,c.booking_id,
+    coalesce(post.title,offer.title) as context_title,last_msg.body as last_body,last_msg.created_at as last_at,
+    (select count(*) from messages m where m.conversation_id=c.id and m.sender_id<>auth.uid()
+      and m.created_at>greatest(coalesce(r.last_read_at,'1970-01-01'::timestamptz),coalesce(d.cleared_at,'1970-01-01'::timestamptz))) as unread_count
+  from conversations c
+  join profiles p on p.id=case when c.user_a=auth.uid() then c.user_b else c.user_a end
+  left join posts post on post.id=c.post_id
+  left join bookings b on b.id=c.booking_id
+  left join offers offer on offer.id=b.offer_id
+  left join conversation_clears d on d.conversation_id=c.id and d.user_id=auth.uid()
+  left join conversation_reads r on r.conversation_id=c.id and r.user_id=auth.uid()
+  left join lateral (select m.body,m.created_at from messages m where m.conversation_id=c.id
+    and (d.cleared_at is null or m.created_at>d.cleared_at) order by m.created_at desc,m.id desc limit 1) last_msg on true
+  where auth.uid() in(c.user_a,c.user_b) and account_active(auth.uid()) and account_active(p.id)
+    and not users_blocked(auth.uid(),p.id) and (d.cleared_at is null or last_msg.created_at is not null)
+ ) t;
+$$ language sql stable security definer set search_path=public;
+revoke all on function list_my_conversations() from public,anon;
+grant execute on function list_my_conversations() to authenticated;
+
+-- A conversation report preserves recent context for the existing moderation queue.
+alter table content_reports drop constraint content_reports_target_kind_check;
+alter table content_reports add constraint content_reports_target_kind_check
+ check(target_kind in ('post','photo','offer','venue','user','message','conversation'));
+create or replace function submit_content_report(p_kind text,p_target uuid,p_reason text,p_details text default '') returns uuid as $$
+declare subject uuid; summary text; rid uuid;begin
+ if not account_active(auth.uid()) then raise exception 'account unavailable';end if;
+ if p_reason is null or p_reason not in ('spam','harassment','inappropriate','scam','safety','other') or char_length(coalesce(p_details,''))>1000 then raise exception 'invalid report';end if;
+ -- A per-reporter lock serializes limits and repeat submissions.
+ perform 1 from profiles where id=auth.uid() for update;
+ select id into rid from content_reports where reporter_id=auth.uid() and target_kind=p_kind and target_id=p_target;
+ if rid is not null then return rid;end if;
+ if (select count(*) from content_reports where reporter_id=auth.uid() and created_at>now()-interval '1 day')>=20 then raise exception 'Daily report limit reached. Please contact support for urgent concerns.';end if;
+ if p_kind='post' then select author_id,left(title||E'\n'||description,2000) into subject,summary from posts where id=p_target;
+ elsif p_kind='photo' then select p.author_id,left(p.title||E'\n'||f.photo_url,2000) into subject,summary from post_photos f join posts p on p.id=f.post_id where f.id=p_target;
+ elsif p_kind='offer' then select business_id,left(title||E'\n'||description,2000) into subject,summary from offers where id=p_target;
+ elsif p_kind='venue' then select business_id,name into subject,summary from venues where id=p_target;
+ elsif p_kind='user' then select id,display_name into subject,summary from profiles where id=p_target;
+ elsif p_kind='conversation' then
+  select case when c.user_a=auth.uid() then c.user_b else c.user_a end,
+    'Conversation '||c.id::text||E'\n'||coalesce((
+      select string_agg(m.sender_id::text||' ['||m.created_at::text||'] '||m.body,E'\n' order by m.created_at,m.id)
+      from (select sender_id,created_at,id,body from messages
+        where conversation_id=c.id order by created_at desc,id desc limit 20) m
+    ),'No messages yet') into subject,summary
+  from conversations c where c.id=p_target and auth.uid() in(c.user_a,c.user_b);
+ elsif p_kind='message' then
+  select m.sender_id,left(m.body,2000) into subject,summary from messages m join conversations c on c.id=m.conversation_id
+   where m.id=p_target and auth.uid() in(c.user_a,c.user_b);
+ else raise exception 'invalid report target';end if;
+ if summary is null then raise exception 'Content not found or not accessible';end if;
+ if subject=auth.uid() then raise exception 'You cannot report your own content';end if;
+ insert into content_reports(reporter_id,subject_user_id,target_kind,target_id,reason,details,snapshot)
+ values(auth.uid(),subject,p_kind,p_target,p_reason,btrim(coalesce(p_details,'')),summary) returning id into rid;
+ return rid;
+end;
+$$ language plpgsql security definer set search_path=public;
+
+create or replace function review_content_report(p_report uuid,p_action text,p_note text default '') returns void as $$
+declare r content_reports; photo_url text; object_path text;begin
+ if p_action is null or p_action not in ('dismiss','remove','suspend') or char_length(coalesce(p_note,''))>1000 then raise exception 'Invalid review';end if;
+ select * into r from content_reports where id=p_report for update;
+ if not found or r.status<>'open' then raise exception 'Report already reviewed or unavailable';end if;
+ if p_action='suspend' then
+  if r.subject_user_id is null then raise exception 'No account to suspend';end if;
+  perform cancel_account_commitments(r.subject_user_id);
+  update profiles set suspended_at=now() where id=r.subject_user_id;
+ elsif p_action='remove' then
+  if r.target_kind in ('user','conversation') then raise exception 'Use suspend for an account, or report a specific message for removal';end if;
+  insert into removed_content(target_kind,target_id) values(r.target_kind,r.target_id) on conflict do nothing;
+  if r.target_kind='post' then update posts set status='cancelled' where id=r.target_id;
+  elsif r.target_kind='offer' then
+   update offers set status='ended' where id=r.target_id;
+   update bookings set status='cancelled' where offer_id=r.target_id and status in ('pending','confirmed') and slot>now();
+  elsif r.target_kind='photo' then
+   select f.photo_url into photo_url from post_photos f where f.id=r.target_id;
+   object_path:=split_part(split_part(photo_url,'/storage/v1/object/public/photos/',2),'?',1);
+   if object_path<>'' and split_part(object_path,'/',1)=r.subject_user_id::text then
+    insert into media_cleanup_jobs(bucket,path) values('photos',object_path) on conflict do nothing;
+   end if;
+   delete from post_photos where id=r.target_id;
+  elsif r.target_kind='message' then delete from messages where id=r.target_id;
+  end if;
+ end if;
+ update content_reports set status=case when p_action='dismiss' then 'dismissed' else 'resolved' end,reviewed_at=now(),review_note=btrim(coalesce(p_note,'')) where id=r.id;
+end;
+$$ language plpgsql security definer set search_path=public;
+revoke all on function review_content_report(uuid,text,text) from public,anon,authenticated;
+grant execute on function review_content_report(uuid,text,text) to service_role;
+
+
+-- 00027_post_participation_and_photos.sql
+-- Complete profiles only at participation, with private self-declared age.
+-- No ages or genders are inferred/backfilled from Google metadata.
+
+alter table profiles add column age integer check(age between 18 and 100);
+grant update(age) on profiles to authenticated;
+-- Public column grants deliberately exclude age; get_my_profile returns it only to its owner.
+create function personal_profile_ready(p_user uuid) returns boolean as $$
+ select exists(select 1 from profiles p where p.id=p_user and p.account_type='personal'
+   and char_length(btrim(p.display_name)) between 2 and 40 and p.onboarding_completed and p.role_selected and p.gender in ('male','female','other')
+   and p.age between 18 and 100 and p.terms_version='2026-10-19' and account_active(p.id));
+$$ language sql stable security definer set search_path=public;
+revoke all on function personal_profile_ready(uuid) from public,anon,authenticated;
+grant execute on function personal_profile_ready(uuid) to service_role;
+create function my_personal_profile_ready() returns boolean as $$ select personal_profile_ready(auth.uid()); $$ language sql stable security definer set search_path=public;
+revoke all on function my_personal_profile_ready() from public,anon;
+grant execute on function my_personal_profile_ready() to authenticated;
+create function complete_personal_profile(p_display_name text,p_gender text,p_age integer,p_terms_accepted boolean default false) returns void as $$
+declare p profiles;
+begin
+ select * into p from profiles where id=auth.uid() for update;
+ if not found or p.account_type<>'personal' or not p.role_selected or not account_active(auth.uid()) then raise exception 'Personal account required';end if;
+ if p_display_name is null or char_length(btrim(p_display_name)) not between 2 and 40 or p_gender is null or p_gender not in ('male','female','other')
+   or p_age is null or p_age not between 18 and 100 then raise exception 'Enter your name, gender and an age between 18 and 100';end if;
+ if p.terms_version is distinct from '2026-10-19' and p_terms_accepted is distinct from true then raise exception 'Please accept the current Terms and Community Guidelines';end if;
+ update profiles set display_name=btrim(p_display_name),gender=p_gender,age=p_age,onboarding_completed=true,
+   terms_version='2026-10-19',terms_accepted_at=case when p.terms_version is distinct from '2026-10-19' then clock_timestamp() else coalesce(p.terms_accepted_at,clock_timestamp()) end where id=p.id;
+end;
+$$ language plpgsql security definer set search_path=public;
+revoke all on function complete_personal_profile(text,text,integer,boolean) from public,anon;
+grant execute on function complete_personal_profile(text,text,integer,boolean) to authenticated;
+create policy "complete personal profile before posting" on posts as restrictive for insert with check(my_personal_profile_ready());
+
+-- Runs through request/approval RPCs as well as any allowed direct write.
+create function enforce_join_eligibility() returns trigger as $$
+declare audience text; eligible boolean;
+begin
+ if new.status not in ('pending','approved') then return new;end if;
+ if tg_op='UPDATE' and row(new.status,new.requester_id,new.post_id) is not distinct from row(old.status,old.requester_id,old.post_id) then return new;end if;
+ select gender_preference into audience from posts where id=new.post_id;
+ select personal_profile_ready(new.requester_id) and (audience is null or audience='any' or p.gender=audience)
+ into eligible from profiles p where p.id=new.requester_id;
+ -- Reopening a full post must not prevent a different participant from leaving.
+ if tg_op='UPDATE' and old.status='full' and new.status='pending' and not coalesce(eligible,false) then new.status:='declined';return new;end if;
+ if not personal_profile_ready(new.requester_id) then raise exception 'Complete your profile with name, gender and age before joining a plan';end if;
+ if not coalesce(eligible,false) then raise exception 'This plan is for % only',case when audience='female' then 'females' else 'males' end;end if;
+ return new;
+end;
+$$ language plpgsql security definer set search_path=public;
+revoke all on function enforce_join_eligibility() from public,anon,authenticated;
+create trigger join_eligibility before insert or update on join_requests for each row execute function enforce_join_eligibility();
+
+-- Audience changes cannot silently exclude already-approved participants.
+create function guard_post_audience() returns trigger as $$
+begin
+ if new.gender_preference is not distinct from old.gender_preference then return new;end if;
+ if new.gender_preference in ('female','male') and exists(
+  select 1 from join_requests r join profiles p on p.id=r.requester_id where r.post_id=new.id and r.status='approved' and p.gender is distinct from new.gender_preference
+ ) then raise exception 'Approved participants do not match this audience. Keep Anyone, or choose an audience that includes them.';end if;
+ return new;
+end;
+$$ language plpgsql security definer set search_path=public;
+revoke all on function guard_post_audience() from public,anon,authenticated;
+create trigger guard_post_audience before update of gender_preference on posts for each row execute function guard_post_audience();
+create function reconcile_post_audience() returns trigger as $$
+begin
+ if new.gender_preference in ('female','male') and new.gender_preference is distinct from old.gender_preference then
+  update join_requests r set status='declined' where r.post_id=new.id and r.status in ('pending','full')
+    and not exists(select 1 from profiles p where p.id=r.requester_id and p.gender=new.gender_preference);
+ end if;
+ return new;
+end;
+$$ language plpgsql security definer set search_path=public;
+revoke all on function reconcile_post_audience() from public,anon,authenticated;
+create trigger reconcile_post_audience after update of gender_preference on posts for each row execute function reconcile_post_audience();
+
+-- Atomic photo selection: existing attachments survive failed uploads/requests.
+create function set_post_photos(p_post_id uuid,p_urls text[]) returns void as $$
+declare owner uuid; url text; object_path text; position integer:=0;
+begin
+ select author_id into owner from posts where id=p_post_id for update;
+ if owner is distinct from auth.uid() or not account_active(auth.uid()) then raise exception 'Only the active host can edit photos';end if;
+ if p_urls is null or cardinality(p_urls)>5 or cardinality(p_urls)<>(select count(distinct x) from unnest(p_urls) x) then raise exception 'Choose up to 5 different photos';end if;
+ foreach url in array p_urls loop
+  if not exists(select 1 from post_photos f where f.post_id=p_post_id and f.photo_url=url) then
+   object_path:=split_part(url,'/storage/v1/object/public/photos/',2);
+   if url is null or url !~ '^https://' or object_path='' or split_part(object_path,'/',1)<>auth.uid()::text
+     or not exists(select 1 from storage.objects where bucket_id='photos' and name=object_path) then raise exception 'Upload your own photo before attaching it';end if;
+  end if;
+ end loop;
+ delete from post_photos a using post_photos b where a.post_id=p_post_id and b.post_id=a.post_id and a.photo_url=b.photo_url and a.id>b.id;
+ delete from post_photos f where f.post_id=p_post_id and not (f.photo_url=any(p_urls));
+ foreach url in array p_urls loop
+  update post_photos set sort_order=position where post_id=p_post_id and photo_url=url;
+  if not found then insert into post_photos(post_id,photo_url,sort_order)values(p_post_id,url,position);end if;
+  position:=position+1;
+ end loop;
+end;
+$$ language plpgsql security definer set search_path=public;
+revoke all on function set_post_photos(uuid,text[]) from public,anon;
+grant execute on function set_post_photos(uuid,text[]) to authenticated;
+
+
+-- 00028_post_audience_readmodel.sql
+-- Migration 00028 — preserve saved audiences when reading published posts.
+-- SELECT p.* in the original view was expanded before gender_preference was
+-- added in 00021; inserting/editing posts saved it, but reading the view lost it.
+
+-- Keep every existing view column in its original position and append the new
+-- field. This preserves dependent objects and grants without dropping the view.
+create or replace view public.post_cards with (security_invoker = true) as
+select
+  p.id,
+  p.author_id,
+  p.title,
+  p.description,
+  p.venue_id,
+  p.venue_name,
+  p.starts_at,
+  p.vacancies,
+  p.tags,
+  p.status,
+  p.created_at,
+  p.expires_at,
+  p.cost_cents,
+  pr.display_name as author_name,
+  public.approved_join_count(p.id) as approved_count,
+  p.gender_preference
+from public.posts p
+join public.profiles pr on pr.id = p.author_id;
+
+-- Refresh PostgREST's schema cache so existing clients see the field promptly.
+notify pgrst, 'reload schema';
+
+
+-- 00029_admin_console.sql
+-- 00029: Private, explicitly allowlisted Nearry operations dashboard.
 -- Admin web client never receives the service-role key or direct table privileges.
 
 create table public.admin_console_members (
@@ -2921,6 +3189,39 @@ alter table public.admin_console_audit enable row level security;
 revoke all on public.admin_console_audit from public,anon,authenticated;
 grant all on public.admin_console_audit to service_role;
 
+-- Page the current requests in SQL, before LIMIT/OFFSET. Filtering stale
+-- requests after pagination could hide valid submissions on later pages.
+create function public.admin_console_business_queue(p_offset int default 0, p_limit int default 26)
+returns table(id uuid,user_id uuid,created_at timestamptz,business_name text,
+  display_name text,business_details jsonb)
+language sql stable security definer set search_path=public,pg_temp as $$
+  select j.id,j.user_id,j.created_at,p.business_name,p.display_name,p.business_details
+  from verification_review_jobs j join profiles p on p.id=j.user_id
+  where j.reviewed_at is null and p.account_type='business'
+    and p.verification_status='pending' and p.verification_doc_path=j.document_path
+    and public.account_active(p.id)
+  order by j.created_at,j.id
+  limit least(greatest(p_limit,1),100) offset least(greatest(p_offset,0),5000);
+$$;
+revoke all on function public.admin_console_business_queue(int,int) from public,anon,authenticated;
+grant execute on function public.admin_console_business_queue(int,int) to service_role;
+
+create function public.admin_console_overview() returns jsonb
+language sql stable security definer set search_path=public,pg_temp as $$
+  select jsonb_build_object(
+    'users',(select count(*) from profiles),
+    'plans',(select count(*) from posts),
+    'offers',(select count(*) from offers),
+    'bookings',(select count(*) from bookings),
+    'openReports',(select count(*) from content_reports where status='open'),
+    'pendingBusinessReviews',(select count(*) from verification_review_jobs j join profiles p on p.id=j.user_id
+      where j.reviewed_at is null and p.account_type='business' and p.verification_status='pending'
+        and p.verification_doc_path=j.document_path and public.account_active(p.id))
+  );
+$$;
+revoke all on function public.admin_console_overview() from public,anon,authenticated;
+grant execute on function public.admin_console_overview() to service_role;
+
 -- Only a trusted server holding the service-role key can call this wrapper.
 -- It checks the acting human against an allowlist and records decisions in
 -- the same transaction as the already-secured, atomic moderation RPCs.
@@ -2928,14 +3229,17 @@ create function public.admin_console_decide(
   p_actor uuid, p_kind text, p_record_id uuid,
   p_decision text, p_note text default ''
 ) returns void as $$
-declare v_role text;
+declare v_role text; j verification_review_jobs; p profiles; note text;
 begin
   select role into v_role
   from public.admin_console_members
-  where user_id=p_actor and revoked_at is null;
+  where user_id=p_actor and revoked_at is null
+    and public.account_active(p_actor)
+  for update;
 
   if v_role is null then raise exception 'admin not authorized'; end if;
-  if p_record_id is null or char_length(coalesce(p_note,'')) > 200 then
+  if p_record_id is null or p_kind is null or p_decision is null
+     or char_length(coalesce(p_note,'')) > 200 then
     raise exception 'invalid review input';
   end if;
   if p_kind='report' and p_decision='suspend' and v_role<>'owner' then
@@ -2949,7 +3253,26 @@ begin
     if p_decision not in ('approved','rejected') then
       raise exception 'invalid business decision';
     end if;
-    perform public.review_verification(p_record_id,p_decision,p_note);
+    -- Admin sessions are independently authenticated with MFA by the Edge API.
+    -- The seven-day expiry protects emailed bearer links, not a current proof
+    -- reviewed by an authenticated operator. Keep email-link RPCs unchanged.
+    select * into j from verification_review_jobs where id=p_record_id;
+    if not found then raise exception 'review unavailable'; end if;
+    select * into p from profiles where id=j.user_id for update;
+    select * into j from verification_review_jobs where id=p_record_id for update;
+    if j.reviewed_at is not null or p.account_type<>'business'
+       or not public.account_active(p.id) or p.verification_status<>'pending'
+       or p.verification_doc_path is distinct from j.document_path then
+      raise exception 'review unavailable, stale, or already completed';
+    end if;
+    note:=case when p_decision='rejected' then btrim(p_note) else null end;
+    update profiles set verification_status=case when p_decision='approved' then 'verified' else 'rejected' end,
+      verification_note=note where id=p.id;
+    update verification_review_jobs set reviewed_at=now(),decision=p_decision where id=j.id;
+    insert into notifications(user_id,kind,title,body) values(p.id,
+      case when p_decision='approved' then 'verification_approved' else 'verification_rejected' end,
+      case when p_decision='approved' then 'Verification approved' else 'Verification needs attention' end,
+      case when p_decision='approved' then 'Your business is verified. You can now publish offers.' else note end);
   elsif p_kind='report' then
     if p_decision not in ('dismiss','remove','suspend') then
       raise exception 'invalid report action';

@@ -1,201 +1,254 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.47.0";
-const config=window.NEARRY_ADMIN_CONFIG;
-const $=id=>document.getElementById(id);
-const NAV=[
-  ["overview","Overview","Home"],["business","Business reviews","Pending submissions"],
-  ["reports","Safety reports","Open abuse cases"],["users","Accounts","User status"],
-  ["plans","Plans","Posted activities"],["offers","Offers","Local promotions"],
-  ["bookings","Bookings","Reservations"],["operations","Operations","Workers and queues"],
-  ["audit","Audit trail","Moderator decisions"]
+import { createClient } from '@supabase/supabase-js';
+const config = window.NEARRY_ADMIN_CONFIG;
+const $ = id => document.getElementById(id);
+const NAV = [
+ ['overview','Overview','Your operations at a glance'], ['business','Business reviews','Check the business and its proof before deciding'],
+ ['reports','Safety reports','Review the full reported context'], ['users','Accounts','Members and account status'],
+ ['plans','Plans','Posted activities'], ['offers','Offers','Business promotions'], ['bookings','Bookings','Reservations'],
+ ['operations','Operations','Background queues — read only'], ['audit','Decision history','Who reviewed what and when'],
 ];
-const safe=v=>String(v??"—").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-const date=v=>v?new Date(v).toLocaleString(undefined,{dateStyle:"medium",timeStyle:"short"}):"—";
-const shorten=(v,n=125)=>{const s=String(v??"—");return s.length>n?s.slice(0,n)+"…":s};
-const field=(v,n)=>safe(shorten(v,n||110));
-const cell=(v)=>'<td>'+v+'</td>';
-const tag=v=>'<span class="chip '+(/pending|open|failed|rejected/i.test(String(v))?"attention":"")+'">'+safe(v)+'</span>';
-const tdText=(v,n)=>cell('<span class="truncate">'+field(v,n)+'</span>');
-const serverOk=config && /^https:\/\/.+\.supabase\.co$/.test(config.supabaseUrl)&&
-  config.publishableKey && !config.publishableKey.includes("YOUR_") && !/service_role|sb_secret/i.test(config.publishableKey);
-let client,section="overview",offset=0,rowsLength=0,session=null,role="";
-let busy=false;
-function message(text,auth=false){$(auth?"auth-message":"feedback").textContent=text||"";}
-function configError(){ $("setup").hidden=false; $("setup").textContent="Admin configuration is missing or invalid. See admin/README.md (only public Supabase credentials belong in config.js)."; }
-if(!serverOk){configError();}
-else {
- client=createClient(config.supabaseUrl,config.publishableKey,{
-   auth:{autoRefreshToken:true,persistSession:true,detectSessionInUrl:true}
- });
- init().catch(e=>{message(e.message,true);showLogin();});
+const safe = value => String(value ?? '—').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const date = value => value && Number.isFinite(Date.parse(value)) ? new Date(value).toLocaleString(undefined,{dateStyle:'medium',timeStyle:'short'}) : '—';
+const tag = value => '<span class="chip">' + safe(value) + '</span>';
+const textCell = value => '<td><span class="wrap">' + safe(value) + '</span></td>';
+let client, section = 'overview', offset = 0, session = null, role = '', currentRows = [], revision = 0, pendingRead;
+let factorId, enrollment, actionBusy = false, bootstrapRun = 0;
+function feedback(text = '', auth = false) { $(auth ? 'auth-message' : 'feedback').textContent = text; }
+function login() {
+ revision++; pendingRead?.abort(); session = null; role = ''; currentRows = [];
+ $('dashboard').hidden = true; $('mfa').hidden = true; $('signin').hidden = false;
+ $('content').replaceChildren(); closeDialog(true);
 }
-function showLogin(){session=null;$("signin").hidden=false;$("dashboard").hidden=true}
-function showDashboard(){ $("signin").hidden=true;$("dashboard").hidden=false; }
-async function call(payload){
- if(!session?.access_token) throw new Error("Session expired. Please sign in again.");
- const res=await fetch(config.supabaseUrl+"/functions/v1/admin-console",{
-   method:"POST",
-   headers:{"Authorization":"Bearer "+session.access_token,"apikey":config.publishableKey,"Content-Type":"application/json"},
-   body:JSON.stringify(payload),cache:"no-store"
+async function call(payload, signal) {
+ const {data,error} = await client.auth.getSession();
+ if(error || !data.session) throw new Error('Your session expired. Sign in again.');
+ session = data.session;
+ const res = await fetch(config.supabaseUrl + '/functions/v1/admin-console', {
+  method:'POST', headers:{Authorization:'Bearer ' + session.access_token,apikey:config.publishableKey,'Content-Type':'application/json'},
+  body:JSON.stringify(payload),cache:'no-store',signal,
  });
- let body={};try{body=await res.json()}catch{}
- if(!res.ok)throw new Error(body.error||"Admin service unavailable");
+ const body = await res.json().catch(() => ({}));
+ if(!res.ok) {
+  if(res.status === 401) login();
+  if(body.code === 'mfa_required') { $('dashboard').hidden = true; $('mfa').hidden = false; }
+  throw new Error(body.error || 'Admin service unavailable. Please retry.');
+ }
  return body;
 }
-async function bootstrap(){
- const current=await client.auth.getSession();
- session=current.data.session;
- if(!session){showLogin();return}
- try{
-   const me=await call({action:"status"});
-   role=me.role;
-   $("operator").textContent="Role: "+role;
-   showDashboard();navigation();await load();
- }catch(e){showLogin();message(e.message,true)}
+async function bootstrap() {
+ const run = ++bootstrapRun;
+ const {data,error} = await client.auth.getSession();
+ if(error) throw error;
+ if(!data.session) { login(); return; }
+ session = data.session;
+ const me = await call({action:'status'});
+ if(run !== bootstrapRun) return;
+ role = me.role;
+ $('signin').hidden = true;
+ $('operator').textContent = (session.user.email || 'Administrator') + ' · ' + role;
+ if(me.mfaRequired) {
+  $('dashboard').hidden = true; $('mfa').hidden = false;
+  await prepareMfa().catch(error => $('mfa-message').textContent=error.message); return;
+ }
+ $('mfa').hidden = true; $('dashboard').hidden = false;
+ enrollment = null; factorId = null; $('mfa-qr').removeAttribute('src'); $('mfa-secret').textContent = '';
+ navigation(); await load();
 }
-async function init(){
- $("email-form").addEventListener("submit",async e=>{
-   e.preventDefault();message("Sending sign-in code…",true);
-   const email=$("email").value.trim();
-   try{
-     const res=await client.auth.signInWithOtp({email,options:{shouldCreateUser:false}});
-     if(res.error)throw res.error;
-     $("code-form").hidden=false;message("Code requested. Check your email.",true);
-   }catch(err){message(err.message,true)}
+async function prepareMfa() {
+ $('mfa-message').textContent = 'Checking your authenticator…';
+ const {data,error} = await client.auth.mfa.listFactors();
+ if(error) throw error;
+ const verified = data.totp.find(f => f.status === 'verified');
+ if(verified) {
+  factorId = verified.id; enrollment = null;
+  $('mfa-enrollment').hidden = true;
+  $('mfa-heading').textContent = 'Verify your authenticator';
+ } else {
+  $('mfa-heading').textContent = 'Protect your admin account';
+  if(!enrollment) {
+   // Only discard unfinished factors belonging to this dashboard, never a verified factor.
+   for(const f of data.all.filter(f => f.status === 'unverified' && f.friendly_name === 'Nearry Admin')) {
+    const removed = await client.auth.mfa.unenroll({factorId:f.id}); if(removed.error) throw removed.error;
+   }
+   const result = await client.auth.mfa.enroll({factorType:'totp',friendlyName:'Nearry Admin',issuer:'Nearry'});
+   if(result.error) throw result.error;
+   enrollment = result.data; factorId = enrollment.id;
+  }
+  $('mfa-enrollment').hidden = false;
+  const qr = enrollment.totp.qr_code;
+  if(!qr.startsWith('data:image/svg+xml')) throw new Error('Authenticator setup could not be displayed. Please retry.');
+  $('mfa-qr').src = qr; $('mfa-secret').textContent = enrollment.totp.secret;
+ }
+ $('mfa-message').textContent = '';
+}
+function navigation() {
+ $('navigation').innerHTML = NAV.map(([id,label]) => '<button class="nav-item ' + (id===section?'active':'') + '" data-section="'+id+'" aria-current="'+(id===section?'page':'false')+'">'+safe(label)+'</button>').join('');
+ const entry = NAV.find(n => n[0] === section);
+ $('section-title').textContent = entry[1]; $('section-description').textContent = entry[2];
+}
+async function load() {
+ const run = ++revision, requested = section, page = offset;
+ pendingRead?.abort(); pendingRead = new AbortController();
+ $('refresh').disabled = true; $('content').setAttribute('aria-busy','true');
+ $('pagination').hidden = true; currentRows = [];
+ $('content').innerHTML = '<div class="empty">Loading ' + safe(NAV.find(n=>n[0]===requested)[1].toLowerCase()) + '…</div>';
+ feedback('');
+ try {
+  const res = await call({action:'list',section:requested,offset:page},pendingRead.signal);
+  if(run !== revision || !session) return;
+  currentRows = res.rows || [];
+  if(requested === 'overview') renderMetrics(res.metrics);
+  else if(requested === 'operations') renderOperations(res.operations);
+  else renderTable(currentRows,requested);
+  $('pagination').hidden = requested==='overview' || requested==='operations';
+  $('page-label').textContent = 'Page ' + (1 + page/25);
+  $('previous').disabled = page===0; $('next').disabled = !res.hasMore || page>=5000;
+  $('last-updated').textContent = 'Updated ' + new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+ } catch(error) {
+  if(run !== revision || error.name === 'AbortError') return;
+  $('content').innerHTML = '<div class="empty">'+safe(error.message)+'<p>Use Refresh to try again.</p></div>';
+ } finally {
+  if(run===revision) { $('refresh').disabled = false; $('content').setAttribute('aria-busy','false'); }
+ }
+}
+function table(headers,rows) {
+ if(!rows.length) return '<div class="empty"><strong>All caught up.</strong><p>There are no items in this section.</p></div>';
+ return '<div class="table-wrap"><table><thead><tr>'+headers.map(h=>'<th>'+safe(h)+'</th>').join('')+'</tr></thead><tbody>'+rows.join('')+'</tbody></table></div>';
+}
+function action(label,row,kind) {
+ return '<button class="action" data-action="'+safe(label)+'" data-kind="'+kind+'" data-id="'+safe(row.id)+'">'+safe(label)+'</button>';
+}
+function renderMetrics(m) {
+ const items = [['Members',m.users],['Plans',m.plans],['Local offers',m.offers],['Bookings',m.bookings],['Open reports',m.openReports],['Business reviews',m.pendingBusinessReviews]];
+ $('content').innerHTML = '<div class="cards">'+items.map(([label,value])=>'<div class="metric"><span>'+safe(label)+'</span><strong>'+safe(value)+'</strong></div>').join('')+'</div><section class="panel welcome-panel"><p class="eyebrow">YOUR REVIEW DESK</p><h2>A little care keeps the neighbourhood running.</h2><p>Start with business requests and open safety reports. Every decision is recorded.</p><div class="actions"><button class="primary" data-section="business">Review businesses →</button><button class="secondary" data-section="reports">Open reports</button></div></section>';
+}
+function renderTable(rows,view) {
+ let headers, rendered;
+ const row = cells => '<tr>'+cells+'</tr>';
+ if(view==='business') {
+  headers=['Business','Category / area','Submitted','Review'];
+  rendered=rows.map(r=>row(textCell(r.business_name||r.display_name)+textCell([r.business_details?.category,r.business_details?.area].filter(Boolean).join(' · '))+textCell(date(r.created_at))+'<td>'+action('Review request',r,'business')+'</td>'));
+ } else if(view==='reports') {
+  headers=['Reason','Subject','Submitted','Review'];
+  rendered=rows.map(r=>row('<td>'+tag(r.reason)+'<br>'+safe(r.target_kind)+'</td>'+textCell(r.subject)+textCell(date(r.created_at))+'<td>'+action('Review report',r,'report')+'</td>'));
+ } else {
+  const specs={
+   users:[['Member','Type','Verification','Status','Joined'],r=>[r.business_name||r.display_name,r.account_type,r.verification_status,r.deletion_requested_at?'Deleting':r.suspended_at?'Suspended':'Active',date(r.created_at)]],
+   plans:[['Plan','Host','When','Audience','Status'],r=>[r.title,r.author_id,date(r.starts_at),r.gender_preference||'any',r.status]],
+   offers:[['Offer','Business','Starts','Ends','Status'],r=>[r.title,r.business_id,date(r.starts_at),date(r.ends_at),r.status]],
+   bookings:[['Booking','Customer','Offer','Slot','Status'],r=>[r.id,r.customer_id,r.offer_id,date(r.slot),r.status]],
+   audit:[['Decision','Administrator','Record','Reason','When'],r=>[r.action,r.actor_id,r.target_id,r.note,date(r.created_at)]],
+  };
+  const spec=specs[view];headers=spec[0];rendered=rows.map(r=>row(spec[1](r).map(textCell).join('')));
+ }
+ $('content').innerHTML=table(headers,rendered);
+}
+function renderOperations(o) {
+ $('content').innerHTML = [['Account deletion queue',o.deletions,['Account','Attempts','Last error'],r=>[r.user_id,r.attempts,r.last_error]],['Pending file cleanup',o.media,['Bucket','File','Attempts','Last error'],r=>[r.bucket,r.path,r.attempts,r.last_error]],['Pending push notifications',o.push,['Job','Attempts','Last error'],r=>[r.id,r.attempts,r.last_error]]].map(([name,rows,headers,values])=>'<section class="panel"><h2>'+safe(name)+'</h2>'+table(headers,rows.map(r=>'<tr>'+values(r).map(textCell).join('')+'</tr>'))+'</section>').join('');
+}
+let selected = null;
+function closeDialog(force = false) {
+ if(actionBusy && !force) return;
+ selected=null; $('review-dialog').close(); $('proof-image').removeAttribute('src'); $('proof-frame').removeAttribute('src');
+ $('proof-link').removeAttribute('href'); $('dialog-message').textContent=''; $('report-evidence').textContent=''; $('review-details').textContent=''; $('review-note').value='';
+}
+function openReview(id,kind) {
+ const item=currentRows.find(r=>r.id===id);if(!item || actionBusy) return;
+ selected={...item,kind};
+ $('dialog-title').textContent=kind==='business' ? (item.business_name||item.display_name||'Business request') : 'Safety report';
+ $('review-note').value='';$('proof-check').checked=false;
+ $('business-review').hidden=kind!=='business';$('report-review').hidden=kind!=='report';
+ $('proof-image').hidden=true;$('proof-frame').hidden=true;$('proof-link').hidden=true;
+ $('proof-image').removeAttribute('src');$('proof-frame').removeAttribute('src');
+ $('proof-message').textContent='The proof is private. Preview it before approving.';
+ $('dialog-message').textContent='';
+ $('review-details').textContent = kind==='business' ? [item.display_name,item.business_details?.category,item.business_details?.area,'Submitted '+date(item.created_at)].filter(Boolean).join(' · ') : 'Subject: '+item.subject+' · '+item.target_kind+' · '+date(item.created_at);
+ $('report-evidence').textContent = [item.reason,item.details,item.evidence].filter(Boolean).join('\n\n');
+ document.querySelectorAll('.business-action').forEach(b=>b.hidden=kind!=='business');
+ document.querySelectorAll('.report-action').forEach(b=>b.hidden=kind!=='report');
+ $('suspend').hidden=kind!=='report'||role!=='owner'||!item.subject_user_id;
+ document.querySelector('[data-decision=remove]').hidden=kind!=='report'||['user','conversation'].includes(item.target_kind);
+ $('review-dialog').showModal();
+}
+async function viewProof() {
+ const item=selected;if(!item||item.kind!=='business')return;
+ $('view-proof').disabled=true;$('proof-message').textContent='Loading private proof…';
+ try {
+  const res=await call({action:'proof',id:item.id});
+  if(selected!==item)return;
+  const url=new URL(res.url),base=new URL(config.supabaseUrl);
+  if(url.origin!==base.origin || !url.pathname.startsWith('/storage/v1/object/sign/verification_docs/')) throw new Error('Invalid proof link.');
+  const pdf=/\.pdf$/i.test(decodeURIComponent(url.pathname));
+  const preview=$(pdf?'proof-frame':'proof-image');preview.src=res.url;preview.hidden=false;
+  $('proof-link').href=res.url;$('proof-link').hidden=false;
+  $('proof-message').textContent='Private preview link expires in one minute. Reload it if needed.';
+ }catch(error){if(selected===item)$('proof-message').textContent=error.message;}
+ finally{$('view-proof').disabled=false;}
+}
+async function decide(decision) {
+ const item=selected;if(!item||actionBusy)return;
+ const note=$('review-note').value.trim();
+ if(['rejected','remove','suspend'].includes(decision)&&!note){$('dialog-message').textContent='Please add a reason for this decision.';return;}
+ if(decision==='approved'&&!$('proof-check').checked){$('dialog-message').textContent='Confirm that you reviewed the business and its proof.';return;}
+ const labels={approved:'Approve this business?',rejected:'Reject this business request?',dismiss:'Dismiss this report?',remove:'Remove the reported content?',suspend:'Suspend the reported account?'};
+ if(!confirm(labels[decision]+' This decision will be recorded.'))return;
+ actionBusy=true;$('review-dialog').querySelectorAll('button').forEach(b=>b.disabled=true);
+ $('dialog-message').textContent='Saving decision…';
+ try {
+  await call({action:'decide',kind:item.kind,id:item.id,decision,note});
+  actionBusy=false;closeDialog();await load();feedback('Decision saved. The business or report status has been updated.');
+ } catch(error){$('dialog-message').textContent=error.message;}
+ finally{actionBusy=false;$('review-dialog').querySelectorAll('button').forEach(b=>b.disabled=false);}
+}
+async function signout() {
+ ++bootstrapRun;revision++;pendingRead?.abort();
+ const result=await client.auth.signOut({scope:'local'});login();
+ if(result.error)feedback(result.error.message,true);
+ $('otp').value='';$('mfa-code').value='';$('mfa-qr').removeAttribute('src');$('mfa-secret').textContent='';enrollment=null;factorId=null;
+}
+async function start() {
+ if(!config?.supabaseUrl || !config?.publishableKey) throw new Error('Admin configuration is missing.');
+ client=createClient(config.supabaseUrl,config.publishableKey,{auth:{autoRefreshToken:true,persistSession:true,detectSessionInUrl:true,flowType:'pkce',storageKey:'nearry-admin-auth'}});
+ $('email-form').addEventListener('submit',async event=>{
+  event.preventDefault();const button=$('send-code');button.disabled=true;feedback('Requesting code…',true);
+  try {
+   const email=$('email').value.trim();
+   const res=await client.auth.signInWithOtp({email,options:{shouldCreateUser:false}});if(res.error)throw res.error;
+   $('email').readOnly=true;$('code-form').hidden=false;feedback('Check your inbox for the sign-in code.',true);$('otp').focus();
+  }catch(error){feedback(error.message,true)}finally{button.disabled=false;}
  });
- $("code-form").addEventListener("submit",async e=>{
-   e.preventDefault();message("Verifying…",true);
-   try{
-     const r=await client.auth.verifyOtp({email:$("email").value.trim(),token:$("otp").value.trim(),type:"email"});
-     if(r.error)throw r.error;
-     session=r.data.session;await bootstrap();
-   }catch(err){message(err.message,true)}
+ $('change-email').addEventListener('click',()=>{$('email').readOnly=false;$('code-form').hidden=true;$('otp').value='';$('email').focus();});
+ $('code-form').addEventListener('submit',async event=>{
+  event.preventDefault();const button=$('verify-code');button.disabled=true;
+  try {
+   const token=$('otp').value.replace(/\s/g,'');if(!/^\d{6,10}$/.test(token))throw new Error('Enter the complete numeric email code.');
+   const res=await client.auth.verifyOtp({email:$('email').value.trim(),token,type:'email'});if(res.error)throw res.error;
+   $('otp').value='';await bootstrap();
+  }catch(error){feedback(error.message,true)}finally{button.disabled=false;}
  });
- $("google").addEventListener("click",async()=>{
-   const res=await client.auth.signInWithOAuth({provider:"google",options:{redirectTo:location.origin+location.pathname}});
-   if(res.error)message(res.error.message,true);
+ $('mfa-form').addEventListener('submit',async event=>{
+  event.preventDefault();const button=$('verify-mfa');button.disabled=true;
+  try {
+   const code=$('mfa-code').value.trim();if(!/^\d{6}$/.test(code))throw new Error('Enter the six-digit authenticator code.');
+   const res=await client.auth.mfa.challengeAndVerify({factorId,code});if(res.error)throw res.error;
+   $('mfa-code').value='';await bootstrap();
+  }catch(error){$('mfa-message').textContent=error.message;}finally{button.disabled=false;}
  });
- $("signout").addEventListener("click",async()=>{
-   await client.auth.signOut();session=null;showLogin();
+ for(const id of ['signout','mfa-signout'])$(id).addEventListener('click',signout);
+ $('mfa-retry').addEventListener('click',()=>prepareMfa().catch(e=>$('mfa-message').textContent=e.message));
+ $('refresh').addEventListener('click',load);
+ $('previous').addEventListener('click',()=>{offset=Math.max(0,offset-25);load();});
+ $('next').addEventListener('click',()=>{offset+=25;load();});
+ document.addEventListener('click',event=>{
+  const nav=event.target.closest('[data-section]');
+  if(nav&&!actionBusy){section=nav.dataset.section;offset=0;navigation();load();return;}
+  const btn=event.target.closest('[data-action]');if(btn)openReview(btn.dataset.id,btn.dataset.kind);
+  const decision=event.target.closest('[data-decision]');if(decision)void decide(decision.dataset.decision);
  });
- $("refresh").addEventListener("click",()=>load());
- $("previous").addEventListener("click",()=>{offset=Math.max(0,offset-25);load()});
- $("next").addEventListener("click",()=>{offset+=25;load()});
- document.addEventListener("click",e=>{
-   const nav=e.target.closest("[data-section]");
-   if(nav){section=nav.dataset.section;offset=0;navigation();load();return}
-   const btn=e.target.closest("[data-action]");
-   if(btn)void decide(btn.dataset.action,btn.dataset.id,btn.dataset.kind);
- });
- const initial=await client.auth.getSession();
- session=initial.data.session;
+ $('view-proof').addEventListener('click',viewProof);$('dialog-close').addEventListener('click',closeDialog);
+ $('review-dialog').addEventListener('cancel',event=>{event.preventDefault();closeDialog();});
+ client.auth.onAuthStateChange(event=>{if(event==='SIGNED_OUT')login();});
+ document.addEventListener('visibilitychange',()=>{if(!document.hidden&&session&&!$('dashboard').hidden&&!$('review-dialog').open)void load();});
  await bootstrap();
 }
-function navigation(){
- $("navigation").innerHTML=NAV.map(([id,title])=>
-  '<button class="nav-item '+(section===id?"active":"")+'" data-section="'+id+'" aria-current="'+(section===id?"page":"false")+'">'+safe(title)+'</button>').join("");
- const active=NAV.find(n=>n[0]===section);
- $("section-title").textContent=active[1];
- $("section-description").textContent=active[2]+".";
-}
-async function load(){
- if(busy)return;
- busy=true;$("refresh").disabled=true;message("Loading…");
- try{
-  const response=await call({action:"list",section,offset});
-  if(section==="overview")renderMetrics(response.metrics);
-  else if(section==="operations")renderOperations(response.operations);
-  else renderTable(response.rows||[]);
-  rowsLength=response.rows?.length||0;
-  $("pagination").hidden=section==="overview"||section==="operations";
-  $("page-label").textContent="Page "+(1+Math.floor(offset/25));
-  $("previous").disabled=offset===0;
-  $("next").disabled=rowsLength<25;
-  message("");
- }catch(e){$("content").innerHTML='<div class="empty">'+safe(e.message)+'</div>';message("Unable to load "+section)}
- finally{busy=false;$("refresh").disabled=false}
-}
-function renderMetrics(m){
- const items=[
-  ["Members",m.users],["Plans",m.plans],["Local offers",m.offers],
-  ["Bookings",m.bookings],["Open reports",m.openReports],["Pending business reviews",m.pendingBusinessReviews]
- ];
- $("content").innerHTML='<div class="cards">'+items.map(([label,value])=>
-  '<div class="metric"><span>'+safe(label)+'</span><strong>'+safe(value??0)+'</strong></div>').join("")+'</div>'+
-  '<div class="panel" style="margin-top:20px"><h2>Review what matters</h2><p>Approve legitimate businesses, investigate reports and watch failed background jobs. This panel deliberately does not offer unrestricted reading of private conversations.</p></div>';
-}
-function table(headers,rows){
- if(!rows.length)return '<div class="empty">Nothing to review in this section.</div>';
- return '<div class="table-wrap"><table class="table"><thead><tr>'+headers.map(h=>'<th>'+safe(h)+'</th>').join("")+'</tr></thead><tbody>'+rows.join("")+'</tbody></table></div>';
-}
-const action=(label,id,kind,style="")=>
- '<button class="action '+style+'" data-action="'+safe(label)+'" data-kind="'+safe(kind)+'" data-id="'+safe(id)+'">'+safe(label)+'</button>';
-function renderTable(rows){
- let head=[],out=[];
- switch(section){
- case "business":
-  head=["Business","Submitted","Status","Actions"];
-  out=rows.map(r=>'<tr>'+tdText(r.person||r.user_id)+tdText(date(r.created_at))+cell(tag("Pending"))+
-  cell('<div class="actions">'+action("View proof",r.id,"business")+
-  action("Approve",r.id,"business","positive")+action("Reject",r.id,"business","negative")+'</div>')+'</tr>');break;
- case "reports":
-  head=["Reason","Subject","Evidence","Submitted","Actions"];
-  out=rows.map(r=>'<tr>'+cell(tag(r.reason)+"<br>"+field(r.target_kind))+tdText(r.subject||r.subject_user_id)+
-  tdText((r.details||"")+" · "+(r.evidence||""),250)+tdText(date(r.created_at))+
-  cell('<div class="actions">'+action("Dismiss",r.id,"report")+
-  action("Remove",r.id,"report","negative")+
-  (role==="owner"?action("Suspend",r.id,"report","negative"):"")+'</div>')+'</tr>');break;
- case "users":
-  head=["Member","Type","Verification","Status","Joined"];
-  out=rows.map(r=>'<tr>'+tdText(r.business_name||r.display_name)+tdText(r.account_type)+cell(tag(r.verification_status))+
-  cell(tag(r.deletion_requested_at?"Deleting":r.suspended_at?"Suspended":"Active"))+tdText(date(r.created_at))+'</tr>');break;
- case "plans":
-  head=["Plan","Host ID","When","Status","Spots"];
-  out=rows.map(r=>'<tr>'+tdText(r.title,100)+tdText(r.author_id)+tdText(date(r.starts_at))+cell(tag(r.status))+tdText(r.vacancies)+'</tr>');break;
- case "offers":
-  head=["Offer","Business ID","Starts","Ends","Status"];
-  out=rows.map(r=>'<tr>'+tdText(r.title,100)+tdText(r.business_id)+tdText(date(r.starts_at))+tdText(date(r.ends_at))+cell(tag(r.status))+'</tr>');break;
- case "bookings":
-  head=["Booking ID","Customer ID","Offer ID","Slot","Status"];
-  out=rows.map(r=>'<tr>'+tdText(r.id)+tdText(r.customer_id)+tdText(r.offer_id)+tdText(date(r.slot))+cell(tag(r.status))+'</tr>');break;
- case "audit":
-  head=["Action","Actor ID","Target ID","Note","At"];
-  out=rows.map(r=>'<tr>'+tdText(r.action)+tdText(r.actor_id)+tdText(r.target_id)+tdText(r.note,150)+tdText(date(r.created_at))+'</tr>');break;
- }
- $("content").innerHTML=table(head,out);
-}
-function renderOperations(o){
- const op=(name,items,cols,fields)=>'<section class="panel"><h2>'+safe(name)+'</h2>'+
-   table(cols,items.map(item=>'<tr>'+fields.map(f=>tdText(f(item),100)).join("")+'</tr>'))+'</section>';
- $("content").innerHTML=op("Account deletion queue",o.deletions,["Account ID","Attempts","Last error","Requested"],[
-  r=>r.user_id,r=>r.attempts,r=>r.last_error,r=>date(r.requested_at)])+
- op("Pending file cleanup",o.media,["Bucket","Path","Attempts","Last error"],[
-  r=>r.bucket,r=>r.path,r=>r.attempts,r=>r.last_error])+
- op("Pending push notifications",o.push,["Job ID","Attempts","Last error"],[
-  r=>r.id,r=>r.attempts,r=>r.last_error]);
-}
-async function decide(action,id,kind){
- if(!id||!kind)return;
- if(action==="View proof"){
-   message("Generating a short-lived private proof link…");
-   try{
-    const r=await call({action:"proof",id});
-    if(!r.url.startsWith("https://"))throw new Error("Invalid document URL");
-    window.open(r.url,"_blank","noopener,noreferrer");
-    message("Private link expires in one minute. Do not share it.");
-   }catch(e){message(e.message)}
-   return;
- }
- const codes={Approve:"approved",Reject:"rejected",Dismiss:"dismiss",Remove:"remove",Suspend:"suspend"};
- const decision=codes[action];if(!decision)return;
- if(!confirm(action+" this "+(kind==="business"?"business review":"report")+"? This decision is logged."))return;
- let note="";
- if(["rejected","remove","suspend"].includes(decision)){
-  const text=prompt("Enter a review reason (max 200 characters):");
-  if(text===null)return;
-  note=text.trim().slice(0,200);
-  if(!note){message("Reason is required for this decision.");return;}
- }
- message("Saving moderation decision…");
- try{await call({action:"decide",kind,id,decision,note});message("Action saved and audited.");await load();}
- catch(e){message(e.message)}
-}
+start().catch(error=>{if(client)login();else $('signin').hidden=false;feedback(error.message,true);});

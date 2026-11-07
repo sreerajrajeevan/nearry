@@ -51,3 +51,5 @@ separate [admin dashboard](../../admin/README.md) and `admin-console` Edge
 Function after applying the migration in a staging database. Never allow public
 users to add themselves as administrators. The separate open selfie verification
 PR uses 00026; reconcile migration histories when merging both PRs.
+
+`00029`: private MFA-protected admin dashboard. Apply after 00028; allowlist confirmed operator UUIDs separately and deploy `admin-console`. See [admin setup](../../admin/README.md). The old unmerged admin migration 00027 was renumbered; existing email review remains unchanged.

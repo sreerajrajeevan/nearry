@@ -1,3 +1,4 @@
+import { PageHeading } from "../../components/PageHeading";
 import { LoadingDots } from "../../components/LoadingDots";
 import React, { useCallback, useState } from "react";
 import {
@@ -14,7 +15,7 @@ import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { Screen } from "../../components/Screen";
 import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
-import { colors, typography, spacing } from "../../theme";
+import { colors, typography, spacing, surfaces } from "../../theme";
 import { useAuth } from "../../store/AuthContext";
 import { listVenues, updateVenueAmenities } from "../../services/venues";
 import {
@@ -125,7 +126,11 @@ export function ManageVenueScreen() {
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Text style={styles.back}>← Back</Text>
         </TouchableOpacity>
-        <Text style={styles.title}>My venue</Text>
+        <PageHeading
+          compact
+          title="My venue"
+          subtitle="Photos, amenities and the details people need."
+        />
         {!venue ? (
           <EmptyState
             title="No venue linked"
@@ -257,17 +262,16 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: "rgba(0,0,0,0.6)",
+    backgroundColor: colors.scrim,
     alignItems: "center",
     justifyContent: "center",
   },
-  photoDeleteText: { color: "#fff", fontSize: 16, lineHeight: 20 },
+  photoDeleteText: { color: colors.onAccent, fontSize: 16, lineHeight: 20 },
   addPhoto: {
+    ...surfaces.field,
     width: 100,
     height: 100,
-    borderRadius: 8,
     borderWidth: 1,
-    borderColor: colors.border,
     borderStyle: "dashed",
     alignItems: "center",
     justifyContent: "center",
@@ -281,9 +285,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-  chipActive: { backgroundColor: colors.accent, borderColor: colors.accent },
+  chipActive: { ...surfaces.selected },
   chipText: { ...typography.label, color: colors.text },
-  chipTextActive: { color: "#fff" },
+  chipTextActive: { color: colors.onGold },
   customRow: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.md },
   customInput: {
     flex: 1,

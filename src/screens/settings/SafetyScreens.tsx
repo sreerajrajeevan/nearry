@@ -144,6 +144,12 @@ export function ReportScreen({
         Choose the main reason. Add details that help us understand the concern;
         avoid sharing private contact or payment information.
       </Text>
+      {target.kind === "conversation" && (
+        <Text style={styles.copy}>
+          Your report includes recent messages from this conversation for
+          review.
+        </Text>
+      )}
       {REPORT_REASONS.map((r) => (
         <Button
           key={r.id}

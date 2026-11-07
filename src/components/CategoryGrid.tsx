@@ -32,48 +32,52 @@ export function CategoryGrid({
           accessibilityRole="tab"
           accessibilityLabel={`${key}. ${hint}`}
           accessibilityState={{ selected: selected === key }}
+          aria-selected={selected === key}
           onPress={() => onSelect(selected === key ? null : key)}
           style={[styles.tile, selected === key && styles.selected]}
         >
-          <View style={styles.art}>
-            <CategoryArt category={key} size={112} />
-          </View>
-          <View style={styles.arrow}>
-            <Icon
-              name={selected === key ? "check" : "arrow-up-right"}
-              size={14}
-              color={selected === key ? colors.accent : colors.textDim}
-            />
-          </View>
+          <CategoryArt category={key} size={52} />
           <Text style={styles.label}>{key}</Text>
-          <Text style={styles.hint}>{hint}</Text>
+          {selected === key && (
+            <View style={styles.check}>
+              <Icon name="check" size={10} color={colors.onGold} />
+            </View>
+          )}
         </MotionPressable>
       ))}
     </View>
   );
 }
 const styles = StyleSheet.create({
-  grid: { flexDirection: "row", flexWrap: "wrap", gap: 12, marginBottom: 28 },
+  grid: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 24 },
   tile: {
-    flexBasis: "46%",
+    flexBasis: "22%",
     flexGrow: 1,
-    minHeight: 166,
-    padding: 15,
-    paddingTop: 112,
-    backgroundColor: colors.onAccent,
+    minHeight: 96,
+    paddingHorizontal: 2,
+    paddingVertical: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    backgroundColor: "transparent",
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 23,
-    overflow: "hidden",
+    borderColor: "transparent",
+    borderRadius: 14,
   },
-  selected: { borderColor: colors.accent, backgroundColor: colors.claySoft },
-  art: { position: "absolute", top: 0, right: 8 },
-  arrow: { position: "absolute", left: 14, top: 17 },
-  label: {
-    ...typography.heading,
-    fontSize: 18,
-    color: colors.text,
-    marginBottom: 3,
+  selected: {
+    borderColor: colors.borderStrong,
+    backgroundColor: colors.sageSoft,
   },
-  hint: { ...typography.caption, lineHeight: 16, color: colors.textDim },
+  label: { ...typography.label, fontSize: 12, color: colors.text },
+  check: {
+    position: "absolute",
+    right: 3,
+    top: 4,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: colors.gold,
+    alignItems: "center",
+    justifyContent: "center",
+  },
 });

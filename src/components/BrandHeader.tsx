@@ -145,7 +145,7 @@ const styles = StyleSheet.create({
   messagesButton: {
     width: 44,
     height: 44,
-    borderRadius: 22,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: colors.border,
     backgroundColor: colors.card,
@@ -165,12 +165,12 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: colors.accent,
+    backgroundColor: colors.gold,
   },
   unreadText: {
     ...typography.caption,
     lineHeight: 16,
-    color: colors.onAccent,
+    color: colors.onGold,
     fontWeight: "600",
   },
   context: {

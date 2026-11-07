@@ -1,3 +1,4 @@
+import { PageHeading } from "../../components/PageHeading";
 import React, { useState } from "react";
 import { Text, View } from "react-native";
 import { Screen } from "../../components/Screen";
@@ -17,9 +18,7 @@ export function AccountTypeScreen() {
   }
   return (
     <Screen padded>
-      <Text style={{ ...typography.title, color: colors.text }}>
-        How will you use Nearry?
-      </Text>
+      <PageHeading compact title="How will you use Nearry?" />
       <Text
         style={{
           ...typography.body,

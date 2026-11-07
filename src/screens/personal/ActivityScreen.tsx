@@ -1,3 +1,6 @@
+import { AudienceBadge } from "../../components/AudienceBadge";
+import { PageHeading } from "../../components/PageHeading";
+
 import React, { useEffect, useRef, useState } from "react";
 import {
   View,
@@ -20,7 +23,7 @@ import { Avatar } from "../../components/Avatar";
 import { Icon, IconName } from "../../components/Icon";
 import { MotionPressable, ScreenReveal } from "../../components/Motion";
 import { LoadingState } from "../../components/LoadingState";
-import { colors, typography, spacing } from "../../theme";
+import { colors, typography, spacing, surfaces } from "../../theme";
 import { useAuth } from "../../store/AuthContext";
 import { PersonalTabNav } from "../../navigation/types";
 import { listPosts, subscribeToPosts } from "../../services/posts";
@@ -251,10 +254,11 @@ export function ActivityScreen() {
         }
       >
         <PersonalHeader />
-        <Text style={styles.title} accessibilityRole="header">
-          Activity
-        </Text>
-        <Text style={styles.intro}>Keep track of what’s happening next.</Text>
+        <PageHeading
+          compact
+          title="Activity"
+          subtitle="Keep track of what’s happening next."
+        />
         <MotionPressable
           accessibilityRole="button"
           accessibilityLabel="My posts"
@@ -440,6 +444,7 @@ export function ActivityScreen() {
                     <View style={styles.flex}>
                       <Text style={styles.eyebrow}>You’re hosting</Text>
                       <Text style={styles.cardTitle}>{post.title}</Text>
+                      <AudienceBadge preference={post.genderPreference} />
                       <Text style={styles.copy}>
                         {formatWhen(post.startsAt)}
                       </Text>
@@ -664,6 +669,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   postsLink: {
+    ...surfaces.card,
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
@@ -678,7 +684,7 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 14,
-    backgroundColor: colors.claySoft,
+    backgroundColor: colors.goldSoft,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -688,7 +694,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    backgroundColor: colors.claySoft,
+    backgroundColor: colors.goldSoft,
     padding: 14,
     borderRadius: 16,
     marginBottom: spacing.md,
@@ -735,16 +741,17 @@ const styles = StyleSheet.create({
     minHeight: 44,
     paddingHorizontal: 16,
     paddingVertical: 12,
-    borderRadius: 22,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: colors.border,
   },
-  activeFilter: { borderColor: colors.clay, backgroundColor: colors.claySoft },
+  activeFilter: { ...surfaces.selected },
   filterText: { ...typography.label, color: colors.textDim },
-  activeFilterText: { color: colors.clayDeep },
+  activeFilterText: { color: colors.onGold },
   card: {
+    ...surfaces.card,
     padding: spacing.md,
-    borderRadius: 22,
+    borderRadius: 16,
     backgroundColor: colors.white,
     borderWidth: 1,
     borderColor: colors.border,
@@ -783,7 +790,7 @@ const styles = StyleSheet.create({
     paddingTop: 16,
   },
   requestGroup: {
-    borderRadius: 22,
+    borderRadius: 16,
     backgroundColor: colors.white,
     borderWidth: 1,
     borderColor: colors.border,
@@ -821,10 +828,10 @@ const styles = StyleSheet.create({
   emptyIcon: {
     width: 60,
     height: 60,
-    borderRadius: 22,
+    borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: colors.claySoft,
+    backgroundColor: colors.goldSoft,
     marginBottom: 16,
   },
   emptyTitle: {

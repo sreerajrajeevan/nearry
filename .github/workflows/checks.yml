@@ -27,6 +27,11 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - run: npm run sql:check
       - run: npm run typecheck
+      - name: Build admin browser assets with public test configuration
+        run: npm run admin:build
+        env:
+          EXPO_PUBLIC_SUPABASE_URL: https://admin-build.supabase.co
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: sb_publishable_build_test
       - run: npm test
       - run: npm run test:database
         env:

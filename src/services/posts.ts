@@ -162,6 +162,7 @@ export async function createPost(
       spotsLeft: input.vacancies,
       costCents: input.costCents,
       tags: input.tags,
+      genderPreference: input.genderPreference,
       status: "open",
       createdAt: new Date().toISOString(),
     };
@@ -245,6 +246,10 @@ export async function updatePost(
           ? p.costCents
           : (patch.costCents ?? undefined),
       tags: patch.tags ?? p.tags,
+      genderPreference:
+        patch.genderPreference === undefined
+          ? p.genderPreference
+          : (patch.genderPreference ?? undefined),
     };
     if (next.vacancies < next.joinedCount)
       throw new Error(

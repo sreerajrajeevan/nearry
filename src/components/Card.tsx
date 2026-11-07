@@ -1,6 +1,6 @@
 import React from "react";
 import { View, StyleSheet, ViewStyle, StyleProp } from "react-native";
-import { colors, spacing } from "../theme";
+import { colors, spacing, surfaces } from "../theme";
 
 type Props = {
   children: React.ReactNode;
@@ -8,14 +8,16 @@ type Props = {
   accent?: boolean;
 };
 
-/** Shared list surface: generous row spacing and a single quiet divider. */
-export function Card({ children, style }: Props) {
-  return <View style={[styles.row, style]}>{children}</View>;
+/** Shared raised surface for account, booking and verification content. */
+export function Card({ children, style, accent }: Props) {
+  return (
+    <View style={[styles.row, accent && styles.accent, style]}>{children}</View>
+  );
 }
 const styles = StyleSheet.create({
   row: {
-    paddingVertical: spacing.lg,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
+    ...surfaces.card,
+    padding: spacing.md,
   },
+  accent: { borderColor: colors.sage, backgroundColor: colors.sageSoft },
 });

@@ -54,7 +54,7 @@ const styles = StyleSheet.create({
     width: 38,
     height: 38,
     borderRadius: 13,
-    backgroundColor: colors.surfaceRaised,
+    backgroundColor: colors.sandSoft,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -62,14 +62,14 @@ const styles = StyleSheet.create({
   title: { ...typography.body, color: colors.text, fontWeight: "600" },
   hint: { ...typography.bodySmall, color: colors.textDim },
   count: {
-    backgroundColor: colors.claySoft,
+    backgroundColor: colors.goldSoft,
     paddingHorizontal: 7,
     paddingVertical: 2,
     borderRadius: 10,
   },
   countText: {
     ...typography.caption,
-    color: colors.clayDeep,
+    color: colors.onGold,
     fontWeight: "700",
   },
 });

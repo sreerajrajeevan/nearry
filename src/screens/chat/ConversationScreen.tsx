@@ -1,7 +1,11 @@
 import { LoadingState } from "../../components/LoadingState";
-import { SafetyActions } from "../../components/SafetyActions";
+import { ConversationActions } from "../../components/ConversationActions";
+import {
+  SafeAreaView,
+  useSafeAreaInsets,
+} from "react-native-safe-area-context";
 import { conversationSafety, ConversationSafety } from "../../services/safety";
-import React, { useCallback, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   AppState,
   View,
@@ -12,10 +16,10 @@ import {
   TouchableOpacity,
   KeyboardAvoidingView,
   Platform,
-  Alert,
+  Keyboard,
+  ActivityIndicator,
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
-import { Screen } from "../../components/Screen";
 import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
 import { Avatar } from "../../components/Avatar";
@@ -84,10 +88,31 @@ export function ConversationScreen({ route, navigation }: Props) {
   const [draft, setDraft] = useState("");
   const [state, setState] = useState<"loading" | "error" | "ready">("loading");
   const [sending, setSending] = useState(false);
+  const sendingLock = useRef<string | null>(null);
+  const inputRef = useRef<TextInput | null>(null);
+  const [sendError, setSendError] = useState("");
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const insets = useSafeAreaInsets();
+  const [keyboardOpen, setKeyboardOpen] = useState(Keyboard.isVisible());
+  useEffect(() => {
+    const show = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
+      () => setKeyboardOpen(true),
+    );
+    const hide = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
+      () => setKeyboardOpen(false),
+    );
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
   const listRef = useRef<FlatList<ChatMessage> | null>(null);
 
   const focused = useRef(false);
   const generation = useRef(0);
+  const visit = useRef(0);
   const room = useRef("");
   room.current = `${conversationId}:${myId}`;
   const stickToBottom = useRef(true);
@@ -104,7 +129,8 @@ export function ConversationScreen({ route, navigation }: Props) {
       ]);
       if (!focused.current || ticket !== generation.current) return;
       setPeer(safety);
-      setMessages((previous) => mergeMessages(previous, msgs));
+      // Use the authoritative snapshot: a clear on another device must remove old bubbles.
+      setMessages(msgs);
       setState("ready");
       // Only acknowledge the messages in this displayed snapshot.
       void markConversationRead(
@@ -119,8 +145,12 @@ export function ConversationScreen({ route, navigation }: Props) {
   useFocusEffect(
     useCallback(() => {
       focused.current = true;
+      ++visit.current;
       setDraft("");
       setSending(false);
+      setPeer(null);
+      setSendError("");
+      setActionsOpen(false);
       stickToBottom.current = true;
       setMessages([]);
       setState("loading");
@@ -137,6 +167,7 @@ export function ConversationScreen({ route, navigation }: Props) {
         app.remove();
         clearInterval(timer);
         focused.current = false;
+        ++visit.current;
         ++generation.current;
         unsubscribe();
       };
@@ -144,14 +175,26 @@ export function ConversationScreen({ route, navigation }: Props) {
   );
 
   const onSend = async () => {
-    const text = draft.trim();
-    if (!text || sending || !peer?.canMessage) return;
+    const sentDraft = draft;
+    const text = sentDraft.trim();
+    if (!text || sendingLock.current === room.current || !peer?.canMessage)
+      return;
     const sendingRoom = `${conversationId}:${myId}`;
+    const sendingVisit = visit.current;
+    sendingLock.current = sendingRoom;
+    setSendError("");
     setSending(true);
     try {
       const msg = await sendMessage(conversationId, myId, text);
-      if (room.current !== sendingRoom || !focused.current) return;
-      setDraft("");
+      if (
+        room.current !== sendingRoom ||
+        visit.current !== sendingVisit ||
+        !focused.current
+      )
+        return;
+      ++generation.current; // Discard a reload started before this send committed.
+      // Keep anything typed while the send was in flight.
+      setDraft((current) => (current === sentDraft ? "" : current));
       stickToBottom.current = true;
       if (focused.current && isForeground()) {
         setMessages((prev) => mergeMessages(prev, [msg]));
@@ -160,117 +203,158 @@ export function ConversationScreen({ route, navigation }: Props) {
       }
       listRef.current?.scrollToEnd({ animated: true });
     } catch (e) {
-      Alert.alert(
-        "Could not send",
-        e instanceof Error ? e.message : "Please try again.",
-      );
+      if (
+        room.current === sendingRoom &&
+        visit.current === sendingVisit &&
+        focused.current
+      )
+        setSendError(
+          e instanceof Error ? e.message : "Could not send. Please try again.",
+        );
     } finally {
-      if (room.current === sendingRoom) setSending(false);
+      if (sendingLock.current === sendingRoom) sendingLock.current = null;
+      if (
+        room.current === sendingRoom &&
+        visit.current === sendingVisit &&
+        focused.current
+      ) {
+        setSending(false);
+        if (Platform.OS === "web" || Keyboard.isVisible())
+          inputRef.current?.focus();
+      }
     }
   };
 
   return (
-    <Screen>
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={8}
-      >
-        <TouchableOpacity
-          accessibilityRole="button"
-          accessibilityLabel="Back"
-          onPress={() => navigation.goBack()}
-          activeOpacity={0.7}
-          style={styles.back}
-        >
-          <Icon name="arrow-left" size={16} />
-          <Text style={styles.backText}>Back</Text>
-        </TouchableOpacity>
+    // The keyboard owner fills the window, outside safe-area padding. Android
+    // edge-to-edge does not resize this window; an undefined behavior covers the input.
+    <KeyboardAvoidingView style={styles.flex} behavior="padding">
+      <SafeAreaView style={styles.flex} edges={["top", "left", "right"]}>
         <View style={styles.heading}>
-          <Avatar name={title ?? "Conversation"} size={44} tone="clay" />
-          <Text style={styles.title} numberOfLines={1}>
-            {title ?? "Conversation"}
-          </Text>
-        </View>
-
-        {peer && (
-          <SafetyActions
-            target={{
-              kind: "user",
-              id: peer.userId,
-              userId: peer.userId,
-              name: peer.name,
-            }}
-            onReport={() =>
-              navigation.navigate("Report", {
-                target: { kind: "user", id: peer.userId, name: peer.name },
-              })
-            }
-            onBlocked={() => navigation.goBack()}
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Back"
+            onPress={() => navigation.goBack()}
+            style={styles.iconButton}
+          >
+            <Icon name="arrow-left" size={22} color={colors.text} />
+          </TouchableOpacity>
+          <Avatar
+            name={peer?.name ?? title ?? "Conversation"}
+            size={40}
+            tone="clay"
           />
-        )}
+          <View style={styles.headingText}>
+            <Text style={styles.title} numberOfLines={1}>
+              {peer?.name ?? title ?? "Conversation"}
+            </Text>
+            <Text style={styles.subtitle} numberOfLines={1}>
+              About your plans & bookings
+            </Text>
+          </View>
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Conversation options"
+            onPress={() => {
+              Keyboard.dismiss();
+              setActionsOpen(true);
+            }}
+            style={styles.iconButton}
+          >
+            <Icon name="more-vertical" size={22} color={colors.text} />
+          </TouchableOpacity>
+        </View>
         {peer && !peer.canMessage && (
           <Text style={styles.status}>
             Messaging is unavailable because an account is blocked or inactive.
             Manage your blocks in Safety & privacy.
           </Text>
         )}
-        {state === "loading" ? (
-          <LoadingState label="Loading messages…" layout="list" />
-        ) : state === "error" ? (
-          <View>
-            <EmptyState
-              title="Couldn’t load messages"
-              hint="Check your connection and retry."
-            />
-            <Button title="Retry" onPress={() => void load()} />
-          </View>
-        ) : (
-          <FlatList
-            ref={listRef}
-            data={messages}
-            keyExtractor={(m: ChatMessage) => m.id}
-            renderItem={({ item }: { item: ChatMessage }) => (
-              <Bubble
-                msg={item}
-                onReport={
-                  item.mine
-                    ? undefined
-                    : () =>
-                        navigation.navigate("Report", {
-                          target: {
-                            kind: "message",
-                            id: item.id,
-                            name: "Message",
-                          },
-                        })
-                }
-              />
-            )}
-            contentContainerStyle={styles.list}
-            onScroll={({ nativeEvent }) => {
-              stickToBottom.current =
-                nativeEvent.contentSize.height -
-                  nativeEvent.layoutMeasurement.height -
-                  nativeEvent.contentOffset.y <
-                120;
-            }}
-            scrollEventThrottle={100}
-            onContentSizeChange={() => {
-              if (stickToBottom.current)
-                listRef.current?.scrollToEnd({ animated: false });
-            }}
-            ListEmptyComponent={
+        <View style={styles.transcript}>
+          {state === "loading" ? (
+            <LoadingState label="Loading messages…" layout="list" />
+          ) : state === "error" ? (
+            <View>
               <EmptyState
-                title="No messages yet"
-                hint="Say hello — keep it about the game or booking."
+                title="Couldn’t load messages"
+                hint="Check your connection and retry."
               />
-            }
-          />
+              <Button title="Retry" onPress={() => void load()} />
+            </View>
+          ) : (
+            <FlatList
+              ref={listRef}
+              style={styles.flex}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode={
+                Platform.OS === "ios" ? "interactive" : "on-drag"
+              }
+              onLayout={() => {
+                if (stickToBottom.current)
+                  listRef.current?.scrollToEnd({ animated: false });
+              }}
+              data={messages}
+              keyExtractor={(m: ChatMessage) => m.id}
+              renderItem={({ item }: { item: ChatMessage }) => (
+                <Bubble
+                  msg={item}
+                  onReport={
+                    item.mine
+                      ? undefined
+                      : () =>
+                          navigation.navigate("Report", {
+                            target: {
+                              kind: "message",
+                              id: item.id,
+                              name: "Message",
+                            },
+                          })
+                  }
+                />
+              )}
+              contentContainerStyle={styles.list}
+              onScroll={({ nativeEvent }) => {
+                stickToBottom.current =
+                  nativeEvent.contentSize.height -
+                    nativeEvent.layoutMeasurement.height -
+                    nativeEvent.contentOffset.y <
+                  120;
+              }}
+              scrollEventThrottle={100}
+              onContentSizeChange={() => {
+                if (stickToBottom.current)
+                  listRef.current?.scrollToEnd({ animated: false });
+              }}
+              ListEmptyComponent={
+                <EmptyState
+                  title="No messages yet"
+                  hint="Say hello — keep it about the game or booking."
+                />
+              }
+            />
+          )}
+        </View>
+        {!!sendError && (
+          <Text
+            accessibilityRole="alert"
+            numberOfLines={3}
+            style={styles.sendError}
+          >
+            {sendError} Your message is still here; tap Send to retry.
+          </Text>
         )}
-
-        <View style={styles.composer}>
+        <View
+          style={[
+            styles.composer,
+            {
+              paddingBottom: keyboardOpen
+                ? spacing.sm
+                : Math.max(insets.bottom, spacing.sm),
+            },
+          ]}
+        >
           <TextInput
+            ref={inputRef}
             accessibilityLabel="Message"
             style={styles.input}
             placeholder="Write a message…"
@@ -279,8 +363,9 @@ export function ConversationScreen({ route, navigation }: Props) {
             onChangeText={setDraft}
             multiline
             maxLength={2000}
-            editable={!sending && !!peer?.canMessage}
-            onSubmitEditing={onSend}
+            editable={!!peer?.canMessage}
+            // Enter inserts a newline; sending is always an explicit tap.
+            submitBehavior="newline"
           />
           <TouchableOpacity
             accessibilityRole="button"
@@ -299,37 +384,72 @@ export function ConversationScreen({ route, navigation }: Props) {
             disabled={!draft.trim() || sending || !peer?.canMessage}
           >
             {sending ? (
-              <Text style={styles.sendText}>…</Text>
+              <ActivityIndicator color={colors.onAccent} size="small" />
             ) : (
               <Icon name="arrow-up" size={20} color={colors.onAccent} />
             )}
           </TouchableOpacity>
         </View>
-      </KeyboardAvoidingView>
-    </Screen>
+        {actionsOpen && (
+          <ConversationActions
+            conversationId={conversationId}
+            name={peer?.name ?? title ?? "this person"}
+            otherUserId={peer?.userId}
+            onClose={() => setActionsOpen(false)}
+            onReport={() => {
+              setActionsOpen(false);
+              navigation.navigate("Report", {
+                target: {
+                  kind: "conversation",
+                  id: conversationId,
+                  name: title ?? peer?.name ?? "Conversation",
+                },
+              });
+            }}
+            onChanged={() => navigation.goBack()}
+          />
+        )}
+      </SafeAreaView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1 },
-  back: {
-    marginBottom: spacing.sm,
-    alignSelf: "flex-start",
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    minHeight: 44,
-  },
-  backText: { ...typography.label, color: colors.textDim },
+  flex: { flex: 1, minHeight: 0, backgroundColor: colors.background },
   heading: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-    marginBottom: spacing.lg,
+    gap: spacing.sm,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: 4,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+    backgroundColor: colors.card,
+    flexShrink: 0,
   },
-  title: { ...typography.title, color: colors.text, flex: 1 },
-  status: { ...typography.label, color: colors.textDim, marginTop: spacing.xl },
-  list: { paddingBottom: spacing.md, flexGrow: 1 },
+  iconButton: {
+    width: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  headingText: { flex: 1, minWidth: 0 },
+  title: { ...typography.heading, color: colors.text },
+  subtitle: { ...typography.caption, color: colors.textDim, marginTop: 2 },
+  status: {
+    ...typography.bodySmall,
+    color: colors.textDim,
+    padding: spacing.sm,
+  },
+  transcript: { flex: 1, minHeight: 0, overflow: "hidden" },
+  list: { padding: spacing.md, flexGrow: 1, justifyContent: "flex-end" },
+  sendError: {
+    ...typography.bodySmall,
+    color: colors.red,
+    paddingHorizontal: spacing.md,
+    paddingTop: spacing.sm,
+  },
   bubbleRow: { alignItems: "flex-start", marginBottom: spacing.sm },
   bubbleRowMine: { alignItems: "flex-end" },
   bubble: {
@@ -358,14 +478,21 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-end",
     gap: spacing.sm,
+    flexShrink: 0,
+    paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
-    paddingBottom: spacing.sm,
+    backgroundColor: colors.card,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
   },
   input: {
     flex: 1,
     ...typography.body,
     fontSize: 16,
     minHeight: 48,
+    minWidth: 0,
+    backgroundColor: colors.background,
+    textAlignVertical: "top",
     color: colors.text,
     borderWidth: 1,
     borderColor: colors.borderStrong,
@@ -378,7 +505,7 @@ const styles = StyleSheet.create({
     borderRadius: 23,
     width: 46,
     height: 46,
-    backgroundColor: colors.red,
+    backgroundColor: colors.accent,
     alignItems: "center",
     justifyContent: "center",
   },

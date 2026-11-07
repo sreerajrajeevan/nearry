@@ -9,6 +9,7 @@ assets/*.png
 
 # Generated public legal pages; build with configured public contacts.
 dist-legal/
+dist-store/
 
 # Generated native projects and private signing material
 android/
@@ -24,3 +25,9 @@ credentials.json
 *.apk
 google-services.json
 GoogleService-Info.plist
+.release-private/
+supabase/.temp/
+__pycache__/
+
+# Bundled admin hosting output
+dist-admin/

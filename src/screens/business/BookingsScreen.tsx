@@ -1,3 +1,4 @@
+import { PageHeading } from "../../components/PageHeading";
 import { LoadingState } from "../../components/LoadingState";
 import { formatWhen } from "../../utils/format";
 import React, { useCallback, useEffect, useState } from "react";
@@ -17,7 +18,7 @@ import { Button } from "../../components/Button";
 import { Badge } from "../../components/Badge";
 import { Avatar } from "../../components/Avatar";
 import { EmptyState } from "../../components/EmptyState";
-import { colors, typography, spacing } from "../../theme";
+import { colors, typography, spacing, surfaces } from "../../theme";
 import { useAuth } from "../../store/AuthContext";
 import {
   listBookingsForBusiness,
@@ -119,8 +120,11 @@ export function BookingsScreen({ navigation }: Props) {
           />
         }
       >
-        <Text style={styles.header}>Bookings</Text>
-        <Text style={styles.caption}>Manage incoming requests</Text>
+        <PageHeading
+          compact
+          title="Bookings"
+          subtitle="Manage incoming requests"
+        />
 
         <View style={styles.filterRow}>
           {FILTERS.map((f) => {
@@ -276,10 +280,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.sm,
   },
-  chipSelected: { borderBottomColor: colors.accent },
+  chipSelected: {
+    borderBottomColor: colors.goldDeep,
+    backgroundColor: colors.goldSoft,
+    borderRadius: 10,
+  },
   chipText: { ...typography.caption, color: colors.textDim },
   chipTextSelected: { color: colors.accent },
   row: {
+    ...surfaces.card,
     paddingVertical: spacing.lg,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,

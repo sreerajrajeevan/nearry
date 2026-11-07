@@ -1,3 +1,4 @@
+import { PageHeading } from "../components/PageHeading";
 import { LoadingState } from "../components/LoadingState";
 import React, { useCallback, useRef, useState } from "react";
 import {
@@ -14,7 +15,7 @@ import { Screen } from "../components/Screen";
 import { Button } from "../components/Button";
 import { Badge } from "../components/Badge";
 import { EmptyState } from "../components/EmptyState";
-import { colors, typography, spacing } from "../theme";
+import { colors, typography, spacing, surfaces } from "../theme";
 import {
   subscribeToNotifications,
   listNotifications,
@@ -188,8 +189,12 @@ export function NotificationCenterScreen({
             ← Back
           </Text>
         </TouchableOpacity>
+        <PageHeading
+          compact
+          title="Notifications"
+          subtitle="The latest from your plans and people."
+        />
         <View style={styles.headerRow}>
-          <Text style={styles.header}>Notifications</Text>
           <View style={styles.headerActions}>
             {unread > 0 && (
               <TouchableOpacity onPress={onMarkAll} activeOpacity={0.7}>
@@ -280,6 +285,7 @@ const styles = StyleSheet.create({
   markAll: { ...typography.label, color: colors.accent },
   status: { ...typography.label, color: colors.textDim, marginTop: spacing.xl },
   row: {
+    ...surfaces.card,
     paddingVertical: spacing.lg,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
@@ -292,7 +298,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: spacing.sm,
   },
-  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.accent },
+  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.goldDeep },
   dotRead: { backgroundColor: colors.border },
   headerActions: {
     flexDirection: "row",

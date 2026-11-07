@@ -52,7 +52,7 @@ export function Button({
           <LoadingDots
             color={
               variant === "primary"
-                ? colors.onAccent
+                ? colors.onSage
                 : variant === "danger"
                   ? colors.red
                   : colors.text
@@ -89,9 +89,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: spacing.md,
   },
-  primary: { backgroundColor: colors.red },
+  primary: { backgroundColor: colors.sage },
   secondary: {
-    backgroundColor: "transparent",
+    backgroundColor: colors.surface,
     borderWidth: 1,
     borderColor: colors.borderStrong,
   },
@@ -109,7 +109,7 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     textAlign: "center",
   },
-  primaryText: { color: colors.onAccent },
+  primaryText: { color: colors.onSage },
   secondaryText: { color: colors.text },
   ghostText: { color: colors.textDim },
   dangerText: { color: colors.red },

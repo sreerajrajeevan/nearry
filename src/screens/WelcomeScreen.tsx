@@ -11,7 +11,7 @@ import { Screen } from "../components/Screen";
 import { BrandHeader } from "../components/BrandHeader";
 import { Button } from "../components/Button";
 import { Icon } from "../components/Icon";
-import { colors, typography, spacing } from "../theme";
+import { colors, typography, spacing, surfaces } from "../theme";
 import { RootStackParamList } from "../navigation/types";
 import { useAuth } from "../store/AuthContext";
 
@@ -93,23 +93,28 @@ export function WelcomeScreen({ navigation }: Props) {
 }
 const styles = StyleSheet.create({
   scroll: { flexGrow: 1, paddingBottom: spacing.lg },
-  hero: { flex: 1, justifyContent: "center", paddingVertical: spacing.xxl },
+  hero: {
+    ...surfaces.hero,
+    marginTop: 16,
+    justifyContent: "center",
+    paddingVertical: 28,
+  },
   greeting: {
     ...typography.bodySmall,
-    color: colors.textDim,
+    color: colors.sageSoft,
     marginBottom: spacing.lg,
   },
   title: {
     ...typography.display,
-    fontSize: 48,
-    lineHeight: 54,
-    letterSpacing: -2,
-    color: colors.text,
+    fontSize: 36,
+    lineHeight: 42,
+    letterSpacing: -1.2,
+    color: colors.onAccent,
   },
-  accent: { color: colors.accent },
+  accent: { color: colors.gold },
   description: {
     ...typography.body,
-    color: colors.textDim,
+    color: colors.goldSoft,
     marginTop: spacing.lg,
     maxWidth: 350,
   },

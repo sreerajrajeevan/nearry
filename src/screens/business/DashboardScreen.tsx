@@ -96,6 +96,7 @@ export function DashboardScreen({ navigation }: Props) {
       >
         <BrandHeader context={name} />
         <PageHeading
+          tone="plain"
           greeting={`Hello, ${name}.`}
           title={"Make room\nfor a new face."}
         />
@@ -238,18 +239,18 @@ const styles = StyleSheet.create({
   statsRow: {
     flexDirection: "row",
     gap: spacing.lg,
-    paddingBottom: spacing.lg,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
+    padding: 18,
+    borderRadius: 18,
+    backgroundColor: colors.forest,
   },
   stat: { flex: 1 },
   value: {
     ...typography.display,
     fontSize: 32,
     lineHeight: 38,
-    color: colors.text,
+    color: colors.onAccent,
   },
-  statLabel: { ...typography.bodySmall, color: colors.textDim, marginTop: 3 },
+  statLabel: { ...typography.bodySmall, color: colors.goldSoft, marginTop: 3 },
   nudge: {
     paddingVertical: spacing.lg,
     borderBottomWidth: StyleSheet.hairlineWidth,

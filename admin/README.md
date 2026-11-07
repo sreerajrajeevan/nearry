@@ -1,103 +1,87 @@
-# Nearry admin console
+# Nearry operations dashboard
 
-A separate, responsive web dashboard for Nearry operations and moderation.
+Business verification, reported-content review, account/plan/offer/booking lists,
+read-only worker queues and an audited decision history. The dashboard follows
+Nearry's Forest & Sand theme and works on desktop and phone browsers.
 
-**Not for consumer accounts.** The browser uses only a public Supabase
-publishable key and an authenticated user token; service role stays inside
-\`supabase/functions/admin-console\`. Requests require server allowlisting.
+## Access
 
-## Screens and permissions
+Sign in with an **existing, confirmed Nearry email account**, then complete a
+TOTP authenticator check. First use offers a QR code/setup key; subsequent sign-ins
+use the existing authenticator. Store the authenticator safely. A successful email
+login alone never grants admin access. The allowlist is keyed to the confirmed
+Auth UUID, not an editable profile/email label. There is no public admin signup.
 
-| Screen | Scope |
-| --- | --- |
-| Overview | Counts of members, plans, offers, bookings, open reports, pending business reviews |
-| Business reviews | Pending documents, private 60-second proof links, approve/reject |
-| Safety reports | Reported evidence only; dismiss, remove, or owner-only suspend |
-| Accounts | Account type, status, verification, registration date |
-| Plans | Basic activity details and author IDs |
-| Offers | Local promotion details and business IDs |
-| Bookings | Reservation state and customer/offer IDs |
-| Operations | Deletion jobs, media cleanup, pending push jobs |
-| Audit trail | Moderator action, actor ID, target ID, timestamp and reason |
+The Edge API checks the actual Supabase Auth user, active private admin membership,
+active account and `aal2` session for every private data read or decision. Only
+allowlisted users can reach authenticator setup in this interface. Suspension,
+account deletion or allowlist revocation prevents access. Owner and moderator
+roles exist; only owners may suspend reported accounts. There is no client-side
+service key, unrestricted chat access, arbitrary account deletion or proof export.
 
-The dashboard intentionally does **not** provide unrestricted chat history,
-user-email exports, arbitrary account deletion, or client-side access to
-private business proof Storage objects.
+## Setup / migration
 
-## Staging installation
+1. Existing projects through 00028 apply **only**
+   `supabase/migrations/00029_admin_console.sql`. The former unmerged 00027 admin
+   draft was renumbered to avoid the now-merged participation migration. Never
+   replay `run-all.sql` on an existing project.
+2. In a trusted database session, match the intended email to exactly one
+   confirmed active Auth user. Insert that **verified UUID** into
+   `admin_console_members(user_id,role)` with role `owner` or `moderator`.
+   Do not put privileged access in user metadata or grant the browser access
+   to that table. Provisioning the requested operator is a separate live action,
+   not a hardcoded email in the migration. Revoke with `revoked_at=now()`.
+3. Enable Supabase Auth TOTP enrollment and verification. The application never
+   weakens MFA to work around a configuration error. The account owner completes
+   their own enrollment; do not ask them to share email/authenticator codes.
+4. Set the exact hosted HTTPS origin in the Edge secret `ADMIN_ALLOWED_ORIGINS`.
+   Deploy only `admin-console`, with `--no-verify-jwt`: the handler performs its
+   own Supabase Auth validation and private authorization on every request.
+   Keep all other existing workers/schedules unchanged.
+5. `npm ci`, then `npm run admin:build`. The build reads the existing public
+   `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY`, bundles the
+   lockfile-pinned Supabase SDK locally, and emits `dist-admin/`. It rejects
+   service-role/private keys. No runtime JavaScript CDN is used. The public key
+   belongs in the generated config; server credentials never do.
+6. Host that output over HTTPS. The build includes a restrictive CSP, no-store,
+   no-referrer and frame protection headers; `index.html` also carries CSP for
+   static hosts. Do not upload `.env`, `.release-private` or the repository as a
+   public document directory. The created Sites deployment remains owner-private
+   in addition to Supabase admin authorization.
 
-1. Back up staging, then apply only the unapplied forward migration
-   \`supabase/migrations/00027_admin_console.sql\` after 00025.
-   The separate selfie-review PR uses 00026; it is not required here.
-   Never use \`run-all.sql\` against an existing Supabase project.
-2. Sign up or sign in as your existing Nearry identity (Google/email).
-   Confirm the correct user UUID in Supabase Auth **as a trusted operator**.
-   In the SQL editor, explicitly allowlist it:
+## Review workflow
 
-   \`\`\`sql
-   insert into public.admin_console_members(user_id,role)
-   values ('YOUR_CONFIRMED_AUTH_USER_UUID','owner');
-   \`\`\`
+Business reviews show the current pending submission, category, area and owner.
+Open the review, load its private proof, inspect it, and explicitly confirm review
+before approval. The preview URL lasts 60 seconds and can be reloaded. Rejection
+requires a reason, which is delivered to the business. Current pending proofs
+remain reviewable by an MFA-authenticated administrator even if their old emailed
+review link expired. Emailed links retain their original seven-day expiry.
+Changed/replaced documents and already completed decisions are rejected.
 
-   Roles: \`owner\` or \`moderator\`. Only an owner can suspend users from
-   the web UI. Revoke access via \`revoked_at=now()\` in SQL.
-3. Configure the exact HTTPS admin website origin(s) in Supabase Edge secrets:
+Approval/rejection, business notification and admin audit row are one database
+transaction. The membership row is locked during the decision, so a concurrent
+revocation cannot silently bypass authorization. Pending requests are filtered
+in SQL before pagination. Overview counts use the same current-request criteria.
 
-   \`\`\`sh
-   supabase secrets set ADMIN_ALLOWED_ORIGINS=https://admin.example.com
-   supabase functions deploy admin-console --no-verify-jwt
-   \`\`\`
+Reports show the complete submitted evidence, with confirmation and a reason for
+removal/suspension. Account/conversation reports offer dismissal or owner-only
+account suspension; deleting a specific message needs a message report. This does
+not introduce general browsing of private chats. Refresh updates the queue; returning
+to the browser refreshes it too. Overlapping section loads cannot display stale
+rows under another section's actions. Sign-out clears proof URLs and evidence.
 
-   The function deliberately validates user JWTs via Supabase Auth and
-   checks the private allowlist for **every** request. Gateway JWT checking
-   is disabled only to allow its own explicit validation; it is not public.
-4. Host the \`admin/\` directory as a static site over HTTPS (e.g. a
-   separate Cloudflare Pages project). Copy \`config.example.js\` to
-   \`config.js\` in the hosted build. Set the exact \`supabaseUrl\` and
-   **public anon/publishable key**. Do not add any service-role/secret
-   key, OAuth client secret or server worker secret to this file.
-   \`config.js\` is ignored by Git.
-5. Add the admin website URL to the Supabase Auth redirect allowlist.
-   Make sure the Google login provider works for the admin's account,
-   or enable numeric email OTP template delivery with an SMTP sender.
-   Login does not allow self-registration through the admin site.
-6. Test that a regular member receives 403 on every admin operation.
-   Verify pending proof review, stale proof rejection, duplicate decisions,
-   audit logging, report removal/suspension, and operations queue display.
-   Validate desktop and mobile browser layouts and sign-out.
+Keep the current verification-email worker in place during cutover. Once the
+operator has signed in and verified the dashboard, retire email delivery separately
+if desired; do not remove the submission trigger or review queue.
 
-**Production security:** use an isolated, trusted admin identity with
-multi-factor authentication, strong host security headers/CSP, and limited
-access to the site. This first version uses the existing Supabase identity
-and does not enforce an MFA assurance level in its code; restrict deployment
-until your admin sign-in security is adequate. Use a reviewed pinned/bundled
-Supabase JS dependency rather than a third-party CDN for a hardened launch.
+## Validation
 
-## Replace verification emails safely
-
-The current verification submission still queues jobs in
-\`verification_review_jobs\`. The admin UI reads that same queue and calls
-the existing atomic approval/rejection function, so no re-upload is needed.
-
-During transition, keep emailed links working. Once the dashboard is deployed,
-tested, and actively staffed, disable the \`notify-verification\` scheduler.
-**Do not remove** the database verification trigger or review queue.
-Outstanding email links can expire naturally; retire the email-only
-function in a separate release. No automatic dashboard reminders are built,
-so check pending business reviews and reports every day.
-
-## Safety and operations
-
-- API access is denied unless user JWT and private admin membership pass.
-- Only server-side service-role code fetches other users' operational records.
-- Only approved business review jobs get short-lived private proof URLs.
-- Moderation decisions and audit writes share a database transaction.
-- Account suspensions happen through the existing reported-content workflow.
-- The app does not read raw private chat, except snapshots associated with
-  user-submitted reports.
-- Admin panel only presents server metadata; live files and user records are
-  not copied into the repository.
-- Existing account deletion and message privacy controls remain intact.
-
-This repository change has **not** deployed a function or created an actual
-admin user. There is no live admin URL until you complete these steps.
+Automated handler tests cover missing/invalid sessions, unconfirmed/inactive users,
+revoked membership, MFA, role restrictions, pagination, private proof boundaries,
+reason validation and safe errors. Database tests cover old requests, stale proofs,
+atomic notifications/audit, duplicate decisions and client RPC denial. Browser QA
+uses fabricated sessions and documents, including 320/390-pixel layouts, proof
+preview, approval, report evidence, sign-out and authenticator enrollment. Actual
+operator email delivery and authenticator enrollment require the owner's first
+sign-in; QA does not impersonate that account or approve real businesses.

@@ -176,7 +176,7 @@ const styles = StyleSheet.create({
   rail: { gap: 12, paddingRight: 12 },
   card: {
     minHeight: 230,
-    borderRadius: 25,
+    borderRadius: 20,
     backgroundColor: colors.ink,
     overflow: "hidden",
     justifyContent: "flex-end",
@@ -186,7 +186,7 @@ const styles = StyleSheet.create({
   cover: {
     padding: 20,
     paddingTop: 45,
-    backgroundColor: "rgba(37,42,38,0.78)",
+    backgroundColor: colors.scrim,
   },
   illustratedCover: { backgroundColor: "transparent", paddingTop: 100 },
   kicker: {
@@ -210,7 +210,7 @@ const styles = StyleSheet.create({
   invitation: {
     padding: 22,
     minHeight: 235,
-    borderRadius: 25,
+    borderRadius: 20,
     backgroundColor: colors.ink,
     overflow: "hidden",
   },
