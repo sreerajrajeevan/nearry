@@ -2589,3 +2589,207 @@ test("photos: atomic edit keeps existing photos on failure, validates ownership,
     0,
   );
 });
+
+test("admin dashboard rejects client actions and atomically audits trusted moderation", async () => {
+  const reportId = (
+    await db.query(
+      "insert into content_reports(reporter_id,subject_user_id,target_kind,target_id,reason,details,snapshot) values($1,$2,'user',gen_random_uuid(),'spam','test','evidence') returning id",
+      [host, b],
+    )
+  ).rows[0].id;
+  const sql =
+    "select admin_console_decide($1,'report',$2,'dismiss','reviewed in test')";
+  await assert.rejects(
+    asUser(host, (tx) => tx.query(sql, [host, reportId])),
+    /permission denied/,
+  );
+  await assert.rejects(
+    asUser(null, (tx) => tx.query(sql, [host, reportId]), "service_role"),
+    /admin not authorized/,
+  );
+  await db.query(
+    "insert into admin_console_members(user_id,role) values($1,'owner')",
+    [host],
+  );
+  await asUser(null, (tx) => tx.query(sql, [host, reportId]), "service_role");
+  assert.equal(
+    (
+      await db.query("select status from content_reports where id=$1", [
+        reportId,
+      ])
+    ).rows[0].status,
+    "dismissed",
+  );
+  const audit = (
+    await db.query(
+      "select actor_id,action from admin_console_audit where target_id=$1",
+      [reportId],
+    )
+  ).rows;
+  assert.equal(audit.length, 1);
+  assert.equal(audit[0].actor_id, host);
+  assert.equal(audit[0].action, "report:dismiss");
+});
+
+test("admin: business review queue, old requests, decisions and audit use current documents and private service access", async () => {
+  const owner = await corePersonal();
+  await db.query(
+    "insert into admin_console_members(user_id,role) values($1,'owner')",
+    [owner],
+  );
+  const makeBusiness = async (name: string) => {
+    const id = (await db.query("select gen_random_uuid() id")).rows[0].id;
+    await db.query(
+      "insert into auth.users(id,email,raw_user_meta_data) values($1,'admin-review@test.example','{\"account_type\":\"business\"}')",
+      [id],
+    );
+    const path = `${id}/current-proof.jpg`;
+    await db.query(
+      "insert into storage.objects(bucket_id,name) values('verification_docs',$1)",
+      [path],
+    );
+    await db.query(
+      'update profiles set display_name=$2,business_name=$2,business_details=\'{"category":"cafe","area":"Kochi"}\',verification_status=\'pending\',verification_doc_path=$3 where id=$1',
+      [id, name, path],
+    );
+    const review = (
+      await db.query(
+        "select id from verification_review_jobs where user_id=$1 and reviewed_at is null",
+        [id],
+      )
+    ).rows[0].id;
+    return { id, review, path };
+  };
+  const business = await makeBusiness("Older cafe request");
+  await db.query(
+    "update verification_review_jobs set created_at=now()-interval '14 days' where id=$1",
+    [business.review],
+  );
+  const call = (id: string, decision = "approved", note = "") =>
+    asUser(
+      null,
+      (tx) =>
+        tx.query("select admin_console_decide($1,'business',$2,$3,$4)", [
+          owner,
+          id,
+          decision,
+          note,
+        ]),
+      "service_role",
+    );
+  const overview = await asUser(
+    null,
+    (tx) => tx.query("select admin_console_overview() result"),
+    "service_role",
+  );
+  assert(overview.rows[0].result.users > 0);
+  assert(overview.rows[0].result.pendingBusinessReviews > 0);
+  const queue = (
+    await asUser(
+      null,
+      (tx) => tx.query("select * from admin_console_business_queue(0,100)"),
+      "service_role",
+    )
+  ).rows;
+  assert.equal(
+    queue.find((r: any) => r.id === business.review).business_name,
+    "Older cafe request",
+  );
+  for (const role of ["anon", "authenticated"]) {
+    await assert.rejects(
+      asUser(owner, (tx) => tx.query("select admin_console_overview()"), role),
+      /permission denied/,
+    );
+    await assert.rejects(
+      asUser(
+        owner,
+        (tx) => tx.query("select * from admin_console_business_queue()"),
+        role,
+      ),
+      /permission denied/,
+    );
+    await assert.rejects(
+      asUser(
+        owner,
+        (tx) => tx.query("select * from admin_console_members"),
+        role,
+      ),
+      /permission denied/,
+    );
+  }
+  // The old emailed link remains expired; an authenticated admin can still act.
+  await assert.rejects(
+    asUser(
+      null,
+      (tx) =>
+        tx.query("select review_verification($1,'approved','')", [
+          business.review,
+        ]),
+      "service_role",
+    ),
+    /expired/,
+  );
+  await call(business.review);
+  assert.equal(
+    (
+      await db.query("select verification_status from profiles where id=$1", [
+        business.id,
+      ])
+    ).rows[0].verification_status,
+    "verified",
+  );
+  assert.equal(
+    (
+      await db.query(
+        "select count(*)::int n from admin_console_audit where target_id=$1",
+        [business.review],
+      )
+    ).rows[0].n,
+    1,
+  );
+  assert.equal(
+    (
+      await db.query(
+        "select count(*)::int n from notifications where user_id=$1 and kind='verification_approved'",
+        [business.id],
+      )
+    ).rows[0].n,
+    1,
+  );
+  await assert.rejects(call(business.review), /already completed/);
+  const rejection = await makeBusiness("Rejected cafe");
+  await assert.rejects(call(rejection.review, "rejected"), /reason required/);
+  await call(
+    rejection.review,
+    "rejected",
+    "Business name does not match the proof",
+  );
+  assert.equal(
+    (
+      await db.query("select verification_note from profiles where id=$1", [
+        rejection.id,
+      ])
+    ).rows[0].verification_note,
+    "Business name does not match the proof",
+  );
+  const stale = await makeBusiness("Changed document");
+  await db.query("update profiles set verification_doc_path=$2 where id=$1", [
+    stale.id,
+    `${stale.id}/new-proof.jpg`,
+  ]);
+  await assert.rejects(call(stale.review), /stale/);
+  await db.query(
+    "update admin_console_members set revoked_at=now() where user_id=$1",
+    [owner],
+  );
+  const waiting = await makeBusiness("Waiting cafe");
+  await assert.rejects(call(waiting.review), /admin not authorized/);
+  assert.equal(
+    (
+      await db.query("select verification_status from profiles where id=$1", [
+        waiting.id,
+      ])
+    ).rows[0].verification_status,
+    "pending",
+  );
+});

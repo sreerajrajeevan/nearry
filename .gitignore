@@ -28,3 +28,6 @@ GoogleService-Info.plist
 .release-private/
 supabase/.temp/
 __pycache__/
+
+# Bundled admin hosting output
+dist-admin/

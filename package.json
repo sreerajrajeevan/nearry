@@ -38,6 +38,7 @@
     "@types/pg": "^8.23.1",
     "@types/react": "~19.1.10",
     "babel-preset-expo": "~54.0.10",
+    "esbuild": "0.28.2",
     "pg": "^8.23.1",
     "prettier": "^3.9.10",
     "tsx": "^4.23.15",
@@ -60,7 +61,8 @@
     "assets": "python3 assets/generate_icons.py",
     "legal:export": "node --env-file-if-exists=.env --import tsx scripts/export-legal.ts",
     "release:check": "node --env-file-if-exists=.env scripts/check-release.mjs",
-    "eas-build-post-install": "node scripts/check-eas-build.mjs"
+    "eas-build-post-install": "node scripts/check-eas-build.mjs",
+    "admin:build": "node --env-file-if-exists=.env scripts/build-admin.mjs"
   },
   "version": "0.1.0",
   "overrides": {

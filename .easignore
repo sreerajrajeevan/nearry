@@ -32,3 +32,6 @@ __pycache__/
 # Generate these with npm run assets before uploading to EAS.
 !assets/*.png
 .git/
+
+# Bundled admin hosting output
+dist-admin/

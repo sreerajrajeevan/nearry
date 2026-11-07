@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+ <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+ <meta name="robots" content="noindex,nofollow"><meta name="referrer" content="no-referrer">
+ <meta name="theme-color" content="#0C3B2E">
+ <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob: https://ggeejgykahzquynwighw.supabase.co; connect-src 'self' https://ggeejgykahzquynwighw.supabase.co; frame-src https://ggeejgykahzquynwighw.supabase.co; base-uri 'none'; form-action 'self'">
+ <title>Nearry · Operations</title><link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+ <section id="signin" class="auth-shell" hidden><div class="auth-card">
+  <img src="./brand.svg" class="brand-image" alt="Nearry"><p class="eyebrow">THE REVIEW DESK</p>
+  <h1>Good neighbours.<br>A little care.</h1>
+  <p class="muted">Business verification, safety reports and everyday operations. For approved Nearry administrators.</p>
+  <form id="email-form"><label for="email">Admin email</label><input type="email" id="email" autocomplete="email" required placeholder="Your approved email address"><button id="send-code" type="submit" class="primary">Send sign-in code →</button></form>
+  <form id="code-form" hidden><label for="otp">Email code</label><input type="text" id="otp" autocomplete="one-time-code" inputmode="numeric" minlength="6" maxlength="10" pattern="[0-9]{6,10}" required><button id="verify-code" type="submit" class="primary">Verify and continue</button><button id="change-email" type="button" class="text-button">Use a different email</button></form>
+  <p id="auth-message" role="status" class="feedback"></p><p class="footnote">Use the email attached to your Nearry account. Your authenticator will be checked before you can access records.</p>
+ </div></section>
+ <section id="mfa" class="auth-shell" hidden><div class="auth-card">
+  <img src="./brand.svg" class="brand-image" alt="Nearry"><p class="eyebrow">ADMIN ACCESS</p><h1 id="mfa-heading">Verify your authenticator</h1>
+  <div id="mfa-enrollment" hidden><p class="muted">Scan this QR code in your authenticator app. Keep access to that app for future admin sign-ins.</p><img id="mfa-qr" class="qr" alt="Authenticator setup QR code"><details><summary>Can't scan? Enter this setup key</summary><code id="mfa-secret"></code></details></div>
+  <form id="mfa-form"><label for="mfa-code">Six-digit authenticator code</label><input id="mfa-code" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required><button id="verify-mfa" class="primary">Open the dashboard →</button></form>
+  <p id="mfa-message" role="status" class="feedback"></p><div class="actions"><button id="mfa-retry" class="text-button">Retry setup</button><button id="mfa-signout" class="text-button">Sign out</button></div>
+ </div></section>
+ <div id="dashboard" class="app" hidden>
+  <aside class="sidebar"><div class="brand-tile"><img src="./brand.svg" class="brand-image" alt="Nearry"></div><p class="side-label">OPERATIONS</p><nav id="navigation" aria-label="Admin sections"></nav><div class="sidebar-bottom"><p id="operator" class="operator"></p><button id="signout" class="signout">Sign out</button></div></aside>
+  <main class="main"><header class="topbar"><div><p class="eyebrow">NEARRY / ADMIN</p><h1 id="section-title">Overview</h1><p id="section-description" class="muted"></p></div><div><button id="refresh" class="secondary">↻ Refresh</button><p id="last-updated" class="footnote"></p></div></header>
+   <div id="feedback" class="feedback" role="status"></div><div id="content" aria-live="polite"></div><div id="pagination" class="pagination" hidden><button id="previous" class="secondary">← Previous</button><span id="page-label"></span><button id="next" class="secondary">Next →</button></div><footer class="footnote">Private records. Review carefully. Decisions are recorded.</footer>
+  </main>
+ </div>
+ <dialog id="review-dialog" aria-labelledby="dialog-title"><div class="dialog-header"><div><p class="eyebrow">REVIEW</p><h2 id="dialog-title"></h2></div><button id="dialog-close" class="secondary" aria-label="Close review">✕</button></div><p id="review-details" class="muted"></p>
+  <div id="business-review" hidden><button id="view-proof" class="secondary">Load private proof</button><p id="proof-message" class="footnote"></p><img id="proof-image" class="proof" alt="Business verification proof" hidden><iframe id="proof-frame" class="proof" title="Business verification document" hidden></iframe><a id="proof-link" target="_blank" rel="noopener noreferrer" hidden>Open proof in another tab ↗</a><label class="check-row"><input id="proof-check" type="checkbox">I reviewed this business and its supporting document.</label></div>
+  <div id="report-review" hidden><h3>Reported context</h3><pre id="report-evidence"></pre></div>
+  <label for="review-note">Review reason <span class="muted">(required for rejection, removal or suspension)</span></label><textarea id="review-note" rows="3" maxlength="200"></textarea><p id="dialog-message" role="status" class="feedback"></p>
+  <div class="actions"><button data-decision="approved" class="primary business-action">Approve business</button><button data-decision="rejected" class="danger business-action">Reject request</button><button data-decision="dismiss" class="secondary report-action">Dismiss report</button><button data-decision="remove" class="danger report-action">Remove content</button><button id="suspend" data-decision="suspend" class="danger report-action">Suspend account</button></div>
+ </dialog>
+ <script src="./config.js"></script><script type="module" src="./app.js"></script>
+</body></html>
