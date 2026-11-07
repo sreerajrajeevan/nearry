@@ -10,12 +10,72 @@ import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Screen } from "../components/Screen";
 import { BrandHeader } from "../components/BrandHeader";
 import { Button } from "../components/Button";
-import { Icon } from "../components/Icon";
-import { colors, typography, spacing, surfaces } from "../theme";
+import { Icon, IconName } from "../components/Icon";
+import { colors, typography, spacing, radius, surfaces } from "../theme";
 import { RootStackParamList } from "../navigation/types";
 import { useAuth } from "../store/AuthContext";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Welcome">;
+
+/** One role, one door: the title names who it is for, the subtitle what happens next. */
+function RoleCard({
+  title,
+  subtitle,
+  icon,
+  variant,
+  onPress,
+}: {
+  title: string;
+  subtitle: string;
+  icon: IconName;
+  variant: "primary" | "secondary";
+  onPress: () => void;
+}) {
+  const primary = variant === "primary";
+  return (
+    <TouchableOpacity
+      accessibilityRole="button"
+      onPress={onPress}
+      activeOpacity={0.8}
+      style={[
+        styles.roleCard,
+        primary ? styles.roleCardPrimary : styles.roleCardSecondary,
+      ]}
+    >
+      <Icon
+        name={icon}
+        size={22}
+        color={primary ? colors.onSage : colors.accent}
+      />
+      <View style={styles.roleText}>
+        <Text
+          style={[
+            styles.roleTitle,
+            primary ? styles.roleTitlePrimary : styles.roleTitleSecondary,
+          ]}
+        >
+          {title}
+        </Text>
+        <Text
+          style={[
+            styles.roleSubtitle,
+            primary
+              ? styles.roleSubtitlePrimary
+              : styles.roleSubtitleSecondary,
+          ]}
+        >
+          {subtitle}
+        </Text>
+      </View>
+      <Icon
+        name="chevron-right"
+        size={20}
+        color={primary ? colors.onSage : colors.textDim}
+      />
+    </TouchableOpacity>
+  );
+}
+
 export function WelcomeScreen({ navigation }: Props) {
   const { enterDemoMode } = useAuth();
   return (
@@ -39,14 +99,19 @@ export function WelcomeScreen({ navigation }: Props) {
           </Text>
         </View>
         <View style={styles.actions}>
-          <Button
-            title="Find my next plan"
+          <RoleCard
+            title="Join as a person"
+            subtitle="Find games, people & plans near you — free"
+            icon="users"
+            variant="primary"
             onPress={() =>
-              navigation.navigate("PersonalAuth", { mode: "login" })
+              navigation.navigate("PersonalAuth", { mode: "signup" })
             }
           />
-          <Button
+          <RoleCard
             title="I’m a business"
+            subtitle="List your place, post offers, take bookings"
+            icon="briefcase"
             variant="secondary"
             onPress={() =>
               navigation.navigate("BusinessAuth", { mode: "login" })
@@ -54,7 +119,9 @@ export function WelcomeScreen({ navigation }: Props) {
           />
         </View>
         <View style={styles.preview}>
-          <Text style={styles.previewLabel}>Take a look around</Text>
+          <Text style={styles.note}>
+            Just looking? Try a demo — no account needed.
+          </Text>
           <View style={styles.demoLinks}>
             <TouchableOpacity
               accessibilityRole="button"
@@ -73,9 +140,6 @@ export function WelcomeScreen({ navigation }: Props) {
               <Icon name="arrow-up-right" size={15} color={colors.accent} />
             </TouchableOpacity>
           </View>
-          <Text style={styles.note}>
-            Demos use sample data. No account needed.
-          </Text>
         </View>
         <Button
           title="Privacy policy"
@@ -119,14 +183,43 @@ const styles = StyleSheet.create({
     maxWidth: 350,
   },
   actions: { gap: 12 },
+  roleCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.md,
+    borderRadius: radius.md,
+    borderWidth: 1,
+  },
+  roleCardPrimary: {
+    backgroundColor: colors.sage,
+    borderColor: colors.sage,
+  },
+  roleCardSecondary: {
+    backgroundColor: colors.surface,
+    borderColor: colors.borderStrong,
+  },
+  roleText: { flex: 1 },
+  roleTitle: { ...typography.body, fontWeight: "600" },
+  roleTitlePrimary: { color: colors.onSage },
+  roleTitleSecondary: { color: colors.text },
+  roleSubtitle: { ...typography.bodySmall, marginTop: 2 },
+  roleSubtitlePrimary: { color: colors.onSage, opacity: 0.85 },
+  roleSubtitleSecondary: { color: colors.textDim },
   preview: {
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.border,
     marginTop: spacing.lg,
     paddingTop: spacing.lg,
+    alignItems: "center",
   },
-  previewLabel: { ...typography.bodySmall, color: colors.text },
-  demoLinks: { flexDirection: "row", flexWrap: "wrap", columnGap: spacing.lg },
+  demoLinks: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    columnGap: spacing.lg,
+    marginTop: spacing.sm,
+  },
   demoLink: {
     flexDirection: "row",
     gap: 5,
@@ -134,5 +227,5 @@ const styles = StyleSheet.create({
     minHeight: 48,
   },
   link: { ...typography.bodySmall, color: colors.accent },
-  note: { ...typography.caption, color: colors.textDim },
+  note: { ...typography.caption, color: colors.textDim, textAlign: "center" },
 });
