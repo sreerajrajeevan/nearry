@@ -9,9 +9,10 @@ import {
 import { colors, spacing, typography } from "../theme";
 import { Icon } from "./Icon";
 
-type Props =
+type Props = (
   | { onPress: () => void }
-  | { value: string; onChangeText: (value: string) => void };
+  | { value: string; onChangeText: (value: string) => void }
+) & { compact?: boolean };
 export function DiscoverySearch(props: Props) {
   if ("onPress" in props)
     return (
@@ -20,14 +21,14 @@ export function DiscoverySearch(props: Props) {
         accessibilityLabel="Search places, plans and offers"
         onPress={props.onPress}
         activeOpacity={0.7}
-        style={styles.field}
+        style={[styles.field, props.compact && styles.compact]}
       >
         <Icon name="search" size={18} />
         <Text style={styles.placeholder}>Search places or plans</Text>
       </TouchableOpacity>
     );
   return (
-    <View style={styles.field}>
+    <View style={[styles.field, props.compact && styles.compact]}>
       <Icon name="search" size={18} />
       <TextInput
         accessibilityLabel="Search nearby"
@@ -46,6 +47,13 @@ export function DiscoverySearch(props: Props) {
   );
 }
 const styles = StyleSheet.create({
+  compact: {
+    minHeight: 48,
+    backgroundColor: colors.sageSoft,
+    borderColor: "transparent",
+    borderRadius: 12,
+    marginBottom: 8,
+  },
   field: {
     flexDirection: "row",
     alignItems: "center",

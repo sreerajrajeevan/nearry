@@ -12,6 +12,7 @@ import { Avatar } from "./Avatar";
 import { AudienceBadge, audienceLabel } from "./AudienceBadge";
 import { Icon } from "./Icon";
 
+/** A compact photo and readable summary; the whole row opens the full plan. */
 export function PostRow({
   post,
   distanceKm,
@@ -51,33 +52,41 @@ export function PostRow({
       style={styles.card}
     >
       <View style={styles.cover}>
-        <PlanCover post={post} />
+        <PlanCover post={post} aspectRatio={0.82} artworkSize={72} />
       </View>
       <View style={styles.content}>
-        <Text style={styles.category}>{postCategory(post)}</Text>
-        <Text style={styles.title}>{post.title}</Text>
+        <View style={styles.topLine}>
+          <Text style={styles.category}>{postCategory(post)}</Text>
+          <Text style={[styles.spots, !status.accepting && styles.closed]}>
+            {spots}
+          </Text>
+        </View>
+        <Text style={styles.title} numberOfLines={2}>
+          {post.title}
+        </Text>
         <View style={styles.metaRow}>
-          <Icon name="calendar" size={15} />
-          <Text style={styles.meta}>{formatWhen(post.startsAt)}</Text>
+          <Icon name="calendar" size={13} />
+          <Text style={styles.meta} numberOfLines={1}>
+            {formatWhen(post.startsAt)}
+          </Text>
         </View>
         {!!place && (
           <View style={styles.metaRow}>
-            <Icon name="map-pin" size={15} />
-            <Text style={styles.meta}>{place}</Text>
+            <Icon name="map-pin" size={13} />
+            <Text style={styles.meta} numberOfLines={1}>
+              {place}
+            </Text>
           </View>
         )}
         {post.genderPreference && post.genderPreference !== "any" && (
           <AudienceBadge preference={post.genderPreference} />
         )}
         <View style={styles.footer}>
-          <Avatar name={post.authorName} uri={post.authorAvatarUrl} size={30} />
+          <Avatar name={post.authorName} uri={post.authorAvatarUrl} size={22} />
           <Text style={styles.author} numberOfLines={1}>
             {post.authorName}
           </Text>
-          <Text style={[styles.spots, !status.accepting && styles.closed]}>
-            {spots}
-          </Text>
-          <Icon name="arrow-right" size={19} color={colors.forest} />
+          <Icon name="arrow-up-right" size={16} color={colors.forest} />
         </View>
       </View>
     </MotionPressable>
@@ -85,43 +94,53 @@ export function PostRow({
 }
 const styles = StyleSheet.create({
   card: {
-    marginBottom: 22,
-    borderBottomWidth: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    paddingVertical: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
-    paddingBottom: 16,
   },
-  cover: { borderRadius: 18, overflow: "hidden", marginBottom: 12 },
-  content: { paddingHorizontal: 2 },
+  cover: { width: 96, borderRadius: 14, overflow: "hidden" },
+  content: { flex: 1, minWidth: 0 },
+  topLine: {
+    flexDirection: "row",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: 6,
+    justifyContent: "space-between",
+    marginBottom: 5,
+  },
   category: {
     ...typography.caption,
-    color: colors.sageDeep,
     fontSize: 10,
-    fontWeight: "700",
+    color: colors.sageDeep,
+    fontWeight: "600",
     textTransform: "uppercase",
-    letterSpacing: 0.8,
-    marginBottom: 5,
+    letterSpacing: 0.6,
   },
   title: {
     ...typography.heading,
-    fontSize: 20,
-    lineHeight: 26,
+    fontSize: 17,
+    lineHeight: 23,
     color: colors.forest,
-    marginBottom: 9,
+    marginBottom: 7,
   },
   metaRow: {
     flexDirection: "row",
-    gap: 8,
+    gap: 6,
     alignItems: "center",
-    marginBottom: 5,
+    marginBottom: 3,
   },
-  meta: { ...typography.bodySmall, color: colors.textDim, flex: 1 },
-  footer: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 10 },
-  author: { ...typography.bodySmall, color: colors.text, flex: 1 },
-  spots: {
+  meta: {
     ...typography.caption,
-    fontWeight: "600",
-    color: colors.sageDeep,
-    flexShrink: 1,
+    fontSize: 12,
+    lineHeight: 18,
+    color: colors.textDim,
+    flex: 1,
   },
+  footer: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 7 },
+  author: { ...typography.caption, color: colors.textDim, flex: 1 },
+  spots: { ...typography.caption, color: colors.sageDeep, flexShrink: 1 },
   closed: { color: colors.textDim },
 });

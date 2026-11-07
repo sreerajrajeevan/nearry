@@ -8,7 +8,15 @@ import { LoadingImage } from "./LoadingImage";
 import { ActivityArt } from "./ActivityArt";
 
 /** Only uploaded photos represent a real plan; missing photos use honest activity artwork. */
-export function PlanCover({ post }: { post: NeedPost }) {
+export function PlanCover({
+  post,
+  aspectRatio = 1.95,
+  artworkSize = 112,
+}: {
+  post: NeedPost;
+  aspectRatio?: number;
+  artworkSize?: number;
+}) {
   const [failed, setFailed] = useState(false);
   useEffect(() => setFailed(false), [post.coverPhotoUrl]);
   const category = postCategory(post);
@@ -16,6 +24,7 @@ export function PlanCover({ post }: { post: NeedPost }) {
     <View
       style={[
         styles.cover,
+        { aspectRatio },
         {
           backgroundColor:
             category === "Meet"
@@ -34,7 +43,7 @@ export function PlanCover({ post }: { post: NeedPost }) {
           onError={() => setFailed(true)}
         />
       ) : (
-        <ActivityArt artwork={activityArtwork(post)} size={112} />
+        <ActivityArt artwork={activityArtwork(post)} size={artworkSize} />
       )}
     </View>
   );

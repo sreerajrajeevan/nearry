@@ -45,7 +45,6 @@ import { CategoryGrid } from "../../components/CategoryGrid";
 import { Icon } from "../../components/Icon";
 import { matchesPlanDate, PlanDateFilter } from "../../utils/planDiscovery";
 import { MotionPressable } from "../../components/Motion";
-import { useReducedMotion } from "../../store/MotionContext";
 
 export function NearbyScreen() {
   const navigation = useNavigation<PersonalTabNav>();
@@ -68,9 +67,6 @@ export function NearbyScreen() {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [freeOnly, setFreeOnly] = useState(false);
   const request = useRef(0);
-  const scroll = useRef<ScrollView>(null);
-  const feedTop = useRef(0);
-  const reduced = useReducedMotion();
   const suggestions = usePlaceSuggestions(area, point, editingLocation);
   const choosePlace = (place: Place) => {
     setSelectedPlace(place);
@@ -178,11 +174,7 @@ export function NearbyScreen() {
     selectedPlace?.name ||
     appliedArea ||
     (demoMode ? "Demo places" : point ? "Near you" : "Choose area");
-  const scope = demoMode
-    ? "Sample plans"
-    : point
-      ? "Within 5 km"
-      : appliedArea || "All locations";
+  const scope = demoMode ? "Sample plans" : point ? "Within 5 km" : "";
   const firstName = profile?.displayName?.trim().split(/\s+/)[0] || "there";
   const feedTitle = category ? `${category} plans` : "Plans near you";
   const hasFilters = !!category || dateFilter !== "all" || freeOnly;
@@ -195,7 +187,6 @@ export function NearbyScreen() {
   return (
     <Screen>
       <ScrollView
-        ref={scroll}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={styles.scroll}
@@ -256,26 +247,12 @@ export function NearbyScreen() {
         {selectedPlace && <PlaceAttributions places={[selectedPlace]} />}
         <View style={styles.intro}>
           <Text style={styles.greeting}>Hello, {firstName}.</Text>
-          <Text accessibilityRole="header" style={styles.heroTitle}>
-            Find your next plan.
-          </Text>
         </View>
-        <DiscoverySearch onPress={() => navigation.navigate("Search")} />
-        <CategoryGrid
-          selected={category}
-          onSelect={(key) => {
-            setCategory(key);
-            scroll.current?.scrollTo({
-              y: feedTop.current,
-              animated: !reduced,
-            });
-          }}
+        <DiscoverySearch
+          compact
+          onPress={() => navigation.navigate("Search")}
         />
-        <View
-          onLayout={(event) => {
-            feedTop.current = event.nativeEvent.layout.y;
-          }}
-        />
+        <CategoryGrid selected={category} onSelect={setCategory} />
         {state === "loading" && posts.length === 0 && offers.length === 0 ? (
           <LoadingState
             label="Finding nearby places and plans…"
@@ -312,7 +289,7 @@ export function NearbyScreen() {
                 <Text accessibilityRole="header" style={styles.sectionTitle}>
                   {feedTitle}
                 </Text>
-                <Text style={styles.sectionMeta}>{scope}</Text>
+                {!!scope && <Text style={styles.sectionMeta}>{scope}</Text>}
               </View>
               <MotionPressable
                 accessibilityRole="button"
@@ -475,9 +452,9 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     gap: spacing.sm,
-    marginBottom: 10,
+    marginBottom: 0,
   },
-  sectionTitle: { ...typography.title, fontSize: 22, color: colors.text },
+  sectionTitle: { ...typography.heading, fontSize: 18, color: colors.text },
   sectionMeta: {
     ...typography.caption,
     color: colors.textDim,
@@ -490,15 +467,8 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg,
     marginBottom: spacing.md,
   },
-  intro: { marginTop: 4, marginBottom: 18 },
-  greeting: { ...typography.bodySmall, color: colors.textDim, marginBottom: 5 },
-  heroTitle: {
-    ...typography.title,
-    fontSize: 27,
-    lineHeight: 33,
-    letterSpacing: -0.8,
-    color: colors.forest,
-  },
+  intro: { marginTop: 0, marginBottom: 10 },
+  greeting: { ...typography.bodySmall, color: colors.textDim, marginBottom: 0 },
   flex: { flex: 1 },
   filterButton: {
     minWidth: 44,
@@ -508,22 +478,25 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   filterSelected: { backgroundColor: colors.sageSoft },
-  dateFilters: { gap: 8, paddingBottom: 18 },
+  dateFilters: {
+    gap: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    marginBottom: 2,
+  },
   dateChip: {
-    minHeight: 42,
+    minHeight: 44,
     paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: colors.borderStrong,
+    paddingHorizontal: 12,
+    borderBottomWidth: 2,
+    borderBottomColor: "transparent",
     justifyContent: "center",
   },
   dateChipSelected: {
-    borderColor: colors.forest,
-    backgroundColor: colors.forest,
+    borderBottomColor: colors.forest,
   },
   dateText: { ...typography.bodySmall, fontWeight: "600", color: colors.text },
-  dateTextSelected: { color: colors.onAccent },
+  dateTextSelected: { color: colors.forest },
   filterPanel: {
     backgroundColor: colors.sageSoft,
     borderRadius: 14,

@@ -1,9 +1,15 @@
 # Simple Nearby and plan details
 
 The Nearby feed and plan details use the existing forest/cream theme with quieter
-headers, larger uploaded images, activity categories, readable metadata and fewer
+headers, compact photo summaries, activity categories, readable metadata and fewer
 competing panels. `PostRow` is shared with Search so plan results stay consistent.
 The Personal Create tab has a small solid green plus button.
+
+Feed rows use a 96-pixel photo with title, date, place, host and available spots
+beside it. Category illustrations are small and unboxed; date filters use
+underlined tabs. The large welcome heading and redundant All locations caption
+have been removed. Changing category keeps the current scroll position rather
+than jumping the page. Details retain their larger gallery.
 
 Nearby has working All plans / Today / This weekend filters and a Free plans only
 toggle. Calendar filters use the device's local day boundaries; Saturday and
@@ -12,7 +18,7 @@ filters apply to plans; offers and venues remain in their own sections and the
 duplicate featured-offer presentation has been removed. Location search,
 attribution, refresh, categories, messages and notifications remain available.
 
-Cards display uploaded cover photos and public host avatars when available.
+Rows display uploaded cover photos and public host avatars when available.
 Missing/failed covers use the existing activity illustrations; failed avatars
 use initials. No stock photography is presented as a real venue or plan. Avatar
 lookups select only public ID/avatar fields, deduplicate and batch IDs, and are
