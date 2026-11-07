@@ -12,7 +12,8 @@ import { Button } from "../../components/Button";
 import { Input } from "../../components/Input";
 import { colors, typography, spacing, radius } from "../../theme";
 import { useAuth } from "../../store/AuthContext";
-import { getCurrentPosition, LatLng } from "../../services/location";
+import { getCurrentPosition, reverseGeocodeArea, formatLatLng, LatLng } from "../../services/location";
+import { Icon } from "../../components/Icon";
 import { isValidBusinessName } from "../../utils/validation";
 
 const CATEGORIES = [
@@ -59,17 +60,26 @@ export function BusinessOnboardingScreen() {
   const [area, setArea] = useState("");
   const [locating, setLocating] = useState(false);
   const [point, setPoint] = useState<LatLng | null>(null);
+  const [capturedLabel, setCapturedLabel] = useState<string | null>(null);
 
   const useCurrentLocation = async () => {
     setLocating(true);
     try {
       const found = await getCurrentPosition();
-      if (found) setPoint(found);
-      else
+      if (!found) {
         Alert.alert(
           "Location unavailable",
           "Enter your area manually to continue.",
         );
+        return;
+      }
+      setPoint(found);
+      // Show what was actually captured and prefill the area, so the
+      // captured point is visible and Continue stops being a dead end.
+      const locality = await reverseGeocodeArea(found);
+      const label = locality ?? formatLatLng(found);
+      setCapturedLabel(label);
+      if (!area.trim() && locality) setArea(locality);
     } finally {
       setLocating(false);
     }
@@ -145,10 +155,16 @@ export function BusinessOnboardingScreen() {
             onPress={useCurrentLocation}
             loading={locating}
           />
+          {point && capturedLabel && (
+            <View style={styles.captured}>
+              <Icon name="map-pin" size={15} color={colors.accent} />
+              <Text style={styles.capturedText}>{capturedLabel}</Text>
+            </View>
+          )}
           <View style={styles.footer}>
             <Button
               title="Continue"
-              disabled={!area.trim()}
+              disabled={!area.trim() && !point}
               onPress={() => setStep(3)}
             />
           </View>
@@ -266,6 +282,13 @@ const styles = StyleSheet.create({
     marginTop: "auto",
     marginBottom: spacing.md,
   },
+  captured: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: spacing.sm,
+  },
+  capturedText: { ...typography.bodySmall, color: colors.textDim, flex: 1 },
   footerWide: {
     marginTop: spacing.sm,
     width: "100%",
