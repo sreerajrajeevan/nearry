@@ -75,14 +75,9 @@
     "splash": {
       "backgroundColor": "#F4F3EB",
       "image": "./assets/splash.png",
-      "resizeMode": "contain",
-      "dark": {
-        "backgroundColor": "#0B1F17",
-        "image": "./assets/splash.png",
-        "resizeMode": "contain"
-      }
+      "resizeMode": "contain"
     },
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "light",
     "version": "0.1.0",
     "web": {
       "bundler": "metro",

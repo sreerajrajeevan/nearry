@@ -143,7 +143,7 @@ const styles = StyleSheet.create({
   },
   photo: { width: "100%", height: "100%" },
   note: { ...typography.caption, color: colors.textDim, marginTop: 8 },
-  viewer: { flex: 1, backgroundColor: colors.forest },
+  viewer: { flex: 1, backgroundColor: colors.ink },
   close: {
     width: 48,
     height: 48,
