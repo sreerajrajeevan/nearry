@@ -3,6 +3,7 @@ import { ProfileRequired } from "../../components/ProfileRequired";
 import {
   personalProfileReady,
   matchesPostAudience,
+  isProfileCompletionError,
 } from "../../utils/profileReadiness";
 import { LoadingState } from "../../components/LoadingState";
 import { SafetyActions } from "../../components/SafetyActions";
@@ -52,7 +53,7 @@ import { timeLeft, formatWhen } from "../../utils/format";
  */
 export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
   const { postId } = route.params;
-  const { profile } = useAuth();
+  const { profile, refreshProfile } = useAuth();
   const myId = profile?.id;
 
   const [profilePrompt, setProfilePrompt] = useState(false);
@@ -90,8 +91,15 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
       await fn();
       await load();
     } catch (e) {
+      if (key === "join" && isProfileCompletionError(e)) {
+        setProfilePrompt(true);
+        // Refresh stale account details without hiding the recovery action if
+        // the network fails. The user can still open the completion form.
+        void refreshProfile().catch(() => {});
+        return;
+      }
       Alert.alert(
-        "Hmm",
+        key === "join" ? "Request not sent" : "Could not update this plan",
         e instanceof Error ? e.message : "Something went wrong.",
       );
     } finally {
@@ -446,6 +454,7 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
         )}
       </ScrollView>
       <ProfileRequired
+        intent="join"
         visible={profilePrompt}
         onComplete={() => {
           setProfilePrompt(false);

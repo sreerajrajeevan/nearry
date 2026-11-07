@@ -5,6 +5,7 @@ import {
   personalProfileReady,
   matchesPostAudience,
   validatePersonalDetails,
+  isProfileCompletionError,
 } from "../src/utils/profileReadiness";
 import type { Profile } from "../src/services/mappers";
 const complete = {
@@ -16,6 +17,24 @@ const complete = {
   age: 25,
   termsVersion: "2026-10-19",
 } as Profile;
+test("server profile requirements open completion recovery without treating audience or network errors as missing details", () => {
+  assert(
+    isProfileCompletionError(
+      new Error(
+        "Complete your profile with name, gender and age before joining a plan",
+      ),
+    ),
+  );
+  assert(isProfileCompletionError({ message: "personal onboarding required" }));
+  for (const error of [
+    null,
+    undefined,
+    new Error("This plan is for females only"),
+    new Error("Network request failed"),
+    { message: "Only the host can approve requests" },
+  ])
+    assert.equal(isProfileCompletionError(error), false);
+});
 test("participation requires adult personal details and current agreement, not merely a Google session", () => {
   assert(personalProfileReady(complete));
   for (const patch of [
