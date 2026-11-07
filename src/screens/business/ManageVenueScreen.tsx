@@ -1,3 +1,4 @@
+import { Alert } from "../../services/appAlert";
 import { PageHeading } from "../../components/PageHeading";
 import { LoadingDots } from "../../components/LoadingDots";
 import React, { useCallback, useState } from "react";
@@ -9,7 +10,6 @@ import {
   TouchableOpacity,
   Image,
   TextInput,
-  Alert,
 } from "react-native";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { Screen } from "../../components/Screen";

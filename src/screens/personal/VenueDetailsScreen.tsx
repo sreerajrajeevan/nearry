@@ -1,3 +1,4 @@
+import { Alert } from "../../services/appAlert";
 import { LoadingImage } from "../../components/LoadingImage";
 import { LoadingState } from "../../components/LoadingState";
 import { SafetyActions } from "../../components/SafetyActions";
@@ -9,7 +10,6 @@ import {
   StyleSheet,
   Linking,
   Share,
-  Alert,
   Modal,
   RefreshControl,
 } from "react-native";

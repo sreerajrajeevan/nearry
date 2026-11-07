@@ -1,9 +1,10 @@
+import { Alert } from "../services/appAlert";
 import {
   LegalScreen,
   RestrictedAccountScreen,
 } from "../screens/settings/SafetyScreens";
-import React, { useEffect } from "react";
-import { View, StyleSheet, Text, Alert } from "react-native";
+import React, { useEffect, useRef } from "react";
+import { View, StyleSheet, Text } from "react-native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { Button } from "../components/Button";
 import { AccountTypeScreen } from "../screens/auth/AccountTypeScreen";
@@ -51,16 +52,22 @@ export function RootNavigator() {
   } = useAuth();
 
   usePushSetup();
+  const shownRoleMismatch = useRef<typeof roleMismatch>(null);
 
   // The login lane is only a hint: one email = one account = one fixed type.
   // If the user picked the other lane, say so instead of landing silently.
   useEffect(() => {
-    if (!roleMismatch) return;
+    if (!roleMismatch) {
+      shownRoleMismatch.current = null;
+      return;
+    }
+    if (shownRoleMismatch.current === roleMismatch) return;
+    shownRoleMismatch.current = roleMismatch;
     const label = roleMismatch === "business" ? "Business" : "Personal";
     Alert.alert(
-      `Signed in to your ${label} account`,
-      `This email is registered as a ${label} account, so we opened the ${label} app.`,
-      [{ text: "OK", onPress: () => clearRoleMismatch() }],
+      `Your ${label} account`,
+      `This email belongs to a ${label} account. We’ve opened your ${label} space.`,
+      [{ text: "Continue", onPress: () => clearRoleMismatch() }],
     );
   }, [roleMismatch, clearRoleMismatch]);
 

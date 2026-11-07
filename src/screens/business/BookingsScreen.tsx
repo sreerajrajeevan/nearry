@@ -1,3 +1,4 @@
+import { Alert } from "../../services/appAlert";
 import { PageHeading } from "../../components/PageHeading";
 import { LoadingState } from "../../components/LoadingState";
 import { formatWhen } from "../../utils/format";
@@ -9,7 +10,6 @@ import {
   ScrollView,
   RefreshControl,
   TouchableOpacity,
-  Alert,
 } from "react-native";
 import { useLiveQuery } from "../../hooks/useLiveQuery";
 import { bookingState } from "../../utils/flowState";

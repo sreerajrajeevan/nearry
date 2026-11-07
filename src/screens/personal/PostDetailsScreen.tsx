@@ -1,3 +1,4 @@
+import { Alert } from "../../services/appAlert";
 import { AudienceBadge, audienceLabel } from "../../components/AudienceBadge";
 import { ProfileRequired } from "../../components/ProfileRequired";
 import {
@@ -14,7 +15,6 @@ import {
   ScrollView,
   TouchableOpacity,
   StyleSheet,
-  Alert,
 } from "react-native";
 import { useLiveQuery } from "../../hooks/useLiveQuery";
 import { postState } from "../../utils/flowState";

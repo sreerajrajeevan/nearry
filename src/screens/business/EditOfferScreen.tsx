@@ -1,3 +1,4 @@
+import { Alert } from "../../services/appAlert";
 import { PageHeading } from "../../components/PageHeading";
 import { LoadingState } from "../../components/LoadingState";
 import { DateSheet, TimeSheet } from "../../components/DateTimeSheets";
@@ -7,7 +8,6 @@ import {
   Text,
   StyleSheet,
   ScrollView,
-  Alert,
   TouchableOpacity,
   Image,
 } from "react-native";

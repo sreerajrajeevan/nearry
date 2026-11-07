@@ -1,6 +1,6 @@
+import { Alert } from "../../services/appAlert";
 import React, { useCallback, useState, useRef, useEffect } from "react";
 import {
-  Alert,
   Image,
   Platform,
   ScrollView,

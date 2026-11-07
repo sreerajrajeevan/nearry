@@ -1,3 +1,4 @@
+import { Alert } from "../../services/appAlert";
 import React, { useEffect, useRef, useState } from "react";
 import { DateSheet, TimeSheet } from "../../components/DateTimeSheets";
 import {
@@ -5,7 +6,6 @@ import {
   Text,
   ScrollView,
   TouchableOpacity,
-  Alert,
   StyleSheet,
 } from "react-native";
 import { PostPhotosField } from "../../components/PostPhotosField";

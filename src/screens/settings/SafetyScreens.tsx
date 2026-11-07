@@ -1,6 +1,7 @@
+import { Alert } from "../../services/appAlert";
 import { LoadingState } from "../../components/LoadingState";
 import React, { useRef, useState } from "react";
-import { Alert, Linking, StyleSheet, Switch, Text, View } from "react-native";
+import { Linking, StyleSheet, Switch, Text, View } from "react-native";
 import { Screen } from "../../components/Screen";
 import { Button } from "../../components/Button";
 import { Input } from "../../components/Input";

@@ -1,7 +1,7 @@
+import { Alert } from "../../services/appAlert";
 import { LoadingState } from "../../components/LoadingState";
 import React, { useCallback, useEffect, useState } from "react";
 import {
-  Alert,
   FlatList,
   StyleSheet,
   Text,

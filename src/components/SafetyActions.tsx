@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Alert, Text, View, StyleSheet } from "react-native";
+import { Text, View, StyleSheet } from "react-native";
 import { Button } from "./Button";
 import { colors, typography } from "../theme";
 import { blockUser, ReportTarget } from "../services/safety";

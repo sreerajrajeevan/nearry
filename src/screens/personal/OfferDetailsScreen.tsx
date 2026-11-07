@@ -7,7 +7,6 @@ import {
   ScrollView,
   TouchableOpacity,
   StyleSheet,
-  Alert,
 } from "react-native";
 import { useLiveQuery } from "../../hooks/useLiveQuery";
 import { bookingState } from "../../utils/flowState";
