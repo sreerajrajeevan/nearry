@@ -43,13 +43,11 @@ For projects already on `00016`, apply only `00017` and `00018` after taking a b
 Existing projects at 00023 apply only `00024_account_safety.sql` and `00025_push_delivery_receipts.sql`, in order, before distributing the matching client. These add report/block rules, account deactivation/deletion queues, terms acknowledgement, notification preferences and delivery receipts. Deploy/redeploy `account-maintenance` and `send-push`, configure trusted schedules, and set public legal/EAS configuration. See [rollout and operator instructions](../../docs/account-safety-rollout.md). Existing future commitments are not cancelled by migration installation; cancellation happens only after an explicit deletion request or a trusted moderation action.
 
 
-## Admin operations console (00027)
+## Admin operations console (00029)
 
-Migration `00027_admin_console.sql` creates private `admin_console_members` and
-`admin_console_audit` tables and a service-role-only moderation RPC. Deploy the
-separate [admin dashboard](../../admin/README.md) and `admin-console` Edge
-Function after applying the migration in a staging database. Never allow public
-users to add themselves as administrators. The separate open selfie verification
-PR uses 00026; reconcile migration histories when merging both PRs.
-
-`00029`: private MFA-protected admin dashboard. Apply after 00028; allowlist confirmed operator UUIDs separately and deploy `admin-console`. See [admin setup](../../admin/README.md). The old unmerged admin migration 00027 was renumbered; existing email review remains unchanged.
+`00029_admin_console.sql` creates private admin membership, audit records and
+service-only overview, business queue and moderation functions. Apply after
+00028; allowlist confirmed operator UUIDs separately and deploy `admin-console`.
+See [admin setup](../../admin/README.md). The old unmerged admin migration 00027
+was renumbered. Existing email review remains unchanged. Never grant ordinary
+clients access to admin tables or let users add themselves as administrators.
