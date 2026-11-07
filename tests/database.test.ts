@@ -103,6 +103,12 @@ before(async () => {
       );
     }
     try {
+      if (file === "00028_post_audience_readmodel.sql") {
+        // Reproduce the upgrade path: a restriction already saved before the
+        // read-model correction must become visible without rewriting the post.
+        await db.exec(`insert into posts(id,author_id,title,description,starts_at,vacancies,gender_preference)
+          values('10000000-0000-0000-0000-000000000028','00000000-0000-0000-0000-000000000009','Existing women’s plan','Preserve the existing saved audience',now()+interval '4 hours',4,'female');`);
+      }
       await db.exec(sql);
       if (file === "00009_offers_bookings.sql") {
         await db.exec(`insert into auth.users(id,email,raw_user_meta_data)values('00000000-0000-0000-0000-000000000009','legacy@test.example','{"account_type":"business"}');
@@ -2327,6 +2333,79 @@ test("participation: Google-style incomplete accounts can browse but must supply
       ),
     ),
     /row-level security/,
+  );
+});
+
+test("post_cards preserves the published audience for detail, feed, My posts and subsequent edits", async () => {
+  // The fixture was inserted before migration 00028, with the stale view.
+  const existing = (
+    await db.query(
+      "select p.gender_preference as stored,c.gender_preference as displayed from posts p join post_cards c using(id) where p.id='10000000-0000-0000-0000-000000000028'",
+    )
+  ).rows[0];
+  assert.deepEqual(existing, { stored: "female", displayed: "female" });
+  const owner = await corePersonal(),
+    viewer = await corePersonal();
+  for (const audience of ["female", "male", "any"] as const) {
+    const saved = (
+      await asUser(owner, (tx) =>
+        tx.query(
+          "insert into posts(author_id,title,description,starts_at,vacancies,gender_preference) values($1,'Audience roundtrip','Keep the selected audience after publishing',now()+interval '4 hours',4,$2) returning id,gender_preference",
+          [owner, audience],
+        ),
+      )
+    ).rows[0];
+    assert.equal(saved.gender_preference, audience);
+    for (const reader of [owner, viewer]) {
+      const detail = (
+        await asUser(reader, (tx) =>
+          tx.query("select * from post_cards where id=$1", [saved.id]),
+        )
+      ).rows[0];
+      assert.equal(detail.gender_preference, audience);
+      assert.equal(detail.approved_count, 0);
+      const feed = (
+        await asUser(reader, (tx) =>
+          tx.query(
+            "select * from post_cards where author_id=$1 and status='open'",
+            [owner],
+          ),
+        )
+      ).rows.find((row: any) => row.id === saved.id);
+      assert.equal(feed.gender_preference, audience);
+    }
+    const changed = audience === "female" ? "male" : "female";
+    await asUser(owner, (tx) =>
+      tx.query("update posts set gender_preference=$2 where id=$1", [
+        saved.id,
+        changed,
+      ]),
+    );
+    const edited = (
+      await asUser(viewer, (tx) =>
+        tx.query("select * from post_cards where id=$1", [saved.id]),
+      )
+    ).rows[0];
+    assert.equal(edited.gender_preference, changed);
+  }
+  const legacy = await post();
+  assert.equal(
+    (
+      await asUser(viewer, (tx) =>
+        tx.query("select gender_preference from post_cards where id=$1", [
+          legacy,
+        ]),
+      )
+    ).rows[0].gender_preference,
+    null,
+  );
+  assert.deepEqual(
+    (
+      await db.query(
+        "select reloptions from pg_class where oid='public.post_cards'::regclass",
+      )
+    ).rows[0].reloptions,
+    ["security_invoker=true"],
   );
 });
 
