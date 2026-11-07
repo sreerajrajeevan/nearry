@@ -1,5 +1,6 @@
+import { Alert } from "../services/appAlert";
 import React, { useRef, useState } from "react";
-import { Alert, Image, StyleSheet, Text, View, Keyboard } from "react-native";
+import { Image, StyleSheet, Text, View, Keyboard } from "react-native";
 import { PhotoCropper } from "./PhotoCropper";
 import { Button } from "./Button";
 import { pickPhoto } from "../services/photos";

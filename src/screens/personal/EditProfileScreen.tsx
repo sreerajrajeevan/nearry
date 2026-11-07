@@ -1,3 +1,4 @@
+import { Alert } from "../../services/appAlert";
 import { PageHeading } from "../../components/PageHeading";
 import React, { useState } from "react";
 import {
@@ -6,7 +7,6 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Alert,
 } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Screen } from "../../components/Screen";

@@ -1,8 +1,8 @@
+import { Alert } from "../services/appAlert";
 import { PageHeading } from "../components/PageHeading";
 import { LoadingState } from "../components/LoadingState";
 import React, { useCallback, useRef, useState } from "react";
 import {
-  Alert,
   AppState,
   View,
   Text,
@@ -298,7 +298,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: spacing.sm,
   },
-  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.goldDeep },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.goldDeep,
+  },
   dotRead: { backgroundColor: colors.border },
   headerActions: {
     flexDirection: "row",

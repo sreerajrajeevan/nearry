@@ -1,3 +1,4 @@
+import { Alert } from "../../services/appAlert";
 import { AudienceBadge } from "../../components/AudienceBadge";
 import { PageHeading } from "../../components/PageHeading";
 
@@ -7,7 +8,6 @@ import {
   Text,
   ScrollView,
   StyleSheet,
-  Alert,
   RefreshControl,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";

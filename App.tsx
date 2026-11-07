@@ -14,6 +14,7 @@ import { BRAND_ASSETS } from "./src/components/BrandLogo";
 import { StartupSplash } from "./src/components/StartupSplash";
 import { colors } from "./src/theme";
 import { MotionProvider } from "./src/store/MotionContext";
+import { AppAlertHost } from "./src/components/AppAlertHost";
 
 // Hold the native brand artwork until React has laid out its matching launch frame.
 void SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -94,6 +95,7 @@ export default function App() {
             }
           />
         </AuthProvider>
+        <AppAlertHost />
       </MotionProvider>
     </SafeAreaProvider>
   );

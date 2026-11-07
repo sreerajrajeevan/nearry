@@ -1,3 +1,4 @@
+import { Alert } from "../../services/appAlert";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   View,
@@ -6,7 +7,6 @@ import {
   ScrollView,
   RefreshControl,
   TouchableOpacity,
-  Alert,
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { Screen } from "../../components/Screen";

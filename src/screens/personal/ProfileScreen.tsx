@@ -1,8 +1,9 @@
+import { Alert } from "../../services/appAlert";
 import { personalProfileReady } from "../../utils/profileReadiness";
 import { PageHeading } from "../../components/PageHeading";
 
 import React, { useRef, useState } from "react";
-import { View, Text, ScrollView, StyleSheet, Alert } from "react-native";
+import { View, Text, ScrollView, StyleSheet } from "react-native";
 import { Screen } from "../../components/Screen";
 import { PersonalHeader } from "../../components/PersonalHeader";
 import { Avatar } from "../../components/Avatar";
