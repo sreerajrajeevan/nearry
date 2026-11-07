@@ -34,7 +34,7 @@
         "expo-image-picker",
         {
           "photosPermission": "Allow Nearry to access a photo you choose for a post, profile or business.",
-          "cameraPermission": false,
+          "cameraPermission": "Allow Nearry to take a private selfie for optional profile verification.",
           "microphonePermission": false
         }
       ],

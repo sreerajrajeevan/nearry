@@ -51,3 +51,5 @@ service-only overview, business queue and moderation functions. Apply after
 See [admin setup](../../admin/README.md). The old unmerged admin migration 00027
 was renumbered. Existing email review remains unchanged. Never grant ordinary
 clients access to admin tables or let users add themselves as administrators.
+
+- **00030_personal_selfie_verification.sql** — optional private camera selfie reviews, versioned admin decisions, current-avatar binding and cleanup. Requires 00029. See [selfie setup](../../docs/personal-selfie-verification.md). New camera and immutable avatar paths require a fresh phone build.

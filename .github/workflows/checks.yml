@@ -74,7 +74,8 @@ jobs:
             exit 1
           fi
           "$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest permissions "$apk" > /tmp/nearry-permissions.txt
-          if grep -E 'READ_MEDIA_|READ_EXTERNAL_STORAGE|WRITE_EXTERNAL_STORAGE|RECORD_AUDIO|ACCESS_BACKGROUND_LOCATION|CAMERA|SYSTEM_ALERT_WINDOW' /tmp/nearry-permissions.txt; then
+          grep -q 'android.permission.CAMERA' /tmp/nearry-permissions.txt || { echo 'Optional selfie capture requires CAMERA permission.'; exit 1; }
+          if grep -E 'READ_MEDIA_|READ_EXTERNAL_STORAGE|WRITE_EXTERNAL_STORAGE|RECORD_AUDIO|ACCESS_BACKGROUND_LOCATION|SYSTEM_ALERT_WINDOW' /tmp/nearry-permissions.txt; then
             echo 'Unexpected broad media, microphone or background-location permission.'
             exit 1
           fi

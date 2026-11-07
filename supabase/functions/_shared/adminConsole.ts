@@ -3,6 +3,7 @@ type Db = any;
 const SECTIONS = new Set([
   "overview",
   "business",
+  "selfies",
   "reports",
   "users",
   "plans",
@@ -77,12 +78,17 @@ async function list(db: Db, section: string, offset: number) {
     };
   }
   let rows: any[];
-  if (section === "business") {
+  if (section === "business" || section === "selfies") {
     rows = checked(
-      await db.rpc("admin_console_business_queue", {
-        p_offset: offset,
-        p_limit: PAGE_SIZE + 1,
-      }),
+      await db.rpc(
+        section === "selfies"
+          ? "admin_console_selfie_queue"
+          : "admin_console_business_queue",
+        {
+          p_offset: offset,
+          p_limit: PAGE_SIZE + 1,
+        },
+      ),
     );
   } else {
     const source: Record<string, string> = {
@@ -131,7 +137,68 @@ async function list(db: Db, section: string, offset: number) {
 export function createAdminConsoleHandler(
   db: Db,
   allowedOrigins: string | undefined,
+  supabaseUrl?: string,
 ) {
+  // Only our own immutable avatar objects may be used for a comparison.
+  // Never fetch or render an arbitrary URL supplied through profile metadata.
+  async function selfieComparison(id: string) {
+    const review = checked<any>(
+      await db
+        .from("personal_selfie_reviews")
+        .select(
+          "user_id,submission_id,selfie_path,avatar_path,avatar_url_at_submission,status,submitted_at",
+        )
+        .eq("submission_id", id)
+        .maybeSingle(),
+    );
+    if (
+      !review ||
+      review.submission_id !== id ||
+      review.status !== "pending" ||
+      !Number.isFinite(Date.parse(review.submitted_at)) ||
+      Date.parse(review.submitted_at) <= Date.now() - 7 * 86400000 ||
+      typeof review.selfie_path !== "string" ||
+      !review.selfie_path.startsWith(review.user_id + "/selfie-")
+    )
+      throw new Error(
+        "Review unavailable, expired or changed; refresh the queue",
+      );
+    const profile = checked<any>(
+      await db
+        .from("profiles")
+        .select("id,account_type,avatar_url,suspended_at,deletion_requested_at")
+        .eq("id", review.user_id)
+        .maybeSingle(),
+    );
+    if (
+      !profile ||
+      profile.account_type !== "personal" ||
+      profile.suspended_at ||
+      profile.deletion_requested_at ||
+      !profile.avatar_url ||
+      profile.avatar_url !== review.avatar_url_at_submission ||
+      typeof review.avatar_path !== "string" ||
+      !UUID.test(review.user_id) ||
+      !review.avatar_path.startsWith(review.user_id + "/") ||
+      !/^[a-zA-Z0-9._-]+$/.test(review.avatar_path.slice(37))
+    )
+      throw new Error("Review unavailable or changed; refresh the queue");
+    const base = new URL(supabaseUrl || "https://invalid.local");
+    const avatar = new URL(profile.avatar_url);
+    const path = "/storage/v1/object/public/avatars/" + review.avatar_path;
+    if (
+      !supabaseUrl ||
+      base.protocol !== "https:" ||
+      avatar.origin !== base.origin ||
+      avatar.pathname !== path ||
+      avatar.username ||
+      avatar.password
+    )
+      throw new Error(
+        "Review unavailable: upload a profile photo in Nearry first",
+      );
+    return { review, avatarUrl: base.origin + path };
+  }
   const allowed = new Set(
     (allowedOrigins ?? "")
       .split(",")
@@ -239,6 +306,21 @@ export function createAdminConsoleHandler(
       if (payload.action === "proof") {
         if (!UUID.test(payload.id ?? ""))
           return json({ error: "Invalid review ID" }, 400, origin);
+        if (payload.kind === "selfie") {
+          const { review, avatarUrl } = await selfieComparison(payload.id);
+          const signed = checked<any>(
+            await db.storage
+              .from("selfie_proofs")
+              .createSignedUrl(review.selfie_path, 60),
+          );
+          return json(
+            { url: signed.signedUrl, avatarUrl, expiresIn: 60 },
+            200,
+            origin,
+          );
+        }
+        if (payload.kind && payload.kind !== "business")
+          return json({ error: "Invalid proof type" }, 400, origin);
         const review = checked<any>(
           await db
             .from("verification_review_jobs")
@@ -282,6 +364,8 @@ export function createAdminConsoleHandler(
           !(
             (kind === "business" &&
               ["approved", "rejected"].includes(decision)) ||
+            (kind === "selfie" &&
+              ["verified", "rejected"].includes(decision)) ||
             (kind === "report" &&
               ["dismiss", "remove", "suspend"].includes(decision))
           ) ||
@@ -304,6 +388,8 @@ export function createAdminConsoleHandler(
             403,
             origin,
           );
+        if (kind === "selfie" && decision === "verified")
+          await selfieComparison(payload.id);
         checked(
           await db.rpc("admin_console_decide", {
             p_actor: user.id,

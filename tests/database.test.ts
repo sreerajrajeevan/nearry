@@ -71,7 +71,7 @@ before(async () => {
   await db.exec(`create role anon;create role authenticated;create role service_role bypassrls;
  create schema auth;create table auth.users(id uuid primary key,email text,raw_user_meta_data jsonb default '{}');
  create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;
- create schema storage;create table storage.buckets(id text primary key,name text,public boolean);create table storage.objects(id uuid primary key default gen_random_uuid(),bucket_id text,name text);
+ create schema storage;create table storage.buckets(id text primary key,name text,public boolean,file_size_limit bigint,allowed_mime_types text[]);create table storage.objects(id uuid primary key default gen_random_uuid(),bucket_id text,name text,created_at timestamptz default now());
  alter table storage.objects enable row level security;
  create function storage.foldername(text) returns text[] language sql immutable as $$select string_to_array($1,'/')$$;
  grant usage on schema public,auth,storage to anon,authenticated,service_role;
@@ -2791,5 +2791,536 @@ test("admin: business review queue, old requests, decisions and audit use curren
       ])
     ).rows[0].verification_status,
     "pending",
+  );
+});
+
+async function selfieApplicant() {
+  const id = await corePersonal();
+  const avatar = `${id}/avatar-00000000-0000-0000-0000-000000000001.jpg`,
+    path = `${id}/selfie-original.jpg`;
+  const url = `https://project.supabase.co/storage/v1/object/public/avatars/${avatar}`;
+  await asUser(id, (tx) =>
+    tx.query(
+      "insert into storage.objects(bucket_id,name)values('avatars',$1),('selfie_proofs',$2)",
+      [avatar, path],
+    ),
+  );
+  await asUser(id, (tx) =>
+    tx.query("update profiles set avatar_url=$2 where id=$1", [id, url]),
+  );
+  return { id, avatar, path, url };
+}
+async function submitSelfie(id: string, path: string) {
+  await asUser(id, (tx) =>
+    tx.query("select submit_personal_selfie($1,true)", [path]),
+  );
+  return (
+    await db.query(
+      "select submission_id from personal_selfie_reviews where user_id=$1",
+      [id],
+    )
+  ).rows[0].submission_id;
+}
+const checkedSelfie = async (id: string) =>
+  (
+    await asUser(id, (tx) =>
+      tx.query("select is_personal_selfie_checked($1) checked", [id]),
+    )
+  ).rows[0].checked;
+
+test("selfies: private owner-only media/status and service-only verdicts; pinned images cannot be replaced or deleted", async () => {
+  const p = await selfieApplicant(),
+    other = await corePersonal();
+  const bucket = (
+    await db.query(
+      "select public,file_size_limit,allowed_mime_types from storage.buckets where id='selfie_proofs'",
+    )
+  ).rows[0];
+  assert.equal(bucket.public, false);
+  assert.equal(Number(bucket.file_size_limit), 5242880);
+  assert.deepEqual(bucket.allowed_mime_types, [
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+  ]);
+  await assert.rejects(
+    asUser(p.id, (tx) =>
+      tx.query("select submit_personal_selfie($1,false)", [p.path]),
+    ),
+    /agree/,
+  );
+  await assert.rejects(
+    asUser(other, (tx) =>
+      tx.query("select submit_personal_selfie($1,true)", [p.path]),
+    ),
+    /profile photo/,
+  );
+  const submission = await submitSelfie(p.id, p.path);
+  assert.equal(await checkedSelfie(p.id), false);
+  for (const role of ["anon", "authenticated"]) {
+    await assert.rejects(
+      asUser(
+        p.id,
+        (tx) =>
+          tx.query("select review_personal_selfie($1,$2,'verified','')", [
+            p.id,
+            submission,
+          ]),
+        role,
+      ),
+      /permission denied/,
+    );
+    await assert.rejects(
+      asUser(
+        p.id,
+        (tx) => tx.query("select * from admin_console_selfie_queue()"),
+        role,
+      ),
+      /permission denied/,
+    );
+  }
+  await assert.rejects(
+    asUser(p.id, (tx) =>
+      tx.query("select selfie_path from personal_selfie_reviews"),
+    ),
+    /permission denied/,
+  );
+  assert.equal(
+    (
+      await asUser(p.id, (tx) =>
+        tx.query("select status,note from personal_selfie_reviews"),
+      )
+    ).rows.length,
+    1,
+  );
+  assert.equal(
+    (
+      await asUser(other, (tx) =>
+        tx.query(
+          "select status from personal_selfie_reviews where user_id=$1",
+          [p.id],
+        ),
+      )
+    ).rows.length,
+    0,
+  );
+  await assert.rejects(
+    asUser(p.id, (tx) =>
+      tx.query(
+        "update personal_selfie_reviews set status='verified' where user_id=$1",
+        [p.id],
+      ),
+    ),
+    /permission denied/,
+  );
+  for (const id of [other, null]) {
+    const role = id ? "authenticated" : "anon";
+    assert.equal(
+      (
+        await asUser(
+          id,
+          (tx) =>
+            tx.query(
+              "select name from storage.objects where bucket_id='selfie_proofs' and name=$1",
+              [p.path],
+            ),
+          role,
+        )
+      ).rows.length,
+      0,
+    );
+    assert.equal(
+      (
+        await asUser(
+          id,
+          (tx) =>
+            tx.query(
+              "delete from storage.objects where bucket_id='selfie_proofs' and name=$1 returning name",
+              [p.path],
+            ),
+          role,
+        )
+      ).rows.length,
+      0,
+    );
+  }
+  await assert.rejects(
+    asUser(other, (tx) =>
+      tx.query(
+        "insert into storage.objects(bucket_id,name)values('selfie_proofs',$1)",
+        [`${p.id}/selfie-forged.jpg`],
+      ),
+    ),
+    /row.level security/,
+  );
+  for (const [bucket, path] of [
+    ["avatars", p.avatar],
+    ["selfie_proofs", p.path],
+  ]) {
+    assert.equal(
+      (
+        await asUser(p.id, (tx) =>
+          tx.query(
+            "update storage.objects set name=name where bucket_id=$1 and name=$2 returning id",
+            [bucket, path],
+          ),
+        )
+      ).rows.length,
+      0,
+    );
+    assert.equal(
+      (
+        await asUser(p.id, (tx) =>
+          tx.query(
+            "delete from storage.objects where bucket_id=$1 and name=$2 returning id",
+            [bucket, path],
+          ),
+        )
+      ).rows.length,
+      0,
+    );
+  }
+  await assert.rejects(
+    asUser(p.id, (tx) =>
+      tx.query(
+        "insert into storage.objects(bucket_id,name)values('selfie_proofs',$1)",
+        [`${p.id}/selfie-second.jpg`],
+      ),
+    ),
+    /row.level security/,
+  );
+  await assert.rejects(submitSelfie(p.id, p.path), /already pending/);
+});
+
+test("selfies: audited approval is atomic, one-time, submission-specific and invalidated by avatar change", async () => {
+  const p = await selfieApplicant(),
+    owner = await corePersonal();
+  await db.query(
+    "insert into admin_console_members(user_id,role)values($1,'owner')",
+    [owner],
+  );
+  const submission = await submitSelfie(p.id, p.path);
+  const decide = (id: string, decision = "verified", note = "") =>
+    asUser(
+      null,
+      (tx) =>
+        tx.query("select admin_console_decide($1,'selfie',$2,$3,$4)", [
+          owner,
+          id,
+          decision,
+          note,
+        ]),
+      "service_role",
+    );
+  const queue = (
+    await asUser(
+      null,
+      (tx) => tx.query("select * from admin_console_selfie_queue(0,100)"),
+      "service_role",
+    )
+  ).rows;
+  assert.equal(queue.find((r: any) => r.id === submission)?.user_id, p.id);
+  assert.equal(
+    "selfie_path" in queue.find((r: any) => r.id === submission),
+    false,
+  );
+  await assert.rejects(decide(submission, "rejected", ""), /reason required/);
+  await decide(submission);
+  assert.equal(await checkedSelfie(p.id), true);
+  const review = (
+    await db.query(
+      "select status,selfie_path from personal_selfie_reviews where user_id=$1",
+      [p.id],
+    )
+  ).rows[0];
+  assert.equal(review.status, "verified");
+  assert.equal(review.selfie_path, null);
+  assert.equal(
+    (
+      await db.query(
+        "select count(*)::int n from media_cleanup_jobs where bucket='selfie_proofs' and path=$1",
+        [p.path],
+      )
+    ).rows[0].n,
+    1,
+  );
+  assert.equal(
+    (
+      await db.query(
+        "select count(*)::int n from notifications where user_id=$1 and kind='selfie_review'",
+        [p.id],
+      )
+    ).rows[0].n,
+    1,
+  );
+  assert.equal(
+    (
+      await db.query(
+        "select count(*)::int n from admin_console_audit where action='selfie:verified' and target_id=$1",
+        [submission],
+      )
+    ).rows[0].n,
+    1,
+  );
+  await assert.rejects(decide(submission), /unavailable/);
+  // An owner cannot delete/reinsert the approved avatar to replace its bytes.
+  assert.equal(
+    (
+      await asUser(p.id, (tx) =>
+        tx.query(
+          "delete from storage.objects where bucket_id='avatars' and name=$1 returning name",
+          [p.avatar],
+        ),
+      )
+    ).rows.length,
+    0,
+  );
+  const nextAvatar = `${p.id}/avatar-00000000-0000-0000-0000-000000000002.jpg`,
+    nextPath = `${p.id}/selfie-new.jpg`;
+  await asUser(p.id, (tx) =>
+    tx.query(
+      "insert into storage.objects(bucket_id,name)values('avatars',$1)",
+      [nextAvatar],
+    ),
+  );
+  await asUser(p.id, (tx) =>
+    tx.query("update profiles set avatar_url=$2 where id=$1", [
+      p.id,
+      `https://project.supabase.co/storage/v1/object/public/avatars/${nextAvatar}`,
+    ]),
+  );
+  assert.equal(await checkedSelfie(p.id), false);
+  assert.equal(
+    (
+      await db.query(
+        "select count(*)::int n from media_cleanup_jobs where bucket='avatars' and path=$1",
+        [p.avatar],
+      )
+    ).rows[0].n,
+    1,
+  );
+  await db.query(
+    "update personal_selfie_reviews set submitted_at=now()-interval '3 minutes' where user_id=$1",
+    [p.id],
+  );
+  await asUser(p.id, (tx) =>
+    tx.query(
+      "insert into storage.objects(bucket_id,name)values('selfie_proofs',$1)",
+      [nextPath],
+    ),
+  );
+  const next = await submitSelfie(p.id, nextPath);
+  assert.notEqual(next, submission);
+  await assert.rejects(decide(submission), /unavailable/);
+  await decide(
+    next,
+    "rejected",
+    "Please use a clear photo without sunglasses.",
+  );
+  assert.equal(await checkedSelfie(p.id), false);
+  assert.equal(
+    (
+      await asUser(p.id, (tx) =>
+        tx.query("select note from personal_selfie_reviews where user_id=$1", [
+          p.id,
+        ]),
+      )
+    ).rows[0].note,
+    "Please use a clear photo without sunglasses.",
+  );
+});
+
+test("selfies: cancellation, avatar replacement, expiry and orphan retention queue private files for the existing worker", async () => {
+  const p = await selfieApplicant();
+  await submitSelfie(p.id, p.path);
+  await asUser(p.id, (tx) => tx.query("select withdraw_personal_selfie()"));
+  assert.equal(await checkedSelfie(p.id), false);
+  assert.equal(
+    (
+      await db.query(
+        "select status,selfie_path from personal_selfie_reviews where user_id=$1",
+        [p.id],
+      )
+    ).rows[0].status,
+    "unverified",
+  );
+  assert.equal(
+    (
+      await db.query(
+        "select count(*)::int n from media_cleanup_jobs where path=$1",
+        [p.path],
+      )
+    ).rows[0].n,
+    1,
+  );
+  const q = await selfieApplicant();
+  const version = await submitSelfie(q.id, q.path);
+  await asUser(q.id, (tx) =>
+    tx.query("update profiles set avatar_url=null where id=$1", [q.id]),
+  );
+  await assert.rejects(
+    asUser(
+      null,
+      (tx) =>
+        tx.query("select review_personal_selfie($1,$2,'verified','')", [
+          q.id,
+          version,
+        ]),
+      "service_role",
+    ),
+    /unavailable/,
+  );
+  assert.equal(
+    (
+      await db.query(
+        "select count(*)::int n from media_cleanup_jobs where path=$1",
+        [q.path],
+      )
+    ).rows[0].n,
+    1,
+  );
+  const expired = await selfieApplicant();
+  const expiredVersion = await submitSelfie(expired.id, expired.path);
+  await db.query(
+    "update personal_selfie_reviews set submitted_at=now()-interval '8 days' where user_id=$1",
+    [expired.id],
+  );
+  await assert.rejects(
+    asUser(
+      null,
+      (tx) =>
+        tx.query("select review_personal_selfie($1,$2,'verified','')", [
+          expired.id,
+          expiredVersion,
+        ]),
+      "service_role",
+    ),
+    /expired/,
+  );
+  const orphan = await selfieApplicant();
+  await db.query(
+    "update storage.objects set created_at=now()-interval '25 hours' where bucket_id='selfie_proofs' and name=$1",
+    [orphan.path],
+  );
+  await asUser(
+    null,
+    (tx) => tx.query("select maintenance_retention_cleanup()"),
+    "service_role",
+  );
+  assert.equal(
+    (
+      await db.query(
+        "select status,selfie_path from personal_selfie_reviews where user_id=$1",
+        [expired.id],
+      )
+    ).rows[0].status,
+    "rejected",
+  );
+  for (const path of [expired.path, orphan.path])
+    assert.equal(
+      (
+        await db.query(
+          "select count(*)::int n from media_cleanup_jobs where path=$1",
+          [path],
+        )
+      ).rows[0].n,
+      1,
+    );
+  const deleting = await selfieApplicant();
+  await submitSelfie(deleting.id, deleting.path);
+  await asUser(deleting.id, (tx) =>
+    tx.query("select request_account_deletion('DELETE')"),
+  );
+  const files = (
+    await asUser(
+      null,
+      (tx) =>
+        tx.query("select deletion_storage_batch($1) files", [deleting.id]),
+      "service_role",
+    )
+  ).rows[0].files;
+  assert(
+    files.some(
+      (f: any) => f.bucket === "selfie_proofs" && f.path === deleting.path,
+    ),
+  );
+  assert.equal(await checkedSelfie(deleting.id), false);
+});
+
+test("selfies: owned avatars, profile readiness, missing media and server submission limits are enforced", async () => {
+  const p = await selfieApplicant();
+  await db.query("update profiles set age=null where id=$1", [p.id]);
+  await assert.rejects(submitSelfie(p.id, p.path), /Complete your profile/);
+  await db.query("update profiles set age=25 where id=$1", [p.id]);
+  await assert.rejects(
+    submitSelfie(p.id, `${p.id}/selfie-missing.jpg`),
+    /invalid private selfie/,
+  );
+  const submission = await submitSelfie(p.id, p.path);
+  await db.query(
+    "delete from storage.objects where bucket_id='avatars' and name=$1",
+    [p.avatar],
+  );
+  assert.equal(await checkedSelfie(p.id), false);
+  await assert.rejects(
+    asUser(
+      null,
+      (tx) =>
+        tx.query("select review_personal_selfie($1,$2,'verified','')", [
+          p.id,
+          submission,
+        ]),
+      "service_role",
+    ),
+    /missing/,
+  );
+  await asUser(p.id, (tx) => tx.query("select withdraw_personal_selfie()"));
+  await db.query(
+    "insert into storage.objects(bucket_id,name)values('avatars',$1),('selfie_proofs',$2)",
+    [p.avatar, `${p.id}/selfie-next.jpg`],
+  );
+  await assert.rejects(
+    submitSelfie(p.id, `${p.id}/selfie-next.jpg`),
+    /two minutes/,
+  );
+  await db.query(
+    "update personal_selfie_reviews set submitted_at=now()-interval '3 minutes',attempt_day=(now() at time zone 'UTC')::date,attempts_today=5 where user_id=$1",
+    [p.id],
+  );
+  await assert.rejects(
+    submitSelfie(p.id, `${p.id}/selfie-next.jpg`),
+    /five selfies/,
+  );
+});
+
+test("selfies: existing app builds can update legacy avatars, which are excluded from new comparisons", async () => {
+  const id = await corePersonal(),
+    path = `${id}/avatar.jpg`;
+  await asUser(id, (tx) =>
+    tx.query(
+      "insert into storage.objects(bucket_id,name)values('avatars',$1),('selfie_proofs',$2)",
+      [path, `${id}/selfie-legacy.jpg`],
+    ),
+  );
+  assert.equal(
+    (
+      await asUser(id, (tx) =>
+        tx.query(
+          "update storage.objects set name=name where bucket_id='avatars' and name=$1 returning name",
+          [path],
+        ),
+      )
+    ).rows.length,
+    1,
+  );
+  await asUser(id, (tx) =>
+    tx.query("update profiles set avatar_url=$2 where id=$1", [
+      id,
+      `https://project.supabase.co/storage/v1/object/public/avatars/${path}`,
+    ]),
+  );
+  await assert.rejects(
+    submitSelfie(id, `${id}/selfie-legacy.jpg`),
+    /Upload a clear profile photo/,
   );
 });

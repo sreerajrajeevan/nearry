@@ -144,3 +144,7 @@ See [chat controls and phone checks](docs/chat-controls.md) for keyboard handlin
 ### Post photos and participation profiles
 
 See [post editing, cropping and profile requirements](docs/post-participation-and-photos.md) for the shared full editor, Crop/Done controls, gender eligibility, private age, migration **00027** and the required native rebuild. Personal users can browse first and complete their profile when creating or joining a plan.
+
+### Optional selfie check
+
+Personal members can submit a private camera selfie from Profile. Review it in the existing admin dashboard’s **Selfie reviews** section. Requires migration **00030**, the updated `admin-console` and a fresh mobile build. See [setup, retention and phone checks](docs/personal-selfie-verification.md). This is a manual photo comparison, not identity, age or liveness verification.

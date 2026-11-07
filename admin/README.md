@@ -85,3 +85,7 @@ uses fabricated sessions and documents, including 320/390-pixel layouts, proof
 preview, approval, report evidence, sign-out and authenticator enrollment. Actual
 operator email delivery and authenticator enrollment require the owner's first
 sign-in; QA does not impersonate that account or approve real businesses.
+
+## Optional selfie reviews
+
+Migration 00030 adds **Selfie reviews** and a pending count on Overview. Load both comparison images, confirm manual review, then mark checked or request another selfie with a useful reason. Decisions are tied to the exact submission ID and audited. Changing the avatar or cancelling a submission invalidates the review. Do not interpret this as identity, age or certified liveness verification. See [retention and release checks](../docs/personal-selfie-verification.md).

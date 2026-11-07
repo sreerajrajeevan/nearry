@@ -21,6 +21,7 @@ import { postState } from "../../utils/flowState";
 import { Screen } from "../../components/Screen";
 import { Button } from "../../components/Button";
 import { Badge } from "../../components/Badge";
+import { isPersonalSelfieChecked } from "../../services/selfieVerification";
 import { EmptyState } from "../../components/EmptyState";
 import { Avatar } from "../../components/Avatar";
 import { PostPhotoGallery } from "../../components/PostPhotoGallery";
@@ -68,11 +69,12 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
     async () => {
       const p = await getPost(postId);
       if (!p) throw new Error("Post not found.");
-      const [reqs, mine] = await Promise.all([
+      const [reqs, mine, selfieChecked] = await Promise.all([
         listRequestsForPost(postId),
         myId ? myRequestForPost(postId, myId) : Promise.resolve(null),
+        isPersonalSelfieChecked(p.authorId).catch(() => false),
       ]);
-      return { post: p, requests: reqs, myRequest: mine };
+      return { post: p, requests: reqs, myRequest: mine, selfieChecked };
     },
     subscribeToPosts,
   );
@@ -193,6 +195,7 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
         <View style={styles.authorRow}>
           <Avatar name={post.authorName} size={28} />
           <Text style={styles.authorName}>{post.authorName}</Text>
+          {data?.selfieChecked && <Badge label="Selfie checked" tone="green" />}
           {post.venueName && (
             <Text style={styles.meta}> · {post.venueName}</Text>
           )}

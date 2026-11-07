@@ -54,12 +54,27 @@ function fixture(options: any = {}) {
           return {
             data: {
               id: user,
-              account_type: "business",
+              account_type: settings.selfie ? "personal" : "business",
+              avatar_url: `https://project.supabase.co/storage/v1/object/public/avatars/${user}/avatar.jpg`,
               verification_status: "pending",
               verification_doc_path: user + "/proof.jpg",
               suspended_at: settings.active ? null : "2026-01-01",
               deletion_requested_at: null,
               ...(call.select.includes("account_type") ? settings.profile : {}),
+            },
+            error: null,
+          };
+        if (table === "personal_selfie_reviews")
+          return {
+            data: {
+              user_id: user,
+              submission_id: review,
+              selfie_path: user + "/selfie-test.jpg",
+              avatar_path: user + "/avatar.jpg",
+              avatar_url_at_submission: `https://project.supabase.co/storage/v1/object/public/avatars/${user}/avatar.jpg`,
+              status: "pending",
+              submitted_at: new Date().toISOString(),
+              ...settings.selfieReview,
             },
             error: null,
           };
@@ -110,7 +125,10 @@ function fixture(options: any = {}) {
         data:
           name === "admin_console_overview"
             ? { users: 9, pendingBusinessReviews: 2 }
-            : name === "admin_console_business_queue"
+            : [
+                  "admin_console_business_queue",
+                  "admin_console_selfie_queue",
+                ].includes(name)
               ? (settings.rows ?? [])
               : null,
         error: settings.rpcError ? { message: settings.rpcError } : null,
@@ -123,7 +141,9 @@ function fixture(options: any = {}) {
           return {
             data: {
               signedUrl:
-                "https://project.supabase.co/storage/v1/object/sign/verification_docs/" +
+                "https://project.supabase.co/storage/v1/object/sign/" +
+                bucket +
+                "/" +
                 path +
                 "?token=fake",
             },
@@ -133,7 +153,11 @@ function fixture(options: any = {}) {
       }),
     },
   };
-  const handler = createAdminConsoleHandler(db, origin);
+  const handler = createAdminConsoleHandler(
+    db,
+    origin,
+    "https://project.supabase.co",
+  );
   return { db, calls, settings, handler };
 }
 function req(body: any, token = "valid", from = origin) {
@@ -386,4 +410,122 @@ test("admin: server errors never expose private SQL, paths or credentials; malfo
     413,
   );
   assert.equal((await fixture().handler(req([]))).status, 400);
+});
+
+test("admin: selfie queue is paged and MFA-protected; approvals use the exact submission version", async () => {
+  const f = fixture({
+    selfie: true,
+    rows: Array.from({ length: 26 }, (_, i) => ({ id: String(i) })),
+  });
+  const response = await f.handler(
+    req({ action: "list", section: "selfies", offset: 25 }),
+  );
+  assert.equal(response.status, 200);
+  const list = await response.json();
+  assert.equal(list.rows.length, 25);
+  assert.equal(list.hasMore, true);
+  assert.deepEqual(
+    f.calls.find((c) => c.rpc === "admin_console_selfie_queue").args,
+    { p_offset: 25, p_limit: 26 },
+  );
+  const proof = await f.handler(
+    req({ action: "proof", kind: "selfie", id: review }),
+  );
+  assert.equal(proof.status, 200);
+  const body = await proof.json();
+  assert.match(body.url, /sign\/selfie_proofs\//);
+  assert.match(body.avatarUrl, /public\/avatars\//);
+  assert.equal(body.expiresIn, 60);
+  assert.equal(JSON.stringify(body).includes("avatar_path"), false);
+  assert.deepEqual(
+    f.calls.find((c) => c.bucket),
+    { bucket: "selfie_proofs", path: user + "/selfie-test.jpg", expiry: 60 },
+  );
+  const verdict = await f.handler(
+    req({
+      action: "decide",
+      kind: "selfie",
+      id: review,
+      decision: "verified",
+      note: "",
+    }),
+  );
+  assert.equal(verdict.status, 200);
+  assert.deepEqual(f.calls.find((c) => c.rpc === "admin_console_decide").args, {
+    p_actor: user,
+    p_kind: "selfie",
+    p_record_id: review,
+    p_decision: "verified",
+    p_note: "",
+  });
+  for (const payload of [
+    { action: "list", section: "selfies" },
+    { action: "proof", kind: "selfie", id: review },
+    {
+      action: "decide",
+      kind: "selfie",
+      id: review,
+      decision: "verified",
+      note: "",
+    },
+  ]) {
+    const blocked = fixture({ aal: "aal1", selfie: true });
+    assert.equal((await blocked.handler(req(payload))).status, 403);
+    assert.equal(
+      blocked.calls.some(
+        (c) => c.bucket || c.rpc || c.table === "personal_selfie_reviews",
+      ),
+      false,
+    );
+  }
+});
+
+test("admin: changed/expired selfies, inactive accounts and off-origin avatars cannot be previewed or approved", async () => {
+  for (const changes of [
+    { selfieReview: { submission_id: user } },
+    { selfieReview: { status: "verified" } },
+    { selfieReview: { submitted_at: "invalid" } },
+    { selfieReview: { submitted_at: "2020-01-01" } },
+    { selfieReview: { selfie_path: "another/selfie-test.jpg" } },
+    { profile: { account_type: "business" } },
+    { profile: { deletion_requested_at: "2026-01-01" } },
+    { profile: { avatar_url: "https://evil.example/photo.jpg" } },
+    { selfieReview: { avatar_path: "../../evil.jpg" } },
+    {
+      profile: {
+        avatar_url: `https://evil.example/storage/v1/object/public/avatars/${user}/avatar.jpg`,
+      },
+      selfieReview: {
+        avatar_url_at_submission: `https://evil.example/storage/v1/object/public/avatars/${user}/avatar.jpg`,
+      },
+    },
+  ]) {
+    for (const action of ["proof", "decide"]) {
+      const f = fixture({ selfie: true, ...changes });
+      const r = await f.handler(
+        req({
+          action,
+          kind: "selfie",
+          id: review,
+          decision: "verified",
+          note: "",
+        }),
+      );
+      assert.equal(r.status, 409, JSON.stringify(changes));
+      assert.equal(
+        f.calls.some((c) => c.bucket || c.rpc === "admin_console_decide"),
+        false,
+      );
+    }
+  }
+  const rejected = await fixture({ selfie: true }).handler(
+    req({
+      action: "decide",
+      kind: "selfie",
+      id: review,
+      decision: "rejected",
+      note: " ",
+    }),
+  );
+  assert.equal(rejected.status, 400);
 });

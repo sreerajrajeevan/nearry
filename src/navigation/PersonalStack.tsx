@@ -1,3 +1,4 @@
+import { SelfieVerificationScreen } from "../screens/personal/SelfieVerificationScreen";
 import {
   SafetyPrivacyScreen,
   BlockedUsersScreen,
@@ -46,6 +47,10 @@ export function PersonalStack() {
       <Stack.Screen name="EditPost" component={EditPostScreen} />
       <Stack.Screen name="MyPosts" component={MyPostsScreen} />
       <Stack.Screen name="EditProfile" component={EditProfileScreen} />
+      <Stack.Screen
+        name="SelfieVerification"
+        component={SelfieVerificationScreen}
+      />
       <Stack.Screen name="CompleteProfile" component={CompleteProfileScreen} />
       <Stack.Screen name="OfferDetails" component={OfferDetailsScreen} />
       <Stack.Screen name="Messages" component={ChatListScreen} />
