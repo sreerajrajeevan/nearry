@@ -4,11 +4,19 @@ import {
   RestrictedAccountScreen,
 } from "../screens/settings/SafetyScreens";
 import React, { useEffect, useRef } from "react";
-import { View, StyleSheet, Text } from "react-native";
+import {
+  View,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  BackHandler,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { Button } from "../components/Button";
+import { Icon } from "../components/Icon";
 import { AccountTypeScreen } from "../screens/auth/AccountTypeScreen";
-import { colors } from "../theme";
+import { colors, typography } from "../theme";
 import { useReducedMotion } from "../store/MotionContext";
 import { RootStackParamList } from "./types";
 import { useAuth } from "../store/AuthContext";
@@ -49,10 +57,28 @@ export function RootNavigator() {
     signOut,
     roleMismatch,
     clearRoleMismatch,
+    exitDemoMode,
   } = useAuth();
+  const insets = useSafeAreaInsets();
 
   usePushSetup();
   const shownRoleMismatch = useRef<typeof roleMismatch>(null);
+
+  // Demo mode has no way back in the stack, so the hardware back button
+  // would close the app. Exit the demo instead — but only when the demo
+  // root is showing: the navigation container's own back handler runs
+  // first and pops inner screens, so this only fires when nothing is left
+  // to pop.
+  const exitDemoRef = useRef(exitDemoMode);
+  exitDemoRef.current = exitDemoMode;
+  useEffect(() => {
+    if (!demoMode) return;
+    const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+      exitDemoRef.current();
+      return true;
+    });
+    return () => sub.remove();
+  }, [demoMode]);
 
   // The login lane is only a hint: one email = one account = one fixed type.
   // If the user picked the other lane, say so instead of landing silently.
@@ -105,41 +131,76 @@ export function RootNavigator() {
     return <AccountTypeScreen />;
 
   return (
-    <Stack.Navigator
-      screenOptions={{
-        headerShown: false,
-        contentStyle: { backgroundColor: colors.background },
-        animation: reduced ? "none" : "fade",
-      }}
-    >
-      {demoMode || (session && accountType) ? (
-        needsOnboarding && pendingOnboarding === "business" ? (
-          <Stack.Screen
-            name="BusinessOnboarding"
-            component={BusinessOnboardingScreen}
-          />
-        ) : accountType === "business" ? (
-          <Stack.Screen name="BusinessApp" component={BusinessStack} />
+    <View style={styles.root}>
+      <Stack.Navigator
+        screenOptions={{
+          headerShown: false,
+          contentStyle: { backgroundColor: colors.background },
+          animation: reduced ? "none" : "fade",
+        }}
+      >
+        {demoMode || (session && accountType) ? (
+          needsOnboarding && pendingOnboarding === "business" ? (
+            <Stack.Screen
+              name="BusinessOnboarding"
+              component={BusinessOnboardingScreen}
+            />
+          ) : accountType === "business" ? (
+            <Stack.Screen name="BusinessApp" component={BusinessStack} />
+          ) : (
+            <Stack.Screen name="PersonalApp" component={PersonalStack} />
+          )
         ) : (
-          <Stack.Screen name="PersonalApp" component={PersonalStack} />
-        )
-      ) : (
-        <>
-          <Stack.Screen name="Welcome" component={WelcomeScreen} />
-          <Stack.Screen name="PersonalAuth" component={PersonalAuthScreen} />
-          <Stack.Screen name="BusinessAuth" component={BusinessAuthScreen} />
-        </>
+          <>
+            <Stack.Screen name="Welcome" component={WelcomeScreen} />
+            <Stack.Screen name="PersonalAuth" component={PersonalAuthScreen} />
+            <Stack.Screen name="BusinessAuth" component={BusinessAuthScreen} />
+          </>
+        )}
+        <Stack.Screen name="Legal" component={LegalScreen} />
+      </Stack.Navigator>
+      {demoMode && (
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel="Leave demo"
+          onPress={() => exitDemoMode()}
+          activeOpacity={0.85}
+          style={[
+            styles.leaveDemo,
+            { bottom: insets.bottom + 84 },
+          ]}
+        >
+          <Icon name="x" size={14} color={colors.onAccent} />
+          <Text style={styles.leaveDemoText}>Leave demo</Text>
+        </TouchableOpacity>
       )}
-      <Stack.Screen name="Legal" component={LegalScreen} />
-    </Stack.Navigator>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  root: { flex: 1 },
   loading: {
     flex: 1,
     backgroundColor: colors.background,
     alignItems: "center",
     justifyContent: "center",
   },
+  leaveDemo: {
+    position: "absolute",
+    alignSelf: "center",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: colors.forest,
+    borderRadius: 999,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    elevation: 4,
+    shadowColor: "#000",
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+  },
+  leaveDemoText: { ...typography.label, color: colors.onAccent },
 });
