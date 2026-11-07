@@ -265,10 +265,10 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
   nameBlock: { flex: 1 },
-  name: { ...typography.title, color: colors.onAccent },
+  name: { ...typography.title, color: colors.onForest },
   category: {
     ...typography.caption,
-    color: colors.goldSoft,
+    color: colors.onForestMuted,
     marginTop: spacing.xs,
   },
   demoRow: { marginTop: spacing.md, alignItems: "flex-start" },

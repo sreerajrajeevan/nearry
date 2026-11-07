@@ -1,7 +1,7 @@
 import { navigationRef } from "./src/navigation/navigationRef";
 import React, { useEffect, useState } from "react";
 import { View, StyleSheet } from "react-native";
-import { NavigationContainer, DefaultTheme } from "@react-navigation/native";
+import { NavigationContainer, DefaultTheme, DarkTheme } from "@react-navigation/native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { useFonts } from "expo-font";
@@ -12,17 +12,17 @@ import { AuthProvider, useAuth } from "./src/store/AuthContext";
 import { RootNavigator } from "./src/navigation/RootNavigator";
 import { BRAND_ASSETS } from "./src/components/BrandLogo";
 import { StartupSplash } from "./src/components/StartupSplash";
-import { colors } from "./src/theme";
+import { colors, isDark } from "./src/theme";
 import { MotionProvider } from "./src/store/MotionContext";
 import { AppAlertHost } from "./src/components/AppAlertHost";
 
 // Hold the native brand artwork until React has laid out its matching launch frame.
 void SplashScreen.preventAutoHideAsync().catch(() => {});
 const navTheme = {
-  ...DefaultTheme,
-  dark: false,
+  ...(isDark ? DarkTheme : DefaultTheme),
+  dark: isDark,
   colors: {
-    ...DefaultTheme.colors,
+    ...(isDark ? DarkTheme.colors : DefaultTheme.colors),
     background: colors.background,
     card: colors.background,
     text: colors.text,
@@ -87,7 +87,7 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <MotionProvider>
-        <StatusBar style="dark" />
+        <StatusBar style={isDark ? "light" : "dark"} />
         <AuthProvider>
           <AppShell
             resourcesReady={

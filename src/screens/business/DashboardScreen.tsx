@@ -248,9 +248,9 @@ const styles = StyleSheet.create({
     ...typography.display,
     fontSize: 32,
     lineHeight: 38,
-    color: colors.onAccent,
+    color: colors.onForest,
   },
-  statLabel: { ...typography.bodySmall, color: colors.goldSoft, marginTop: 3 },
+  statLabel: { ...typography.bodySmall, color: colors.onForestMuted, marginTop: 3 },
   nudge: {
     paddingVertical: spacing.lg,
     borderBottomWidth: StyleSheet.hairlineWidth,

@@ -183,7 +183,7 @@ export function VenueDetailsScreen({ route, navigation }: VenueDetailsProps) {
             {venue.name}
           </Text>
           <View style={styles.location}>
-            <Icon name="map-pin" size={14} color={colors.goldSoft} />
+            <Icon name="map-pin" size={14} color={colors.onForestMuted} />
             <Text style={[styles.meta, styles.introText]}>
               {[
                 venue.area,
@@ -407,7 +407,7 @@ export function VenueDetailsScreen({ route, navigation }: VenueDetailsProps) {
             style={styles.closePhoto}
             onPress={() => setSelectedPhoto(null)}
           >
-            <Icon name="x" size={22} color={colors.onAccent} />
+            <Icon name="x" size={22} color={colors.onForest} />
           </MotionPressable>
           {selectedPhoto && (
             <LoadingImage
@@ -474,7 +474,7 @@ const styles = StyleSheet.create({
   },
   heroLabelText: { ...typography.caption, color: colors.text },
   intro: { ...surfaces.hero, marginHorizontal: 16, marginTop: 16 },
-  introText: { color: colors.goldSoft },
+  introText: { color: colors.onForestMuted },
   eyebrow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -482,12 +482,12 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   category: { ...typography.label, color: colors.gold },
-  open: { ...typography.caption, color: colors.sageSoft },
+  open: { ...typography.caption, color: colors.onForest },
   name: {
     ...typography.display,
     fontSize: 30,
     lineHeight: 35,
-    color: colors.onAccent,
+    color: colors.onForest,
     marginBottom: 12,
   },
   location: { flexDirection: "row", alignItems: "center", gap: 6 },
@@ -577,7 +577,7 @@ const styles = StyleSheet.create({
   },
   footerCopy: { flex: 1, minWidth: 0 },
   footerTitle: { ...typography.label, color: colors.text, marginBottom: 4 },
-  viewer: { flex: 1, backgroundColor: colors.ink },
+  viewer: { flex: 1, backgroundColor: colors.forest },
   closePhoto: {
     width: 48,
     height: 48,

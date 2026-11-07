@@ -50,8 +50,8 @@ export function PageHeading({
 const styles = StyleSheet.create({
   heading: { marginTop: spacing.sm, marginBottom: spacing.lg },
   forest: { ...surfaces.hero },
-  onForest: { color: colors.onAccent },
-  onForestMuted: { color: colors.goldSoft },
+  onForest: { color: colors.onForest },
+  onForestMuted: { color: colors.onForestMuted },
   greeting: {
     ...typography.bodySmall,
     color: colors.textDim,

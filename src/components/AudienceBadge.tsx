@@ -17,9 +17,9 @@ export function AudienceBadge({
   const restricted = preference === "female" || preference === "male";
   const color =
     preference === "female"
-      ? "#8A2754"
+      ? colors.badgePink
       : preference === "male"
-        ? "#205A91"
+        ? colors.badgeBlue
         : colors.sageDeep;
   return (
     <View
@@ -28,9 +28,9 @@ export function AudienceBadge({
         {
           backgroundColor:
             preference === "female"
-              ? "#FCE8F1"
+              ? colors.badgePinkBg
               : preference === "male"
-                ? "#E6F0FC"
+                ? colors.badgeBlueBg
                 : colors.sageSoft,
         },
       ]}

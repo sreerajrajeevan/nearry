@@ -432,7 +432,7 @@ const styles = StyleSheet.create({
   },
   greeting: {
     ...typography.bodySmall,
-    color: colors.sageSoft,
+    color: colors.onForest,
     marginBottom: 9,
   },
   heroTitle: {
@@ -440,7 +440,7 @@ const styles = StyleSheet.create({
     fontSize: 30,
     lineHeight: 35,
     letterSpacing: -1,
-    color: colors.onAccent,
+    color: colors.onForest,
   },
   heroAccent: { color: colors.gold },
   resetFilter: {

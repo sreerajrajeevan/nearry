@@ -171,7 +171,7 @@ export function PhotoCropper({
                 width: frameWidth,
                 height: frameHeight,
                 overflow: "hidden",
-                backgroundColor: colors.ink,
+                backgroundColor: colors.forest,
               }}
             >
               <Image
@@ -281,7 +281,7 @@ const styles = StyleSheet.create({
   frame: {
     ...StyleSheet.absoluteFillObject,
     borderWidth: 2,
-    borderColor: colors.white,
+    borderColor: colors.onForest,
   },
   controls: { paddingHorizontal: 16, paddingBottom: 8, gap: 8, flexShrink: 0 },
   row: {

@@ -1,4 +1,4 @@
-import { colors } from "./colors";
+import { colors, isDark } from "./colors";
 import { typography, fontFamily } from "./typography";
 import { spacing, radius, borderWidth } from "./spacing";
 
@@ -9,7 +9,7 @@ export const theme = {
   spacing,
   radius,
   borderWidth,
-  dark: false,
+  dark: isDark,
 } as const;
 
 export type Theme = typeof theme;

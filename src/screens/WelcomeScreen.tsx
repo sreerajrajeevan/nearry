@@ -101,7 +101,7 @@ const styles = StyleSheet.create({
   },
   greeting: {
     ...typography.bodySmall,
-    color: colors.sageSoft,
+    color: colors.onForest,
     marginBottom: spacing.lg,
   },
   title: {
@@ -109,12 +109,12 @@ const styles = StyleSheet.create({
     fontSize: 36,
     lineHeight: 42,
     letterSpacing: -1.2,
-    color: colors.onAccent,
+    color: colors.onForest,
   },
   accent: { color: colors.gold },
   description: {
     ...typography.body,
-    color: colors.goldSoft,
+    color: colors.onForestMuted,
     marginTop: spacing.lg,
     maxWidth: 350,
   },
