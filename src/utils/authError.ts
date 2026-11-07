@@ -1,12 +1,20 @@
 export function friendlyAuthError(message: string, code?: string): string {
   const m = message.toLowerCase();
   if (
+    m.includes("network request failed") ||
+    m.includes("failed to fetch") ||
+    m.includes("networkerror")
+  )
+    return "Could not reach Nearry. Check your connection and try again.";
+  if (
     code === "email_address_not_authorized" ||
     m.includes("email address not authorized")
   )
     return "Email sign-in is not available for this address yet. Nearry's email delivery needs to be configured. Try Google sign-in for now.";
   if (code === "over_email_send_rate_limit" || m.includes("email rate limit"))
     return "Nearry's email sending limit has been reached. Try again later or continue with Google.";
+  if (code === "email_not_confirmed")
+    return "Confirm your email with the latest code. If you are new, choose Create an account.";
   if (code === "email_provider_disabled")
     return "Email sign-in is currently unavailable. Try Google sign-in for now.";
   if (

@@ -1,3 +1,4 @@
+import { normalizeEmail, normalizeEmailCode } from "../utils/emailSignIn";
 import { completeSignupAgreement } from "./terms";
 import { requireSupabase } from "./supabase";
 import type { AccountType } from "../navigation/types";
@@ -23,7 +24,7 @@ export async function sendEmailOtp(
 ): Promise<void> {
   const supabase = requireSupabase();
   const { error } = await supabase.auth.signInWithOtp({
-    email: email.trim().toLowerCase(),
+    email: normalizeEmail(email),
     options: {
       ...accountTypeMeta(accountType, displayName),
       shouldCreateUser: signup,
@@ -39,8 +40,8 @@ export async function verifyEmailOtp(
 ): Promise<string> {
   const supabase = requireSupabase();
   const { data, error } = await supabase.auth.verifyOtp({
-    email: email.trim().toLowerCase(),
-    token: code.trim(),
+    email: normalizeEmail(email),
+    token: normalizeEmailCode(code),
     type: "email",
   });
   if (error) throw new Error(friendlyAuthError(error.message, error.code));
