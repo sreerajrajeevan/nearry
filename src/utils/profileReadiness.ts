@@ -1,5 +1,20 @@
 import type { Profile, NeedPost } from "../services/mappers";
 import { POLICY_VERSION } from "./legal";
+
+/** Server requirements can change while a signed-in profile is cached. */
+export function isProfileCompletionError(error: unknown): boolean {
+  const message =
+    error instanceof Error
+      ? error.message
+      : error && typeof error === "object" && "message" in error
+        ? String(error.message)
+        : "";
+  return (
+    /complete your profile with name, gender and age/i.test(message) ||
+    /personal onboarding required/i.test(message)
+  );
+}
+
 export function personalProfileReady(
   profile: Profile | null | undefined,
 ): boolean {
