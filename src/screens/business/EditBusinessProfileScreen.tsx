@@ -1,3 +1,4 @@
+import { PageHeading } from "../../components/PageHeading";
 import React, { useState } from "react";
 import {
   Text,
@@ -12,13 +13,16 @@ import { Button } from "../../components/Button";
 import { Input } from "../../components/Input";
 import { EmptyState } from "../../components/EmptyState";
 import { Avatar } from "../../components/Avatar";
-import { colors, typography, spacing } from "../../theme";
+import { colors, typography, spacing, surfaces } from "../../theme";
 import { BusinessStackParamList } from "../../navigation/types";
 import { useAuth } from "../../store/AuthContext";
 import { updateProfile } from "../../services/profile";
 import { pickAvatar, uploadAvatar } from "../../services/avatars";
 
-type Props = NativeStackScreenProps<BusinessStackParamList, "EditBusinessProfile">;
+type Props = NativeStackScreenProps<
+  BusinessStackParamList,
+  "EditBusinessProfile"
+>;
 
 /** Edit business name, category and area. */
 export function EditBusinessProfileScreen({ navigation }: Props) {
@@ -115,7 +119,7 @@ export function EditBusinessProfileScreen({ navigation }: Props) {
         >
           <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>
-        <Text style={styles.header}>Edit profile.</Text>
+        <PageHeading compact title="Edit profile." />
 
         <TouchableOpacity
           onPress={() => void onPickPhoto()}
@@ -130,11 +134,7 @@ export function EditBusinessProfileScreen({ navigation }: Props) {
           </Text>
         </TouchableOpacity>
 
-        <Input
-          label="Business name"
-          value={name}
-          onChangeText={setName}
-        />
+        <Input label="Business name" value={name} onChangeText={setName} />
         <Input
           label="Category"
           value={category}

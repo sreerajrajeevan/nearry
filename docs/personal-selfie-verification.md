@@ -1,70 +1,88 @@
-# Optional personal selfie verification (migration 00026)
+# Optional personal selfie check (migration 00030)
 
-This feature does **not** establish legal identity, age, uniqueness, or live-person
-presence. A photo can be spoofed. It is a manually reviewed comparison against
-the current public profile picture, shown as **Selfie checked**, not ID verified.
+A trusted person compares a private selfie with the submitted public profile
+photo. The badge says **Selfie checked**. It does not establish legal identity,
+age, uniqueness or live-person presence. No face recognition or face templates
+are used. Browsing, posting and joining remain available without this check.
 
 ## Setup
 
-1. Back up the existing database and apply only missing migrations, including
-   `00026_personal_selfie_verification.sql`. Never rerun `run-all.sql`
-   on an existing database.
-2. Rebuild the mobile app: expo-image-picker now asks for CAMERA permission.
-   No microphone permission or broad photo access is needed.
-3. Confirm `selfie_proofs` is a **private** Storage bucket and its policies
-   only permit the owner to upload/view their own proof. Review images must
-   never appear in public galleries, posts, notifications or logs.
-4. Configure an actual, staffed moderator who can review submissions promptly.
-   The reviewer uses a trusted service-role context, never a key shipped to the
-   mobile app. Review queue:
-   ```sql
-   select r.user_id, p.display_name, p.avatar_url, r.selfie_path, r.submitted_at
-   from public.personal_selfie_reviews r
-   join public.profiles p on p.id=r.user_id
-   where r.status='pending'
-   order by r.submitted_at;
-   ```
-   Retrieve each private image through the Supabase dashboard as a trusted
-   operator and compare to the current public profile photo. Approve only if
-   both clearly depict the same person; reject unclear, inconsistent or
-   apparently fabricated images. Do not claim automated liveness.
-   ```sql
-   -- In a trusted service-role session after inspecting the private proof:
-   select public.review_personal_selfie('USER_UUID','verified',null);
-   -- Or reject, with a useful reason:
-   select public.review_personal_selfie('USER_UUID','rejected','Face not clearly visible');
-   ```
-   Review decisions queue selfie images for deletion by the existing
-   `account-maintenance` media-cleanup worker. Confirm it is scheduled
-   and processes the new bucket. Check queue/backlog regularly.
-5. Review privacy copy, consent, retention, and Google Play Data safety before
-   release. Real-user data should not be collected until a staffed review and
-   privacy workflow is ready.
+1. Back up the existing database and apply **only missing migrations**, through
+   `00030_personal_selfie_verification.sql`. Migration 00029 (admin console) is a
+   prerequisite. Never rerun `run-all.sql` on an existing project.
+2. Deploy `admin-console` with `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` and
+   the existing exact `ADMIN_ALLOWED_ORIGINS`. Rebuild/deploy `admin/` to the
+   existing private dashboard. Keep the service-role key on the server.
+3. Build a fresh mobile binary. Camera permission is intentional for this
+   optional, front-camera flow. Microphone, broad library access and background
+   location remain excluded. A JavaScript-only update cannot add native camera
+   permission. Profile photo uploads now use unique paths for comparison. Older builds can
+   still update legacy `avatar.jpg` photos; those photos must be uploaded again
+   in the new version before requesting a check.
+4. Confirm `selfie_proofs` is private (5 MB JPEG/PNG/WebP only) and the existing
+   `account-maintenance` schedule runs. The worker deletes objects through the
+   Storage API; never delete live `storage.objects` rows manually.
+5. Keep a reviewer available and check the cleanup backlog. Update the Play
+   Data safety declaration to include optional photo collection for this flow
+   before distributing the new release. Review the in-app privacy/consent copy.
 
-## Security properties
+## Reviewing in the dashboard
 
-- Personal account only; an existing public profile picture is mandatory.
-- Submission requires a deliberate unchecked consent control and server-side
-  `p_consent=true`, and is rejected for inactive/deleting accounts.
-- Proof is private, submitted under the signed-in user's Storage prefix.
-- Clients can view their own status and note, but not change verdicts.
-- Only service_role may call `review_personal_selfie`.
-- Other members can only query the approved boolean, never the proof or notes.
-- Changing the profile photo revokes an existing check and queues any pending
-  photo for cleanup; a new submission is required.
-- Submission is restricted while pending/verified and briefly rate-limited
-  after rejection. Camera-only UI does not stop modified clients from uploading
-  another image: a review process or certified liveness provider is still needed.
-- Account deletion worker removes any unreviewed private file under the user's
-  storage prefix before deleting Auth data.
-- This release does not forcibly block unverified users from joining activities.
-  Do that only after establishing moderator capacity, appeals, and accessibility
-  alternatives.
+Open **Selfie reviews → Compare photos → Load comparison photos**. The left image
+is the public profile photo bound to the submission; the right is the private
+selfie. Both must load. Compare them yourself, then confirm the checkbox and
+choose **Mark selfie checked**. If unclear or inconsistent, choose **Ask for
+another selfie** and give a short, useful reason. Do not put private image links,
+identifying facial descriptions or credentials in notes. Do not treat this as
+certified liveness or an ID check.
 
-## Release tests
+Every request requires a confirmed active administrator, current allowlist
+membership and MFA (`aal2`). Both owners and moderators can review selfies.
+Decisions and an audit entry commit together; the applicant receives an in-app
+notification that opens their status screen. Proof links expire after 60 seconds.
+Do not approve or reject real requests as a deployment test.
 
-On a staging backend, take a selfie from the Android camera and verify private
-upload, consent, pending status, verified/rejected paths, public badge on post
-details, profile-photo-change invalidation, blocked file access, cleanup queue,
-and complete account deletion. Test camera denied and screen resume. This has
-not been validated against the production Supabase project.
+## Storage, consent and retention
+
+- Profile → Selfie verification shows current status, reason and camera action.
+  A complete personal profile and an uploaded Nearry profile photo are required.
+- Consent is unchecked initially and resets on retake. Gallery input is not part
+  of the selfie UI; modified clients can still upload other images. Human review
+  remains necessary and this is not a certified liveness system.
+- Clients can read their own status/note but cannot change verdicts or read
+  another person's proof or review details. Other members get one boolean.
+- A submission has a unique ID. Decisions for a cancelled or superseded ID fail.
+  Uploads and review are bound to an existing owned avatar object, not an
+  arbitrary remote image URL. The admin server validates the project's origin.
+- Overwrites of private selfies and new immutable avatar paths are denied. Pending selfies and compared avatars
+  cannot be deleted and reinserted to swap the bytes under a review. Changing
+  the profile photo revokes pending/approved status and queues the old image.
+- Approval, rejection, cancellation and avatar changes queue the private selfie
+  for deletion. Undecided reviews expire after seven days; abandoned uploads are
+  queued after 24 hours. Actual removal occurs on the existing maintenance run,
+  with retries after a storage failure. Monitor Operations for failures.
+- The owner can cancel pending review or remove their check. The minimal result,
+  consent time, submission ID and moderator audit remain until account deletion;
+  the private photo is not retained after review. Review notes are owner-only.
+- Account deletion includes this bucket via the existing generic storage scan
+  before deleting the sign-in account. No deletion schedule is changed here.
+- Submissions have a two-minute cooldown and a five-per-UTC-day limit. At most
+  two outstanding uploads per owner are admitted by the normal storage policy;
+  concurrent uploads are not a strict quota. General write abuse protections
+  are a separate release concern.
+
+## Validation
+
+Automated tests apply the real migrations to a disposable database and exercise
+private file access, consent, current-avatar binding, stale submission decisions,
+atomic approval/notification/audit, rejection, cancellation, avatar invalidation,
+seven-day expiry, abandoned uploads and account-deletion inclusion. Handler tests
+cover MFA and unsafe/changed comparison URLs; service tests cover actual
+supabase-js serialization, JPEG bytes, private upload and failure cleanup.
+
+Before release, install a fresh Android build on real phones: allow/deny camera,
+retake/cancel, submit with deliberate consent, check pending status, manually
+approve/reject a **test account**, open the notification, change the avatar,
+remove the check and confirm Storage cleanup. Repeat with a slow/offline network
+and a screen resume. Browser previews and CI compilation do not test native
+camera hardware. For standalone testing use the EAS `preview` build profile.

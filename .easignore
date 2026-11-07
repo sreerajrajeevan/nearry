@@ -9,6 +9,7 @@ assets/*.png
 
 # Generated public legal pages; build with configured public contacts.
 dist-legal/
+dist-store/
 
 # Generated native projects and private signing material
 android/
@@ -24,7 +25,13 @@ credentials.json
 *.apk
 google-services.json
 GoogleService-Info.plist
+.release-private/
+supabase/.temp/
+__pycache__/
 
 # Generate these with npm run assets before uploading to EAS.
 !assets/*.png
 .git/
+
+# Bundled admin hosting output
+dist-admin/

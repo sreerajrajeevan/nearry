@@ -1,3 +1,4 @@
+import { PageHeading } from "../../components/PageHeading";
 import { LoadingState } from "../../components/LoadingState";
 import React, { useCallback, useRef, useState } from "react";
 import {
@@ -21,7 +22,7 @@ import { listPosts } from "../../services/posts";
 import { listLiveOffers } from "../../services/offers";
 import { NeedPost, Offer, Venue } from "../../services/mappers";
 import { validPlace } from "../../services/places";
-import { colors, typography, spacing } from "../../theme";
+import { colors, typography, spacing, surfaces } from "../../theme";
 type Props = NativeStackScreenProps<PersonalStackParamList, "PlaceDetails">;
 export function PlaceDetailsScreen({ route, navigation }: Props) {
   const { place } = route.params;
@@ -71,8 +72,7 @@ export function PlaceDetailsScreen({ route, navigation }: Props) {
         >
           <Text style={styles.back}>← Back</Text>
         </TouchableOpacity>
-        <Text style={styles.title}>{place.name}</Text>
-        <Text style={styles.meta}>{place.address}</Text>
+        <PageHeading compact title={place.name} subtitle={place.address} />
         <PlaceAttributions places={[place]} />
         <Text style={styles.section}>
           {place.provider === "demo"
@@ -170,6 +170,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   row: {
+    ...surfaces.card,
     paddingVertical: spacing.md,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,

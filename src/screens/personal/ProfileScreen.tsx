@@ -1,3 +1,6 @@
+import { personalProfileReady } from "../../utils/profileReadiness";
+import { PageHeading } from "../../components/PageHeading";
+
 import React, { useRef, useState } from "react";
 import { View, Text, ScrollView, StyleSheet, Alert } from "react-native";
 import { Screen } from "../../components/Screen";
@@ -8,9 +11,9 @@ import { EmptyState } from "../../components/EmptyState";
 import { AccountMenuRow } from "../../components/AccountMenuRow";
 import { MotionPressable } from "../../components/Motion";
 import { Icon } from "../../components/Icon";
-import { colors, typography, spacing } from "../../theme";
+import { colors, typography, spacing, surfaces } from "../../theme";
 import { useAuth } from "../../store/AuthContext";
-import { getMySelfieReview } from "../../services/selfieVerification";
+import { isPersonalSelfieChecked } from "../../services/selfieVerification";
 import { useFocusEffect } from "@react-navigation/native";
 import { useCallback } from "react";
 import { useUnreadCounts } from "../../hooks/useUnreadCounts";
@@ -21,14 +24,23 @@ export function ProfileScreen({ navigation }: Props) {
   const { profile, session, demoMode, signOut, enterDemoMode } = useAuth();
   const { notifications, messages } = useUnreadCounts();
   const [selfieChecked, setSelfieChecked] = useState(false);
-  useFocusEffect(useCallback(() => {
-    let alive = true;
-    if (profile && !demoMode) void getMySelfieReview(profile.id)
-      .then(review => { if (alive) setSelfieChecked(review.status === "verified"); })
-      .catch(() => { if (alive) setSelfieChecked(false); });
-    else setSelfieChecked(false);
-    return () => { alive = false; };
-  }, [profile?.id, demoMode]));
+  useFocusEffect(
+    useCallback(() => {
+      let alive = true;
+      if (profile && !demoMode)
+        void isPersonalSelfieChecked(profile.id)
+          .then((checked) => {
+            if (alive) setSelfieChecked(checked);
+          })
+          .catch(() => {
+            if (alive) setSelfieChecked(false);
+          });
+      else setSelfieChecked(false);
+      return () => {
+        alive = false;
+      };
+    }, [profile?.id, demoMode]),
+  );
   const [signingOut, setSigningOut] = useState(false);
   const signOutLock = useRef(false);
   const leave = async () => {
@@ -61,10 +73,11 @@ export function ProfileScreen({ navigation }: Props) {
         contentContainerStyle={styles.scroll}
       >
         <PersonalHeader />
-        <Text style={styles.title} accessibilityRole="header">
-          Profile
-        </Text>
-        <Text style={styles.intro}>Your space. Everything in one place.</Text>
+        <PageHeading
+          compact
+          title="Profile"
+          subtitle="Your space. Everything in one place."
+        />
         {demoMode && (
           <View style={styles.demo}>
             <Icon name="info" size={16} color={colors.clayDeep} />
@@ -85,7 +98,9 @@ export function ProfileScreen({ navigation }: Props) {
               <Text style={styles.name}>
                 {profile.displayName || "Your profile"}
               </Text>
-              <Text style={styles.member}>Personal account{selfieChecked ? " · Selfie checked ✓" : ""}</Text>
+              <Text style={styles.member}>
+                Personal account{selfieChecked ? " · Selfie checked ✓" : ""}
+              </Text>
             </View>
           </View>
           {!!profile.bio && <Text style={styles.bio}>{profile.bio}</Text>}
@@ -101,11 +116,25 @@ export function ProfileScreen({ navigation }: Props) {
           <MotionPressable
             style={styles.edit}
             accessibilityRole="button"
-            accessibilityLabel="Edit profile"
-            onPress={() => navigation.navigate("EditProfile")}
+            accessibilityLabel={
+              personalProfileReady(profile)
+                ? "Edit profile"
+                : "Complete profile"
+            }
+            onPress={() =>
+              navigation.navigate(
+                personalProfileReady(profile)
+                  ? "EditProfile"
+                  : "CompleteProfile",
+              )
+            }
           >
             <Icon name="edit-2" size={15} color={colors.accent} />
-            <Text style={styles.editText}>Edit profile</Text>
+            <Text style={styles.editText}>
+              {personalProfileReady(profile)
+                ? "Edit profile"
+                : "Complete profile to host or join"}
+            </Text>
             <Icon name="chevron-right" size={16} color={colors.accent} />
           </MotionPressable>
         </View>
@@ -113,13 +142,6 @@ export function ProfileScreen({ navigation }: Props) {
           Your space
         </Text>
         <View style={styles.group}>
-          <AccountMenuRow
-            icon="file-text"
-            title="My posts"
-            hint="Manage the plans you posted"
-            onPress={() => navigation.navigate("MyPosts")}
-          />
-          <View style={styles.divider} />
           <AccountMenuRow
             icon="calendar"
             title="My activity"
@@ -150,7 +172,11 @@ export function ProfileScreen({ navigation }: Props) {
           <AccountMenuRow
             icon="shield"
             title="Selfie verification"
-            hint={selfieChecked ? "Selfie checked by a reviewer" : "Optional private selfie review"}
+            hint={
+              selfieChecked
+                ? "Selfie checked by a reviewer"
+                : "Optional private selfie review"
+            }
             onPress={() => navigation.navigate("SelfieVerification")}
           />
           <View style={styles.divider} />
@@ -231,6 +257,7 @@ const styles = StyleSheet.create({
   },
   demoCopy: { ...typography.caption, color: colors.clayDeep, flex: 1 },
   identity: {
+    ...surfaces.card,
     backgroundColor: colors.white,
     borderWidth: 1,
     borderColor: colors.border,
@@ -277,6 +304,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   group: {
+    ...surfaces.card,
     backgroundColor: colors.white,
     borderWidth: 1,
     borderColor: colors.border,

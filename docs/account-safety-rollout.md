@@ -26,7 +26,7 @@ This change contains application and server code. It does not modify the deploye
 
 ## Reporting and blocking
 
-Report is available on post/offer/venue details, a received message (hold the bubble), and the conversation's other account. Open a post photo full-screen to report that image. Reports resolve the target owner and snapshot on the server; the app cannot forge the owner. Each reporter/target pair has one report, and at most 20 new reports may be submitted per day. Only the reporter can read their limited status fields; evidence and reviewer notes are not available to clients.
+Report is available on post/offer/venue details, a received message (hold the bubble), and a conversation (hold an inbox row or open its three-dot menu). Conversation reports retain the latest 20 messages as private moderation context. Open a post photo full-screen to report that image. Reports resolve the target owner and snapshot on the server; the app cannot forge the owner. Each reporter/target pair has one report, and at most 20 new reports may be submitted per day. Only the reporter can read their limited status fields; evidence and reviewer notes are not available to clients.
 
 Blocking works in both directions for new messages, conversations, join requests, approvals, reservations and confirmations. Database triggers enforce this even through existing security-definer RPCs or direct message writes. Blocked plans and businesses are excluded from discovery and blocked chat pairs from the inbox/badges. Existing bookings remain readable and cancellable through history; blocking alone does not cancel them. Your own blocks can be removed in Safety & privacy → Blocked people. A person cannot unblock a block imposed by the other account.
 

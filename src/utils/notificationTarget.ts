@@ -5,6 +5,8 @@ export function notificationTarget(notice: AppNotification, role: AccountType) {
   if (notice.kind === "message" && notice.refId)
     return { screen: "Conversation", params: { conversationId: notice.refId } };
   if (role === "personal") {
+    if (notice.kind === "selfie_review")
+      return { screen: "SelfieVerification", params: undefined };
     if (
       [
         "join_request",

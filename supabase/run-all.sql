@@ -2894,197 +2894,642 @@ end;
 $$ language plpgsql security definer set search_path=public;
 
 
--- 00026_personal_selfie_verification.sql
--- 00026: optional personal-account selfie review. A reviewer compares the
--- private camera image with the current public profile photo. This is NOT
--- legal identity, age, or automated liveness verification.
+-- 00026_chat_inbox_controls.sql
+-- Member-specific chat deletion. Shared messages are preserved for the other member.
+
+create table conversation_clears (
+  conversation_id uuid not null references conversations(id) on delete cascade,
+  user_id uuid not null references profiles(id) on delete cascade,
+  cleared_at timestamptz not null,
+  primary key(conversation_id,user_id)
+);
+alter table conversation_clears enable row level security;
+revoke all on conversation_clears from public,anon,authenticated;
+grant select on conversation_clears to authenticated;
+grant all on conversation_clears to service_role;
+create policy "own conversation clears" on conversation_clears for select using(user_id=auth.uid());
+
+-- The boundary is server-owned; direct message reads cannot restore cleared history.
+create policy "uncleared messages" on messages as restrictive for select using (
+  not exists(select 1 from conversation_clears d where d.conversation_id=messages.conversation_id
+    and d.user_id=auth.uid() and messages.created_at<=d.cleared_at)
+);
+create function delete_my_conversation(p_conversation_id uuid) returns void as $$
+declare cutoff timestamptz;
+begin
+ if not account_active(auth.uid()) then raise exception 'account unavailable';end if;
+ perform 1 from conversations where id=p_conversation_id and auth.uid() in(user_a,user_b) for update;
+ if not found then raise exception 'not a conversation member';end if;
+ cutoff:=clock_timestamp();
+ insert into conversation_clears(conversation_id,user_id,cleared_at) values(p_conversation_id,auth.uid(),cutoff)
+ on conflict(conversation_id,user_id) do update set cleared_at=greatest(conversation_clears.cleared_at,excluded.cleared_at);
+ insert into conversation_reads(conversation_id,user_id,last_read_at) values(p_conversation_id,auth.uid(),cutoff)
+ on conflict(conversation_id,user_id) do update set last_read_at=greatest(conversation_reads.last_read_at,excluded.last_read_at);
+ update notifications set read_at=cutoff where user_id=auth.uid() and kind='message'
+   and ref_id=p_conversation_id and read_at is null and created_at<=cutoff;
+end;
+$$ language plpgsql security definer set search_path=public;
+revoke all on function delete_my_conversation(uuid) from public,anon;
+grant execute on function delete_my_conversation(uuid) to authenticated;
+
+-- Filter both history and previews. A new message revives the inbox entry,
+-- but never revives the deleting member's old messages.
+create or replace function list_my_conversations() returns json as $$
+ select coalesce(json_agg(row_to_json(t) order by t.last_at desc nulls last,t.id),'[]'::json) from (
+  select c.id, p.id as other_user_id,p.display_name as other_name,c.post_id,c.booking_id,
+    coalesce(post.title,offer.title) as context_title,last_msg.body as last_body,last_msg.created_at as last_at,
+    (select count(*) from messages m where m.conversation_id=c.id and m.sender_id<>auth.uid()
+      and m.created_at>greatest(coalesce(r.last_read_at,'1970-01-01'::timestamptz),coalesce(d.cleared_at,'1970-01-01'::timestamptz))) as unread_count
+  from conversations c
+  join profiles p on p.id=case when c.user_a=auth.uid() then c.user_b else c.user_a end
+  left join posts post on post.id=c.post_id
+  left join bookings b on b.id=c.booking_id
+  left join offers offer on offer.id=b.offer_id
+  left join conversation_clears d on d.conversation_id=c.id and d.user_id=auth.uid()
+  left join conversation_reads r on r.conversation_id=c.id and r.user_id=auth.uid()
+  left join lateral (select m.body,m.created_at from messages m where m.conversation_id=c.id
+    and (d.cleared_at is null or m.created_at>d.cleared_at) order by m.created_at desc,m.id desc limit 1) last_msg on true
+  where auth.uid() in(c.user_a,c.user_b) and account_active(auth.uid()) and account_active(p.id)
+    and not users_blocked(auth.uid(),p.id) and (d.cleared_at is null or last_msg.created_at is not null)
+ ) t;
+$$ language sql stable security definer set search_path=public;
+revoke all on function list_my_conversations() from public,anon;
+grant execute on function list_my_conversations() to authenticated;
+
+-- A conversation report preserves recent context for the existing moderation queue.
+alter table content_reports drop constraint content_reports_target_kind_check;
+alter table content_reports add constraint content_reports_target_kind_check
+ check(target_kind in ('post','photo','offer','venue','user','message','conversation'));
+create or replace function submit_content_report(p_kind text,p_target uuid,p_reason text,p_details text default '') returns uuid as $$
+declare subject uuid; summary text; rid uuid;begin
+ if not account_active(auth.uid()) then raise exception 'account unavailable';end if;
+ if p_reason is null or p_reason not in ('spam','harassment','inappropriate','scam','safety','other') or char_length(coalesce(p_details,''))>1000 then raise exception 'invalid report';end if;
+ -- A per-reporter lock serializes limits and repeat submissions.
+ perform 1 from profiles where id=auth.uid() for update;
+ select id into rid from content_reports where reporter_id=auth.uid() and target_kind=p_kind and target_id=p_target;
+ if rid is not null then return rid;end if;
+ if (select count(*) from content_reports where reporter_id=auth.uid() and created_at>now()-interval '1 day')>=20 then raise exception 'Daily report limit reached. Please contact support for urgent concerns.';end if;
+ if p_kind='post' then select author_id,left(title||E'\n'||description,2000) into subject,summary from posts where id=p_target;
+ elsif p_kind='photo' then select p.author_id,left(p.title||E'\n'||f.photo_url,2000) into subject,summary from post_photos f join posts p on p.id=f.post_id where f.id=p_target;
+ elsif p_kind='offer' then select business_id,left(title||E'\n'||description,2000) into subject,summary from offers where id=p_target;
+ elsif p_kind='venue' then select business_id,name into subject,summary from venues where id=p_target;
+ elsif p_kind='user' then select id,display_name into subject,summary from profiles where id=p_target;
+ elsif p_kind='conversation' then
+  select case when c.user_a=auth.uid() then c.user_b else c.user_a end,
+    'Conversation '||c.id::text||E'\n'||coalesce((
+      select string_agg(m.sender_id::text||' ['||m.created_at::text||'] '||m.body,E'\n' order by m.created_at,m.id)
+      from (select sender_id,created_at,id,body from messages
+        where conversation_id=c.id order by created_at desc,id desc limit 20) m
+    ),'No messages yet') into subject,summary
+  from conversations c where c.id=p_target and auth.uid() in(c.user_a,c.user_b);
+ elsif p_kind='message' then
+  select m.sender_id,left(m.body,2000) into subject,summary from messages m join conversations c on c.id=m.conversation_id
+   where m.id=p_target and auth.uid() in(c.user_a,c.user_b);
+ else raise exception 'invalid report target';end if;
+ if summary is null then raise exception 'Content not found or not accessible';end if;
+ if subject=auth.uid() then raise exception 'You cannot report your own content';end if;
+ insert into content_reports(reporter_id,subject_user_id,target_kind,target_id,reason,details,snapshot)
+ values(auth.uid(),subject,p_kind,p_target,p_reason,btrim(coalesce(p_details,'')),summary) returning id into rid;
+ return rid;
+end;
+$$ language plpgsql security definer set search_path=public;
+
+create or replace function review_content_report(p_report uuid,p_action text,p_note text default '') returns void as $$
+declare r content_reports; photo_url text; object_path text;begin
+ if p_action is null or p_action not in ('dismiss','remove','suspend') or char_length(coalesce(p_note,''))>1000 then raise exception 'Invalid review';end if;
+ select * into r from content_reports where id=p_report for update;
+ if not found or r.status<>'open' then raise exception 'Report already reviewed or unavailable';end if;
+ if p_action='suspend' then
+  if r.subject_user_id is null then raise exception 'No account to suspend';end if;
+  perform cancel_account_commitments(r.subject_user_id);
+  update profiles set suspended_at=now() where id=r.subject_user_id;
+ elsif p_action='remove' then
+  if r.target_kind in ('user','conversation') then raise exception 'Use suspend for an account, or report a specific message for removal';end if;
+  insert into removed_content(target_kind,target_id) values(r.target_kind,r.target_id) on conflict do nothing;
+  if r.target_kind='post' then update posts set status='cancelled' where id=r.target_id;
+  elsif r.target_kind='offer' then
+   update offers set status='ended' where id=r.target_id;
+   update bookings set status='cancelled' where offer_id=r.target_id and status in ('pending','confirmed') and slot>now();
+  elsif r.target_kind='photo' then
+   select f.photo_url into photo_url from post_photos f where f.id=r.target_id;
+   object_path:=split_part(split_part(photo_url,'/storage/v1/object/public/photos/',2),'?',1);
+   if object_path<>'' and split_part(object_path,'/',1)=r.subject_user_id::text then
+    insert into media_cleanup_jobs(bucket,path) values('photos',object_path) on conflict do nothing;
+   end if;
+   delete from post_photos where id=r.target_id;
+  elsif r.target_kind='message' then delete from messages where id=r.target_id;
+  end if;
+ end if;
+ update content_reports set status=case when p_action='dismiss' then 'dismissed' else 'resolved' end,reviewed_at=now(),review_note=btrim(coalesce(p_note,'')) where id=r.id;
+end;
+$$ language plpgsql security definer set search_path=public;
+revoke all on function review_content_report(uuid,text,text) from public,anon,authenticated;
+grant execute on function review_content_report(uuid,text,text) to service_role;
+
+
+-- 00027_post_participation_and_photos.sql
+-- Complete profiles only at participation, with private self-declared age.
+-- No ages or genders are inferred/backfilled from Google metadata.
+
+alter table profiles add column age integer check(age between 18 and 100);
+grant update(age) on profiles to authenticated;
+-- Public column grants deliberately exclude age; get_my_profile returns it only to its owner.
+create function personal_profile_ready(p_user uuid) returns boolean as $$
+ select exists(select 1 from profiles p where p.id=p_user and p.account_type='personal'
+   and char_length(btrim(p.display_name)) between 2 and 40 and p.onboarding_completed and p.role_selected and p.gender in ('male','female','other')
+   and p.age between 18 and 100 and p.terms_version='2026-10-19' and account_active(p.id));
+$$ language sql stable security definer set search_path=public;
+revoke all on function personal_profile_ready(uuid) from public,anon,authenticated;
+grant execute on function personal_profile_ready(uuid) to service_role;
+create function my_personal_profile_ready() returns boolean as $$ select personal_profile_ready(auth.uid()); $$ language sql stable security definer set search_path=public;
+revoke all on function my_personal_profile_ready() from public,anon;
+grant execute on function my_personal_profile_ready() to authenticated;
+create function complete_personal_profile(p_display_name text,p_gender text,p_age integer,p_terms_accepted boolean default false) returns void as $$
+declare p profiles;
+begin
+ select * into p from profiles where id=auth.uid() for update;
+ if not found or p.account_type<>'personal' or not p.role_selected or not account_active(auth.uid()) then raise exception 'Personal account required';end if;
+ if p_display_name is null or char_length(btrim(p_display_name)) not between 2 and 40 or p_gender is null or p_gender not in ('male','female','other')
+   or p_age is null or p_age not between 18 and 100 then raise exception 'Enter your name, gender and an age between 18 and 100';end if;
+ if p.terms_version is distinct from '2026-10-19' and p_terms_accepted is distinct from true then raise exception 'Please accept the current Terms and Community Guidelines';end if;
+ update profiles set display_name=btrim(p_display_name),gender=p_gender,age=p_age,onboarding_completed=true,
+   terms_version='2026-10-19',terms_accepted_at=case when p.terms_version is distinct from '2026-10-19' then clock_timestamp() else coalesce(p.terms_accepted_at,clock_timestamp()) end where id=p.id;
+end;
+$$ language plpgsql security definer set search_path=public;
+revoke all on function complete_personal_profile(text,text,integer,boolean) from public,anon;
+grant execute on function complete_personal_profile(text,text,integer,boolean) to authenticated;
+create policy "complete personal profile before posting" on posts as restrictive for insert with check(my_personal_profile_ready());
+
+-- Runs through request/approval RPCs as well as any allowed direct write.
+create function enforce_join_eligibility() returns trigger as $$
+declare audience text; eligible boolean;
+begin
+ if new.status not in ('pending','approved') then return new;end if;
+ if tg_op='UPDATE' and row(new.status,new.requester_id,new.post_id) is not distinct from row(old.status,old.requester_id,old.post_id) then return new;end if;
+ select gender_preference into audience from posts where id=new.post_id;
+ select personal_profile_ready(new.requester_id) and (audience is null or audience='any' or p.gender=audience)
+ into eligible from profiles p where p.id=new.requester_id;
+ -- Reopening a full post must not prevent a different participant from leaving.
+ if tg_op='UPDATE' and old.status='full' and new.status='pending' and not coalesce(eligible,false) then new.status:='declined';return new;end if;
+ if not personal_profile_ready(new.requester_id) then raise exception 'Complete your profile with name, gender and age before joining a plan';end if;
+ if not coalesce(eligible,false) then raise exception 'This plan is for % only',case when audience='female' then 'females' else 'males' end;end if;
+ return new;
+end;
+$$ language plpgsql security definer set search_path=public;
+revoke all on function enforce_join_eligibility() from public,anon,authenticated;
+create trigger join_eligibility before insert or update on join_requests for each row execute function enforce_join_eligibility();
+
+-- Audience changes cannot silently exclude already-approved participants.
+create function guard_post_audience() returns trigger as $$
+begin
+ if new.gender_preference is not distinct from old.gender_preference then return new;end if;
+ if new.gender_preference in ('female','male') and exists(
+  select 1 from join_requests r join profiles p on p.id=r.requester_id where r.post_id=new.id and r.status='approved' and p.gender is distinct from new.gender_preference
+ ) then raise exception 'Approved participants do not match this audience. Keep Anyone, or choose an audience that includes them.';end if;
+ return new;
+end;
+$$ language plpgsql security definer set search_path=public;
+revoke all on function guard_post_audience() from public,anon,authenticated;
+create trigger guard_post_audience before update of gender_preference on posts for each row execute function guard_post_audience();
+create function reconcile_post_audience() returns trigger as $$
+begin
+ if new.gender_preference in ('female','male') and new.gender_preference is distinct from old.gender_preference then
+  update join_requests r set status='declined' where r.post_id=new.id and r.status in ('pending','full')
+    and not exists(select 1 from profiles p where p.id=r.requester_id and p.gender=new.gender_preference);
+ end if;
+ return new;
+end;
+$$ language plpgsql security definer set search_path=public;
+revoke all on function reconcile_post_audience() from public,anon,authenticated;
+create trigger reconcile_post_audience after update of gender_preference on posts for each row execute function reconcile_post_audience();
+
+-- Atomic photo selection: existing attachments survive failed uploads/requests.
+create function set_post_photos(p_post_id uuid,p_urls text[]) returns void as $$
+declare owner uuid; url text; object_path text; position integer:=0;
+begin
+ select author_id into owner from posts where id=p_post_id for update;
+ if owner is distinct from auth.uid() or not account_active(auth.uid()) then raise exception 'Only the active host can edit photos';end if;
+ if p_urls is null or cardinality(p_urls)>5 or cardinality(p_urls)<>(select count(distinct x) from unnest(p_urls) x) then raise exception 'Choose up to 5 different photos';end if;
+ foreach url in array p_urls loop
+  if not exists(select 1 from post_photos f where f.post_id=p_post_id and f.photo_url=url) then
+   object_path:=split_part(url,'/storage/v1/object/public/photos/',2);
+   if url is null or url !~ '^https://' or object_path='' or split_part(object_path,'/',1)<>auth.uid()::text
+     or not exists(select 1 from storage.objects where bucket_id='photos' and name=object_path) then raise exception 'Upload your own photo before attaching it';end if;
+  end if;
+ end loop;
+ delete from post_photos a using post_photos b where a.post_id=p_post_id and b.post_id=a.post_id and a.photo_url=b.photo_url and a.id>b.id;
+ delete from post_photos f where f.post_id=p_post_id and not (f.photo_url=any(p_urls));
+ foreach url in array p_urls loop
+  update post_photos set sort_order=position where post_id=p_post_id and photo_url=url;
+  if not found then insert into post_photos(post_id,photo_url,sort_order)values(p_post_id,url,position);end if;
+  position:=position+1;
+ end loop;
+end;
+$$ language plpgsql security definer set search_path=public;
+revoke all on function set_post_photos(uuid,text[]) from public,anon;
+grant execute on function set_post_photos(uuid,text[]) to authenticated;
+
+
+-- 00028_post_audience_readmodel.sql
+-- Migration 00028 — preserve saved audiences when reading published posts.
+-- SELECT p.* in the original view was expanded before gender_preference was
+-- added in 00021; inserting/editing posts saved it, but reading the view lost it.
+
+-- Keep every existing view column in its original position and append the new
+-- field. This preserves dependent objects and grants without dropping the view.
+create or replace view public.post_cards with (security_invoker = true) as
+select
+  p.id,
+  p.author_id,
+  p.title,
+  p.description,
+  p.venue_id,
+  p.venue_name,
+  p.starts_at,
+  p.vacancies,
+  p.tags,
+  p.status,
+  p.created_at,
+  p.expires_at,
+  p.cost_cents,
+  pr.display_name as author_name,
+  public.approved_join_count(p.id) as approved_count,
+  p.gender_preference
+from public.posts p
+join public.profiles pr on pr.id = p.author_id;
+
+-- Refresh PostgREST's schema cache so existing clients see the field promptly.
+notify pgrst, 'reload schema';
+
+
+-- 00029_admin_console.sql
+-- 00029: Private, explicitly allowlisted Nearry operations dashboard.
+-- Admin web client never receives the service-role key or direct table privileges.
+
+create table public.admin_console_members (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  role text not null check(role in ('owner','moderator')),
+  created_at timestamptz not null default now(),
+  revoked_at timestamptz
+);
+alter table public.admin_console_members enable row level security;
+revoke all on public.admin_console_members from public,anon,authenticated;
+grant all on public.admin_console_members to service_role;
+
+create table public.admin_console_audit (
+  id uuid primary key default gen_random_uuid(),
+  actor_id uuid references auth.users(id) on delete set null,
+  action text not null check (char_length(action) between 1 and 80),
+  target_id uuid,
+  note text not null default '',
+  created_at timestamptz not null default now()
+);
+create index admin_console_audit_recent on public.admin_console_audit(created_at desc);
+alter table public.admin_console_audit enable row level security;
+revoke all on public.admin_console_audit from public,anon,authenticated;
+grant all on public.admin_console_audit to service_role;
+
+-- Page the current requests in SQL, before LIMIT/OFFSET. Filtering stale
+-- requests after pagination could hide valid submissions on later pages.
+create function public.admin_console_business_queue(p_offset int default 0, p_limit int default 26)
+returns table(id uuid,user_id uuid,created_at timestamptz,business_name text,
+  display_name text,business_details jsonb)
+language sql stable security definer set search_path=public,pg_temp as $$
+  select j.id,j.user_id,j.created_at,p.business_name,p.display_name,p.business_details
+  from verification_review_jobs j join profiles p on p.id=j.user_id
+  where j.reviewed_at is null and p.account_type='business'
+    and p.verification_status='pending' and p.verification_doc_path=j.document_path
+    and public.account_active(p.id)
+  order by j.created_at,j.id
+  limit least(greatest(p_limit,1),100) offset least(greatest(p_offset,0),5000);
+$$;
+revoke all on function public.admin_console_business_queue(int,int) from public,anon,authenticated;
+grant execute on function public.admin_console_business_queue(int,int) to service_role;
+
+create function public.admin_console_overview() returns jsonb
+language sql stable security definer set search_path=public,pg_temp as $$
+  select jsonb_build_object(
+    'users',(select count(*) from profiles),
+    'plans',(select count(*) from posts),
+    'offers',(select count(*) from offers),
+    'bookings',(select count(*) from bookings),
+    'openReports',(select count(*) from content_reports where status='open'),
+    'pendingBusinessReviews',(select count(*) from verification_review_jobs j join profiles p on p.id=j.user_id
+      where j.reviewed_at is null and p.account_type='business' and p.verification_status='pending'
+        and p.verification_doc_path=j.document_path and public.account_active(p.id))
+  );
+$$;
+revoke all on function public.admin_console_overview() from public,anon,authenticated;
+grant execute on function public.admin_console_overview() to service_role;
+
+-- Only a trusted server holding the service-role key can call this wrapper.
+-- It checks the acting human against an allowlist and records decisions in
+-- the same transaction as the already-secured, atomic moderation RPCs.
+create function public.admin_console_decide(
+  p_actor uuid, p_kind text, p_record_id uuid,
+  p_decision text, p_note text default ''
+) returns void as $$
+declare v_role text; j verification_review_jobs; p profiles; note text;
+begin
+  select role into v_role
+  from public.admin_console_members
+  where user_id=p_actor and revoked_at is null
+    and public.account_active(p_actor)
+  for update;
+
+  if v_role is null then raise exception 'admin not authorized'; end if;
+  if p_record_id is null or p_kind is null or p_decision is null
+     or char_length(coalesce(p_note,'')) > 200 then
+    raise exception 'invalid review input';
+  end if;
+  if p_kind='report' and p_decision='suspend' and v_role<>'owner' then
+    raise exception 'only owner may suspend accounts';
+  end if;
+  if p_decision in ('rejected','remove','suspend')
+     and nullif(btrim(coalesce(p_note,'')),'') is null then
+    raise exception 'review reason required';
+  end if;
+  if p_kind='business' then
+    if p_decision not in ('approved','rejected') then
+      raise exception 'invalid business decision';
+    end if;
+    -- Admin sessions are independently authenticated with MFA by the Edge API.
+    -- The seven-day expiry protects emailed bearer links, not a current proof
+    -- reviewed by an authenticated operator. Keep email-link RPCs unchanged.
+    select * into j from verification_review_jobs where id=p_record_id;
+    if not found then raise exception 'review unavailable'; end if;
+    select * into p from profiles where id=j.user_id for update;
+    select * into j from verification_review_jobs where id=p_record_id for update;
+    if j.reviewed_at is not null or p.account_type<>'business'
+       or not public.account_active(p.id) or p.verification_status<>'pending'
+       or p.verification_doc_path is distinct from j.document_path then
+      raise exception 'review unavailable, stale, or already completed';
+    end if;
+    note:=case when p_decision='rejected' then btrim(p_note) else null end;
+    update profiles set verification_status=case when p_decision='approved' then 'verified' else 'rejected' end,
+      verification_note=note where id=p.id;
+    update verification_review_jobs set reviewed_at=now(),decision=p_decision where id=j.id;
+    insert into notifications(user_id,kind,title,body) values(p.id,
+      case when p_decision='approved' then 'verification_approved' else 'verification_rejected' end,
+      case when p_decision='approved' then 'Verification approved' else 'Verification needs attention' end,
+      case when p_decision='approved' then 'Your business is verified. You can now publish offers.' else note end);
+  elsif p_kind='report' then
+    if p_decision not in ('dismiss','remove','suspend') then
+      raise exception 'invalid report action';
+    end if;
+    perform public.review_content_report(p_record_id,p_decision,p_note);
+  else
+    raise exception 'unsupported admin action';
+  end if;
+
+  insert into public.admin_console_audit(actor_id,action,target_id,note)
+  values(p_actor,p_kind||':'||p_decision,p_record_id,coalesce(p_note,''));
+end;
+$$ language plpgsql security definer set search_path=public,pg_temp;
+
+revoke all on function public.admin_console_decide(uuid,text,uuid,text,text)
+from public,anon,authenticated;
+grant execute on function public.admin_console_decide(uuid,text,uuid,text,text)
+to service_role;
+
+
+-- 00030_personal_selfie_verification.sql
+-- 00030: optional human photo comparison, private files and versioned admin review.
 
 create table public.personal_selfie_reviews (
-  user_id uuid primary key references public.profiles(id) on delete cascade,
-  selfie_path text,
-  status text not null default 'pending'
-    check (status in ('pending','verified','rejected')),
-  note text,
-  consented_at timestamptz not null default now(),
-  submitted_at timestamptz not null default now(),
-  reviewed_at timestamptz
+ user_id uuid primary key references public.profiles(id) on delete cascade,
+ submission_id uuid not null unique default gen_random_uuid(),
+ selfie_path text,
+ avatar_url_at_submission text,
+ avatar_path text,
+ status text not null default 'pending' check(status in ('unverified','pending','verified','rejected')),
+ note text,
+ consented_at timestamptz not null default now(),
+ submitted_at timestamptz not null default now(),
+ reviewed_at timestamptz,
+ attempt_day date not null default current_date,
+ attempts_today int not null default 1,
+ check(status <> 'pending' or selfie_path is not null)
 );
+alter table public.notifications drop constraint if exists notifications_kind_check;
+alter table public.notifications add constraint notifications_kind_check check(kind in (
+ 'join_request','request_approved','request_declined','request_full','post_cancelled',
+ 'booking','booking_confirmed','booking_cancelled','message',
+ 'verification_approved','verification_rejected','selfie_review'
+));
+create index personal_selfie_pending on personal_selfie_reviews(submitted_at,user_id) where status='pending';
 alter table public.personal_selfie_reviews enable row level security;
-revoke all on public.personal_selfie_reviews from public, anon, authenticated;
-grant select (user_id,status,note,submitted_at,reviewed_at)
-  on public.personal_selfie_reviews to authenticated;
+revoke all on public.personal_selfie_reviews from public,anon,authenticated;
+grant select(user_id,submission_id,status,note,submitted_at,reviewed_at) on public.personal_selfie_reviews to authenticated;
 grant all on public.personal_selfie_reviews to service_role;
-create policy "owners read selfie review status"
-  on public.personal_selfie_reviews for select to authenticated
-  using (user_id=auth.uid());
+create policy "owners read selfie status" on public.personal_selfie_reviews for select to authenticated using(user_id=auth.uid());
 
--- The image must never be stored in the public avatars/photos bucket.
-insert into storage.buckets(id,name,public)
-values ('selfie_proofs','selfie_proofs',false)
-on conflict (id) do nothing;
-create policy "owners upload private selfies" on storage.objects
-  for insert to authenticated with check (
-    bucket_id='selfie_proofs'
-    and (storage.foldername(name))[1]=auth.uid()::text
-    and name ~ ('^' || auth.uid()::text || '/selfie-[A-Za-z0-9-]+[.](jpg|jpeg|png|webp)$')
-    and account_active(auth.uid())
-  );
-create policy "owners inspect private selfie uploads" on storage.objects
-  for select to authenticated using (
-    bucket_id='selfie_proofs'
-    and (storage.foldername(name))[1]=auth.uid()::text
-  );
-create policy "owners delete unused private selfies" on storage.objects
-  for delete to authenticated using (
-    bucket_id='selfie_proofs'
-    and (storage.foldername(name))[1]=auth.uid()::text
-    and not exists (
-      select 1 from public.personal_selfie_reviews r
-      where r.user_id=auth.uid() and r.selfie_path=storage.objects.name
-      and r.status='pending'
-    )
-  );
+insert into storage.buckets(id,name,public,file_size_limit,allowed_mime_types)
+values('selfie_proofs','selfie_proofs',false,5242880,array['image/jpeg','image/png','image/webp'])
+on conflict(id) do update set public=false,file_size_limit=excluded.file_size_limit,allowed_mime_types=excluded.allowed_mime_types;
 
--- Existing account maintenance already processes media_cleanup_jobs using
--- Storage API. Extend its allowed buckets; do not delete Storage DB rows in SQL.
-alter table public.media_cleanup_jobs
-  drop constraint if exists media_cleanup_jobs_bucket_check;
-alter table public.media_cleanup_jobs
-  add constraint media_cleanup_jobs_bucket_check
-  check(bucket in ('photos','selfie_proofs'));
+create function public.selfie_upload_allowed(p_path text) returns boolean as $$
+ select coalesce(
+  public.personal_profile_ready(auth.uid())
+  and p_path ~ ('^'||auth.uid()::text||'/selfie-[A-Za-z0-9-]+[.](jpg|jpeg|png|webp)$')
+  and not exists(select 1 from public.personal_selfie_reviews where user_id=auth.uid() and status in ('pending','verified'))
+  and (select count(*) from storage.objects where bucket_id='selfie_proofs' and split_part(name,'/',1)=auth.uid()::text)<2,
+ false);
+$$ language sql stable security definer set search_path=public,pg_temp;
+revoke all on function public.selfie_upload_allowed(text) from public,anon;
+grant execute on function public.selfie_upload_allowed(text) to authenticated;
+create function public.my_selfie_file_pending(p_path text) returns boolean as $$
+ select exists(select 1 from personal_selfie_reviews where user_id=auth.uid() and selfie_path=p_path and status='pending');
+$$ language sql stable security definer set search_path=public,pg_temp;
+revoke all on function public.my_selfie_file_pending(text) from public,anon;
+grant execute on function public.my_selfie_file_pending(text) to authenticated;
+create policy "owners upload private selfies" on storage.objects for insert to authenticated
+ with check(bucket_id='selfie_proofs' and public.selfie_upload_allowed(name));
+create policy "owners read private selfies" on storage.objects for select to authenticated
+ using(bucket_id='selfie_proofs' and split_part(name,'/',1)=auth.uid()::text and account_active(auth.uid()));
+create policy "owners delete unused private selfies" on storage.objects for delete to authenticated
+ using(bucket_id='selfie_proofs' and split_part(name,'/',1)=auth.uid()::text and not public.my_selfie_file_pending(name));
+-- A comparison must stay bound to immutable image bytes. New app avatar uploads
+-- use unique immutable paths. Legacy avatar.jpg uploads stay compatible with
+-- old app versions, but cannot be submitted for comparison.
+create policy "comparison images cannot be overwritten" on storage.objects as restrictive for update to authenticated
+ using(bucket_id<>'selfie_proofs' and (bucket_id<>'avatars' or name !~ '/avatar-[0-9a-f-]{36}[.]jpg$'))
+ with check(bucket_id<>'selfie_proofs' and (bucket_id<>'avatars' or name !~ '/avatar-[0-9a-f-]{36}[.]jpg$'));
+-- Also prevent delete-and-reinsert at the same avatar path from changing the
+-- bytes under an existing pending/approved comparison.
+create function public.my_avatar_in_comparison(p_path text) returns boolean as $$
+ select exists(select 1 from personal_selfie_reviews where user_id=auth.uid() and avatar_path=p_path and status in ('pending','verified'));
+$$ language sql stable security definer set search_path=public,pg_temp;
+revoke all on function public.my_avatar_in_comparison(text) from public,anon;
+grant execute on function public.my_avatar_in_comparison(text) to authenticated;
+create policy "comparison avatar cannot be deleted" on storage.objects as restrictive for delete to authenticated
+ using(bucket_id<>'avatars' or not public.my_avatar_in_comparison(name));
 
-create function public.submit_personal_selfie(p_path text,p_consent boolean)
-returns void as $$
-declare v_account_type text;v_avatar text;v_old_path text;
-        v_status text;v_submitted timestamptz;
+alter table public.media_cleanup_jobs drop constraint if exists media_cleanup_jobs_bucket_check;
+alter table public.media_cleanup_jobs add constraint media_cleanup_jobs_bucket_check check(bucket in ('photos','avatars','selfie_proofs'));
+
+create function public.submit_personal_selfie(p_path text,p_consent boolean) returns void as $$
+declare p profiles; r personal_selfie_reviews; image_path text; day_utc date:=(now() at time zone 'UTC')::date;
 begin
-  if auth.uid() is null or p_consent is distinct from true
-     or not account_active(auth.uid()) then
-    raise exception 'Sign in and agree to the private selfie review first';
-  end if;
-  select account_type,avatar_url into v_account_type,v_avatar
-    from public.profiles where id=auth.uid() for update;
-  if v_account_type is distinct from 'personal' then
-    raise exception 'Selfie review is for personal accounts';
-  end if;
-  if nullif(trim(v_avatar),'') is null then
-    raise exception 'Add a clear profile photo before selfie review';
-  end if;
-  if p_path is null or p_path !~
-      ('^' || auth.uid()::text || '/selfie-[A-Za-z0-9-]+[.](jpg|jpeg|png|webp)$')
-    or not exists (
-      select 1 from storage.objects where bucket_id='selfie_proofs'
-      and name=p_path
-    ) then
-    raise exception 'Missing or invalid private selfie upload';
-  end if;
-  select status,selfie_path,submitted_at into v_status,v_old_path,v_submitted
-    from public.personal_selfie_reviews where user_id=auth.uid() for update;
-  if v_status in ('pending','verified') then
-    raise exception 'Your selfie is already pending or approved';
-  end if;
-  if v_submitted > now()-interval '2 minutes' then
-    raise exception 'Please try again in a few minutes';
-  end if;
-  if v_old_path is not null and v_old_path<>p_path then
-    insert into public.media_cleanup_jobs(bucket,path)
-      values('selfie_proofs',v_old_path) on conflict(path) do nothing;
-  end if;
-  insert into public.personal_selfie_reviews
-    (user_id,selfie_path,status,note,consented_at,submitted_at,reviewed_at)
-    values(auth.uid(),p_path,'pending',null,now(),now(),null)
-  on conflict(user_id) do update set
-    selfie_path=excluded.selfie_path,status='pending',note=null,
-    consented_at=now(),submitted_at=now(),reviewed_at=null;
+ if p_consent is distinct from true or auth.uid() is null or not personal_profile_ready(auth.uid()) then
+  raise exception 'Complete your profile and agree to the private selfie review first';end if;
+ select * into p from profiles where id=auth.uid() for update;
+ image_path:=split_part(split_part(p.avatar_url,'/storage/v1/object/public/avatars/',2),'?',1);
+ if nullif(image_path,'') is null or image_path !~ ('^'||p.id::text||'/avatar-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}[.]jpg$')
+  or not exists(select 1 from storage.objects where bucket_id='avatars' and name=image_path)
+  or exists(select 1 from media_cleanup_jobs where bucket='avatars' and path=image_path) then
+  raise exception 'Upload a clear profile photo in Nearry before selfie review';end if;
+ select * into r from personal_selfie_reviews where user_id=p.id for update;
+ if r.status in ('pending','verified') then raise exception 'Your selfie is already pending or checked';end if;
+ if r.submitted_at>now()-interval '2 minutes' then raise exception 'Please try again in two minutes';end if;
+ if r.attempt_day=day_utc and r.attempts_today>=5 then raise exception 'You can submit up to five selfies per day';end if;
+ if p_path is null or p_path !~ ('^'||p.id::text||'/selfie-[A-Za-z0-9-]+[.](jpg|jpeg|png|webp)$')
+  or not exists(select 1 from storage.objects where bucket_id='selfie_proofs' and name=p_path)
+  or exists(select 1 from media_cleanup_jobs where bucket='selfie_proofs' and path=p_path) then
+  raise exception 'Missing or invalid private selfie upload';end if;
+ insert into personal_selfie_reviews(user_id,submission_id,selfie_path,avatar_url_at_submission,avatar_path,status,note,consented_at,submitted_at,reviewed_at,attempt_day,attempts_today)
+ values(p.id,gen_random_uuid(),p_path,p.avatar_url,image_path,'pending',null,now(),now(),null,day_utc,
+   case when r.attempt_day=day_utc then r.attempts_today+1 else 1 end)
+ on conflict(user_id) do update set submission_id=excluded.submission_id,selfie_path=excluded.selfie_path,
+  avatar_url_at_submission=excluded.avatar_url_at_submission,avatar_path=excluded.avatar_path,status='pending',note=null,
+  consented_at=now(),submitted_at=now(),reviewed_at=null,attempt_day=excluded.attempt_day,attempts_today=excluded.attempts_today;
 end;
-$$ language plpgsql security definer set search_path=public;
-revoke all on function public.submit_personal_selfie(text,boolean)
-  from public,anon,authenticated;
-grant execute on function public.submit_personal_selfie(text,boolean)
-  to authenticated;
+$$ language plpgsql security definer set search_path=public,pg_temp;
+revoke all on function public.submit_personal_selfie(text,boolean) from public,anon;
+grant execute on function public.submit_personal_selfie(text,boolean) to authenticated;
 
--- Only the trusted service role can approve after HUMAN inspection.
-create function public.review_personal_selfie(
-  p_user uuid,p_decision text,p_note text default null
-) returns void as $$
-declare v_path text;v_status text;
+create function public.review_personal_selfie(p_user uuid,p_submission uuid,p_decision text,p_note text default '') returns void as $$
+declare p profiles; r personal_selfie_reviews;
 begin
-  if p_decision not in ('verified','rejected') then
-    raise exception 'Decision must be verified or rejected';
-  end if;
-  select selfie_path,status into v_path,v_status
-    from public.personal_selfie_reviews
-    where user_id=p_user for update;
-  if v_status is distinct from 'pending' or v_path is null then
-    raise exception 'No pending selfie for this user';
-  end if;
-  if not exists(
-    select 1 from storage.objects
-    where bucket_id='selfie_proofs' and name=v_path
-  ) then raise exception 'Private review photo is missing'; end if;
-  if p_decision='verified' and
-     (not account_active(p_user) or not exists(
-       select 1 from profiles where id=p_user and account_type='personal'
-       and nullif(trim(avatar_url),'') is not null
-     )) then raise exception 'Account is no longer eligible'; end if;
-  update public.personal_selfie_reviews
-    set selfie_path=null,status=p_decision,
-        note=case when p_decision='rejected'
-          then coalesce(nullif(left(trim(p_note),300),''),'Photo did not pass review')
-          else null end,
-        reviewed_at=now()
-    where user_id=p_user;
-  insert into public.media_cleanup_jobs(bucket,path)
-    values('selfie_proofs',v_path) on conflict(path) do nothing;
+ if p_decision is null or p_decision not in ('verified','rejected') or char_length(coalesce(p_note,''))>200 then raise exception 'Invalid selfie decision';end if;
+ if p_decision='rejected' and nullif(btrim(p_note),'') is null then raise exception 'Review reason required';end if;
+ -- All avatar/submit/review paths lock profile first, then review.
+ select * into p from profiles where id=p_user for update;
+ select * into r from personal_selfie_reviews where user_id=p_user for update;
+ if r.status is distinct from 'pending' or r.submission_id is distinct from p_submission
+  or r.selfie_path is null or r.submitted_at<=now()-interval '7 days'
+  or p.avatar_url is distinct from r.avatar_url_at_submission then raise exception 'Review unavailable, expired or changed; refresh the queue';end if;
+ if not account_active(p_user) or p.account_type<>'personal' then raise exception 'Review unavailable for an inactive account';end if;
+ if p_decision='verified' and (not exists(select 1 from storage.objects where bucket_id='selfie_proofs' and name=r.selfie_path)
+  or not exists(select 1 from storage.objects where bucket_id='avatars' and name=r.avatar_path)) then raise exception 'Review unavailable: comparison photo is missing';end if;
+ update personal_selfie_reviews set selfie_path=null,status=p_decision,note=case when p_decision='rejected' then btrim(p_note) else null end,reviewed_at=now() where user_id=p_user;
+ insert into media_cleanup_jobs(bucket,path)values('selfie_proofs',r.selfie_path) on conflict(path) do nothing;
+ insert into notifications(user_id,kind,title,body)values(p_user,'selfie_review',case when p_decision='verified' then 'Your selfie check is complete' else 'Your selfie needs another try' end,
+  case when p_decision='verified' then 'A reviewer compared your selfie with your profile photo.' else btrim(p_note) end);
 end;
-$$ language plpgsql security definer set search_path=public;
-revoke all on function public.review_personal_selfie(uuid,text,text)
-  from public,anon,authenticated;
-grant execute on function public.review_personal_selfie(uuid,text,text)
-  to service_role;
+$$ language plpgsql security definer set search_path=public,pg_temp;
+revoke all on function public.review_personal_selfie(uuid,uuid,text,text) from public,anon,authenticated;
+grant execute on function public.review_personal_selfie(uuid,uuid,text,text) to service_role;
 
--- A profile photo change invalidates an earlier human comparison.
-create function public.invalidate_selfie_on_avatar_change()
-returns trigger as $$
-declare v_path text;
+create function public.withdraw_personal_selfie() returns void as $$
+declare r personal_selfie_reviews;
 begin
-  select selfie_path into v_path from public.personal_selfie_reviews
-    where user_id=new.id for update;
-  if found then
-    update public.personal_selfie_reviews
-      set status='rejected',selfie_path=null,
-          note='Profile photo changed. Submit a new selfie for review.',
-          reviewed_at=now()
-      where user_id=new.id;
-    if v_path is not null then
-      insert into public.media_cleanup_jobs(bucket,path)
-        values('selfie_proofs',v_path) on conflict(path) do nothing;
-    end if;
-  end if;
-  return new;
+ if auth.uid() is null then raise exception 'Sign in first';end if;
+ perform 1 from profiles where id=auth.uid() for update;
+ select * into r from personal_selfie_reviews where user_id=auth.uid() for update;
+ if found then
+  update personal_selfie_reviews set status='unverified',selfie_path=null,avatar_url_at_submission=null,avatar_path=null,note=null,reviewed_at=now() where user_id=auth.uid();
+  if r.selfie_path is not null then insert into media_cleanup_jobs(bucket,path)values('selfie_proofs',r.selfie_path) on conflict(path) do nothing;end if;
+ end if;
 end;
-$$ language plpgsql security definer set search_path=public;
-create trigger invalidate_selfie_when_avatar_changes
-  after update of avatar_url on public.profiles
-  for each row
-  when (old.avatar_url is distinct from new.avatar_url)
-  execute function public.invalidate_selfie_on_avatar_change();
+$$ language plpgsql security definer set search_path=public,pg_temp;
+revoke all on function public.withdraw_personal_selfie() from public,anon;
+grant execute on function public.withdraw_personal_selfie() to authenticated;
 
--- The public interface exposes ONLY a boolean review result, never images or notes.
-create function public.is_personal_selfie_checked(p_user uuid)
-returns boolean as $$
-  select coalesce(
-    account_active(p_user) and exists(
-      select 1 from public.personal_selfie_reviews r
-      where r.user_id=p_user and r.status='verified'
-    ),false
-  );
-$$ language sql stable security definer set search_path=public;
-revoke all on function public.is_personal_selfie_checked(uuid)
-  from public,anon,authenticated;
-grant execute on function public.is_personal_selfie_checked(uuid)
-  to authenticated;
+create function public.invalidate_selfie_on_avatar_change() returns trigger as $$
+declare r personal_selfie_reviews; old_path text; new_path text;
+begin
+ select * into r from personal_selfie_reviews where user_id=new.id for update;
+ if found then
+  update personal_selfie_reviews set status='unverified',selfie_path=null,avatar_url_at_submission=null,avatar_path=null,
+   note='Profile photo changed. You can submit a new selfie.',reviewed_at=now() where user_id=new.id;
+  if r.selfie_path is not null then insert into media_cleanup_jobs(bucket,path)values('selfie_proofs',r.selfie_path) on conflict(path) do nothing;end if;
+ end if;
+ old_path:=split_part(split_part(old.avatar_url,'/storage/v1/object/public/avatars/',2),'?',1);
+ new_path:=split_part(split_part(new.avatar_url,'/storage/v1/object/public/avatars/',2),'?',1);
+ if nullif(old_path,'') is not null and split_part(old_path,'/',1)=new.id::text and old_path is distinct from new_path then
+  insert into media_cleanup_jobs(bucket,path)values('avatars',old_path) on conflict(path) do nothing;
+ end if;
+ return new;
+end;
+$$ language plpgsql security definer set search_path=public,pg_temp;
+revoke all on function public.invalidate_selfie_on_avatar_change() from public,anon,authenticated;
+create trigger invalidate_selfie_when_avatar_changes after update of avatar_url on profiles for each row
+ when(old.avatar_url is distinct from new.avatar_url) execute function public.invalidate_selfie_on_avatar_change();
 
+create function public.is_personal_selfie_checked(p_user uuid) returns boolean as $$
+ select exists(select 1 from personal_selfie_reviews r join profiles p on p.id=r.user_id
+  join storage.objects o on o.bucket_id='avatars' and o.name=r.avatar_path
+  where r.user_id=p_user and r.status='verified' and p.account_type='personal' and p.avatar_url=r.avatar_url_at_submission and account_active(p_user));
+$$ language sql stable security definer set search_path=public,pg_temp;
+revoke all on function public.is_personal_selfie_checked(uuid) from public,anon;
+grant execute on function public.is_personal_selfie_checked(uuid) to authenticated;
+
+create function public.admin_console_selfie_queue(p_offset int default 0,p_limit int default 26)
+returns table(id uuid,user_id uuid,display_name text,submitted_at timestamptz)
+language sql stable security definer set search_path=public,pg_temp as $$
+ select r.submission_id,r.user_id,p.display_name,r.submitted_at from personal_selfie_reviews r join profiles p on p.id=r.user_id
+ where r.status='pending' and r.submitted_at>now()-interval '7 days' and r.avatar_url_at_submission=p.avatar_url and account_active(p.id)
+ order by r.submitted_at,r.user_id limit least(greatest(p_limit,1),100) offset least(greatest(p_offset,0),5000);
+$$;
+revoke all on function public.admin_console_selfie_queue(int,int) from public,anon,authenticated;
+grant execute on function public.admin_console_selfie_queue(int,int) to service_role;
+
+-- Reuse existing business/report logic without changing its authorization or audit.
+alter function public.admin_console_decide(uuid,text,uuid,text,text) rename to admin_console_decide_before_selfie;
+create function public.admin_console_decide(p_actor uuid,p_kind text,p_record_id uuid,p_decision text,p_note text default '') returns void as $$
+declare v_user uuid;
+begin
+ if p_kind is distinct from 'selfie' then perform admin_console_decide_before_selfie(p_actor,p_kind,p_record_id,p_decision,p_note);return;end if;
+ perform 1 from admin_console_members where user_id=p_actor and revoked_at is null and account_active(p_actor) for update;
+ if not found then raise exception 'Admin not authorized';end if;
+ select user_id into v_user from personal_selfie_reviews where submission_id=p_record_id;
+ if v_user is null then raise exception 'Review unavailable or changed';end if;
+ perform review_personal_selfie(v_user,p_record_id,p_decision,p_note);
+ insert into admin_console_audit(actor_id,action,target_id,note)values(p_actor,'selfie:'||p_decision,p_record_id,btrim(coalesce(p_note,'')));
+end;
+$$ language plpgsql security definer set search_path=public,pg_temp;
+revoke all on function public.admin_console_decide(uuid,text,uuid,text,text) from public,anon,authenticated;
+grant execute on function public.admin_console_decide(uuid,text,uuid,text,text) to service_role;
+alter function public.admin_console_overview() rename to admin_console_overview_before_selfie;
+create function public.admin_console_overview() returns jsonb as $$
+ select admin_console_overview_before_selfie() || jsonb_build_object('pendingSelfieReviews',
+  (select count(*) from personal_selfie_reviews r join profiles p on p.id=r.user_id where r.status='pending'
+   and r.submitted_at>now()-interval '7 days' and r.avatar_url_at_submission=p.avatar_url and account_active(p.id)));
+$$ language sql stable security definer set search_path=public,pg_temp;
+revoke all on function public.admin_console_overview() from public,anon,authenticated;
+grant execute on function public.admin_console_overview() to service_role;
+
+create function public.expire_private_selfies() returns void as $$
+declare candidate uuid; r personal_selfie_reviews;
+begin
+ for candidate in select p.id from profiles p join personal_selfie_reviews pending on pending.user_id=p.id
+  where pending.status='pending' and pending.submitted_at<=now()-interval '7 days' order by p.id limit 100 for update of p skip locked
+ loop
+  select * into r from personal_selfie_reviews where user_id=candidate for update;
+  if r.status='pending' and r.submitted_at<=now()-interval '7 days' then
+   update personal_selfie_reviews set status='rejected',selfie_path=null,note='Review expired. Please submit a new selfie.',reviewed_at=now() where user_id=candidate;
+   insert into media_cleanup_jobs(bucket,path)values('selfie_proofs',r.selfie_path) on conflict(path) do nothing;
+  end if;
+ end loop;
+ -- Remove abandoned uploads through Storage API via the existing cleanup queue.
+ insert into media_cleanup_jobs(bucket,path)
+ select 'selfie_proofs',o.name from storage.objects o where o.bucket_id='selfie_proofs' and o.created_at<=now()-interval '24 hours'
+  and not exists(select 1 from personal_selfie_reviews pending where pending.status='pending' and pending.selfie_path=o.name)
+ on conflict(path) do nothing;
+end;
+$$ language plpgsql security definer set search_path=public,pg_temp;
+revoke all on function public.expire_private_selfies() from public,anon,authenticated;
+grant execute on function public.expire_private_selfies() to service_role;
+create or replace function public.maintenance_retention_cleanup() returns void as $$
+begin
+ delete from content_reports where reviewed_at<now()-interval '90 days';
+ delete from push_deliveries where created_at<now()-interval '30 days';
+ delete from push_jobs where notification_id in(select id from notifications where created_at<now()-interval '30 days');
+ perform expire_private_selfies();
+end;
+$$ language plpgsql security definer set search_path=public,pg_temp;
+notify pgrst,'reload schema';
 
 
 commit;

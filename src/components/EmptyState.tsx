@@ -21,9 +21,25 @@ export function EmptyState({ title, hint }: Props) {
 }
 
 const styles = StyleSheet.create({
-  base: { alignItems: "center", paddingVertical: spacing.xxl },
-  glyph: { marginBottom: spacing.md },
-  title: { ...typography.heading, color: colors.textDim, textAlign: "center" },
+  base: {
+    alignItems: "center",
+    padding: spacing.lg,
+    marginVertical: spacing.md,
+    backgroundColor: colors.surface,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  glyph: {
+    marginBottom: spacing.md,
+    width: 48,
+    height: 48,
+    borderRadius: 16,
+    backgroundColor: colors.sandSoft,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  title: { ...typography.heading, color: colors.text, textAlign: "center" },
   hint: {
     ...typography.bodySmall,
     color: colors.textDim,

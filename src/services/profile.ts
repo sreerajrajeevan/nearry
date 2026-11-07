@@ -6,6 +6,7 @@ export type ProfilePatch = {
   bio?: string;
   interests?: string[];
   gender?: "male" | "female" | "other" | null;
+  age?: number | null;
   businessName?: string;
   businessDetails?: Record<string, unknown>;
 };
@@ -22,6 +23,7 @@ export async function updateProfile(
   if (patch.bio !== undefined) dbPatch.bio = patch.bio.trim();
   if (patch.interests !== undefined) dbPatch.interests = patch.interests;
   if (patch.gender !== undefined) dbPatch.gender = patch.gender;
+  if (patch.age !== undefined) dbPatch.age = patch.age;
   if (patch.businessName !== undefined)
     dbPatch.business_name = patch.businessName.trim();
   if (patch.businessDetails !== undefined)
@@ -34,5 +36,21 @@ export async function updateProfile(
     .from("profiles")
     .update(dbPatch)
     .eq("id", userId);
+  if (error) throw new Error(error.message);
+}
+
+/** Server validates adulthood, required fields, role and explicit current agreement. */
+export async function completePersonalProfile(input: {
+  displayName: string;
+  gender: "male" | "female" | "other";
+  age: number;
+  termsAccepted: boolean;
+}): Promise<void> {
+  const { error } = await getSupabase()!.rpc("complete_personal_profile", {
+    p_display_name: input.displayName,
+    p_gender: input.gender,
+    p_age: input.age,
+    p_terms_accepted: input.termsAccepted,
+  });
   if (error) throw new Error(error.message);
 }

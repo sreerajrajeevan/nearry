@@ -1,3 +1,4 @@
+import { ConversationActions } from "../../components/ConversationActions";
 import { LoadingState } from "../../components/LoadingState";
 import React, { useCallback, useRef, useState } from "react";
 import {
@@ -15,7 +16,7 @@ import { PageHeading } from "../../components/PageHeading";
 import { Icon } from "../../components/Icon";
 import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
-import { colors, typography, spacing } from "../../theme";
+import { colors, typography, spacing, surfaces } from "../../theme";
 import { useAuth } from "../../store/AuthContext";
 import { subscribeToNotifications } from "../../services/notifications";
 import { onUnreadChanged } from "../../services/unreadEvents";
@@ -45,6 +46,7 @@ export function ChatListScreen({ navigation }: Props) {
   const { profile } = useAuth();
   const focused = useRef(false),
     version = useRef(0);
+  const [selected, setSelected] = useState<Conversation | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [state, setState] = useState<"loading" | "error" | "ready">("loading");
 
@@ -65,6 +67,7 @@ export function ChatListScreen({ navigation }: Props) {
   useFocusEffect(
     useCallback(() => {
       focused.current = true;
+      setSelected(null);
       void load();
       const refresh = () => void load(true);
       const stop = profile
@@ -105,6 +108,11 @@ export function ChatListScreen({ navigation }: Props) {
         )}
         <PageHeading compact title="Your conversations" />
         <Text style={styles.subtitle}>About your plans and bookings</Text>
+        {conversations.length > 0 && (
+          <Text style={styles.subtitle}>
+            Hold a chat for options, or tap its three dots.
+          </Text>
+        )}
         {state === "loading" ? (
           <LoadingState label="Loading conversations…" layout="list" />
         ) : state === "error" ? (
@@ -122,48 +130,90 @@ export function ChatListScreen({ navigation }: Props) {
           />
         ) : (
           conversations.map((c) => (
-            <TouchableOpacity
-              key={c.id}
-              accessibilityRole="button"
-              accessibilityLabel={`${c.otherName}. ${c.contextTitle}${c.unreadCount > 0 ? `. ${c.unreadCount} unread message${c.unreadCount === 1 ? "" : "s"}` : ""}`}
-              activeOpacity={0.85}
-              onPress={() =>
-                navigation.navigate("Conversation", {
-                  conversationId: c.id,
-                  title: c.otherName,
-                })
-              }
-            >
-              <View style={styles.chatRow}>
-                <Avatar name={c.otherName} size={44} tone="clay" />
-                <View style={styles.text}>
-                  <View style={styles.topRow}>
-                    <Text style={styles.name} numberOfLines={1}>
-                      {c.otherName}
+            <View key={c.id} style={styles.chatRow}>
+              <TouchableOpacity
+                style={styles.chatOpen}
+                accessibilityRole="button"
+                accessibilityLabel={`${c.otherName}. ${c.contextTitle}${c.unreadCount > 0 ? `. ${c.unreadCount} unread message${c.unreadCount === 1 ? "" : "s"}` : ""}`}
+                accessibilityHint="Double tap to open. Long press for conversation options."
+                accessibilityActions={[
+                  { name: "longpress", label: "Conversation options" },
+                ]}
+                onAccessibilityAction={(event) => {
+                  if (event.nativeEvent.actionName === "longpress")
+                    setSelected(c);
+                }}
+                onLongPress={() => setSelected(c)}
+                activeOpacity={0.85}
+                onPress={() =>
+                  navigation.navigate("Conversation", {
+                    conversationId: c.id,
+                    title: c.otherName,
+                  })
+                }
+              >
+                <View style={styles.chatContent}>
+                  <Avatar name={c.otherName} size={44} tone="clay" />
+                  <View style={styles.text}>
+                    <View style={styles.topRow}>
+                      <Text style={styles.name} numberOfLines={1}>
+                        {c.otherName}
+                      </Text>
+                      <Text style={styles.time}>{timeAgo(c.lastAt)}</Text>
+                    </View>
+                    <Text style={styles.context} numberOfLines={1}>
+                      {c.contextTitle}
                     </Text>
-                    <Text style={styles.time}>{timeAgo(c.lastAt)}</Text>
-                  </View>
-                  <Text style={styles.context} numberOfLines={1}>
-                    {c.contextTitle}
-                  </Text>
-                  <View style={styles.bottomRow}>
-                    <Text style={styles.preview} numberOfLines={1}>
-                      {c.lastBody ?? "Say hello…"}
-                    </Text>
-                    {c.unreadCount > 0 && (
-                      <View style={styles.unreadBadge}>
-                        <Text style={styles.unreadText}>
-                          {c.unreadCount > 99 ? "99+" : c.unreadCount}
-                        </Text>
-                      </View>
-                    )}
+                    <View style={styles.bottomRow}>
+                      <Text style={styles.preview} numberOfLines={1}>
+                        {c.lastBody ?? "Say hello…"}
+                      </Text>
+                      {c.unreadCount > 0 && (
+                        <View style={styles.unreadBadge}>
+                          <Text style={styles.unreadText}>
+                            {c.unreadCount > 99 ? "99+" : c.unreadCount}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
                   </View>
                 </View>
-              </View>
-            </TouchableOpacity>
+              </TouchableOpacity>
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel={`Options for ${c.otherName}`}
+                style={styles.more}
+                onPress={() => setSelected(c)}
+              >
+                <Icon name="more-vertical" size={20} color={colors.text} />
+              </TouchableOpacity>
+            </View>
           ))
         )}
       </ScrollView>
+      {selected && (
+        <ConversationActions
+          key={selected.id}
+          conversationId={selected.id}
+          otherUserId={selected.otherUserId}
+          name={selected.otherName}
+          onClose={() => setSelected(null)}
+          onReport={() => {
+            setSelected(null);
+            navigation.navigate("Report", {
+              target: {
+                kind: "conversation",
+                id: selected.id,
+                name: selected.otherName,
+              },
+            });
+          }}
+          onChanged={() => {
+            setSelected(null);
+            void load(true);
+          }}
+        />
+      )}
     </Screen>
   );
 }
@@ -185,12 +235,24 @@ const styles = StyleSheet.create({
   },
   status: { ...typography.label, color: colors.textDim, marginTop: spacing.xl },
   chatRow: {
+    ...surfaces.card,
+    flexDirection: "row",
+    alignItems: "center",
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  chatOpen: { flex: 1, minWidth: 0 },
+  more: {
+    width: 44,
+    minHeight: 64,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  chatContent: {
     flexDirection: "row",
     gap: 12,
     alignItems: "center",
     paddingVertical: 20,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
   },
   text: { flex: 1, minWidth: 0 },
   topRow: {
@@ -217,11 +279,11 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: colors.accent,
+    backgroundColor: colors.gold,
   },
   unreadText: {
     ...typography.caption,
-    color: colors.onAccent,
+    color: colors.onGold,
     fontWeight: "600",
   },
 });

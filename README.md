@@ -1,6 +1,6 @@
 # Nearry
 
-React Native + Expo SDK 54, with Personal and Business experiences and Supabase Auth, Postgres, Storage and Realtime. The Everyday Nearby UI uses the Current Clay palette: warm-white surfaces, dark ink and one burnt-orange accent. Both account experiences share the same type, icons, controls, and safe-area-aware navigation.
+React Native + Expo SDK 54, with Personal and Business experiences and Supabase Auth, Postgres, Storage and Realtime. The Everyday Nearby UI uses a Forest & Sand palette: warm neutral surfaces, deep green, sage, tan and restrained gold. Both account experiences share the same type, icons, controls, and safe-area-aware navigation.
 
 ## Run
 
@@ -108,7 +108,7 @@ See the [core journey changes and phone checklist](docs/core-journey-checklist.m
 
 ## Backend audit
 
-See [audit scope, fixes, and remaining live checks](docs/backend-audit.md). Offer editing/publishing/cancellation now uses `update_offer`; cancelling an offer also cancels its future reservations. Customers keep the offer context in booking history. Chat loads the newest 200 messages, merges concurrent send/realtime results, and acknowledges only displayed messages while the conversation is focused. Older-message pagination remains future work.
+See [audit scope, fixes, and remaining live checks](docs/backend-audit.md). Offer editing/publishing/cancellation now uses `update_offer`; cancelling an offer also cancels its future reservations. Customers keep the offer context in booking history. Chat loads the newest 200 visible messages, discards stale reloads after sends, and acknowledges only displayed messages while the conversation is focused. Older-message pagination remains future work.
 
 Search treats punctuation and pattern characters as literal text, and keeps expiry and text conditions together. Optional post fields can be explicitly cleared. Badges refresh after local read actions; chat and notification lists refresh on incoming events and app resume. Remote push is owned by the server worker, avoiding duplicate local banners from the same database event.
 
@@ -116,14 +116,14 @@ Search treats punctuation and pattern characters as literal text, and keeps expi
 
 Expo SDK 54 / React Native 0.81 target Android API 36 with the New Architecture and edge-to-edge layout. Native packages follow Expo's supported versions. Photo/document uploads retain the compatible filesystem API, and foreground notifications use the banner/list API. CI compiles an unsigned native release and checks its manifest, permissions and 16 KB native alignment. This does not replace a signed release test on a phone. See [Android release setup](docs/android-release.md) for signing, environment variables and the first Play internal test. Do not use `npm audit fix --force` to change the framework blindly.
 
-## Everyday Nearby · Current Clay design
+## Everyday Nearby · Forest & Sand design
 
-- Palette: warm white `#FAF9F5`, ink `#252A26`, burnt orange `#C14D2F`. Statuses use explicit text, with no extra brand colours.
+- Palette: sage `#6D9773`, forest `#0C3B2E`, tan `#BB8A52`, gold `#FFBA00`, warm neutral `#F4F3EB`. Forest anchors text and introduction panels; sage buttons have dark accessible labels. Gold highlights are small, and statuses remain labelled in words.
 - Typography: Avenir Next on iOS, the system sans elsewhere; comfortable body text and medium-weight headlines. Native text scaling is retained.
-- Discovery: an illustrated Play / Meet / Explore / Unwind grid, original clay artwork, and larger rounded Plan / Place / Offer cards. Existing detail screens handle joining and booking; opening a card never submits a request. Offer cover photos use business uploads; illustrated venue covers are explicitly labelled as an overview.
+- Discovery: a compact Play / Meet / Explore / Unwind row, original category artwork, and quieter Plan / Place / Offer cards. Nearby plans appear before featured promotions. Existing detail screens handle joining and booking; opening a card never submits a request. Offer cover photos use business uploads; illustrated venue covers are explicitly labelled as an overview.
 - Nearby: category tiles filter the feed and bring it into view; tap the selected tile or Show all to reset. A horizontal featured rail uses the loaded, area-scoped live offers, preferring those marked spotlight. Its controls never auto-advance. When there are no offers, an invitation starts the real Create flow. Search, attribution, area selection, refresh and realtime updates retain their existing services.
 - Venue pages: cover/gallery photos, community rating (never labelled as Google), directions, actual amenities, live venue offers and plans, a full-screen photo viewer, and a bottom action that scrolls to available times/plans or starts a new plan. Absent photos/amenities/ratings have honest empty states. Directions open an external map search and need no map API key.
-- Layout: warm paper, raised ivory cards, dark ink and one burnt-orange accent; an uncluttered location header and a rounded dark-ink tab bar. All five tabs remain labelled, with height and bottom space reserved for device insets and scaled labels. The bar stays in normal layout, so content cannot slide underneath it.
+- Layout: warm neutral surfaces, forest heading panels, raised ivory cards, sage primary buttons, gold selected controls and a light full-width tab bar. Shared heading, card, field and selection surfaces cover authentication, onboarding, discovery, activity, profiles, messaging, business tools and account settings. All five tabs remain labelled, with height and bottom space reserved for device insets and scaled labels. The bar stays in normal layout, so content cannot slide underneath it.
 - Motion: `MotionProvider` observes the device's Reduce Motion preference. Presses use a short scale spring; screens enter with a 240 ms fade/lift; native stacks slide and the photo viewer fades. Reduce Motion disables these effects and animated scrolling. There are no looping decorative animations. The existing business verification welcome also respects this setting. Test native gestures and keyboard on a phone before release.
 - Original artwork and the built-in image-generation prompt are documented in `assets/discovery/README.md`. The shared transparent atlas is bundled once; it is category illustration, not real venue photography.
 - Feed thumbnails use twelve distinct activity miniatures (including football, badminton, cricket, coffee, chess, food, kayaking, cycling, movies, music and wellness), separate from the larger home scenes. Titles, details and tags choose relevant artwork; a post's first uploaded photo takes precedence. Create Post accepts up to five JPEG/PNG/WebP images, 10 MB each. Post details show the gallery and full-screen viewing. Failed photo saves remain retryable against the saved post, with no new post created on retry. See [photo setup and verification](docs/post-photos.md).
@@ -137,11 +137,14 @@ Expo SDK 54 / React Native 0.81 target Android API 36 with the New Architecture 
 
 Review on a phone with both a short and a long display name. Check Nearby filters, the area picker, Search, details, Create, keyboard dismissal, Activity, and Profile; then check all five Business tabs. Verify the native safe areas and large-text setting on iOS and Android before release. Browser checks are useful for layout, but cannot verify native Google redirects, push permission, or device keyboard behavior.
 
+### Chat controls
 
-## Optional personal selfie review
+See [chat controls and phone checks](docs/chat-controls.md) for keyboard handling, per-member conversation deletion, long-press reporting/blocking and migration **00026**.
 
-Personal accounts may request a private camera selfie comparison against their
-current profile picture. A badge only appears after a trusted manual review;
-it does **not** verify legal identity, age or liveness. Deploy migration 00026,
-run the cleanup worker and staff the review queue before making this available
-to real users. See [setup and safety details](docs/personal-selfie-verification.md).
+### Post photos and participation profiles
+
+See [post editing, cropping and profile requirements](docs/post-participation-and-photos.md) for the shared full editor, Crop/Done controls, gender eligibility, private age, migration **00027** and the required native rebuild. Personal users can browse first and complete their profile when creating or joining a plan.
+
+### Optional selfie check
+
+Personal members can submit a private camera selfie from Profile. Review it in the existing admin dashboard’s **Selfie reviews** section. Requires migration **00030**, the updated `admin-console` and a fresh mobile build. See [setup, retention and phone checks](docs/personal-selfie-verification.md). This is a manual photo comparison, not identity, age or liveness verification.

@@ -48,7 +48,7 @@ export function legalSections(
     },
     {
       title: "Account and activity data",
-      body: "We store your email and sign-in identifiers, name, account type and the profile details you choose to provide, such as your photo, bio, interests, gender or business information. Google sign-in provides identity information through Supabase Auth. We do not ask for a phone number or store a Google password. Posts, uploads, requests, bookings, chat messages, reports, blocks and notification read states are stored to operate those features.",
+      body: "We store your email and sign-in identifiers, name, account type and the profile details you choose to provide, such as your photo, bio, interests, gender, self-declared age or business information. Age is private and is required with gender before creating or joining a plan. Google sign-in provides identity information through Supabase Auth. We do not ask for a phone number or store a Google password. Posts, uploads, requests, bookings, chat messages, reports, blocks and notification read states are stored to operate those features.",
     },
     {
       title: "Location and permissions",
@@ -56,7 +56,7 @@ export function legalSections(
     },
     {
       title: "Optional selfie verification",
-      body: "Personal accounts may choose a private camera selfie review against their current public profile picture. Nearry stores the selfie in a private bucket for trusted human review and stores your consent, result and review note. Only an approved boolean is shown to other users as 'Selfie checked'. This is not legal identity, age or certified liveness verification. The original review photo is queued for deletion following a decision; pending photos are removed during account deletion. Changing your profile picture revokes the badge. No automated facial recognition or face templates are used in this version.",
+      body: "Personal accounts may choose a private camera selfie review against their current public profile picture. Nearry stores the selfie in a private bucket for trusted human review and stores your consent, result and review note. Only an approved boolean is shown to other users as 'Selfie checked'. This is not legal identity, age or certified liveness verification. You can cancel a pending review or remove your check in Profile. The original review photo is queued for deletion following a decision, cancellation, profile-photo change, or seven days without a decision. Abandoned uploads are queued after 24 hours. The maintenance worker retries failed removals; minimal consent/result records remain until account deletion. Pending photos are also removed during account deletion. Changing your profile picture revokes the badge. No automated facial recognition or face templates are used in this version.",
     },
     {
       title: "What others can see",

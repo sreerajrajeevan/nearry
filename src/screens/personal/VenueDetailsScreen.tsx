@@ -22,7 +22,7 @@ import { CategoryArt } from "../../components/CategoryArt";
 import { MotionPressable } from "../../components/Motion";
 import { PostRow } from "../../components/PostRow";
 import { OfferRow } from "../../components/OfferRow";
-import { colors, typography, spacing } from "../../theme";
+import { colors, typography, spacing, surfaces } from "../../theme";
 import { VenueDetailsProps } from "../../navigation/types";
 import { getVenue } from "../../services/venues";
 import { listPosts, subscribeToPosts } from "../../services/posts";
@@ -183,8 +183,8 @@ export function VenueDetailsScreen({ route, navigation }: VenueDetailsProps) {
             {venue.name}
           </Text>
           <View style={styles.location}>
-            <Icon name="map-pin" size={14} />
-            <Text style={styles.meta}>
+            <Icon name="map-pin" size={14} color={colors.goldSoft} />
+            <Text style={[styles.meta, styles.introText]}>
               {[
                 venue.area,
                 venue.distanceKm == null
@@ -196,8 +196,8 @@ export function VenueDetailsScreen({ route, navigation }: VenueDetailsProps) {
             </Text>
           </View>
           <View style={styles.rating}>
-            <Icon name="star" size={14} color={colors.accent} />
-            <Text style={styles.ratingText}>
+            <Icon name="star" size={14} color={colors.gold} />
+            <Text style={[styles.ratingText, styles.introText]}>
               {venue.rating > 0
                 ? `${venue.rating.toFixed(1)} · community rating`
                 : "No ratings yet"}
@@ -221,12 +221,15 @@ export function VenueDetailsScreen({ route, navigation }: VenueDetailsProps) {
           </MotionPressable>
           {state === "error" && (
             <>
-              <Text accessibilityRole="alert" style={styles.meta}>
+              <Text
+                accessibilityRole="alert"
+                style={[styles.meta, styles.introText]}
+              >
                 Couldn’t refresh. Showing the last details.
               </Text>
               <Button
                 title="Retry refresh"
-                variant="ghost"
+                variant="secondary"
                 onPress={() => void refresh(true)}
               />
             </>
@@ -470,20 +473,21 @@ const styles = StyleSheet.create({
     borderRadius: 16,
   },
   heroLabelText: { ...typography.caption, color: colors.text },
-  intro: { padding: 24 },
+  intro: { ...surfaces.hero, marginHorizontal: 16, marginTop: 16 },
+  introText: { color: colors.goldSoft },
   eyebrow: {
     flexDirection: "row",
     justifyContent: "space-between",
     gap: 8,
     marginBottom: 12,
   },
-  category: { ...typography.label, color: colors.accent },
-  open: { ...typography.caption, color: colors.textDim },
+  category: { ...typography.label, color: colors.gold },
+  open: { ...typography.caption, color: colors.sageSoft },
   name: {
     ...typography.display,
     fontSize: 30,
     lineHeight: 35,
-    color: colors.text,
+    color: colors.onAccent,
     marginBottom: 12,
   },
   location: { flexDirection: "row", alignItems: "center", gap: 6 },

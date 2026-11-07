@@ -1,3 +1,4 @@
+import { PageHeading } from "../../components/PageHeading";
 import React, { useState } from "react";
 import {
   View,
@@ -13,7 +14,7 @@ import { Button } from "../../components/Button";
 import { Input } from "../../components/Input";
 import { EmptyState } from "../../components/EmptyState";
 import { Avatar } from "../../components/Avatar";
-import { colors, typography, spacing } from "../../theme";
+import { colors, typography, spacing, surfaces } from "../../theme";
 import { PersonalStackParamList } from "../../navigation/types";
 import { useAuth } from "../../store/AuthContext";
 import { updateProfile } from "../../services/profile";
@@ -41,8 +42,11 @@ const GENDERS = [
 export function EditProfileScreen({ navigation }: Props) {
   const { profile, refreshProfile } = useAuth();
   const [name, setName] = useState(profile?.displayName ?? "");
+  const [age, setAge] = useState(profile?.age?.toString() ?? "");
   const [bio, setBio] = useState(profile?.bio ?? "");
-  const [interests, setInterests] = useState<string[]>(profile?.interests ?? []);
+  const [interests, setInterests] = useState<string[]>(
+    profile?.interests ?? [],
+  );
   const [gender, setGender] = useState<"male" | "female" | "other" | undefined>(
     profile?.gender,
   );
@@ -93,6 +97,13 @@ export function EditProfileScreen({ navigation }: Props) {
       setFormError("Keep the name under 40 characters.");
       return;
     }
+    if (
+      age &&
+      (!/^\d{2,3}$/.test(age) || Number(age) < 18 || Number(age) > 100)
+    ) {
+      setFormError("Enter an age between 18 and 100.");
+      return;
+    }
     setSaving(true);
     try {
       let avatarUrl = profile.avatarUrl;
@@ -107,6 +118,7 @@ export function EditProfileScreen({ navigation }: Props) {
         bio: bio.trim(),
         interests,
         gender: gender ?? null,
+        age: age ? Number(age) : null,
       });
       await refreshProfile();
       navigation.goBack();
@@ -135,7 +147,7 @@ export function EditProfileScreen({ navigation }: Props) {
         >
           <Text style={styles.backText}>← Back</Text>
         </TouchableOpacity>
-        <Text style={styles.header}>Edit profile.</Text>
+        <PageHeading compact title="Edit profile." />
 
         <TouchableOpacity
           onPress={() => void onPickPhoto()}
@@ -182,6 +194,13 @@ export function EditProfileScreen({ navigation }: Props) {
           })}
         </View>
 
+        <Input
+          label="Age (private)"
+          value={age}
+          onChangeText={(text) => setAge(text.replace(/\D/g, ""))}
+          keyboardType="number-pad"
+          maxLength={3}
+        />
         <Text style={styles.fieldLabel}>Interests</Text>
         <View style={styles.chips}>
           {INTERESTS.map((tag) => {
@@ -249,9 +268,9 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: colors.surface,
   },
-  chipSel: { backgroundColor: colors.text, borderColor: colors.text },
+  chipSel: { ...surfaces.selected },
   chipText: { ...typography.bodySmall, color: colors.text },
-  chipTextSel: { color: colors.background },
+  chipTextSel: { color: colors.onGold },
   formError: {
     ...typography.body,
     color: colors.red,

@@ -51,12 +51,14 @@ export const HOME_CATEGORIES = [
   },
 ] as const;
 
-export async function pickPhoto(): Promise<string | null> {
+export async function pickPhoto(
+  options: { allowsEditing?: boolean } = {},
+): Promise<string | null> {
   // The system picker grants access to the chosen item. Do not require broad
   // library permission or await a permission prompt before a web user gesture.
   const result = await ImagePicker.launchImageLibraryAsync({
     mediaTypes: ["images"],
-    allowsEditing: true,
+    allowsEditing: options.allowsEditing ?? true,
     quality: 0.8,
   });
   if (result.canceled || result.assets.length === 0) return null;
