@@ -68,6 +68,7 @@ export function createPlaceAutocompleteHandler(deps: {
           );
         return json({
           place: await deps.provider.resolve(body.place, body.sessionToken),
+          requestedId: body.place.id,
         });
       }
       if (body.action !== undefined && body.action !== "suggest")

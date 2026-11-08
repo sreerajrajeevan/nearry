@@ -525,3 +525,34 @@ test("Google predictions resolve only after selection and pass the same session 
   handler = () => ({ place: { ...selected, id: "other" } });
   await assert.rejects(resolvePlace(prediction), /Could not read/);
 });
+
+test("Google address canonicalization is accepted only when the server binds it to the selected prediction", async () => {
+  const { resolvePlace } = await import("../src/services/places");
+  const prediction = {
+    provider: "google",
+    id: "selected-address-id",
+    name: "Chosen address",
+    address: "Kakkanad",
+    attributions: [],
+  };
+  handler = () => ({
+    requestedId: prediction.id,
+    place: {
+      ...prediction,
+      id: "canonical-address-id",
+      latitude: 10,
+      longitude: 76,
+    },
+  });
+  assert.equal((await resolvePlace(prediction)).id, "canonical-address-id");
+  handler = () => ({
+    requestedId: "a-different-selection",
+    place: {
+      ...prediction,
+      id: "canonical-address-id",
+      latitude: 10,
+      longitude: 76,
+    },
+  });
+  await assert.rejects(resolvePlace(prediction), /Could not read/);
+});

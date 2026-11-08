@@ -4,7 +4,7 @@ The new app uses `place-autocomplete` for Search → Places and Nearby's area pi
 
 This feature does not add a map, import Google businesses into the database, verify business ownership, or add arbitrary external locations to post creation. Nearby activity still comes from Nearry's own geolocated venues. A valid external place can therefore have no Nearry plans yet.
 
-## Activation remaining for the account owner
+## Setup and rollout
 
 1. Open the existing [Nearry Google Cloud project](https://console.cloud.google.com/google/maps-apis/overview?project=nearry-43e80). Link/activate its billing account. The owner must handle payment information and accept any billing terms; free allowances still require billing.
 2. Enable **Places API (New)** in that project. Maps JavaScript API, legacy Places, routing, ratings and photo APIs are not required for this implementation.
@@ -23,7 +23,15 @@ This feature does not add a map, import Google businesses into the database, ver
 8. Merge this change and install a new Android build. Deploying the endpoint alone does not switch an older APK: its `place-search` call still uses Geoapify.
 9. Sign in and test `Infopark`, `Kakkanad`, a local cafe, a turf and another Indian city. Confirm Google suggestions and attribution, choose one, check its actual area/coordinates, open Nearby and check radius filters. Test rapid typing, changing the query during selection, going back, empty results, a network failure and retry. Confirm only one Details call follows selection and inspect Cloud usage.
 
-At implementation time the owner reported that Google required billing setup, and Supabase did not have `GOOGLE_PLACES_API_KEY`. Automated fixtures do not demonstrate live Google results or billing eligibility. Record the actual activation/live-test result when these steps are completed.
+### Activation verified on 8 November 2026
+
+- Places API (New) is enabled in `nearry-43e80`; live Google calls succeed after linking the Nearry billing account.
+- Dedicated key **Nearry place search** is restricted to Places API (New). Its value is stored in Supabase secrets, alongside `PLACES_AUTOCOMPLETE_PROVIDER=google`; it is absent from app configuration and Git.
+- `place-autocomplete` is deployed with explicit user authentication and existing service-only quota reservations. The legacy `place-search` endpoint is unchanged.
+- Cloud Console confirmed **1,000 AutocompletePlacesRequest/day** and **1,000 GetPlaceRequest/day** for this project. These are shared testing limits, not a monetary cap or production capacity guarantee. Other APIs, billing-account projects and future quota changes can still produce charges. Billing alerts have not been configured.
+- The actual provider adapter successfully fetched suggestions and selected-place coordinates for `Infopark`, `Kakkanad`, `cafe Kakkanad`, `Grand Hyatt Kochi` and `Indiranagar Bengaluru`. No response content was saved in the repository. The café result exposed Google's legitimate canonical Place ID change; resolution now accepts a validated canonical ID and binds the response to the selected prediction.
+- Autocomplete predicts place names/addresses; it is not full categorical Google Maps search. A live `turf Kakkanad` query returned no suggestions. Specific venue names and areas are the intended input; broader category discovery requires a separate search feature.
+- Remaining rollout: merge PR #35, republish legal pages, install a new Android build, and perform the signed-in phone checks above. Live adapter checks do not prove a phone-to-Edge authenticated round trip. Older APKs continue using Geoapify.
 
 ## Compatibility and rollback
 
@@ -36,7 +44,7 @@ The new endpoint chooses `PLACES_AUTOCOMPLETE_PROVIDER` if set; otherwise it sel
 - The field mask for Details is `id,location,formattedAddress,attributions`; the prediction already contains the selected name. This uses Essentials rather than Pro fields. Do not replace the mask with `*`.
 - The new endpoint does not cache Google responses, share session tokens, log queries, persist searched coordinates or import predictions into tables. Results stay in transient screen/navigation state. Selected coordinates are used to query Nearry content; no third-party map is displayed. Place IDs are external IDs, never Nearry venue IDs.
 - Google Maps attribution appears beside suggestions and selected locations; extra source attribution from Details is preserved. The narrow caption uses the permitted Google Maps text attribution with neutral 14sp text. Geoapify/OSM attribution remains when that provider is configured.
-- Every upstream attempt, including selected Details, uses the existing shared `reserve_place_search` counters: 2,800/day and 4/second globally, 150/day and 20/minute per user. The new endpoint has no provider cache; these are conservative testing controls, not a 1,000-concurrent-user production design. The daily cap does not guarantee staying under a monthly Google allowance (31 × 2,800 exceeds 70,000). Other keys/projects sharing the billing account also count.
+- Every upstream attempt, including selected Details, uses the existing shared `reserve_place_search` counters: 2,800/day and 4/second globally, 150/day and 20/minute per user. The new endpoint has no provider cache; these are conservative testing controls, not a 1,000-concurrent-user production design. Cloud Console additionally limits each used Google method to 1,000/day as verified above. The application cap alone does not guarantee staying under a monthly Google allowance (31 × 2,800 exceeds 70,000). Other keys/projects sharing the billing account also count.
 - Existing search access remains signed-in only. Server errors never return Google URLs, keys or billing-account diagnostic payloads to clients.
 
 ## Free allowance and references

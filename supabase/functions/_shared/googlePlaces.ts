@@ -111,7 +111,8 @@ export function createGooglePlacesProvider(
         "id,location,formattedAddress,attributions",
       );
       if (
-        payload?.id !== suggestion.id ||
+        typeof payload?.id !== "string" ||
+        !/^[A-Za-z0-9_-]{1,512}$/.test(payload.id) ||
         !validPoint(payload?.location) ||
         typeof payload.formattedAddress !== "string"
       )

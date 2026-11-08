@@ -122,7 +122,8 @@ export async function resolvePlace(
   if (
     !validPlace(data?.place) ||
     data.place.provider !== place.provider ||
-    data.place.id !== place.id
+    (data.place.id !== place.id &&
+      !(place.provider === "google" && data.requestedId === place.id))
   )
     throw new Error("Could not read this place. Please search again.");
   return data.place;

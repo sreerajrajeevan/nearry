@@ -102,11 +102,11 @@ test("Google empty results stay empty and malformed predictions never invent coo
   assert.throws(() => mapGooglePredictions(null), /Invalid/);
   assert.throws(() => mapGooglePredictions({ suggestions: "bad" }), /Invalid/);
 });
-test("Google rejects mismatched IDs and malformed coordinates on resolution", async () => {
+test("Google rejects invalid IDs and malformed coordinates on resolution", async () => {
   const chosen = mapGooglePredictions({ suggestions: [prediction] })[0];
   for (const payload of [
     {
-      id: "other",
+      id: "../../bad",
       location: { latitude: 10, longitude: 76 },
       formattedAddress: "Address",
     },
@@ -200,4 +200,27 @@ test("suggestions are not cached across sessions, and quota exhaustion does not 
     reserve: async () => true,
   });
   assert.equal((await missing(req({ query: "Infopark" }))).status, 503);
+});
+
+test("Google may canonicalize a selected address ID; the authenticated handler binds it to the chosen prediction", async () => {
+  const chosen = mapGooglePredictions({ suggestions: [prediction] })[0];
+  const provider = createGooglePlacesProvider("key", (async () =>
+    Response.json({
+      id: "canonical-address-id",
+      formattedAddress: "Public address",
+      location: { latitude: 10, longitude: 76 },
+    })) as typeof fetch);
+  const handler = createPlaceAutocompleteHandler({
+    provider,
+    authenticate: async () => "user",
+    reserve: async () => true,
+  });
+  const response = await handler(
+    req({ action: "resolve", place: chosen, sessionToken }),
+  );
+  assert.equal(response.status, 200);
+  const result = await response.json();
+  assert.equal(result.requestedId, chosen.id);
+  assert.equal(result.place.id, "canonical-address-id");
+  assert.equal(result.place.name, chosen.name);
 });
