@@ -295,7 +295,7 @@ test("place suggestions use the server function contract, never a provider key o
     bias: { latitude: 10, longitude: 76 },
   });
   assert.equal(places[0].id, "external-id");
-  assert.match(calls[0].url.pathname, /functions\/v1\/place-search$/);
+  assert.match(calls[0].url.pathname, /functions\/v1\/place-autocomplete$/);
   assert.deepEqual(calls[0].body, {
     query: "Infopark",
     bias: { latitude: 10, longitude: 76 },
@@ -497,4 +497,62 @@ test("conversation reports send the conversation target to the moderation RPC", 
     p_reason: "harassment",
     p_details: "Concern",
   });
+});
+
+test("Google predictions resolve only after selection and pass the same session without exposing a key", async () => {
+  const { searchPlaces, resolvePlace } = await import("../src/services/places");
+  const prediction = {
+    provider: "google",
+    id: "ChIJ_infopark",
+    name: "Infopark",
+    address: "Kakkanad",
+    attributions: [{ label: "Google Maps", url: "https://maps.google.com/" }],
+  };
+  handler = () => ({ places: [prediction] });
+  const sessionToken = "12345678-1234-4234-8234-123456789012";
+  const suggestions = await searchPlaces("Infopark", { sessionToken });
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].body.sessionToken, sessionToken);
+  assert.equal(suggestions[0].latitude, undefined);
+  handler = () => ({ place: { ...prediction, latitude: 10, longitude: 76 } });
+  const selected = await resolvePlace(suggestions[0], { sessionToken });
+  assert.equal(calls.length, 2);
+  assert.equal(calls[1].body.action, "resolve");
+  assert.equal(calls[1].body.sessionToken, sessionToken);
+  assert.equal(selected.latitude, 10);
+  await resolvePlace(selected);
+  assert.equal(calls.length, 2);
+  handler = () => ({ place: { ...selected, id: "other" } });
+  await assert.rejects(resolvePlace(prediction), /Could not read/);
+});
+
+test("Google address canonicalization is accepted only when the server binds it to the selected prediction", async () => {
+  const { resolvePlace } = await import("../src/services/places");
+  const prediction = {
+    provider: "google",
+    id: "selected-address-id",
+    name: "Chosen address",
+    address: "Kakkanad",
+    attributions: [],
+  };
+  handler = () => ({
+    requestedId: prediction.id,
+    place: {
+      ...prediction,
+      id: "canonical-address-id",
+      latitude: 10,
+      longitude: 76,
+    },
+  });
+  assert.equal((await resolvePlace(prediction)).id, "canonical-address-id");
+  handler = () => ({
+    requestedId: "a-different-selection",
+    place: {
+      ...prediction,
+      id: "canonical-address-id",
+      latitude: 10,
+      longitude: 76,
+    },
+  });
+  await assert.rejects(resolvePlace(prediction), /Could not read/);
 });

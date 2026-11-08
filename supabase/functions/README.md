@@ -52,7 +52,7 @@ Use a staging Supabase project and test mailbox first. Confirm unauthorized work
 
 ## Place suggestions
 
-The authenticated `place-search` function is configured separately from scheduled workers. It uses `GEOAPIFY_API_KEY` (server only) and migration `00019`; no dispatch secret or scheduler is needed. See [place search setup](../../docs/place-search.md) for deployment, quota controls and the provider adapter contract.
+The new authenticated `place-autocomplete` function supports Google Places suggestions and selected-place details with a server-only `GOOGLE_PLACES_API_KEY`. See [activation and rollout](../../docs/google-places.md). The legacy authenticated `place-search` function is configured separately from scheduled workers. It uses `GEOAPIFY_API_KEY` (server only) and migration `00019`; no dispatch secret or scheduler is needed. See [place search setup](../../docs/place-search.md) for deployment, quota controls and the provider adapter contract.
 
 ## Account maintenance and push receipts
 

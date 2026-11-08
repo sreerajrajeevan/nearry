@@ -39,6 +39,10 @@ export function legalSections(
         title: "Leaving and changes",
         body: "You can request permanent account deletion in Safety & privacy. Upcoming commitments will be cancelled and your content removed through the deletion process. Material changes to these terms will be shown for acceptance in the app. Nothing in these terms limits rights you have under applicable consumer law.",
       },
+      {
+        title: "Google Maps place search",
+        body: "When using Google Maps place search, you are also bound by the Google Maps/Google Earth Additional Terms of Service: https://maps.google.com/help/terms_maps/. Google's Privacy Policy is available at https://policies.google.com/privacy.",
+      },
       { title: "Contact", body: contact },
     ];
   return [
@@ -52,7 +56,11 @@ export function legalSections(
     },
     {
       title: "Location and permissions",
-      body: "Location access is optional. With permission, coordinates are used to find nearby results and may be sent to our place-search service and its provider, Geoapify. Manual area selection is available. We do not continuously track your background location. Photo selection provides access to the image you choose. Push notifications require separate phone permission and a device push token.",
+      body: "Location access is optional. With permission, coordinates are used to find nearby results and may be sent to our place-search service and its configured provider, Google Maps Platform or Geoapify. Search text and the selected place are sent to that provider to return suggestions and coordinates. Manual area selection is available. We do not continuously track your background location. Photo selection provides access to the image you choose. Push notifications require separate phone permission and a device push token.",
+    },
+    {
+      title: "Google Maps place search",
+      body: "Google Maps place search is subject to the Google Maps/Google Earth Additional Terms of Service (https://maps.google.com/help/terms_maps/) and Google Privacy Policy (https://policies.google.com/privacy). Google predictions and selected locations are labelled separately from Nearry posts and registered businesses. We do not save a Google search history or import Google places into our business directory.",
     },
     {
       title: "Optional selfie verification",
@@ -68,7 +76,7 @@ export function legalSections(
     },
     {
       title: "Service providers",
-      body: "Supabase provides authentication, database, file storage and server functions. Geoapify provides searched-place suggestions. Expo and the phone platform’s Apple/Google push services deliver notifications. Resend is used to email business-review links to authorised reviewers. Google is used when you choose Google sign-in. These providers process relevant data to deliver those services; processing locations depend on the configured provider infrastructure.",
+      body: "Supabase provides authentication, database, file storage and server functions. Google Maps Platform or Geoapify provides searched-place suggestions, depending on the configured search provider. Expo and the phone platform’s Apple/Google push services deliver notifications. Resend is used to email business-review links to authorised reviewers. Google is used when you choose Google sign-in. These providers process relevant data to deliver those services; processing locations depend on the configured provider infrastructure.",
     },
     {
       title: "Retention and account deletion",

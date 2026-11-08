@@ -1,14 +1,19 @@
 import { isDemoMode, requireSupabase } from "../supabase";
-import { validPlace } from "../../../supabase/functions/_shared/placeTypes";
+import {
+  validPlace,
+  validSuggestion,
+} from "../../../supabase/functions/_shared/placeTypes";
 export { validPlace } from "../../../supabase/functions/_shared/placeTypes";
 export type {
   Place,
   PlaceBias,
   PlaceAttribution,
+  PlaceSuggestion,
 } from "../../../supabase/functions/_shared/placeTypes";
 import type {
   Place,
   PlaceBias,
+  PlaceSuggestion,
 } from "../../../supabase/functions/_shared/placeTypes";
 
 const samples: Place[] = [
@@ -43,8 +48,12 @@ const samples: Place[] = [
 /** The UI knows only this contract. Provider keys and adapters stay on the server. */
 export async function searchPlaces(
   query: string,
-  options: { bias?: PlaceBias; signal?: AbortSignal } = {},
-): Promise<Place[]> {
+  options: {
+    bias?: PlaceBias;
+    signal?: AbortSignal;
+    sessionToken?: string;
+  } = {},
+): Promise<PlaceSuggestion[]> {
   const text = query.trim();
   if (text.length < 3) return [];
   if (text.length > 120)
@@ -54,9 +63,13 @@ export async function searchPlaces(
       `${p.name} ${p.address}`.toLowerCase().includes(text.toLowerCase()),
     );
   const { data, error } = await requireSupabase().functions.invoke(
-    "place-search",
+    "place-autocomplete",
     {
-      body: { query: text, ...(options.bias ? { bias: options.bias } : {}) },
+      body: {
+        query: text,
+        ...(options.bias ? { bias: options.bias } : {}),
+        ...(options.sessionToken ? { sessionToken: options.sessionToken } : {}),
+      },
       signal: options.signal,
     },
   );
@@ -70,7 +83,48 @@ export async function searchPlaces(
     }
     throw new Error(message);
   }
-  if (!data || !Array.isArray(data.places) || !data.places.every(validPlace))
+  if (
+    !data ||
+    !Array.isArray(data.places) ||
+    !data.places.every(validSuggestion)
+  )
     throw new Error("Could not read the place results. Please try again.");
   return data.places.slice(0, 5);
+}
+
+/** Resolve coordinates only for the chosen prediction; no details prefetch. */
+export async function resolvePlace(
+  place: PlaceSuggestion,
+  options: { sessionToken?: string; signal?: AbortSignal } = {},
+): Promise<Place> {
+  if (!validSuggestion(place))
+    throw new Error("Choose a place from the results.");
+  if (validPlace(place)) return place;
+  const { data, error } = await requireSupabase().functions.invoke(
+    "place-autocomplete",
+    {
+      body: {
+        action: "resolve",
+        place,
+        ...(options.sessionToken ? { sessionToken: options.sessionToken } : {}),
+      },
+      signal: options.signal,
+    },
+  );
+  if (error) {
+    let message = "Could not open this place. Please try again.";
+    try {
+      const payload = await error.context?.json();
+      if (typeof payload?.error === "string") message = payload.error;
+    } catch {}
+    throw new Error(message);
+  }
+  if (
+    !validPlace(data?.place) ||
+    data.place.provider !== place.provider ||
+    (data.place.id !== place.id &&
+      !(place.provider === "google" && data.requestedId === place.id))
+  )
+    throw new Error("Could not read this place. Please search again.");
+  return data.place;
 }
