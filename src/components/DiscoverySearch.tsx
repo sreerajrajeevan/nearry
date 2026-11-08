@@ -39,8 +39,8 @@ export function DiscoverySearch(props: Props) {
             accessibilityRole="button"
             accessibilityLabel={
               props.filtersActive
-                ? "Filter plans, filters applied"
-                : "Filter plans"
+                ? "Filter and sort plans, options applied"
+                : "Filter and sort plans"
             }
             accessibilityState={{ expanded: props.filtersOpen }}
             onPress={props.onFilterPress}

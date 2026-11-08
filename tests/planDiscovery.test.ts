@@ -123,10 +123,14 @@ test("date, category and free filters combine over the actual feed and reset res
   assert.deepEqual(ids({ date: "weekend", category: "Play", freeOnly: true }), [
     "football-saturday",
   ]);
-  assert.deepEqual(
-    ids(all),
-    posts.map((p) => p.id),
-  );
+  assert.deepEqual(ids(all), [
+    "coffee-today",
+    "coffee-saturday",
+    "football-saturday",
+    "paid-sunday",
+    "unknown-cost",
+    "coffee-monday",
+  ]);
 });
 
 test("cached expired/closed plans disappear and Today changes when midnight passes", () => {
@@ -218,4 +222,190 @@ test("unspecified costs are never advertised as free and fractional rupees are p
   assert.equal(planCost({ costCents: 0 }), "Free to join");
   assert.equal(planCost({ costCents: 15000 }), "₹150 / person");
   assert.equal(planCost({ costCents: 1050 }), "₹10.5 / person");
+});
+
+test("audience filters distinguish unrestricted plans from women-only and men-only plans", () => {
+  const now = local(2026, 11, 8, 10);
+  const time = local(2026, 11, 8, 18);
+  const posts = [
+    plan("a-unspecified", time),
+    plan("b-everyone", time, { genderPreference: "any" }),
+    plan("c-women", time, { genderPreference: "female" }),
+    plan("d-men", time, { genderPreference: "male" }),
+  ];
+  const ids = (audience: "all" | "any" | "female" | "male") =>
+    discoveryPlans(posts, { ...all, audience }, now).map((p) => p.id);
+  assert.deepEqual(
+    ids("all"),
+    posts.map((p) => p.id),
+  );
+  assert.deepEqual(ids("any"), ["a-unspecified", "b-everyone"]);
+  assert.deepEqual(ids("female"), ["c-women"]);
+  assert.deepEqual(ids("male"), ["d-men"]);
+});
+
+test("distance boundaries are inclusive and missing/invalid distances never pass a radius filter", () => {
+  const now = local(2026, 11, 8, 10);
+  const distances = new Map([
+    ["zero", 0],
+    ["two", 2],
+    ["five", 5],
+    ["ten", 10],
+    ["twenty-five", 25],
+    ["outside", 25.001],
+    ["negative", -1],
+    ["nan", NaN],
+    ["infinite", Infinity],
+  ]);
+  const keys = [
+    "zero",
+    "two",
+    "five",
+    "ten",
+    "twenty-five",
+    "outside",
+    "negative",
+    "nan",
+    "infinite",
+    "unknown",
+  ];
+  const posts = keys.map((id) =>
+    plan(id, local(2026, 11, 8, 18), { venueId: id }),
+  );
+  const unlocated = plan("no-venue", local(2026, 11, 8, 18));
+  for (const [radius, expected] of [
+    [2, ["two", "zero"]],
+    [5, ["five", "two", "zero"]],
+    [10, ["five", "ten", "two", "zero"]],
+    [25, ["five", "ten", "twenty-five", "two", "zero"]],
+  ] as const) {
+    assert.deepEqual(
+      discoveryPlans(
+        [...posts, unlocated],
+        { ...all, maxDistanceKm: radius, distances },
+        now,
+      ).map((p) => p.id),
+      expected,
+    );
+  }
+});
+
+test("starting soon, nearest and newest have distinct orders without mutating the feed", () => {
+  const now = local(2026, 11, 8, 10);
+  const posts = [
+    plan("later-nearer", local(2026, 11, 9, 18), {
+      venueId: "near",
+      createdAt: local(2026, 11, 6).toISOString(),
+    }),
+    plan("soon-farther", local(2026, 11, 8, 18), {
+      venueId: "far",
+      createdAt: local(2026, 11, 7).toISOString(),
+    }),
+    plan("newest-unknown", local(2026, 11, 10, 18), {
+      createdAt: local(2026, 11, 8).toISOString(),
+    }),
+  ];
+  const original = [...posts];
+  const distances = new Map([
+    ["near", 0.5],
+    ["far", 4],
+  ]);
+  const ids = (sort: "soonest" | "nearest" | "newest") =>
+    discoveryPlans(posts, { ...all, sort, distances }, now).map((p) => p.id);
+  assert.deepEqual(ids("soonest"), [
+    "soon-farther",
+    "later-nearer",
+    "newest-unknown",
+  ]);
+  assert.deepEqual(ids("nearest"), [
+    "later-nearer",
+    "soon-farther",
+    "newest-unknown",
+  ]);
+  assert.deepEqual(ids("newest"), [
+    "newest-unknown",
+    "soon-farther",
+    "later-nearer",
+  ]);
+  assert.deepEqual(posts, original);
+});
+
+test("nearest puts known distances first, with deterministic start-time/ID ties", () => {
+  const now = local(2026, 11, 8, 10);
+  const posts = [
+    plan("z-known", local(2026, 11, 9, 18), { venueId: "same" }),
+    plan("a-known", local(2026, 11, 9, 18), { venueId: "same" }),
+    plan("early-known", local(2026, 11, 8, 18), { venueId: "same" }),
+    plan("early-unknown", local(2026, 11, 8, 11)),
+    plan("invalid-distance", local(2026, 11, 10, 18), { venueId: "bad" }),
+  ];
+  assert.deepEqual(
+    discoveryPlans(
+      posts,
+      {
+        ...all,
+        sort: "nearest",
+        distances: new Map([
+          ["same", 1],
+          ["bad", NaN],
+        ]),
+      },
+      now,
+    ).map((p) => p.id),
+    ["early-known", "a-known", "z-known", "early-unknown", "invalid-distance"],
+  );
+});
+
+test("all filters combine and never reveal own, expired or cancelled plans", () => {
+  const now = local(2026, 11, 8, 10);
+  const base = { venueId: "near", genderPreference: "female" as const };
+  const make = (id: string, patch: Partial<NeedPost> = {}) =>
+    plan(id, local(2026, 11, 8, 18), { ...base, ...patch });
+  const posts = [
+    make("match"),
+    make("mine", { authorId: "viewer" }),
+    make("paid", { costCents: 100 }),
+    make("unknown-cost", { costCents: undefined }),
+    make("men", { genderPreference: "male" }),
+    make("far", { venueId: "far" }),
+    make("no-place", { venueId: undefined }),
+    make("cancelled", { status: "cancelled" }),
+    make("expired", { expiresAt: now.toISOString() }),
+    make("tomorrow", { startsAt: local(2026, 11, 9, 18).toISOString() }),
+    make("sports", { title: "Football", tags: ["football"] }),
+  ];
+  assert.deepEqual(
+    discoveryPlans(
+      posts,
+      {
+        date: "today",
+        category: "Meet",
+        freeOnly: true,
+        audience: "female",
+        maxDistanceKm: 2,
+        sort: "nearest",
+        excludeAuthorId: "viewer",
+        distances: new Map([
+          ["near", 1],
+          ["far", 10],
+        ]),
+      },
+      now,
+    ).map((p) => p.id),
+    ["match"],
+  );
+});
+
+test("invalid creation dates sort after dated posts, with stable ties", () => {
+  const now = local(2026, 11, 8, 10);
+  const time = local(2026, 11, 8, 18);
+  const posts = [
+    plan("z", time, { createdAt: "invalid" }),
+    plan("a", time, { createdAt: "invalid" }),
+    plan("dated", time),
+  ];
+  assert.deepEqual(
+    discoveryPlans(posts, { ...all, sort: "newest" }, now).map((p) => p.id),
+    ["dated", "a", "z"],
+  );
 });

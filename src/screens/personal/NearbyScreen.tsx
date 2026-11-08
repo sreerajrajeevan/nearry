@@ -6,6 +6,7 @@ import {
   ScrollView,
   RefreshControl,
   StyleSheet,
+  Keyboard,
 } from "react-native";
 import {
   useFocusEffect,
@@ -34,16 +35,20 @@ import { listLiveOffers, subscribeToOffers } from "../../services/offers";
 import { getCurrentPosition, LatLng } from "../../services/location";
 import { nearbyVenues, listVenues } from "../../services/venues";
 import { NeedPost, Venue, Offer } from "../../services/mappers";
-import {
-  DiscoveryCategory,
-  postCategory,
-  venueCategory,
-} from "../../utils/discovery";
+import { postCategory, venueCategory } from "../../utils/discovery";
 import { useAuth } from "../../store/AuthContext";
 import { PersonalTabNav, PersonalTabParamList } from "../../navigation/types";
-import { CategoryGrid } from "../../components/CategoryGrid";
+import { PlanFilterSheet } from "../../components/PlanFilterSheet";
 import { Icon } from "../../components/Icon";
-import { discoveryPlans, PlanDateFilter } from "../../utils/planDiscovery";
+import {
+  discoveryPlans,
+  planDistance,
+  DEFAULT_PLAN_OPTIONS,
+  PLAN_SORT_LABELS,
+  PLAN_AUDIENCE_LABELS,
+  PlanDateFilter,
+  PlanOptions,
+} from "../../utils/planDiscovery";
 import { useDiscoveryClock } from "../../hooks/useDiscoveryClock";
 import { MotionPressable } from "../../components/Motion";
 
@@ -64,10 +69,14 @@ export function NearbyScreen() {
   const [editingLocation, setEditingLocation] = useState(false);
   const [locating, setLocating] = useState(false);
   const [locationError, setLocationError] = useState("");
-  const [category, setCategory] = useState<DiscoveryCategory | null>(null);
+  const [options, setOptions] = useState<PlanOptions>({
+    ...DEFAULT_PLAN_OPTIONS,
+  });
+  const { category, freeOnly } = options;
   const [dateFilter, setDateFilter] = useState<PlanDateFilter>("all");
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [freeOnly, setFreeOnly] = useState(false);
+  const hasLocation = demoMode || point !== null;
+  const radiusKm = options.maxDistanceKm ?? 5;
   const request = useRef(0);
   const suggestions = usePlaceSuggestions(area, point, editingLocation);
   const choosePlace = (place: Place) => {
@@ -91,7 +100,7 @@ export function NearbyScreen() {
       if (!silent) setState("loading");
       try {
         let places = point
-          ? await nearbyVenues(point.latitude, point.longitude, 5000)
+          ? await nearbyVenues(point.latitude, point.longitude, radiusKm * 1000)
           : await listVenues();
         if (appliedArea)
           places = places.filter((v) =>
@@ -111,7 +120,7 @@ export function NearbyScreen() {
         if (request.current === version) setState("error");
       }
     },
-    [point, appliedArea],
+    [point, appliedArea, radiusKm],
   );
 
   useFocusEffect(
@@ -130,6 +139,12 @@ export function NearbyScreen() {
     setRefreshing(false);
   };
   const applyArea = () => {
+    if (!demoMode)
+      setOptions((current) => ({
+        ...current,
+        maxDistanceKm: null,
+        sort: current.sort === "nearest" ? "soonest" : current.sort,
+      }));
     setPoint(null);
     setSelectedPlace(null);
     setAppliedArea(area.trim());
@@ -160,40 +175,101 @@ export function NearbyScreen() {
   const visiblePosts = discoveryPlans(
     posts,
     {
-      category,
+      ...options,
       date: dateFilter,
-      freeOnly,
+      distances,
       excludeAuthorId: profile?.id ?? session?.user.id,
     },
     now,
   );
   const visibleOffers = offers.filter(
     (o) =>
-      !category ||
-      postCategory({ title: `${o.title} ${o.description}`, tags: [] }) ===
-        category,
+      (!category ||
+        postCategory({ title: `${o.title} ${o.description}`, tags: [] }) ===
+          category) &&
+      (options.maxDistanceKm == null ||
+        (planDistance(o, distances) ?? Infinity) <= options.maxDistanceKm),
   );
   const visibleVenues = venues.filter(
-    (v) => !category || venueCategory(v) === category,
+    (v) =>
+      (!category || venueCategory(v) === category) &&
+      (options.maxDistanceKm == null ||
+        (planDistance({ venueId: v.id }, distances) ?? Infinity) <=
+          options.maxDistanceKm),
   );
   const areaLabel =
     selectedPlace?.name ||
     appliedArea ||
     (demoMode ? "Demo places" : point ? "Near you" : "Choose area");
-  const scope = demoMode ? "Sample plans" : point ? "Within 5 km" : "";
+  const scope = demoMode
+    ? "Sample plans"
+    : point
+      ? `Within ${radiusKm} km`
+      : "";
   const filterSummary = [
     scope,
-    category ? `${category} plans` : "",
-    freeOnly ? "Free only" : "",
+    options.sort === "soonest" ? PLAN_SORT_LABELS.soonest : "",
   ]
     .filter(Boolean)
     .join(" · ");
-  const hasFilters = !!category || dateFilter !== "all" || freeOnly;
+  const hasFilters =
+    !!category ||
+    dateFilter !== "all" ||
+    freeOnly ||
+    options.audience !== "all" ||
+    options.maxDistanceKm !== null ||
+    options.sort !== "soonest";
   const clearFilters = () => {
-    setCategory(null);
+    setOptions({ ...DEFAULT_PLAN_OPTIONS });
     setDateFilter("all");
-    setFreeOnly(false);
   };
+  const chips = [
+    ...(category
+      ? [
+          {
+            key: "category",
+            label: category,
+            remove: () => setOptions((o) => ({ ...o, category: null })),
+          },
+        ]
+      : []),
+    ...(options.maxDistanceKm !== null
+      ? [
+          {
+            key: "distance",
+            label: `Within ${options.maxDistanceKm} km`,
+            remove: () => setOptions((o) => ({ ...o, maxDistanceKm: null })),
+          },
+        ]
+      : []),
+    ...(freeOnly
+      ? [
+          {
+            key: "cost",
+            label: "Free only",
+            remove: () => setOptions((o) => ({ ...o, freeOnly: false })),
+          },
+        ]
+      : []),
+    ...(options.audience !== "all"
+      ? [
+          {
+            key: "audience",
+            label: PLAN_AUDIENCE_LABELS[options.audience],
+            remove: () => setOptions((o) => ({ ...o, audience: "all" })),
+          },
+        ]
+      : []),
+    ...(options.sort !== "soonest"
+      ? [
+          {
+            key: "sort",
+            label: PLAN_SORT_LABELS[options.sort],
+            remove: () => setOptions((o) => ({ ...o, sort: "soonest" })),
+          },
+        ]
+      : []),
+  ];
 
   return (
     <Screen style={styles.page}>
@@ -260,7 +336,10 @@ export function NearbyScreen() {
         <DiscoverySearch
           compact
           onPress={() => navigation.navigate("Search")}
-          onFilterPress={() => setFiltersOpen((v) => !v)}
+          onFilterPress={() => {
+            Keyboard.dismiss();
+            setFiltersOpen(true);
+          }}
           filtersOpen={filtersOpen}
           filtersActive={hasFilters}
         />
@@ -333,30 +412,25 @@ export function NearbyScreen() {
             {!!filterSummary && (
               <Text style={styles.sectionMeta}>{filterSummary}</Text>
             )}
-            {filtersOpen && (
-              <View style={styles.filterPanel}>
-                <Text style={styles.filterLabel}>What are you up for?</Text>
-                <CategoryGrid selected={category} onSelect={setCategory} />
-                <MotionPressable
-                  accessibilityRole="checkbox"
-                  accessibilityLabel="Free plans only"
-                  aria-checked={freeOnly}
-                  accessibilityState={{ checked: freeOnly }}
-                  onPress={() => setFreeOnly((v) => !v)}
-                  style={styles.freeFilter}
-                >
-                  <Icon
-                    name={freeOnly ? "check-square" : "square"}
-                    size={20}
-                    color={colors.forest}
-                  />
-                  <Text style={styles.resetText}>Free plans only</Text>
-                </MotionPressable>
-                <Button
-                  title="Reset filters"
-                  variant="ghost"
-                  onPress={clearFilters}
-                />
+            {state === "loading" && posts.length > 0 && (
+              <Text accessibilityLiveRegion="polite" style={styles.sectionMeta}>
+                Updating nearby plans…
+              </Text>
+            )}
+            {chips.length > 0 && (
+              <View style={styles.appliedFilters}>
+                {chips.map((chip) => (
+                  <MotionPressable
+                    key={chip.key}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Remove ${chip.label}`}
+                    onPress={chip.remove}
+                    style={styles.appliedChip}
+                  >
+                    <Text style={styles.appliedText}>{chip.label}</Text>
+                    <Icon name="x" size={13} color={colors.forest} />
+                  </MotionPressable>
+                ))}
               </View>
             )}
             {visiblePosts.map((post) => (
@@ -364,9 +438,7 @@ export function NearbyScreen() {
                 key={post.id}
                 post={post}
                 now={now}
-                distanceKm={
-                  post.venueId ? distances.get(post.venueId) : undefined
-                }
+                distanceKm={planDistance(post, distances)}
                 onPress={() =>
                   navigation.navigate("PostDetails", { postId: post.id })
                 }
@@ -382,7 +454,7 @@ export function NearbyScreen() {
                   }
                   hint={
                     hasFilters
-                      ? "Try another day or category."
+                      ? "Try another day, widen the distance, or remove a filter."
                       : "Start a plan and invite someone nearby."
                   }
                 />
@@ -406,9 +478,7 @@ export function NearbyScreen() {
                   <OfferRow
                     key={offer.id}
                     offer={offer}
-                    distanceKm={
-                      offer.venueId ? distances.get(offer.venueId) : undefined
-                    }
+                    distanceKm={planDistance(offer, distances)}
                     onPress={() =>
                       navigation.navigate("OfferDetails", { offerId: offer.id })
                     }
@@ -435,6 +505,22 @@ export function NearbyScreen() {
           </>
         )}
       </ScrollView>
+      {filtersOpen && (
+        <PlanFilterSheet
+          value={options}
+          hasLocation={hasLocation}
+          demo={demoMode}
+          onClose={() => setFiltersOpen(false)}
+          onApply={(next) => {
+            setOptions(next);
+            setFiltersOpen(false);
+          }}
+          onChooseArea={() => {
+            setFiltersOpen(false);
+            setEditingLocation(true);
+          }}
+        />
+      )}
     </Screen>
   );
 }
@@ -483,18 +569,27 @@ const styles = StyleSheet.create({
     color: colors.textDim,
   },
   dateTextSelected: { color: colors.forest, fontWeight: "600" },
-  filterLabel: { ...typography.label, color: colors.text, marginBottom: 8 },
-  filterPanel: {
-    backgroundColor: colors.sageSoft,
-    borderRadius: 14,
-    padding: 12,
-    marginBottom: 18,
+  appliedFilters: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+    marginTop: 6,
   },
-  freeFilter: {
+  appliedChip: {
     minHeight: 44,
+    maxWidth: "100%",
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: colors.sageSoft,
   },
-  resetText: { ...typography.bodySmall, color: colors.accent },
+  appliedText: {
+    ...typography.caption,
+    fontSize: 12,
+    color: colors.forest,
+    flexShrink: 1,
+  },
 });

@@ -12,8 +12,10 @@ The default cover aspect ratio used elsewhere remains unchanged. There are no en
 panels or decorative badges, apart from audience restrictions that remain visible.
 The compact header keeps the existing logo, location picker, messages and unread
 notifications. Search and a separate 44-pixel filter button share one quiet field.
-Categories and the free-only toggle live inside the filter panel; an applied-filter
-indicator and summary keep their state visible when the panel closes. Date tabs
+The sliders button opens a themed Filter & sort sheet with draft selections.
+Show plans commits changes; closing/back discards them. Reset clears panel
+options but preserves the date tab. Applied choices become individual removable
+labels above the feed, and the footer remains reachable while the sheet scrolls. Date tabs
 remain directly on the feed. Changing filters does not force a scroll jump.
 Three sample rows fit at 390×844; narrower phones, longer titles, audience
 restrictions and larger system text can need more room. Text is allowed
@@ -26,16 +28,36 @@ posts remain available under Activity → My posts with their management actions
 The existing location/area scope still applies. Identity matching uses the
 author ID, so a different host with the same display name is not hidden.
 
-Nearby has working All plans / Today / This weekend filters and a Free plans only
-toggle. Calendar filters use the device's local day boundaries; Saturday and
-Sunday include the current weekend. A focus/resume-aware clock updates at minute
-boundaries, including midnight, so cached plans that have started or expired are
-removed without manual refresh. The feed combines date/category/free conditions
-against one clock. Date labels also handle New Year and daylight-saving changes.
-Unknown costs do not count as free. These
-filters apply to plans; offers and venues remain in their own sections and the
-duplicate featured-offer presentation has been removed. Location search,
-attribution, refresh, categories, messages and notifications remain available.
+Nearby has working All plans / Today / This weekend tabs and these panel choices:
+
+- Category: All categories, Play, Meet, Explore, Unwind.
+- Distance: Default area, within 2 / 5 / 10 / 25 km. With a coordinate-based area,
+  the venue RPC uses the selected radius, rather than always loading only 5 km.
+  Default area preserves the existing 5 km scope around a point or the selected
+  text area. Demo distances are explicitly sample data.
+- Cost: Any price or Free only. An unknown cost is not free.
+- Audience: Any audience (no restriction), Everyone (unrestricted plans only),
+  Women only, Men only. This matches the host's saved preference and does not
+  bypass profile or server eligibility rules.
+- Sort: Starting soon by default, Nearest first, or Newest posted. Nearest uses
+  saved venue distances; unknown/invalid distances sort last and are excluded
+  by explicit distance filters. Ties use start time and ID for stable results.
+
+Distance and Nearest first require a coordinate-based selected area or current
+location. Without one, they are disabled with a Choose an area action; category,
+cost, audience and the other sorts still work. Applying a text-only area clears
+coordinate-dependent options. Plans without a measurable venue distance cannot
+appear in radius-filtered results. No new database migration is needed.
+
+Calendar filters retain the device's local day boundaries; Saturday and Sunday
+include the current weekend. A focus/resume-aware clock updates at minute
+boundaries, including midnight, so started/expired cached plans disappear.
+Date/category/cost/audience/distance filters combine against one clock before
+sorting, and never reintroduce the viewer's own plans. Date labels handle New
+Year and daylight-saving changes. Sorting does not mutate the fetched list.
+Plan-only cost/audience/date filters do not filter offers/venues; category and
+selected distance retain the discovery area's scope for those sections.
+Location search, attribution, refresh, messages and notifications remain available.
 
 Rows display uploaded cover photos and public host avatars when available.
 Missing/failed covers use the existing activity illustrations; failed avatars
@@ -53,11 +75,14 @@ the viewer. Host approval, edit, cancel/delete, participant withdrawal/leave,
 profile readiness and gender restrictions retain their existing service rules.
 Participant names are not exposed beyond existing backend access rules.
 
-Validation: TypeScript passed; 178 local tests (173 passed, 5 PostgreSQL-only
+Validation: TypeScript passed; 184 local tests (179 passed, 5 PostgreSQL-only
 skips); Android/web production exports passed. Date regression tests also passed
 separately under Asia/Kolkata and America/New_York, covering every weekday,
 weekend midnight bounds, year/DST changes, combined filters/reset, cached expiry,
-invalid timestamps, cancelled/closed plans, full plans and unknown costs.
+invalid timestamps, cancelled/closed plans, full plans and unknown costs. New
+regressions cover audience matching, inclusive 2/5/10/25 km bounds, missing/
+invalid distance values, all sort modes, stable ties, combined filters and own-post
+exclusion without mutating the fetched list.
 Actual app checks in an isolated demo at 390×844 and 320×600 covered photo/text
 placement, audience badges, no horizontal overflow and fully visible tab labels.
 A local attached-image fixture rendered at 142×154 pixels and the row opened the
@@ -66,6 +91,12 @@ layout change. Earlier passes also checked category/free filters and reset, empt
 results and search navigation. A host-account demo confirmed its own post was
 absent from Nearby (also after Today/reset), other hosts remained visible, and
 the same owned post stayed available in Activity → My posts.
+Filter-sheet checks covered draft discard, apply, reset/date preservation,
+removable labels, combined filters, Everyone vs restricted audiences, newest/
+nearest ordering, expanding 5 to 25 km, the scrollable 320×600 sheet with its
+fixed actions, and a local unlocated fixture that enables nearest only after
+choosing coordinates and clears it after applying a text-only area. No device
+GPS permission was requested and no live records were written.
 The earlier checks in this PR covered request/withdraw, gender/profile gates,
 host approval/edit and photo/safety reporting. No production records were modified.
 Native share/maps, large system fonts, TalkBack/VoiceOver and gesture navigation
