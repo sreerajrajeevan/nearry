@@ -10,12 +10,15 @@ export function discoveryPlans(
     date: PlanDateFilter;
     category: DiscoveryCategory | null;
     freeOnly: boolean;
+    /** Home is for discovering other hosts; My Posts uses its own query. */
+    excludeAuthorId?: string;
   },
   now = new Date(),
 ) {
   const timestamp = now.getTime();
   return posts.filter(
     (post) =>
+      (!filters.excludeAuthorId || post.authorId !== filters.excludeAuthorId) &&
       post.status === "open" &&
       new Date(post.startsAt).getTime() > timestamp &&
       (!post.expiresAt || new Date(post.expiresAt).getTime() > timestamp) &&

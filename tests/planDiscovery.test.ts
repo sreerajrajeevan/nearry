@@ -166,6 +166,38 @@ test("full future plans retain their honest Full status rather than being silent
   ]);
 });
 
+test("home excludes the viewer's posts across date/free filters without matching by display name", () => {
+  const now = local(2026, 11, 8, 10);
+  const mine = plan("mine", local(2026, 11, 8, 18), {
+    authorId: "viewer",
+    authorName: "Sree",
+  });
+  const other = plan("other", local(2026, 11, 8, 18), {
+    authorId: "another-host",
+    authorName: "Sree",
+  });
+  const posts = [mine, other];
+  for (const date of ["all", "today", "weekend"] as const) {
+    for (const freeOnly of [false, true]) {
+      assert.deepEqual(
+        discoveryPlans(
+          posts,
+          { ...all, date, freeOnly, excludeAuthorId: "viewer" },
+          now,
+        ),
+        [other],
+      );
+    }
+  }
+  assert.deepEqual(
+    discoveryPlans([mine], { ...all, excludeAuthorId: "viewer" }, now),
+    [],
+  );
+  // Filtering the discovery feed neither deletes nor changes the host's record.
+  assert.deepEqual(posts, [mine, other]);
+  assert.deepEqual(discoveryPlans(posts, all, now), [mine, other]);
+});
+
 test("date labels handle New Year and DST calendar changes", () => {
   assert.equal(
     formatWhen(local(2027, 1, 1, 9).toISOString(), local(2026, 12, 31, 23)),

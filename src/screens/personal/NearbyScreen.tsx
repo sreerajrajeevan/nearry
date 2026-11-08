@@ -50,7 +50,7 @@ import { MotionPressable } from "../../components/Motion";
 export function NearbyScreen() {
   const navigation = useNavigation<PersonalTabNav>();
   const route = useRoute<RouteProp<PersonalTabParamList, "Nearby">>();
-  const { demoMode } = useAuth();
+  const { demoMode, profile, session } = useAuth();
   const now = useDiscoveryClock();
   const [posts, setPosts] = useState<NeedPost[]>([]);
   const [venues, setVenues] = useState<Venue[]>([]);
@@ -159,7 +159,12 @@ export function NearbyScreen() {
   const distances = new Map(venues.map((v) => [v.id, v.distanceKm]));
   const visiblePosts = discoveryPlans(
     posts,
-    { category, date: dateFilter, freeOnly },
+    {
+      category,
+      date: dateFilter,
+      freeOnly,
+      excludeAuthorId: profile?.id ?? session?.user.id,
+    },
     now,
   );
   const visibleOffers = offers.filter(

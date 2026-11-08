@@ -20,6 +20,12 @@ restrictions and larger system text can need more room. Text is allowed
 to grow rather than being forced into a fixed card height. Details retain their
 larger gallery, and the safe-area-aware tab bar has no selected background pill.
 
+Nearby excludes posts authored by the signed-in account, including after filter
+changes/reset and cached feed updates. This only affects home discovery: hosted
+posts remain available under Activity → My posts with their management actions.
+The existing location/area scope still applies. Identity matching uses the
+author ID, so a different host with the same display name is not hidden.
+
 Nearby has working All plans / Today / This weekend filters and a Free plans only
 toggle. Calendar filters use the device's local day boundaries; Saturday and
 Sunday include the current weekend. A focus/resume-aware clock updates at minute
@@ -47,7 +53,7 @@ the viewer. Host approval, edit, cancel/delete, participant withdrawal/leave,
 profile readiness and gender restrictions retain their existing service rules.
 Participant names are not exposed beyond existing backend access rules.
 
-Validation: TypeScript passed; 177 local tests (172 passed, 5 PostgreSQL-only
+Validation: TypeScript passed; 178 local tests (173 passed, 5 PostgreSQL-only
 skips); Android/web production exports passed. Date regression tests also passed
 separately under Asia/Kolkata and America/New_York, covering every weekday,
 weekend midnight bounds, year/DST changes, combined filters/reset, cached expiry,
@@ -57,7 +63,9 @@ placement, audience badges, no horizontal overflow and fully visible tab labels.
 A local attached-image fixture rendered at 142×154 pixels and the row opened the
 full gallery and participation footer. Today/weekend were rechecked after the
 layout change. Earlier passes also checked category/free filters and reset, empty
-results and search navigation.
+results and search navigation. A host-account demo confirmed its own post was
+absent from Nearby (also after Today/reset), other hosts remained visible, and
+the same owned post stayed available in Activity → My posts.
 The earlier checks in this PR covered request/withdraw, gender/profile gates,
 host approval/edit and photo/safety reporting. No production records were modified.
 Native share/maps, large system fonts, TalkBack/VoiceOver and gesture navigation
