@@ -40,7 +40,7 @@ Migrations `00011`–`00018` introduce required RPCs, so deploy migrations and t
 
 ## Real place search
 
-Search and Nearby's location picker support Geoapify suggestions through an authenticated Supabase function. Choose a location to see Nearry activity within 5 km, or use it as the Nearby feed's center. Required provider attribution appears beside results. See [place search setup and provider migration](docs/place-search.md) for the server-only API key, migration `00019`, usage limits, deployment and the future Google adapter contract.
+Search and Nearby's location picker support Google Places Autocomplete through a server-only Supabase function, with Geoapify available during rollout. Only a selected Google result fetches Essentials coordinates; provider attribution stays visible. See [Google Places activation](docs/google-places.md) for billing, key restrictions, deployment and phone testing. Existing phone builds retain their Geoapify endpoint until updated.
 
 ## Protected flows
 

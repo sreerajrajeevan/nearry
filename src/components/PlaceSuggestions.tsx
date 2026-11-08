@@ -1,18 +1,24 @@
 import { LoadingState } from "./LoadingState";
-import React from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
   Linking,
+  Keyboard,
 } from "react-native";
-import { Place, PlaceAttribution } from "../services/places";
+import {
+  Place,
+  PlaceSuggestion,
+  PlaceAttribution,
+  resolvePlace,
+} from "../services/places";
 import { Icon } from "./Icon";
 import { Button } from "./Button";
 import { colors, typography, spacing } from "../theme";
 
-export function PlaceAttributions({ places }: { places: Place[] }) {
+export function PlaceAttributions({ places }: { places: PlaceSuggestion[] }) {
   const unique = new Map<string, PlaceAttribution>();
   for (const place of places)
     for (const item of place.attributions)
@@ -28,7 +34,16 @@ export function PlaceAttributions({ places }: { places: Place[] }) {
             accessibilityRole="link"
             onPress={() => void Linking.openURL(item.url!).catch(() => {})}
           >
-            <Text style={styles.link}>{item.label}</Text>
+            <Text
+              numberOfLines={item.label === "Google Maps" ? 1 : undefined}
+              style={
+                item.label === "Google Maps"
+                  ? styles.googleAttribution
+                  : styles.link
+              }
+            >
+              {item.label}
+            </Text>
           </TouchableOpacity>
         ) : (
           <Text key={item.label} style={styles.caption}>
@@ -45,16 +60,72 @@ export function PlaceSuggestions({
   error,
   onSelect,
   onRetry,
+  sessionToken,
+  onSessionEnd,
 }: {
-  places: Place[];
+  places: PlaceSuggestion[];
   loading: boolean;
   error: string;
   onSelect: (place: Place) => void;
   onRetry: () => void;
+  sessionToken?: string;
+  onSessionEnd?: () => void;
 }) {
+  const [resolving, setResolving] = useState(false);
+  const [selectionError, setSelectionError] = useState("");
+  const selection = useRef<{ version: number; controller?: AbortController }>({
+    version: 0,
+  });
+  useEffect(() => {
+    selection.current.version++;
+    selection.current.controller?.abort();
+    setResolving(false);
+    setSelectionError("");
+    return () => {
+      selection.current.version++;
+      selection.current.controller?.abort();
+    };
+  }, [places]);
+  const choose = async (place: PlaceSuggestion) => {
+    if (
+      selection.current.controller &&
+      !selection.current.controller.signal.aborted
+    )
+      return;
+    const controller = new AbortController();
+    selection.current.controller = controller;
+    const ticket = ++selection.current.version;
+    setResolving(true);
+    setSelectionError("");
+    try {
+      const resolved = await resolvePlace(place, {
+        sessionToken,
+        signal: controller.signal,
+      });
+      if (controller.signal.aborted || ticket !== selection.current.version)
+        return;
+      onSessionEnd?.();
+      Keyboard.dismiss();
+      onSelect(resolved);
+    } catch (e) {
+      if (!controller.signal.aborted && ticket === selection.current.version)
+        setSelectionError(
+          e instanceof Error
+            ? e.message
+            : "Could not open this place. Try again.",
+        );
+    } finally {
+      if (ticket === selection.current.version) {
+        controller.abort();
+        setResolving(false);
+      }
+    }
+  };
   return (
     <View>
-      {loading ? (
+      {resolving ? (
+        <LoadingState label="Opening place…" layout="inline" />
+      ) : loading ? (
         <LoadingState label="Finding places…" layout="inline" />
       ) : error ? (
         <View>
@@ -77,7 +148,7 @@ export function PlaceSuggestions({
             key={`${place.provider}:${place.id}`}
             accessibilityRole="button"
             accessibilityLabel={`Explore near ${place.name}, ${place.address}`}
-            onPress={() => onSelect(place)}
+            onPress={() => void choose(place)}
             style={styles.row}
           >
             <Icon name="map-pin" size={18} color={colors.accent} />
@@ -88,6 +159,11 @@ export function PlaceSuggestions({
             <Icon name="arrow-up-right" size={16} color={colors.accent} />
           </TouchableOpacity>
         ))
+      )}
+      {!!selectionError && (
+        <Text accessibilityRole="alert" style={styles.caption}>
+          {selectionError}
+        </Text>
       )}
       <PlaceAttributions places={places} />
     </View>
@@ -110,6 +186,14 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: spacing.sm,
     marginTop: spacing.sm,
+  },
+  googleAttribution: {
+    fontSize: 14,
+    fontWeight: "400",
+    fontStyle: "normal",
+    letterSpacing: 0,
+    color: "#1F1F1F",
+    paddingVertical: 4,
   },
   link: { ...typography.caption, color: colors.accent, paddingVertical: 4 },
 });

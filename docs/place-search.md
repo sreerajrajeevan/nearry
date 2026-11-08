@@ -1,5 +1,7 @@
 # Place search
 
+**Google integration:** New builds use a two-step suggestion/selection flow. See [Google Places setup](google-places.md). The Geoapify implementation and old `place-search` endpoint below remain for older installed builds.
+
 Nearry uses Geoapify autocomplete for **Search → Places** and the **Nearby area picker**. Selecting a suggestion opens a location preview with Nearry plans, offers and venues within 5 km. “Use this area in Nearby” sets that location as the feed's center without requesting GPS permission. A provider place is not a registered business and never becomes a venue UUID or claimed business automatically.
 
 Current post creation still attaches a post to a Nearry venue. This change adds external location discovery; importing external venues or posting directly at an arbitrary external point is separate work. Nearby content currently comes from geolocated Nearry venues, so a searchable location can have no Nearry activity yet.

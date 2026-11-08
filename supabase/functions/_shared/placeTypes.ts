@@ -42,3 +42,44 @@ export function validPlace(value: unknown): value is Place {
     )
   );
 }
+
+/** Predictions have no coordinates until the person selects one. */
+export type PlaceSuggestion = Pick<
+  Place,
+  "provider" | "id" | "name" | "address" | "attributions"
+> &
+  Partial<PlaceBias>;
+export function validSuggestion(value: unknown): value is PlaceSuggestion {
+  const p = value as PlaceSuggestion | null;
+  if (validPlace(value)) return true;
+  return (
+    !!p &&
+    p.provider === "google" &&
+    typeof p.id === "string" &&
+    /^[A-Za-z0-9_-]{1,512}$/.test(p.id) &&
+    typeof p.name === "string" &&
+    p.name.trim().length > 0 &&
+    p.name.length <= 200 &&
+    typeof p.address === "string" &&
+    p.address.length <= 500 &&
+    p.latitude === undefined &&
+    p.longitude === undefined &&
+    Array.isArray(p.attributions) &&
+    p.attributions.every(
+      (a) =>
+        typeof a.label === "string" &&
+        (a.url === undefined || /^https:\/\//.test(a.url)),
+    )
+  );
+}
+export interface PlaceSuggestionProvider {
+  readonly id: string;
+  suggest(
+    query: string,
+    bias?: PlaceBias,
+    sessionToken?: string,
+  ): Promise<PlaceSuggestion[]>;
+  resolve(suggestion: PlaceSuggestion, sessionToken?: string): Promise<Place>;
+}
+export const validPlaceSession = (value: unknown): value is string =>
+  typeof value === "string" && /^[A-Za-z0-9_-]{16,36}$/.test(value);

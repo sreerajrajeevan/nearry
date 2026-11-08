@@ -1,14 +1,21 @@
-import { useEffect, useState } from "react";
-import { searchPlaces, Place, PlaceBias } from "../services/places";
+import { useEffect, useState, useRef } from "react";
+import { useIsFocused } from "@react-navigation/native";
+import * as Crypto from "expo-crypto";
+import { searchPlaces, PlaceSuggestion, PlaceBias } from "../services/places";
 
 export function usePlaceSuggestions(
   query: string,
   bias?: PlaceBias | null,
   enabled = true,
 ) {
-  const [places, setPlaces] = useState<Place[]>([]);
+  const focused = useIsFocused();
+  const [places, setPlaces] = useState<PlaceSuggestion[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const session = useRef<{ token: string; created: number } | null>(null);
+  const endSession = () => {
+    session.current = null;
+  };
   const [retry, setRetry] = useState(0);
   useEffect(() => {
     let active = true;
@@ -17,16 +24,22 @@ export function usePlaceSuggestions(
     setPlaces([]);
     setError("");
     setLoading(false);
-    if (!enabled || text.length < 3)
+    if (!enabled || !focused || text.length < 3) {
+      endSession();
       return () => {
         active = false;
         controller.abort();
       };
+    }
+    if (!session.current || Date.now() - session.current.created > 150000)
+      session.current = { token: Crypto.randomUUID(), created: Date.now() };
+    const sessionToken = session.current.token;
     setLoading(true);
     const timer = setTimeout(async () => {
       try {
         const results = await searchPlaces(text, {
           bias: bias ?? undefined,
+          sessionToken,
           signal: controller.signal,
         });
         if (active) setPlaces(results);
@@ -42,6 +55,13 @@ export function usePlaceSuggestions(
       clearTimeout(timer);
       controller.abort();
     };
-  }, [query, bias?.latitude, bias?.longitude, enabled, retry]);
-  return { places, loading, error, retry: () => setRetry((n) => n + 1) };
+  }, [query, bias?.latitude, bias?.longitude, enabled, focused, retry]);
+  return {
+    places,
+    loading,
+    error,
+    sessionToken: session.current?.token,
+    onSessionEnd: endSession,
+    retry: () => setRetry((n) => n + 1),
+  };
 }
