@@ -4,7 +4,6 @@ import { colors, typography } from "../theme";
 import { DiscoveryCategory } from "../utils/discovery";
 import { CategoryArt } from "./CategoryArt";
 import { MotionPressable } from "./Motion";
-import { Icon } from "./Icon";
 
 const categories: { key: DiscoveryCategory; hint: string }[] = [
   { key: "Play", hint: "Find your next game" },
@@ -36,48 +35,32 @@ export function CategoryGrid({
           onPress={() => onSelect(selected === key ? null : key)}
           style={[styles.tile, selected === key && styles.selected]}
         >
-          <CategoryArt category={key} size={52} />
+          <CategoryArt category={key} size={32} />
           <Text style={styles.label}>{key}</Text>
-          {selected === key && (
-            <View style={styles.check}>
-              <Icon name="check" size={10} color={colors.onGold} />
-            </View>
-          )}
         </MotionPressable>
       ))}
     </View>
   );
 }
 const styles = StyleSheet.create({
-  grid: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 24 },
+  grid: { flexDirection: "row", flexWrap: "wrap", gap: 6, marginBottom: 14 },
   tile: {
     flexBasis: "22%",
     flexGrow: 1,
-    minHeight: 96,
+    minHeight: 64,
     paddingHorizontal: 2,
-    paddingVertical: 8,
+    paddingVertical: 5,
     alignItems: "center",
     justifyContent: "center",
-    gap: 7,
+    gap: 4,
     backgroundColor: "transparent",
     borderWidth: 1,
     borderColor: "transparent",
     borderRadius: 14,
   },
   selected: {
-    borderColor: colors.borderStrong,
+    borderColor: colors.border,
     backgroundColor: colors.sageSoft,
   },
   label: { ...typography.label, fontSize: 12, color: colors.text },
-  check: {
-    position: "absolute",
-    right: 3,
-    top: 4,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: colors.gold,
-    alignItems: "center",
-    justifyContent: "center",
-  },
 });

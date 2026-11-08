@@ -1,5 +1,25 @@
 import { getSupabase, isDemoMode } from "./supabase";
 
+/** Optional public avatar URLs only, batched to avoid one profile request per feed card. */
+export async function publicAvatars(
+  userIds: string[],
+): Promise<Map<string, string>> {
+  const result = new Map<string, string>();
+  const supabase = getSupabase();
+  if (isDemoMode() || !supabase) return result;
+  const ids = [...new Set(userIds)];
+  for (let start = 0; start < ids.length; start += 100) {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("id, avatar_url")
+      .in("id", ids.slice(start, start + 100));
+    if (error) throw new Error(error.message);
+    for (const row of data ?? [])
+      if (row.avatar_url) result.set(row.id, row.avatar_url);
+  }
+  return result;
+}
+
 export type ProfilePatch = {
   displayName?: string;
   avatarUrl?: string;

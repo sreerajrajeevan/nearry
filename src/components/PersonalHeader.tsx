@@ -8,7 +8,7 @@ import { BrandHeader } from "./BrandHeader";
 
 type Props = Pick<
   React.ComponentProps<typeof BrandHeader>,
-  "context" | "location" | "onContextPress"
+  "context" | "location" | "onContextPress" | "compact"
 >;
 
 export function PersonalHeader(props: Props) {

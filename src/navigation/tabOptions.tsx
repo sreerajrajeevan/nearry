@@ -1,5 +1,5 @@
 import React from "react";
-import { StyleSheet, useWindowDimensions } from "react-native";
+import { StyleSheet, View, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BottomTabNavigationOptions } from "@react-navigation/bottom-tabs";
 import { Icon, IconName } from "../components/Icon";
@@ -26,6 +26,7 @@ export function useTabBarLayout(): BottomTabNavigationOptions {
 export function tabOptions(
   icon: IconName,
   title: string,
+  prominent = false,
 ): BottomTabNavigationOptions {
   return {
     title,
@@ -33,7 +34,7 @@ export function tabOptions(
     tabBarHideOnKeyboard: true,
     tabBarActiveTintColor: colors.forest,
     tabBarInactiveTintColor: colors.textDim,
-    tabBarActiveBackgroundColor: colors.sageSoft,
+    tabBarActiveBackgroundColor: "transparent",
     tabBarLabelPosition: "below-icon",
     tabBarLabel: title === "Create Offer" ? "Create" : title,
     tabBarItemStyle: styles.item,
@@ -46,7 +47,14 @@ export function tabOptions(
       />
     ),
     tabBarLabelStyle: styles.label,
-    tabBarIcon: ({ color }) => <Icon name={icon} size={21} color={color} />,
+    tabBarIcon: ({ color }) =>
+      prominent ? (
+        <View style={styles.create}>
+          <Icon name={icon} size={24} color={colors.onAccent} />
+        </View>
+      ) : (
+        <Icon name={icon} size={21} color={color} />
+      ),
     tabBarBadgeStyle: {
       backgroundColor: colors.gold,
       color: colors.onGold,
@@ -54,6 +62,14 @@ export function tabOptions(
   };
 }
 const styles = StyleSheet.create({
+  create: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: colors.forest,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   bar: {
     backgroundColor: colors.surface,
     borderTopColor: colors.border,

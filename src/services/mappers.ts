@@ -141,6 +141,7 @@ export type NeedPost = {
   id: string;
   authorId: string;
   authorName: string;
+  authorAvatarUrl?: string;
   coverPhotoUrl?: string;
   title: string;
   description: string;

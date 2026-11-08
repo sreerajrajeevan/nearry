@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { View, Text, Image, StyleSheet } from "react-native";
 import { colors, typography, radius } from "../theme";
 
@@ -12,6 +12,8 @@ type Props = {
 
 /** Initials avatar, or a photo when uri is provided. */
 export function Avatar({ name, size = 44, tone = "neutral", uri }: Props) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [uri]);
   const initials = name
     .split(" ")
     .map((p) => p[0])
@@ -19,8 +21,14 @@ export function Avatar({ name, size = 44, tone = "neutral", uri }: Props) {
     .join("")
     .toUpperCase();
   const round = { width: size, height: size, borderRadius: size / 2 };
-  if (uri) {
-    return <Image source={{ uri }} style={[styles.photo, round]} />;
+  if (uri && !failed) {
+    return (
+      <Image
+        source={{ uri }}
+        style={[styles.photo, round]}
+        onError={() => setFailed(true)}
+      />
+    );
   }
   return (
     <View
