@@ -3486,7 +3486,7 @@ test(
       ),
     );
     await asUser(stranger, async (tx) =>
-      tx.query("select block_user($1)", [owner]),
+      tx.query("select set_user_block($1,true)", [owner]),
     );
     assert.ok(
       !(
