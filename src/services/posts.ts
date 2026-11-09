@@ -1,3 +1,9 @@
+import {
+  PostLocation,
+  postLocationPatch,
+  validPostLocation,
+} from "../utils/postLocation";
+import { distanceKm } from "./locationDistance";
 import { demoUserBlocked } from "./safety";
 import { getSupabase, isSupabaseConfigured, isDemoMode } from "./supabase";
 import { multiplexSubscribe } from "./realtime";
@@ -44,6 +50,7 @@ const useMock = () => {
 };
 
 export type PostFilter = {
+  nearby?: { latitude: number; longitude: number; radiusM: number };
   search?: string;
   tag?: string;
   /** Defaults to open posts only. */
@@ -90,9 +97,36 @@ export async function listPosts(filter: PostFilter = {}): Promise<NeedPost[]> {
           (p.venueName ?? "").toLowerCase().includes(q),
       );
     }
+    if (filter.nearby) {
+      const origin = filter.nearby;
+      posts = posts.flatMap((p) => {
+        if (!p.location) return [];
+        const km = distanceKm(origin, p.location);
+        return km <= origin.radiusM / 1000 ? [{ ...p, distanceKm: km }] : [];
+      });
+    }
     return withPhotoCovers(posts);
   }
   const supabase = getSupabase()!;
+  if (filter.nearby) {
+    const { latitude, longitude, radiusM } = filter.nearby;
+    if (
+      !validPostLocation({ latitude, longitude, source: "manual" }) ||
+      !Number.isFinite(radiusM) ||
+      radiusM < 100 ||
+      radiusM > 50000
+    )
+      throw new Error("Choose a valid area and distance.");
+    const { data, error } = await supabase.rpc("nearby_post_cards", {
+      p_lat: latitude,
+      p_lng: longitude,
+      p_radius_m: radiusM,
+    });
+    if (error) throw new Error(error.message);
+    return withPhotoCovers(
+      ((data ?? []) as Record<string, unknown>[]).map(toCard),
+    );
+  }
   let req = supabase
     .from("post_cards")
     .select("*")
@@ -154,6 +188,8 @@ export async function createPost(
     costCents: input.costCents,
   });
   if (err) throw new Error(err);
+  if (input.location && !validPostLocation(input.location))
+    throw new Error("Choose a valid meeting location.");
 
   if (useMock()) {
     const created: NeedPost = {
@@ -164,6 +200,7 @@ export async function createPost(
       description: input.description.trim(),
       venueId: input.venueId,
       venueName: input.venueName,
+      location: input.location,
       startsAt: input.startsAt,
       expiresAt: input.expiresAt,
       vacancies: input.vacancies,
@@ -189,6 +226,7 @@ export async function createPost(
 }
 
 export type PostPatch = {
+  location?: PostLocation | null;
   venueId?: string | null;
   venueName?: string | null;
   expiresAt?: string | null;
@@ -214,6 +252,8 @@ export async function updatePost(
   patch: PostPatch,
 ): Promise<NeedPost> {
   const dbPatch: Record<string, unknown> = {};
+  if (patch.location !== undefined)
+    Object.assign(dbPatch, postLocationPatch(patch.location));
   if (patch.title !== undefined) dbPatch.title = patch.title.trim();
   if (patch.description !== undefined)
     dbPatch.description = patch.description.trim();
@@ -240,6 +280,10 @@ export async function updatePost(
       description: (patch.description ?? p.description).trim(),
       venueId:
         patch.venueId === undefined ? p.venueId : (patch.venueId ?? undefined),
+      location:
+        patch.location === undefined
+          ? p.location
+          : (patch.location ?? undefined),
       venueName:
         patch.venueName === undefined
           ? p.venueName

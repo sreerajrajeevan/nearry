@@ -52,6 +52,7 @@ import { NeedPost } from "../../services/mappers";
 import { JoinRequest } from "../../services/mappers";
 import { formatWhen, formatTime } from "../../utils/format";
 
+import { GoogleMapsCredit } from "../../components/PlaceSuggestions";
 import { Icon } from "../../components/Icon";
 import { MotionPressable } from "../../components/Motion";
 import { PlanCover } from "../../components/PlanCover";
@@ -315,7 +316,7 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
                 accessibilityLabel={`Directions to ${locationName}`}
                 onPress={() =>
                   void Linking.openURL(
-                    `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([locationName, data?.venue?.area].filter(Boolean).join(" "))}`,
+                    `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(post.location ? `${post.location.latitude},${post.location.longitude}` : [locationName, data?.venue?.area].filter(Boolean).join(" "))}`,
                   ).catch(() =>
                     Alert.alert("Couldn’t open maps", "Please try again."),
                   )
@@ -326,6 +327,7 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
               </MotionPressable>
             )}
           </View>
+          {post.location?.source === "google" && <GoogleMapsCredit />}
           <View style={[styles.factRow, styles.lastFact]}>
             <Icon name="users" size={22} color={colors.text} />
             <View style={styles.flex}>

@@ -54,6 +54,23 @@ export function PlaceAttributions({ places }: { places: PlaceSuggestion[] }) {
     </View>
   );
 }
+export function GoogleMapsCredit() {
+  return (
+    <PlaceAttributions
+      places={[
+        {
+          provider: "google",
+          id: "meeting-locations",
+          name: "",
+          address: "",
+          attributions: [
+            { label: "Google Maps", url: "https://maps.google.com/" },
+          ],
+        },
+      ]}
+    />
+  );
+}
 export function PlaceSuggestions({
   places,
   loading,
@@ -62,7 +79,9 @@ export function PlaceSuggestions({
   onRetry,
   sessionToken,
   onSessionEnd,
+  selectionLabel = "Explore near",
 }: {
+  selectionLabel?: string;
   places: PlaceSuggestion[];
   loading: boolean;
   error: string;
@@ -147,7 +166,7 @@ export function PlaceSuggestions({
           <TouchableOpacity
             key={`${place.provider}:${place.id}`}
             accessibilityRole="button"
-            accessibilityLabel={`Explore near ${place.name}, ${place.address}`}
+            accessibilityLabel={`${selectionLabel} ${place.name}, ${place.address}`}
             onPress={() => void choose(place)}
             style={styles.row}
           >

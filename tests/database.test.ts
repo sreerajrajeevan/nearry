@@ -92,6 +92,11 @@ before(async () => {
         /create or replace function nearby_venues\([\s\S]*?\$\$ language sql stable;/g,
         "",
       );
+      if (file === "00031_post_meeting_locations.sql")
+        sql = sql.replace(
+          /create function public.nearby_post_cards[\s\S]*?grant execute on function public.nearby_post_cards[^;]+;/,
+          "",
+        );
       if (file === "00014_location.sql")
         sql = sql.replace(
           /create or replace function nearby_venues_with_distance[\s\S]*?grant execute on function nearby_venues_with_distance[^;]+;/,
@@ -3324,3 +3329,171 @@ test("selfies: existing app builds can update legacy avatars, which are excluded
     /Upload a clear profile photo/,
   );
 });
+
+test("meeting location writes preserve user labels, enforce host ownership and delete expired Google coordinates", async () => {
+  const owner = "00000000-0000-0000-0000-000000003110";
+  const stranger = "00000000-0000-0000-0000-000000003111";
+  for (const id of [owner, stranger]) {
+    await db.query(
+      "insert into auth.users(id,email,raw_user_meta_data) values($1,$2,$3)",
+      [
+        id,
+        `${id}@test.example`,
+        JSON.stringify({
+          account_type: "personal",
+          display_name: "Location tester",
+        }),
+      ],
+    );
+    await db.query(
+      "update profiles set age=25,gender='male',terms_version='2026-10-19',onboarding_completed=true where id=$1",
+      [id],
+    );
+  }
+  const saved = await asUser(
+    owner,
+    async (tx) =>
+      (
+        await tx.query(
+          `insert into posts(author_id,title,description,starts_at,vacancies,venue_name,location_lat,location_lng,location_source,location_place_id,location_cached_at)
+    values($1,'Meet at the courtyard','Friendly coffee in the courtyard',now()+interval '4 hours',2,'My courtyard',10,76,'google','google-place',now()+interval '1 year') returning *`,
+          [owner],
+        )
+      ).rows[0],
+  );
+  assert.ok(
+    Math.abs(Date.parse(saved.location_cached_at) - Date.now()) < 10000,
+  );
+  const card = await asUser(
+    owner,
+    async (tx) =>
+      (await tx.query("select * from post_cards where id=$1", [saved.id]))
+        .rows[0],
+  );
+  assert.equal(card.location_lat, 10);
+  assert.equal(card.venue_id, null);
+  assert.equal(card.venue_name, "My courtyard");
+  await asUser(stranger, async (tx) =>
+    tx.query("update posts set location_lat=11 where id=$1", [saved.id]),
+  );
+  assert.equal(
+    (await db.query("select location_lat from posts where id=$1", [saved.id]))
+      .rows[0].location_lat,
+    10,
+  );
+  await assert.rejects(() =>
+    asUser(owner, async (tx) =>
+      tx.query("update posts set location_lng=181 where id=$1", [saved.id]),
+    ),
+  );
+  await assert.rejects(() =>
+    asUser(owner, async (tx) =>
+      tx.query("update posts set location_cached_at=now() where id=$1", [
+        saved.id,
+      ]),
+    ),
+  );
+  // Simulate an old cache in this disposable DB; clients cannot edit its timestamp.
+  await db.exec("alter table posts disable trigger guard_post_location");
+  await db.query(
+    "update posts set location_cached_at=now()-interval '30 days' where id=$1",
+    [saved.id],
+  );
+  await db.exec("alter table posts enable trigger guard_post_location");
+  assert.equal(
+    (
+      await asUser(owner, async (tx) =>
+        tx.query("select location_lat from post_cards where id=$1", [saved.id]),
+      )
+    ).rows[0].location_lat,
+    null,
+  );
+  await db.exec("select maintenance_retention_cleanup()");
+  const expired = (
+    await db.query(
+      "select location_lat,location_lng,location_place_id,venue_name from posts where id=$1",
+      [saved.id],
+    )
+  ).rows[0];
+  assert.equal(expired.location_lat, null);
+  assert.equal(expired.location_lng, null);
+  assert.equal(expired.location_place_id, "google-place");
+  assert.equal(expired.venue_name, "My courtyard");
+  await asUser(owner, async (tx) =>
+    tx.query(
+      "update posts set location_source='manual',location_place_id=null,location_lat=0,location_lng=-76 where id=$1",
+      [saved.id],
+    ),
+  );
+  assert.equal(
+    (await db.query("select location_lat from posts where id=$1", [saved.id]))
+      .rows[0].location_lat,
+    0,
+  );
+});
+
+test(
+  "PostGIS discovers external meeting spots and legacy venues with radius and RLS",
+  { skip: !process.env.TEST_DATABASE_URL },
+  async () => {
+    const owner = "00000000-0000-0000-0000-000000003110",
+      stranger = "00000000-0000-0000-0000-000000003111";
+    const make = async (lat: number, lng: number) =>
+      (
+        await asUser(owner, async (tx) =>
+          tx.query(
+            `insert into posts(author_id,title,description,starts_at,vacancies,venue_name,location_lat,location_lng,location_source)
+    values($1,'Coordinate plan','Meet at the coordinate spot',now()+interval '4 hours',2,'Host chosen spot',$2,$3,'manual') returning id`,
+            [owner, lat, lng],
+          ),
+        )
+      ).rows[0].id;
+    const near = await make(10.007, 76.363),
+      far = await make(12.97, 77.64);
+    const venue = (
+      await db.query(
+        "insert into venues(name,category,area,location) values('Legacy location','Café','Kakkanad',st_setsrid(st_makepoint(76.363,10.007),4326)::geography) returning id",
+      )
+    ).rows[0].id;
+    const legacy = (
+      await asUser(owner, async (tx) =>
+        tx.query(
+          "insert into posts(author_id,title,description,starts_at,vacancies,venue_id) values($1,'Legacy venue plan','Meet at a registered venue',now()+interval '4 hours',2,$2) returning id",
+          [owner, venue],
+        ),
+      )
+    ).rows[0].id;
+    const results = await asUser(stranger, async (tx) =>
+      tx.query("select nearby_post_cards(10.007,76.363,5000) card"),
+    );
+    assert.ok(
+      results.rows.some(
+        (r: any) => r.card.id === near && r.card.distance_km < 0.01,
+      ),
+    );
+    assert.ok(results.rows.some((r: any) => r.card.id === legacy));
+    assert.ok(!results.rows.some((r: any) => r.card.id === far));
+    await assert.rejects(() =>
+      asUser(stranger, async (tx) =>
+        tx.query("select nearby_post_cards(100,76,5000)"),
+      ),
+    );
+    await assert.rejects(() =>
+      asUser(
+        null,
+        async (tx) => tx.query("select nearby_post_cards(10,76,5000)"),
+        "anon",
+      ),
+    );
+    await asUser(stranger, async (tx) =>
+      tx.query("select block_user($1)", [owner]),
+    );
+    assert.ok(
+      !(
+        await asUser(stranger, async (tx) =>
+          tx.query("select nearby_post_cards(10.007,76.363,5000) card"),
+        )
+      ).rows.some((r: any) => [near, legacy].includes(r.card.id)),
+    );
+  },
+);

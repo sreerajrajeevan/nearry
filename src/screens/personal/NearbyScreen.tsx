@@ -17,6 +17,7 @@ import {
 import {
   PlaceSuggestions,
   PlaceAttributions,
+  GoogleMapsCredit,
 } from "../../components/PlaceSuggestions";
 import { usePlaceSuggestions } from "../../hooks/usePlaceSuggestions";
 import { Place, validPlace } from "../../services/places";
@@ -108,7 +109,11 @@ export function NearbyScreen() {
           );
         const ids = point || appliedArea ? places.map((v) => v.id) : undefined;
         const [plans, openings] = await Promise.all([
-          listPosts({ venueIds: ids }),
+          listPosts(
+            point
+              ? { nearby: { ...point, radiusM: radiusKm * 1000 } }
+              : { venueIds: ids },
+          ),
           listLiveOffers(ids),
         ]);
         if (request.current !== version) return;
@@ -295,6 +300,7 @@ export function NearbyScreen() {
         {editingLocation && (
           <View style={styles.locationEditor}>
             <Input
+              clearable
               label="Your area or city"
               value={area}
               onChangeText={setArea}
@@ -332,7 +338,14 @@ export function NearbyScreen() {
             )}
           </View>
         )}
-        {selectedPlace && <PlaceAttributions places={[selectedPlace]} />}
+        {selectedPlace ? (
+          <PlaceAttributions places={[selectedPlace]} />
+        ) : (
+          posts.some((p) => p.location?.source === "google") && (
+            <GoogleMapsCredit />
+          )
+        )}
+
         <DiscoverySearch
           compact
           onPress={() => navigation.navigate("Search")}

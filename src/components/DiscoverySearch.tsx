@@ -66,9 +66,19 @@ export function DiscoverySearch(props: Props) {
         autoCapitalize="none"
         returnKeyType="search"
         maxLength={120}
-        clearButtonMode="while-editing"
+        clearButtonMode="never"
         selectionColor={colors.accent}
       />
+      {!!props.value && (
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel="Clear search"
+          onPress={() => props.onChangeText("")}
+          style={styles.clear}
+        >
+          <Icon name="x" size={18} color={colors.textDim} />
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
@@ -105,6 +115,13 @@ const styles = StyleSheet.create({
     height: 5,
     borderRadius: 3,
     backgroundColor: colors.forest,
+  },
+  clear: {
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: -10,
   },
   field: {
     flexDirection: "row",

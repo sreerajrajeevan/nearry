@@ -33,10 +33,12 @@ export type PlanDistances = ReadonlyMap<string, number | undefined>;
 
 /** Unknown, negative and non-finite values must never imply a nearby location. */
 export function planDistance(
-  post: Pick<NeedPost, "venueId">,
+  post: Pick<NeedPost, "venueId" | "distanceKm">,
   distances?: PlanDistances,
 ) {
-  const distance = post.venueId ? distances?.get(post.venueId) : undefined;
+  const distance =
+    post.distanceKm ??
+    (post.venueId ? distances?.get(post.venueId) : undefined);
   return distance != null && Number.isFinite(distance) && distance >= 0
     ? distance
     : undefined;

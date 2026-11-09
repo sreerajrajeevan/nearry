@@ -1,3 +1,8 @@
+import {
+  PostLocation,
+  validPostLocation,
+  postLocationPatch,
+} from "../utils/postLocation";
 import { AccountType } from "../navigation/types";
 
 /**
@@ -124,6 +129,12 @@ export type DbPost = {
   description: string;
   venue_id: string | null;
   venue_name: string | null;
+  location_lat?: number | null;
+  location_lng?: number | null;
+  location_source?: PostLocation["source"] | null;
+  location_place_id?: string | null;
+  location_cached_at?: string | null;
+  distance_km?: number;
   starts_at: string;
   expires_at: string | null;
   vacancies: number;
@@ -147,6 +158,9 @@ export type NeedPost = {
   description: string;
   venueId?: string;
   venueName?: string;
+  location?: PostLocation;
+  locationCachedAt?: string;
+  distanceKm?: number;
   startsAt: string;
   expiresAt?: string;
   vacancies: number;
@@ -172,6 +186,25 @@ export function toNeedPost(row: DbPost): NeedPost {
     description: row.description,
     venueId: row.venue_id ?? undefined,
     venueName: row.venue_name ?? undefined,
+    location:
+      validPostLocation({
+        latitude: row.location_lat,
+        longitude: row.location_lng,
+        source: row.location_source,
+        placeId: row.location_place_id ?? undefined,
+      }) &&
+      (row.location_source !== "google" ||
+        (!!row.location_cached_at &&
+          Date.now() - Date.parse(row.location_cached_at) < 29 * 86400000))
+        ? {
+            latitude: row.location_lat!,
+            longitude: row.location_lng!,
+            source: row.location_source!,
+            placeId: row.location_place_id ?? undefined,
+          }
+        : undefined,
+    locationCachedAt: row.location_cached_at ?? undefined,
+    distanceKm: row.distance_km,
     startsAt: row.starts_at,
     expiresAt: row.expires_at ?? undefined,
     vacancies: row.vacancies,
@@ -190,6 +223,7 @@ export type NewPostInput = {
   description: string;
   venueId?: string;
   venueName?: string;
+  location?: PostLocation;
   startsAt: string;
   expiresAt?: string;
   vacancies: number;
@@ -208,6 +242,7 @@ export function toDbNewPost(
     description: input.description,
     venue_id: input.venueId ?? null,
     venue_name: input.venueName ?? null,
+    ...postLocationPatch(input.location ?? null),
     starts_at: input.startsAt,
     expires_at: input.expiresAt ?? null,
     vacancies: input.vacancies,

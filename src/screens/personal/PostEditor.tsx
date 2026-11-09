@@ -20,8 +20,11 @@ import { EmptyState } from "../../components/EmptyState";
 import { colors, typography, spacing, surfaces } from "../../theme";
 import { useAuth } from "../../store/AuthContext";
 import { createPost, getPost, updatePost } from "../../services/posts";
-import { searchVenues } from "../../services/venues";
-import { NeedPost, Venue } from "../../services/mappers";
+import {
+  PostLocationField,
+  PostMeetingSpot,
+} from "../../components/PostLocationField";
+import { NeedPost } from "../../services/mappers";
 import { validatePostDraft } from "../../utils/validation";
 import { uploadPhoto } from "../../services/photos";
 import {
@@ -97,9 +100,8 @@ export function PostEditor({
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
-  const [venueQuery, setVenueQuery] = useState("");
-  const [venueResults, setVenueResults] = useState<Venue[]>([]);
-  const [venue, setVenue] = useState<Venue | null>(null);
+  const [venue, setVenue] = useState<PostMeetingSpot | null>(null);
+  const [unfinishedLocation, setUnfinishedLocation] = useState(false);
   const [startsAtDate, setStartsAtDate] = useState<Date | null>(null);
   const [expiresAtDate, setExpiresAtDate] = useState<Date | null>(null);
   const [picker, setPicker] = useState<{
@@ -141,16 +143,11 @@ export function PostEditor({
         setCost(post.costCents == null ? "" : String(post.costCents / 100));
         setTags(post.tags);
         setGenderPref(post.genderPreference ?? "any");
-        if (post.venueId || post.venueName)
+        if (post.venueId || post.venueName || post.location)
           setVenue({
-            id: post.venueId ?? "",
+            venueId: post.venueId,
             name: post.venueName ?? "",
-            area: "",
-            category: "",
-            rating: 0,
-            openNow: true,
-            amenities: [],
-            createdAt: post.createdAt,
+            location: post.location,
           });
         setPhotos(
           savedPhotos.map((photo) => ({
@@ -174,27 +171,6 @@ export function PostEditor({
       active = false;
     };
   }, [postId, retry, profile?.id]);
-
-  useEffect(() => {
-    let live = true;
-    const q = venueQuery.trim();
-    if (!q || venue) {
-      if (live) setVenueResults([]);
-      return;
-    }
-    const t = setTimeout(async () => {
-      try {
-        const res = await searchVenues(q);
-        if (live) setVenueResults(res.slice(0, 5));
-      } catch {
-        if (live) setVenueResults([]);
-      }
-    }, 250);
-    return () => {
-      live = false;
-      clearTimeout(t);
-    };
-  }, [venueQuery, venue]);
 
   if (!profile && !demoMode) {
     return (
@@ -220,7 +196,7 @@ export function PostEditor({
       setTitle("");
       setDescription("");
       setVenue(null);
-      setVenueQuery("");
+      setUnfinishedLocation(false);
       setStartsAtDate(null);
       setExpiresAtDate(null);
       setVacancies(2);
@@ -237,6 +213,12 @@ export function PostEditor({
   const handlePublish = async () => {
     if (publishLock.current) return;
     setFormError("");
+    if (!savedPostId && (unfinishedLocation || (venue && !venue.name.trim()))) {
+      setFormError(
+        "Choose a meeting place or add its coordinates, or clear the field to leave it out.",
+      );
+      return;
+    }
     if (!startsAtDate) {
       setFormError("Pick a date and time for your post.");
       return;
@@ -280,7 +262,8 @@ export function PostEditor({
       const details = {
         title: title.trim(),
         description: description.trim(),
-        venueId: venue?.id || undefined,
+        venueId: venue?.venueId || undefined,
+        location: venue?.location,
         venueName: venue?.name || undefined,
         startsAt: startsAt.toISOString(),
         expiresAt: expiresAt?.toISOString(),
@@ -295,7 +278,8 @@ export function PostEditor({
           ? (
               await updatePost(postId, {
                 ...details,
-                venueId: venue?.id || null,
+                venueId: venue?.venueId || null,
+                location: venue?.location ?? null,
                 venueName: venue?.name || null,
                 expiresAt: details.expiresAt ?? null,
                 costCents: costCents ?? null,
@@ -409,48 +393,12 @@ export function PostEditor({
           style={styles.multiline}
         />
 
-        <Text style={styles.fieldLabel}>Venue (optional)</Text>
-        {venue ? (
-          <View style={styles.venuePick}>
-            <Text style={styles.venuePickText}>
-              {[venue.name || "Selected venue", venue.area]
-                .filter(Boolean)
-                .join(" · ")}
-            </Text>
-            <TouchableOpacity
-              onPress={() => {
-                setVenue(null);
-                setVenueQuery("");
-              }}
-              activeOpacity={0.7}
-            >
-              <Text style={styles.venueClear}>✕</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <>
-            <Input
-              editable={!publishing}
-              label=""
-              placeholder="Search venues…"
-              value={venueQuery}
-              onChangeText={setVenueQuery}
-            />
-            {venueResults.map((v) => (
-              <TouchableOpacity
-                key={v.id}
-                activeOpacity={0.8}
-                style={styles.venueRow}
-                onPress={() => setVenue(v)}
-              >
-                <Text style={styles.venueName}>{v.name}</Text>
-                <Text style={styles.venueMeta}>
-                  {v.category} · {v.area}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </>
-        )}
+        <PostLocationField
+          value={venue}
+          onChange={setVenue}
+          onDraftChange={setUnfinishedLocation}
+          disabled={publishing}
+        />
 
         <View style={styles.row}>
           <DateTimeField

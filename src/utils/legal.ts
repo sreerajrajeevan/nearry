@@ -60,7 +60,7 @@ export function legalSections(
     },
     {
       title: "Google Maps place search",
-      body: "Google Maps place search is subject to the Google Maps/Google Earth Additional Terms of Service (https://maps.google.com/help/terms_maps/) and Google Privacy Policy (https://policies.google.com/privacy). Google predictions and selected locations are labelled separately from Nearry posts and registered businesses. We do not save a Google search history or import Google places into our business directory.",
+      body: "Google Maps place search is subject to the Google Maps/Google Earth Additional Terms of Service (https://maps.google.com/help/terms_maps/) and Google Privacy Policy (https://policies.google.com/privacy). Google predictions and selected locations are labelled separately from Nearry posts and registered businesses. We do not save a Google search history or import Google places into our business directory. When you attach a meeting spot to a public plan, we store your independently entered label and place ID, and temporarily cache Google coordinates for up to 29 days for nearby filtering. Manual coordinates you confirm are stored with your plan. Meeting locations are visible to other users; do not share a private home address.",
     },
     {
       title: "Optional selfie verification",
