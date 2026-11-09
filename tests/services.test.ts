@@ -556,3 +556,78 @@ test("Google address canonicalization is accepted only when the server binds it 
   });
   await assert.rejects(resolvePlace(prediction), /Could not read/);
 });
+
+test("external meeting spots are saved, reloaded, moved and removed without pretending to be registered venues", async () => {
+  let row: any = {
+    id: "location-post",
+    author_id: "host",
+    author_name: "Host",
+    approved_count: 0,
+    status: "open",
+    created_at: new Date().toISOString(),
+  };
+  handler = (url) => {
+    const call = calls.at(-1)!;
+    if (url.pathname.endsWith("/posts")) {
+      Object.assign(row, call.body);
+      return { ...row };
+    }
+    if (url.pathname.endsWith("/post_cards")) return { ...row };
+    return [];
+  };
+  const created = await posts.createPost("host", {
+    title: "Coffee with friends",
+    description: "Join me for a friendly coffee",
+    venueName: "Courtyard entrance",
+    location: { source: "manual", latitude: 10, longitude: 76 },
+    startsAt: new Date(Date.now() + 4 * 3600000).toISOString(),
+    vacancies: 2,
+    tags: [],
+  });
+  assert.equal(calls[0].body.venue_id, null);
+  assert.equal(calls[0].body.location_lat, 10);
+  assert.equal(created.location?.longitude, 76);
+  const moved = await posts.updatePost(created.id, {
+    location: { source: "manual", latitude: 11, longitude: 77 },
+  });
+  assert.equal(moved.location?.latitude, 11);
+  const removed = await posts.updatePost(created.id, {
+    location: null,
+    venueName: null,
+  });
+  assert.equal(removed.location, undefined);
+  assert.equal(removed.venueName, undefined);
+});
+
+test("nearby plans query coordinates even when no registered venues exist and preserve RPC distance", async () => {
+  handler = (url) =>
+    url.pathname.endsWith("/nearby_post_cards")
+      ? [
+          {
+            id: "external",
+            title: "Plan nearby",
+            author_id: "host",
+            author_name: "Host",
+            starts_at: new Date(Date.now() + 4 * 3600000).toISOString(),
+            vacancies: 2,
+            tags: [],
+            distance_km: 0.25,
+            status: "open",
+          },
+        ]
+      : [];
+  const rows = await posts.listPosts({
+    nearby: { latitude: 10, longitude: 76, radiusM: 5000 },
+  });
+  const request = calls.find((c) =>
+    c.url.pathname.endsWith("/nearby_post_cards"),
+  )!;
+  assert.deepEqual(request.body, { p_lat: 10, p_lng: 76, p_radius_m: 5000 });
+  assert.equal(rows[0].distanceKm, 0.25);
+  assert.ok(!calls.some((c) => c.url.pathname.endsWith("/post_cards")));
+  await assert.rejects(() =>
+    posts.listPosts({
+      nearby: { latitude: 100, longitude: 76, radiusM: 5000 },
+    }),
+  );
+});
