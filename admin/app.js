@@ -37,6 +37,11 @@ const date = (value) =>
       })
     : "—";
 const tag = (value) => '<span class="chip">' + safe(value) + "</span>";
+const coords = (details) =>
+  typeof details?.latitude === "number" &&
+  typeof details?.longitude === "number"
+    ? details.latitude.toFixed(4) + ", " + details.longitude.toFixed(4)
+    : null;
 const textCell = (value) =>
   '<td><span class="wrap">' + safe(value) + "</span></td>";
 let client,
@@ -46,7 +51,8 @@ let client,
   role = "",
   currentRows = [],
   revision = 0,
-  pendingRead;
+  pendingRead,
+  accountFilter = "all";
 let factorId,
   enrollment,
   actionBusy = false,
@@ -199,7 +205,12 @@ async function load() {
   feedback("");
   try {
     const res = await call(
-      { action: "list", section: requested, offset: page },
+      {
+        action: "list",
+        section: requested,
+        offset: page,
+        ...(requested === "users" ? { filter: accountFilter } : {}),
+      },
       pendingRead.signal,
     );
     if (run !== revision || !session) return;
@@ -280,10 +291,11 @@ function renderTable(rows, view) {
   let headers, rendered;
   const row = (cells) => "<tr>" + cells + "</tr>";
   if (view === "business") {
-    headers = ["Business", "Category / area", "Submitted", "Review"];
+    headers = ["Business", "Email", "Category / area", "Submitted", "Review"];
     rendered = rows.map((r) =>
       row(
         textCell(r.business_name || r.display_name) +
+          textCell(r.email || "—") +
           textCell(
             [r.business_details?.category, r.business_details?.area]
               .filter(Boolean)
@@ -295,6 +307,49 @@ function renderTable(rows, view) {
           "</td>",
       ),
     );
+  } else if (view === "users") {
+    headers = ["Member", "Type", "Verification", "Status", "Joined", "Manage"];
+    rendered = rows.map((r) =>
+      row(
+        textCell(r.business_name || r.display_name) +
+          textCell(r.account_type) +
+          textCell(r.verification_status) +
+          textCell(
+            r.deletion_requested_at
+              ? "Deleting"
+              : r.suspended_at
+                ? "Suspended"
+                : "Active",
+          ) +
+          textCell(date(r.created_at)) +
+          '<td><button class="action" data-account="' +
+          safe(r.id) +
+          '">Manage</button></td>',
+      ),
+    );
+    const filters = [
+      ["all", "All accounts"],
+      ["suspended", "Suspended"],
+      ["deletion", "Deletion requested"],
+      ["active", "Active"],
+    ];
+    $("content").innerHTML =
+      '<div class="filter-row" role="group" aria-label="Filter accounts">' +
+      filters
+        .map(
+          ([value, label]) =>
+            '<button class="secondary' +
+            (accountFilter === value ? " active-filter" : "") +
+            '" data-account-filter="' +
+            value +
+            '">' +
+            label +
+            "</button>",
+        )
+        .join("") +
+      "</div>" +
+      table(headers, rendered);
+    return;
   } else if (view === "selfies") {
     headers = ["Member", "Submitted", "Review"];
     rendered = rows.map((r) =>
@@ -324,20 +379,6 @@ function renderTable(rows, view) {
     );
   } else {
     const specs = {
-      users: [
-        ["Member", "Type", "Verification", "Status", "Joined"],
-        (r) => [
-          r.business_name || r.display_name,
-          r.account_type,
-          r.verification_status,
-          r.deletion_requested_at
-            ? "Deleting"
-            : r.suspended_at
-              ? "Suspended"
-              : "Active",
-          date(r.created_at),
-        ],
-      ],
       plans: [
         ["Plan", "Host", "When", "Audience", "Status"],
         (r) => [
@@ -374,45 +415,192 @@ function renderTable(rows, view) {
   $("content").innerHTML = table(headers, rendered);
 }
 function renderOperations(o) {
-  $("content").innerHTML = [
+  const deletionRows = o.deletions.map(
+    (r) =>
+      "<tr>" +
+      textCell(r.user_id) +
+      textCell(date(r.requested_at)) +
+      textCell(r.attempts) +
+      textCell(r.last_error) +
+      '<td><button class="action" data-account="' +
+      safe(r.user_id) +
+      '">Manage</button></td></tr>',
+  );
+  $("content").innerHTML =
+    '<section class="panel"><h2>Account deletion queue</h2>' +
+    table(
+      ["Account", "Requested", "Attempts", "Last error", "Manage"],
+      deletionRows,
+    ) +
+    "</section>" +
     [
-      "Account deletion queue",
-      o.deletions,
-      ["Account", "Attempts", "Last error"],
-      (r) => [r.user_id, r.attempts, r.last_error],
-    ],
-    [
-      "Pending file cleanup",
-      o.media,
-      ["Bucket", "File", "Attempts", "Last error"],
-      (r) => [r.bucket, r.path, r.attempts, r.last_error],
-    ],
-    [
-      "Pending push notifications",
-      o.push,
-      ["Job", "Attempts", "Last error"],
-      (r) => [r.id, r.attempts, r.last_error],
-    ],
-  ]
-    .map(
-      ([name, rows, headers, values]) =>
-        '<section class="panel"><h2>' +
-        safe(name) +
-        "</h2>" +
-        table(
-          headers,
-          rows.map((r) => "<tr>" + values(r).map(textCell).join("") + "</tr>"),
-        ) +
-        "</section>",
-    )
-    .join("");
+      [
+        "Pending file cleanup",
+        o.media,
+        ["Bucket", "File", "Attempts", "Last error"],
+        (r) => [r.bucket, r.path, r.attempts, r.last_error],
+      ],
+      [
+        "Pending push notifications",
+        o.push,
+        ["Job", "Attempts", "Last error"],
+        (r) => [r.id, r.attempts, r.last_error],
+      ],
+    ]
+      .map(
+        ([name, rows, headers, values]) =>
+          '<section class="panel"><h2>' +
+          safe(name) +
+          "</h2>" +
+          table(
+            headers,
+            rows.map(
+              (r) => "<tr>" + values(r).map(textCell).join("") + "</tr>",
+            ),
+          ) +
+          "</section>",
+      )
+      .join("");
 }
 let selected = null,
-  proofLoaded = false;
+  proofLoaded = false,
+  selectedAccount = null;
+function closeAccount(force = false) {
+  if (actionBusy && !force) return;
+  selectedAccount = null;
+  $("account-dialog").close();
+  $("account-note").value = "";
+  $("account-message").textContent = "";
+  $("account-details").innerHTML = "";
+}
+async function openAccount(id) {
+  if (actionBusy) return;
+  $("account-title").textContent = "Account";
+  $("account-details").innerHTML =
+    '<p class="muted">Loading account…</p>';
+  $("account-note").value = "";
+  $("account-message").textContent = "";
+  document
+    .querySelectorAll("[data-account-decision]")
+    .forEach((b) => (b.hidden = true));
+  $("account-dialog").showModal();
+  try {
+    const a = await call({ action: "account", id });
+    selectedAccount = a;
+    $("account-title").textContent =
+      a.business_name || a.display_name || "Nearry member";
+    const status = a.deletion_requested_at
+      ? "Deletion requested"
+      : a.suspended_at
+        ? "Suspended"
+        : "Active";
+    const details = [
+      ["Email", a.email || "—"],
+      ["Account", a.account_type],
+      ["Verification", a.verification_status],
+      ["Joined", date(a.created_at)],
+      ["Status", status],
+    ];
+    if (a.business_details?.category || a.business_details?.area)
+      details.push([
+        "Business",
+        [a.business_details.category, a.business_details.area]
+          .filter(Boolean)
+          .join(" · "),
+      ]);
+    if (a.suspended_at) {
+      details.push(["Suspended since", date(a.suspended_at)]);
+      if (a.suspendReason)
+        details.push(["Suspension reason", a.suspendReason]);
+    }
+    if (a.deletion_requested_at) {
+      details.push(["Deletion requested", date(a.deletion_requested_at)]);
+      if (a.deletionJob) {
+        details.push([
+          "Deletion attempts",
+          String(a.deletionJob.attempts ?? "—"),
+        ]);
+        details.push([
+          "Next deletion attempt",
+          date(a.deletionJob.next_attempt_at),
+        ]);
+        if (a.deletionJob.last_error)
+          details.push(["Last deletion error", a.deletionJob.last_error]);
+        if (a.deletionJob.prepared_at)
+          details.push([
+            "Deletion",
+            "Already being processed — cancellation is no longer possible",
+          ]);
+      }
+    }
+    $("account-details").innerHTML = details
+      .map(
+        ([label, value]) =>
+          '<div class="detail-row"><span>' +
+          safe(label) +
+          "</span><strong>" +
+          safe(value) +
+          "</strong></div>",
+      )
+      .join("");
+    const isOwner = role === "owner";
+    document.querySelector('[data-account-decision="suspend"]').hidden =
+      !isOwner || !!a.suspended_at;
+    document.querySelector('[data-account-decision="unsuspend"]').hidden =
+      !isOwner || !a.suspended_at;
+    document.querySelector(
+      '[data-account-decision="cancel-deletion"]',
+    ).hidden = !isOwner || !a.deletion_requested_at;
+  } catch (error) {
+    $("account-message").textContent = error.message;
+  }
+}
+async function decideAccount(decision) {
+  const item = selectedAccount;
+  if (!item || actionBusy) return;
+  const note = $("account-note").value.trim();
+  if (!note) {
+    $("account-message").textContent =
+      "Please add a reason for this action. It is recorded in the audit.";
+    return;
+  }
+  const labels = {
+    suspend: "Suspend this account?",
+    unsuspend: "Restore this account?",
+    "cancel-deletion": "Cancel this deletion request?",
+  };
+  if (!confirm(labels[decision] + " This action will be recorded.")) return;
+  actionBusy = true;
+  $("account-dialog")
+    .querySelectorAll("button")
+    .forEach((b) => (b.disabled = true));
+  $("account-message").textContent = "Saving…";
+  try {
+    await call({
+      action: "decide",
+      kind: "account",
+      id: item.id,
+      decision,
+      note,
+    });
+    actionBusy = false;
+    closeAccount();
+    await load();
+    feedback("Account updated.");
+  } catch (error) {
+    $("account-message").textContent = error.message;
+  } finally {
+    actionBusy = false;
+    $("account-dialog")
+      .querySelectorAll("button")
+      .forEach((b) => (b.disabled = false));
+  }
+}
 function closeDialog(force = false) {
   if (actionBusy && !force) return;
   selected = null;
   proofLoaded = false;
+  closeAccount(force);
   $("review-dialog").close();
   $("proof-image").removeAttribute("src");
   $("proof-frame").removeAttribute("src");
@@ -464,8 +652,10 @@ function openReview(id, kind) {
     kind === "business"
       ? [
           item.display_name,
+          item.email,
           item.business_details?.category,
           item.business_details?.area,
+          coords(item.business_details),
           "Submitted " + date(item.created_at),
         ]
           .filter(Boolean)
@@ -731,14 +921,34 @@ async function start() {
     }
     const btn = event.target.closest("[data-action]");
     if (btn) openReview(btn.dataset.id, btn.dataset.kind);
+    const accountBtn = event.target.closest("[data-account]");
+    if (accountBtn) {
+      void openAccount(accountBtn.dataset.account);
+      return;
+    }
+    const filterBtn = event.target.closest("[data-account-filter]");
+    if (filterBtn) {
+      accountFilter = filterBtn.dataset.accountFilter;
+      offset = 0;
+      load();
+      return;
+    }
+    const accountDecision = event.target.closest("[data-account-decision]");
+    if (accountDecision)
+      void decideAccount(accountDecision.dataset.accountDecision);
     const decision = event.target.closest("[data-decision]");
     if (decision) void decide(decision.dataset.decision);
   });
   $("view-proof").addEventListener("click", viewProof);
   $("dialog-close").addEventListener("click", closeDialog);
+  $("account-close").addEventListener("click", () => closeAccount());
   $("review-dialog").addEventListener("cancel", (event) => {
     event.preventDefault();
     closeDialog();
+  });
+  $("account-dialog").addEventListener("cancel", (event) => {
+    event.preventDefault();
+    closeAccount();
   });
   client.auth.onAuthStateChange((event) => {
     if (event === "SIGNED_OUT") login();
@@ -748,7 +958,8 @@ async function start() {
       !document.hidden &&
       session &&
       !$("dashboard").hidden &&
-      !$("review-dialog").open
+      !$("review-dialog").open &&
+      !$("account-dialog").open
     )
       void load();
   });

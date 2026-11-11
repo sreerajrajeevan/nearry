@@ -47,7 +47,12 @@ function json(body: unknown, status: number, origin: string | null) {
   }
   return new Response(JSON.stringify(body), { status, headers });
 }
-async function list(db: Db, section: string, offset: number) {
+async function list(
+  db: Db,
+  section: string,
+  offset: number,
+  filter?: string,
+) {
   if (section === "overview")
     return { metrics: checked(await db.rpc("admin_console_overview")) };
   if (section === "operations") {
@@ -90,6 +95,22 @@ async function list(db: Db, section: string, offset: number) {
         },
       ),
     );
+    if (section === "business") {
+      // The applicant's email lives in Auth, not profiles. Attach it so the
+      // reviewer can see who is behind each request; a lookup failure must
+      // never break the queue.
+      rows = await Promise.all(
+        rows.map(async (r) => {
+          if (!r.user_id) return { ...r, email: null };
+          try {
+            const { data } = await db.auth.admin.getUserById(r.user_id);
+            return { ...r, email: data?.user?.email ?? null };
+          } catch {
+            return { ...r, email: null };
+          }
+        }),
+      );
+    }
   } else {
     const source: Record<string, string> = {
       reports: "content_reports",
@@ -105,6 +126,13 @@ async function list(db: Db, section: string, offset: number) {
       .order("created_at", { ascending: false })
       .order("id", { ascending: false });
     if (section === "reports") q = q.eq("status", "open");
+    if (section === "users") {
+      if (filter === "suspended") q = q.not("suspended_at", "is", null);
+      else if (filter === "deletion")
+        q = q.not("deletion_requested_at", "is", null);
+      else if (filter === "active")
+        q = q.is("suspended_at", null).is("deletion_requested_at", null);
+    }
     rows = checked(await q.range(offset, offset + PAGE_SIZE));
     if (section === "reports") {
       const ids = [
@@ -198,6 +226,64 @@ export function createAdminConsoleHandler(
         "Review unavailable: upload a profile photo in Nearry first",
       );
     return { review, avatarUrl: base.origin + path };
+  }
+  // Full account record for the dashboard's account controls: profile,
+  // Auth email, pending deletion job and, when suspended, the reason.
+  async function accountDetail(id: string) {
+    const profile = checked<any>(
+      await db
+        .from("profiles")
+        .select(
+          "id,account_type,display_name,business_name,business_details,verification_status,verification_note,onboarding_completed,created_at,suspended_at,deletion_requested_at",
+        )
+        .eq("id", id)
+        .maybeSingle(),
+    );
+    if (!profile) throw new Error("Account unavailable");
+    let email: string | null = null;
+    try {
+      const { data } = await db.auth.admin.getUserById(id);
+      email = data?.user?.email ?? null;
+    } catch {
+      email = null;
+    }
+    const job = checked<any>(
+      await db
+        .from("account_deletion_jobs")
+        .select(
+          "user_id,requested_at,attempts,next_attempt_at,last_error,prepared_at",
+        )
+        .eq("user_id", id)
+        .maybeSingle(),
+    );
+    let suspendReason: string | null = null;
+    if (profile.suspended_at) {
+      const direct = checked<any[]>(
+        await db
+          .from("admin_console_audit")
+          .select("note,created_at")
+          .eq("action", "account:suspend")
+          .eq("target_id", id)
+          .order("created_at", { ascending: false })
+          .limit(1),
+      );
+      if (direct.length && direct[0].note) {
+        suspendReason = direct[0].note;
+      } else {
+        const reports = checked<any[]>(
+          await db
+            .from("content_reports")
+            .select("id,review_note,reviewed_at")
+            .eq("subject_user_id", id)
+            .eq("status", "resolved")
+            .order("reviewed_at", { ascending: false })
+            .limit(5),
+        );
+        const noted = reports.find((r) => r.review_note);
+        if (noted) suspendReason = noted.review_note;
+      }
+    }
+    return { ...profile, email, deletionJob: job ?? null, suspendReason };
   }
   const allowed = new Set(
     (allowedOrigins ?? "")
@@ -301,7 +387,22 @@ export function createAdminConsoleHandler(
         const offset = payload.offset ?? 0;
         if (!Number.isSafeInteger(offset) || offset < 0 || offset > 5000)
           return json({ error: "Invalid page" }, 400, origin);
-        return json(await list(db, payload.section, offset), 200, origin);
+        const filter = payload.filter;
+        if (
+          filter !== undefined &&
+          !["all", "suspended", "deletion", "active"].includes(filter)
+        )
+          return json({ error: "Invalid filter" }, 400, origin);
+        return json(
+          await list(db, payload.section, offset, filter),
+          200,
+          origin,
+        );
+      }
+      if (payload.action === "account") {
+        if (!UUID.test(payload.id ?? ""))
+          return json({ error: "Invalid account" }, 400, origin);
+        return json(await accountDetail(payload.id), 200, origin);
       }
       if (payload.action === "proof") {
         if (!UUID.test(payload.id ?? ""))
@@ -367,14 +468,18 @@ export function createAdminConsoleHandler(
             (kind === "selfie" &&
               ["verified", "rejected"].includes(decision)) ||
             (kind === "report" &&
-              ["dismiss", "remove", "suspend"].includes(decision))
+              ["dismiss", "remove", "suspend"].includes(decision)) ||
+            (kind === "account" &&
+              ["suspend", "unsuspend", "cancel-deletion"].includes(decision))
           ) ||
           typeof payload.note !== "string" ||
           payload.note.length > 200
         )
           return json({ error: "Invalid moderation decision" }, 400, origin);
         if (
-          ["rejected", "remove", "suspend"].includes(decision) &&
+          ["rejected", "remove", "suspend", "unsuspend", "cancel-deletion"].includes(
+            decision,
+          ) &&
           !payload.note.trim()
         )
           return json({ error: "Review reason required" }, 400, origin);
@@ -385,6 +490,12 @@ export function createAdminConsoleHandler(
         )
           return json(
             { error: "Only owners can suspend accounts" },
+            403,
+            origin,
+          );
+        if (kind === "account" && member.data.role !== "owner")
+          return json(
+            { error: "Only owners can manage accounts" },
             403,
             origin,
           );
