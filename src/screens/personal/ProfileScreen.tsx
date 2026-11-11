@@ -77,7 +77,7 @@ export function ProfileScreen({ navigation }: Props) {
         <PageHeading
           compact
           title="Profile"
-          subtitle="Your space. Everything in one place."
+          subtitle="Your plans, your people, your space."
         />
         {demoMode && (
           <View style={styles.demo}>
@@ -143,6 +143,13 @@ export function ProfileScreen({ navigation }: Props) {
           Your space
         </Text>
         <View style={styles.group}>
+          <AccountMenuRow
+            icon="edit-3"
+            title="My posts"
+            hint="Manage the plans you’re hosting"
+            onPress={() => navigation.navigate("MyPosts")}
+          />
+          <View style={styles.divider} />
           <AccountMenuRow
             icon="calendar"
             title="My activity"
@@ -263,7 +270,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: 24,
-    padding: spacing.md,
+    borderTopWidth: 4,
+    borderTopColor: colors.coral,
+    padding: 20,
   },
   person: { flexDirection: "row", alignItems: "center", gap: 14 },
   personCopy: { flex: 1, minWidth: 0 },

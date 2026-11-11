@@ -34,9 +34,9 @@ export type RootStackParamList = {
 
 export type PersonalTabParamList = {
   Nearby: { place?: Place } | undefined;
-  Search: undefined;
+  Search: { filter?: "all" | "venues" | "posts" | "offers" } | undefined;
   CreatePost: undefined;
-  Activity: undefined;
+  Inbox: undefined;
   Profile: undefined;
 };
 
@@ -53,6 +53,7 @@ export type PersonalStackParamList = SafetyStackParamList & {
   SelfieVerification: undefined;
   OfferDetails: { offerId: string };
   Messages: undefined;
+  Activity: undefined;
   Conversation: { conversationId: string; title?: string };
   Notifications: undefined;
 };

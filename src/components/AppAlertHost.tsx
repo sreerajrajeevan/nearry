@@ -123,6 +123,10 @@ export function AppAlertHost() {
                       style={[
                         styles.buttonText,
                         button.style === "cancel" && styles.cancelText,
+                        button.style !== "cancel" &&
+                          button.style !== "destructive" && {
+                            color: colors.onAction,
+                          },
                       ]}
                     >
                       {button.text || "Got it"}
@@ -139,7 +143,7 @@ export function AppAlertHost() {
 }
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: "rgba(8,37,27,0.38)" },
+  overlay: { flex: 1, backgroundColor: colors.modalScrim },
   position: {
     flex: 1,
     justifyContent: "center",
@@ -190,7 +194,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  primary: { backgroundColor: colors.forest },
+  primary: { backgroundColor: colors.action },
   destructive: { backgroundColor: colors.red },
   cancel: { backgroundColor: colors.sageSoft },
   buttonText: {

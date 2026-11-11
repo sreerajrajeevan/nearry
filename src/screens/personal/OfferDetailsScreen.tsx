@@ -250,7 +250,7 @@ export function OfferDetailsScreen({ route, navigation }: Props) {
               title="View in Activity"
               variant="secondary"
               onPress={() =>
-                navigation.navigate("PersonalTabs", { screen: "Activity" })
+                navigation.navigate("Activity")
               }
             />
             {requestedBooking &&

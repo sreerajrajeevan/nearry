@@ -31,3 +31,6 @@ __pycache__/
 
 # Bundled admin hosting output
 dist-admin/
+
+# Local design verification build
+dist-ui/

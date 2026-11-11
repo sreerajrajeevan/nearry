@@ -1,232 +1,242 @@
-import React, { useRef, useState } from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
-  Image,
   ScrollView,
   StyleSheet,
   useWindowDimensions,
 } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { Offer } from "../services/mappers";
 import { colors, typography } from "../theme";
-import { postCategory } from "../utils/discovery";
-import { CategoryArt } from "./CategoryArt";
+import { activityArtwork } from "../utils/activityArtwork";
+import { ActivityArt } from "./ActivityArt";
+import { DemoPhoto } from "./DemoPhoto";
+import { LoadingImage } from "./LoadingImage";
 import { MotionPressable } from "./Motion";
-import { Icon } from "./Icon";
-import { useReducedMotion } from "../store/MotionContext";
+import { Icon, IconName } from "./Icon";
 
+function offerKind(offer: Offer) {
+  const text =
+    `${offer.title} ${offer.description} ${offer.businessName}`.toLowerCase();
+  if (/gym|fitness|training|workout/.test(text)) return "fitness";
+  if (/restaurant|café|cafe|food|dine|dining|meal/.test(text)) return "dining";
+  if (/turf|sport|football|court|badminton|cricket/.test(text)) return "sports";
+  return "more";
+}
+const filters: { key: string; label: string; icon: IconName }[] = [
+  { key: "all", label: "All offers", icon: "grid" },
+  { key: "fitness", label: "Fitness", icon: "activity" },
+  { key: "dining", label: "Dining", icon: "coffee" },
+  { key: "sports", label: "Sports", icon: "dribbble" },
+  { key: "more", label: "More", icon: "more-horizontal" },
+];
+function OfferTile({
+  offer,
+  width,
+  onPress,
+}: {
+  offer: Offer;
+  width: number;
+  onPress: () => void;
+}) {
+  const [failed, setFailed] = useState(false);
+  const photo = !!offer.coverPhotoUrl && !failed;
+  return (
+    <MotionPressable
+      accessibilityRole="button"
+      accessibilityLabel={`${offer.businessName}. ${offer.title}. View offer`}
+      onPress={onPress}
+      style={[styles.card, { width }]}
+    >
+      {photo ? (
+        <LoadingImage
+          source={{ uri: offer.coverPhotoUrl }}
+          style={StyleSheet.absoluteFill}
+          resizeMode="cover"
+          onError={() => setFailed(true)}
+        />
+      ) : offer.demoScene ? (
+        <DemoPhoto scene={offer.demoScene} />
+      ) : (
+        <View style={styles.art}>
+          <ActivityArt artwork={activityArtwork(offer)} size={115} />
+        </View>
+      )}
+      <LinearGradient
+        colors={["rgba(0,25,29,0.26)", "rgba(0,25,29,0.88)"]}
+        style={styles.cover}
+      >
+        <View style={styles.business}>
+          <Icon name="tag" size={14} color={colors.white} />
+          <Text style={styles.businessText} numberOfLines={2}>
+            {offer.businessName}
+          </Text>
+        </View>
+        <View style={styles.bottom}>
+          <Text style={styles.title} numberOfLines={3}>
+            {offer.title}
+          </Text>
+          <View style={styles.footer}>
+            <Text style={styles.price}>
+              {offer.priceCents == null
+                ? "View offer"
+                : offer.priceCents === 0
+                  ? "Free"
+                  : `₹${Math.round(offer.priceCents / 100)}`}
+            </Text>
+            <View style={styles.arrow}>
+              <Icon name="chevron-right" size={19} color={colors.ink} />
+            </View>
+          </View>
+        </View>
+      </LinearGradient>
+    </MotionPressable>
+  );
+}
 export function FeaturedOffers({
   offers,
   onOpen,
-  onCreate,
 }: {
   offers: Offer[];
   onOpen: (id: string) => void;
-  onCreate: () => void;
 }) {
-  const { width } = useWindowDimensions();
-  const reduced = useReducedMotion();
-  const cardWidth = Math.min(342, width - 64);
-  const scroll = useRef<ScrollView>(null);
-  const [active, setActive] = useState(0);
-  const featured = offers.filter((o) => o.isSpotlight);
-  const items = (featured.length ? featured : offers).slice(0, 5);
+  const { width, fontScale } = useWindowDimensions();
+  const [filter, setFilter] = useState("all");
+  const cardWidth = Math.min(235, Math.max(148, (width - 48) * 0.42));
+  const filtered = offers.filter(
+    (o) => filter === "all" || offerKind(o) === filter,
+  );
   return (
-    <View style={styles.section}>
-      <View style={styles.heading}>
-        <Text accessibilityRole="header" style={styles.title}>
-          Worth stepping out for
-        </Text>
-        <Icon name="sun" size={20} color={colors.accent} />
-      </View>
-      {items.length ? (
-        <>
-          <ScrollView
-            ref={scroll}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            decelerationRate="fast"
-            snapToInterval={cardWidth + 12}
-            contentContainerStyle={styles.rail}
-            onMomentumScrollEnd={(e) =>
-              setActive(
-                Math.max(
-                  0,
-                  Math.min(
-                    items.length - 1,
-                    Math.round(
-                      e.nativeEvent.contentOffset.x / (cardWidth + 12),
-                    ),
-                  ),
-                ),
-              )
-            }
+    <View>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.filters}
+      >
+        {filters.map((item) => (
+          <MotionPressable
+            key={item.key}
+            accessibilityRole="button"
+            accessibilityState={{ selected: item.key === filter }}
+            accessibilityLabel={item.label}
+            onPress={() => setFilter(item.key)}
+            style={[styles.chip, filter === item.key && styles.selected]}
           >
-            {items.map((offer) => (
-              <MotionPressable
-                key={offer.id}
-                accessibilityRole="button"
-                accessibilityLabel={`${offer.title}. ${offer.businessName}. View available times`}
-                onPress={() => onOpen(offer.id)}
-                style={[styles.card, { width: cardWidth }]}
-              >
-                {offer.coverPhotoUrl ? (
-                  <Image
-                    source={{ uri: offer.coverPhotoUrl }}
-                    style={styles.photo}
-                    resizeMode="cover"
-                  />
-                ) : (
-                  <View style={styles.illustration}>
-                    <CategoryArt
-                      category={postCategory({
-                        title: `${offer.title} ${offer.description}`,
-                        tags: [],
-                      })}
-                      size={150}
-                    />
-                  </View>
-                )}
-                <View
-                  style={[
-                    styles.cover,
-                    !offer.coverPhotoUrl && styles.illustratedCover,
-                  ]}
-                >
-                  <Text style={styles.kicker}>A LITTLE OPENING</Text>
-                  <Text style={styles.offerTitle}>{offer.title}</Text>
-                  <Text style={styles.meta}>
-                    {offer.businessName}
-                    {offer.priceCents != null
-                      ? ` · ${offer.priceCents === 0 ? "Free" : `₹${Math.round(offer.priceCents / 100)}`}`
-                      : ""}
-                  </Text>
-                  <View style={styles.action}>
-                    <Text style={styles.actionText}>Find a time</Text>
-                    <Icon
-                      name="arrow-up-right"
-                      size={17}
-                      color={colors.onAccent}
-                    />
-                  </View>
-                </View>
-              </MotionPressable>
-            ))}
-          </ScrollView>
-          {items.length > 1 && (
-            <View style={styles.dots}>
-              {items.map((item, index) => (
-                <MotionPressable
-                  key={item.id}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Show featured offer ${index + 1}`}
-                  accessibilityState={{ selected: index === active }}
-                  style={styles.dotTarget}
-                  onPress={() => {
-                    scroll.current?.scrollTo({
-                      x: index * (cardWidth + 12),
-                      animated: !reduced,
-                    });
-                    setActive(index);
-                  }}
-                >
-                  <View
-                    style={[styles.dot, index === active && styles.activeDot]}
-                  />
-                </MotionPressable>
-              ))}
-            </View>
-          )}
-        </>
-      ) : (
-        <MotionPressable
-          accessibilityRole="button"
-          accessibilityLabel="Start a plan"
-          onPress={onCreate}
-          style={styles.invitation}
+            <Icon
+              name={item.icon}
+              size={16}
+              color={filter === item.key ? colors.white : colors.ink}
+            />
+            <Text
+              style={[
+                styles.chipText,
+                filter === item.key && styles.selectedText,
+              ]}
+            >
+              {item.label}
+            </Text>
+          </MotionPressable>
+        ))}
+      </ScrollView>
+      {filtered.length ? (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          snapToInterval={cardWidth + 12}
+          decelerationRate="fast"
+          contentContainerStyle={[
+            styles.rail,
+            { minHeight: fontScale > 1.3 ? 250 : 174 },
+          ]}
         >
-          <View style={styles.invitationArt}>
-            <CategoryArt category="Meet" size={142} />
-          </View>
-          <Text style={styles.kicker}>YOUR NEIGHBOURHOOD, YOUR PEOPLE</Text>
-          <Text style={[styles.offerTitle, { maxWidth: "65%" }]}>
-            Make the first move.
+          {filtered.slice(0, 12).map((offer) => (
+            <OfferTile
+              key={`${offer.id}:${offer.coverPhotoUrl}`}
+              offer={offer}
+              width={cardWidth}
+              onPress={() => onOpen(offer.id)}
+            />
+          ))}
+        </ScrollView>
+      ) : (
+        <View style={styles.empty}>
+          <Text style={styles.emptyText}>
+            No{" "}
+            {filter === "all"
+              ? "live"
+              : filters.find((f) => f.key === filter)?.label.toLowerCase()}{" "}
+            offers nearby yet.
           </Text>
-          <Text style={[styles.meta, { maxWidth: "65%" }]}>
-            A good plan starts with one person.
-          </Text>
-          <View style={styles.action}>
-            <Text style={styles.actionText}>Start a plan</Text>
-            <Icon name="arrow-up-right" size={17} color={colors.onAccent} />
-          </View>
-        </MotionPressable>
+          {filter !== "all" && (
+            <MotionPressable
+              accessibilityRole="button"
+              onPress={() => setFilter("all")}
+              style={styles.clear}
+            >
+              <Text style={styles.clearText}>See all offers</Text>
+            </MotionPressable>
+          )}
+        </View>
       )}
     </View>
   );
 }
 const styles = StyleSheet.create({
-  section: { marginBottom: 30 },
-  heading: {
+  filters: { gap: 8, paddingBottom: 12 },
+  chip: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    marginBottom: 14,
-  },
-  title: { ...typography.heading, fontSize: 19, color: colors.text, flex: 1 },
-  rail: { gap: 12, paddingRight: 12 },
-  card: {
-    minHeight: 230,
-    borderRadius: 20,
-    backgroundColor: colors.ink,
-    overflow: "hidden",
-    justifyContent: "flex-end",
-  },
-  photo: { position: "absolute", width: "100%", height: "100%" },
-  illustration: { position: "absolute", top: -8, right: -16, opacity: 0.9 },
-  cover: {
-    padding: 20,
-    paddingTop: 45,
-    backgroundColor: colors.scrim,
-  },
-  illustratedCover: { backgroundColor: "transparent", paddingTop: 100 },
-  kicker: {
-    ...typography.caption,
-    fontSize: 11,
-    letterSpacing: 1.3,
-    color: colors.onAccent,
-    marginBottom: 10,
-  },
-  offerTitle: {
-    ...typography.title,
-    fontSize: 24,
-    lineHeight: 29,
-    fontWeight: "700",
-    color: colors.onAccent,
-    maxWidth: "95%",
-  },
-  meta: { ...typography.bodySmall, color: colors.onAccent, marginTop: 9 },
-  action: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 16 },
-  actionText: { ...typography.label, color: colors.onAccent },
-  invitation: {
-    padding: 22,
-    minHeight: 235,
-    borderRadius: 20,
-    backgroundColor: colors.ink,
-    overflow: "hidden",
-  },
-  invitationArt: { position: "absolute", right: -20, top: 42 },
-  dots: { flexDirection: "row", justifyContent: "center", marginTop: 2 },
-  dotTarget: {
-    minWidth: 44,
+    gap: 7,
     minHeight: 44,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: 24,
+    backgroundColor: colors.sandSoft,
+  },
+  selected: { backgroundColor: colors.teal },
+  chipText: { ...typography.bodySmall, color: colors.ink, fontWeight: "600" },
+  selectedText: { color: colors.white },
+  rail: { gap: 12, paddingRight: 4, paddingBottom: 6 },
+  card: {
+    minHeight: 174,
+    borderRadius: 22,
+    overflow: "hidden",
+    backgroundColor: colors.teal,
+  },
+  art: { position: "absolute", top: 35, right: -10 },
+  cover: { flex: 1, padding: 12, justifyContent: "space-between", gap: 30 },
+  business: { flexDirection: "row", alignItems: "flex-start", gap: 6 },
+  businessText: { ...typography.label, color: colors.white, flex: 1 },
+  bottom: { gap: 12 },
+  title: {
+    ...typography.heading,
+    fontWeight: "800",
+    fontSize: 18,
+    lineHeight: 21,
+    color: colors.white,
+  },
+  footer: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 8,
+  },
+  price: { ...typography.label, color: colors.white, flexShrink: 1 },
+  arrow: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     alignItems: "center",
     justifyContent: "center",
+    backgroundColor: colors.cream,
   },
-  dot: {
-    width: 5,
-    height: 5,
-    borderRadius: 3,
-    backgroundColor: colors.borderStrong,
+  empty: {
+    padding: 18,
+    backgroundColor: colors.surfaceRaised,
+    borderRadius: 20,
   },
-  activeDot: { width: 18, backgroundColor: colors.accent },
+  emptyText: { ...typography.bodySmall, color: colors.textDim },
+  clear: { minHeight: 44, justifyContent: "center" },
+  clearText: { ...typography.label, color: colors.teal },
 });

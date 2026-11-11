@@ -10,8 +10,8 @@ export const BRAND_ASSETS = [
 /** Approved Around You artwork. Keep the nearby point separate from the pin. */
 export function BrandMark({
   size = 48,
-  color = colors.ink,
-  dotColor = colors.sand,
+  color = colors.coral,
+  dotColor = colors.teal,
 }: {
   size?: number;
   color?: string;
@@ -57,7 +57,17 @@ export function BrandWordmark({
   );
 }
 
-export function BrandLogo({ width = 148 }: { width?: number }) {
+export function BrandLogo({
+  width = 148,
+  color = colors.ink,
+  markColor = colors.coral,
+  dotColor = colors.teal,
+}: {
+  width?: number;
+  color?: string;
+  markColor?: string;
+  dotColor?: string;
+}) {
   return (
     <View
       style={[styles.row, { width, gap: width * 0.033 }]}
@@ -65,8 +75,8 @@ export function BrandLogo({ width = 148 }: { width?: number }) {
       accessibilityRole="image"
       accessibilityLabel="Nearry"
     >
-      <BrandMark size={width * 0.26} />
-      <BrandWordmark width={width * 0.707} />
+      <BrandMark size={width * 0.26} color={markColor} dotColor={dotColor} />
+      <BrandWordmark width={width * 0.707} color={color} />
     </View>
   );
 }

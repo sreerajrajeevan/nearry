@@ -4,6 +4,7 @@ import { NeedPost } from "../services/mappers";
 import { activityArtwork } from "../utils/activityArtwork";
 import { postCategory } from "../utils/discovery";
 import { colors } from "../theme";
+import { DemoPhoto } from "./DemoPhoto";
 import { LoadingImage } from "./LoadingImage";
 import { ActivityArt } from "./ActivityArt";
 
@@ -45,6 +46,8 @@ export function PlanCover({
           style={styles.image}
           onError={() => setFailed(true)}
         />
+      ) : post.demoScene ? (
+        <DemoPhoto scene={post.demoScene} />
       ) : (
         <ActivityArt artwork={activityArtwork(post)} size={artworkSize} />
       )}

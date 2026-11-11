@@ -1,5 +1,6 @@
 import React from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { NeedPost } from "../services/mappers";
 import { formatWhen, formatDistance } from "../utils/format";
 import { postState } from "../utils/flowState";
@@ -9,10 +10,10 @@ import { colors, typography } from "../theme";
 import { MotionPressable } from "./Motion";
 import { PlanCover } from "./PlanCover";
 import { Avatar } from "./Avatar";
-import { AudienceBadge, audienceLabel } from "./AudienceBadge";
+import { audienceLabel } from "./AudienceBadge";
 import { Icon } from "./Icon";
 
-/** A generous left photo with a readable plan summary alongside it. */
+/** Owner-uploaded photography, real availability, and one clear path to the plan. */
 export function PostRow({
   post,
   distanceKm,
@@ -26,16 +27,22 @@ export function PostRow({
   onPress: () => void;
   now?: Date;
 }) {
+  const { fontScale } = useWindowDimensions();
   const status = postState(post, now.getTime());
   const spots = status.accepting
     ? `${post.spotsLeft} spot${post.spotsLeft === 1 ? "" : "s"} left`
     : status.label;
   const place = [
     post.venueName,
-    distanceKm == null ? null : `${formatDistance(distanceKm)} away`,
+    distanceKm == null ? null : formatDistance(distanceKm),
   ]
     .filter(Boolean)
     .join(" · ");
+  const category = postCategory(post);
+  const audience =
+    post.genderPreference && post.genderPreference !== "any"
+      ? audienceLabel(post.genderPreference)
+      : null;
   return (
     <MotionPressable
       accessibilityRole="button"
@@ -53,105 +60,154 @@ export function PostRow({
       onPress={onPress}
       style={styles.card}
     >
-      <View style={styles.cover}>
-        <PlanCover post={post} fill artworkSize={84} />
+      <View style={StyleSheet.absoluteFill} accessible={false}>
+        <PlanCover post={post} fill artworkSize={130} />
       </View>
-      <View style={styles.content}>
-        <Text style={styles.category}>{postCategory(post)}</Text>
-        <Text style={styles.title} numberOfLines={2}>
+      <LinearGradient
+        colors={[
+          "rgba(0,24,28,0.04)",
+          "rgba(0,24,28,0.48)",
+          "rgba(0,24,28,0.94)",
+        ]}
+        locations={[0, 0.35, 1]}
+        style={[
+          styles.content,
+          { minHeight: 226 + Math.max(0, fontScale - 1) * 160 },
+        ]}
+      >
+        <View style={styles.top}>
+          <View style={styles.category}>
+            <Icon
+              name={
+                category === "Play"
+                  ? "dribbble"
+                  : category === "Meet"
+                    ? "coffee"
+                    : category === "Explore"
+                      ? "compass"
+                      : "sun"
+              }
+              size={13}
+              color={colors.ink}
+            />
+            <Text style={styles.categoryText}>{category}</Text>
+          </View>
+          {!!audience && (
+            <View style={styles.audience}>
+              <Icon name="users" size={12} color={colors.white} />
+              <Text style={styles.audienceText}>{audience}</Text>
+            </View>
+          )}
+        </View>
+        <Text
+          style={styles.title}
+          numberOfLines={fontScale > 1.3 ? undefined : 2}
+        >
           {post.title}
         </Text>
         <View style={styles.metaRow}>
-          <Icon name="calendar" size={13} />
+          <Icon name="calendar" size={14} color={colors.white} />
           <Text style={styles.meta}>{formatWhen(post.startsAt, now)}</Text>
         </View>
         {!!place && (
           <View style={styles.metaRow}>
-            <Icon name="map-pin" size={13} />
-            <Text style={styles.meta} numberOfLines={1}>
+            <Icon name="map-pin" size={14} color={colors.white} />
+            <Text style={styles.meta} numberOfLines={2}>
               {place}
             </Text>
           </View>
         )}
-        {post.genderPreference && post.genderPreference !== "any" && (
-          <AudienceBadge preference={post.genderPreference} />
-        )}
         <View style={styles.footer}>
-          <Avatar name={post.authorName} uri={post.authorAvatarUrl} size={22} />
-          <Text style={styles.author} numberOfLines={1}>
-            {post.authorName}
-          </Text>
+          <Avatar name={post.authorName} uri={post.authorAvatarUrl} size={29} />
+          <View style={styles.host}>
+            <Text style={styles.author} numberOfLines={1}>
+              {post.authorName}
+            </Text>
+            <Text style={styles.spots}>
+              {spots}
+              {post.joinedCount > 0 ? ` · ${post.joinedCount} joined` : ""}
+            </Text>
+          </View>
+          <View
+            style={[styles.action, !status.accepting && styles.closedAction]}
+          >
+            <Text style={styles.actionText}>{cta}</Text>
+            <Icon name="arrow-right" size={16} color={colors.onAction} />
+          </View>
         </View>
-        <View style={styles.availability}>
-          <Text style={[styles.spots, !status.accepting && styles.closed]}>
-            {spots}
-          </Text>
-          <Icon name="chevron-right" size={18} color={colors.forest} />
-        </View>
-      </View>
+      </LinearGradient>
     </MotionPressable>
   );
 }
 const styles = StyleSheet.create({
   card: {
-    flexDirection: "row",
-    alignItems: "stretch",
-    gap: 14,
-    paddingTop: 12,
-    paddingBottom: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
-  cover: {
-    width: "40%",
-    maxWidth: 200,
-    minHeight: 154,
-    borderRadius: 8,
+    backgroundColor: colors.deepTeal,
+    borderRadius: 24,
     overflow: "hidden",
+    marginBottom: 14,
   },
-  content: { flex: 1, minWidth: 0, justifyContent: "center" },
+  content: { padding: 16, justifyContent: "flex-end" },
+  top: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 6,
+    alignItems: "center",
+    marginBottom: 25,
+  },
   category: {
-    ...typography.caption,
-    fontSize: 12,
-    lineHeight: 18,
-    color: colors.textDim,
-    fontWeight: "400",
+    flexDirection: "row",
+    gap: 5,
+    alignItems: "center",
+    alignSelf: "flex-start",
+    borderRadius: 20,
+    backgroundColor: colors.cream,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
   },
+  categoryText: { ...typography.caption, fontWeight: "700", color: colors.ink },
+  audience: {
+    flexDirection: "row",
+    gap: 4,
+    alignItems: "center",
+    backgroundColor: colors.deepTeal,
+    borderRadius: 20,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+  },
+  audienceText: { ...typography.caption, color: colors.white },
   title: {
-    ...typography.heading,
-    fontSize: 18,
-    lineHeight: 24,
-    color: colors.ink,
-    marginTop: 1,
-    marginBottom: 4,
+    ...typography.title,
+    fontSize: 24,
+    lineHeight: 29,
+    fontWeight: "800",
+    color: colors.white,
+    marginBottom: 8,
+    textShadowColor: "rgba(0,0,0,0.35)",
+    textShadowRadius: 6,
   },
-  metaRow: {
-    flexDirection: "row",
-    gap: 6,
-    alignItems: "center",
-    marginBottom: 3,
-  },
-  meta: {
-    ...typography.caption,
-    fontSize: 12,
-    lineHeight: 18,
-    color: colors.textDim,
-    flex: 1,
-  },
-  footer: { flexDirection: "row", alignItems: "center", gap: 7, marginTop: 9 },
-  availability: {
+  metaRow: { flexDirection: "row", gap: 6, alignItems: "center", marginTop: 2 },
+  meta: { ...typography.bodySmall, color: colors.white, flex: 1 },
+  footer: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
+    flexWrap: "wrap",
+    columnGap: 7,
+    rowGap: 10,
+    marginTop: 14,
+  },
+  host: { flex: 1, minWidth: 65 },
+  author: { ...typography.caption, color: colors.white, fontWeight: "600" },
+  spots: { ...typography.caption, color: colors.onTeal },
+  action: {
+    flexDirection: "row",
+    alignItems: "center",
     gap: 6,
-    marginTop: 5,
+    borderRadius: 24,
+    minHeight: 44,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    backgroundColor: colors.action,
   },
-  author: { ...typography.bodySmall, color: colors.textDim, flex: 1 },
-  spots: {
-    ...typography.caption,
-    fontSize: 12,
-    color: colors.forest,
-    flexShrink: 1,
-  },
-  closed: { color: colors.textDim },
+  actionText: { ...typography.label, color: colors.onAction },
+  closedAction: { backgroundColor: colors.teal },
 });

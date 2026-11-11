@@ -149,6 +149,8 @@ export type DbPost = {
 };
 
 export type NeedPost = {
+  /** Only explicit demo fixtures set this; never returned by the backend mapper. */
+  demoScene?: "coffee" | "court" | "walk";
   id: string;
   authorId: string;
   authorName: string;
@@ -313,6 +315,8 @@ export type DbOffer = {
 };
 
 export type Offer = {
+  /** Only explicit demo fixtures set this; never returned by the backend mapper. */
+  demoScene?: "coffee" | "court" | "walk";
   id: string;
   businessId: string;
   businessName: string;

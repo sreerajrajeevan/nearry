@@ -7,7 +7,7 @@ import { tabOptions, useTabBarLayout } from "./tabOptions";
 import { NearbyScreen } from "../screens/personal/NearbyScreen";
 import { SearchScreen } from "../screens/personal/SearchScreen";
 import { CreatePostScreen } from "../screens/personal/CreatePostScreen";
-import { ActivityScreen } from "../screens/personal/ActivityScreen";
+import { InboxScreen } from "../screens/chat/ChatListScreen";
 import { ProfileScreen } from "../screens/personal/ProfileScreen";
 
 const Tab = createBottomTabNavigator<PersonalTabParamList>();
@@ -20,12 +20,12 @@ export function PersonalTabs() {
         <Tab.Screen
           name="Nearby"
           component={NearbyScreen}
-          options={tabOptions("map-pin", "Nearby")}
+          options={tabOptions("home", "Home")}
         />
         <Tab.Screen
           name="Search"
           component={SearchScreen}
-          options={tabOptions("search", "Search")}
+          options={tabOptions("compass", "Explore")}
         />
         <Tab.Screen
           name="CreatePost"
@@ -33,9 +33,12 @@ export function PersonalTabs() {
           options={tabOptions("plus", "Create", true)}
         />
         <Tab.Screen
-          name="Activity"
-          component={ActivityScreen}
-          options={tabOptions("calendar", "Activity")}
+          name="Inbox"
+          component={InboxScreen}
+          options={{
+            ...tabOptions("message-circle", "Messages"),
+            tabBarBadge: messages > 0 ? messages : undefined,
+          }}
         />
         <Tab.Screen
           name="Profile"

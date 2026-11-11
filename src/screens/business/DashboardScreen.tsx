@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { Screen } from "../../components/Screen";
+import { CoastalHero } from "../../components/CoastalHero";
 import { BrandHeader } from "../../components/BrandHeader";
 import { PageHeading } from "../../components/PageHeading";
 import { Icon } from "../../components/Icon";
@@ -79,7 +80,7 @@ export function DashboardScreen({ navigation }: Props) {
     }
   };
   return (
-    <Screen>
+    <Screen brandTop padded={false}>
       <ScrollView
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
@@ -94,143 +95,159 @@ export function DashboardScreen({ navigation }: Props) {
           />
         }
       >
-        <BrandHeader context={name} />
-        <PageHeading
-          tone="plain"
-          greeting={`Hello, ${name}.`}
-          title={"Make room\nfor a new face."}
-        />
-        {state === "loading" ? (
-          <LoadingState label="Getting your day ready…" layout="list" />
-        ) : state === "error" ? (
-          <>
-            <EmptyState
-              title="Couldn’t load your day"
-              hint="Check your connection and try again."
-            />
-            <Button
-              title="Try again"
-              variant="ghost"
-              onPress={() => void load()}
-            />
-          </>
-        ) : (
-          <>
-            <View style={styles.statsRow}>
-              <View style={styles.stat}>
-                <Text style={styles.value}>
-                  {String(today.length).padStart(2, "0")}
-                </Text>
-                <Text style={styles.statLabel}>Bookings today</Text>
+        <CoastalHero>
+          <BrandHeader inverse context={name} />
+          <Text style={styles.heroTitle}>A good day for business.</Text>
+          <Text style={styles.heroSubtitle}>
+            Your offers, bookings and neighbourhood.
+          </Text>
+        </CoastalHero>
+        <View style={styles.body}>
+          {state === "loading" ? (
+            <LoadingState label="Getting your day ready…" layout="list" />
+          ) : state === "error" ? (
+            <>
+              <EmptyState
+                title="Couldn’t load your day"
+                hint="Check your connection and try again."
+              />
+              <Button
+                title="Try again"
+                variant="ghost"
+                onPress={() => void load()}
+              />
+            </>
+          ) : (
+            <>
+              <View style={styles.statsRow}>
+                <View style={styles.stat}>
+                  <Text style={styles.value}>
+                    {String(today.length).padStart(2, "0")}
+                  </Text>
+                  <Text style={styles.statLabel}>Bookings today</Text>
+                </View>
+                <View style={styles.stat}>
+                  <Text style={styles.value}>
+                    {String(liveOffers.length).padStart(2, "0")}
+                  </Text>
+                  <Text style={styles.statLabel}>Live offers</Text>
+                </View>
               </View>
-              <View style={styles.stat}>
-                <Text style={styles.value}>
-                  {String(liveOffers.length).padStart(2, "0")}
+              <View style={styles.nudge}>
+                <Text style={styles.nudgeTitle}>
+                  {verified
+                    ? drafts.length
+                      ? "Your next hello is almost ready."
+                      : "Someone nearby could use that slot."
+                    : "Let’s introduce your business."}
                 </Text>
-                <Text style={styles.statLabel}>Live offers</Text>
+                <Text style={styles.nudgeDescription}>
+                  {verified
+                    ? drafts.length
+                      ? `You have ${drafts.length} draft offer${drafts.length === 1 ? "" : "s"}. Finish an invitation for your neighbourhood.`
+                      : "Invite your neighbourhood in with a last-minute offer."
+                    : "Complete verification to publish your offers. You can prepare drafts while you wait."}
+                </Text>
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  style={styles.textButton}
+                  activeOpacity={0.65}
+                  onPress={() =>
+                    navigation.navigate(verified ? "CreateOffer" : "Business")
+                  }
+                >
+                  <Text style={styles.link}>
+                    {verified
+                      ? "Create an offer"
+                      : "View business verification"}
+                  </Text>
+                  <Icon name="arrow-up-right" size={15} color={colors.accent} />
+                </TouchableOpacity>
+                <Button
+                  title="My offers"
+                  variant="secondary"
+                  onPress={() => navigation.navigate("MyOffers")}
+                />
               </View>
-            </View>
-            <View style={styles.nudge}>
-              <Text style={styles.nudgeTitle}>
-                {verified
-                  ? drafts.length
-                    ? "Your next hello is almost ready."
-                    : "Someone nearby could use that slot."
-                  : "Let’s introduce your business."}
-              </Text>
-              <Text style={styles.nudgeDescription}>
-                {verified
-                  ? drafts.length
-                    ? `You have ${drafts.length} draft offer${drafts.length === 1 ? "" : "s"}. Finish an invitation for your neighbourhood.`
-                    : "Invite your neighbourhood in with a last-minute offer."
-                  : "Complete verification to publish your offers. You can prepare drafts while you wait."}
-              </Text>
+              <View style={styles.sectionRow}>
+                <Text style={styles.sectionTitle}>
+                  Coming through your door
+                </Text>
+                <Text style={styles.sectionMeta}>Today</Text>
+              </View>
+              {today.length === 0 ? (
+                <EmptyState
+                  title="A little room in your day"
+                  hint="New bookings will appear here."
+                />
+              ) : (
+                today.slice(0, 8).map((booking) => (
+                  <View key={booking.id} style={styles.appointment}>
+                    <Text style={styles.time}>{formatTime(booking.slot)}</Text>
+                    <View style={styles.customer}>
+                      <Text style={styles.name}>{booking.customerName}</Text>
+                      <Text style={styles.detail}>
+                        {[
+                          booking.offerTitle,
+                          booking.partySize > 1
+                            ? `${booking.partySize} people`
+                            : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </Text>
+                    </View>
+                    {booking.status === "confirmed" ? (
+                      <Text style={styles.confirmed}>Confirmed</Text>
+                    ) : isBookingStale(booking) ? (
+                      <Text style={styles.stale}>
+                        {isHoldExpired(booking) ? "Expired" : "Missed"}
+                      </Text>
+                    ) : (
+                      <TouchableOpacity
+                        accessibilityRole="button"
+                        accessibilityLabel={`Confirm ${booking.customerName} at ${formatTime(booking.slot)}`}
+                        disabled={confirming !== null}
+                        onPress={() => void onConfirm(booking.id)}
+                        style={styles.confirmButton}
+                      >
+                        <Text style={styles.link}>
+                          {confirming === booking.id
+                            ? "Confirming…"
+                            : "Confirm"}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                ))
+              )}
               <TouchableOpacity
                 accessibilityRole="button"
-                style={styles.textButton}
                 activeOpacity={0.65}
-                onPress={() =>
-                  navigation.navigate(verified ? "CreateOffer" : "Business")
-                }
+                style={styles.allBookings}
+                onPress={() => navigation.navigate("Bookings")}
               >
-                <Text style={styles.link}>
-                  {verified
-                    ? "Say hello with an offer"
-                    : "View business verification"}
-                </Text>
+                <Text style={styles.link}>All bookings</Text>
                 <Icon name="arrow-up-right" size={15} color={colors.accent} />
               </TouchableOpacity>
-              <Button
-                title="My offers"
-                variant="secondary"
-                onPress={() => navigation.navigate("MyOffers")}
-              />
-            </View>
-            <View style={styles.sectionRow}>
-              <Text style={styles.sectionTitle}>Coming through your door</Text>
-              <Text style={styles.sectionMeta}>Today</Text>
-            </View>
-            {today.length === 0 ? (
-              <EmptyState
-                title="A little room in your day"
-                hint="New bookings will appear here."
-              />
-            ) : (
-              today.slice(0, 8).map((booking) => (
-                <View key={booking.id} style={styles.appointment}>
-                  <Text style={styles.time}>{formatTime(booking.slot)}</Text>
-                  <View style={styles.customer}>
-                    <Text style={styles.name}>{booking.customerName}</Text>
-                    <Text style={styles.detail}>
-                      {[
-                        booking.offerTitle,
-                        booking.partySize > 1
-                          ? `${booking.partySize} people`
-                          : null,
-                      ]
-                        .filter(Boolean)
-                        .join(" · ")}
-                    </Text>
-                  </View>
-                  {booking.status === "confirmed" ? (
-                    <Text style={styles.confirmed}>Confirmed</Text>
-                  ) : isBookingStale(booking) ? (
-                    <Text style={styles.stale}>
-                      {isHoldExpired(booking) ? "Expired" : "Missed"}
-                    </Text>
-                  ) : (
-                    <TouchableOpacity
-                      accessibilityRole="button"
-                      accessibilityLabel={`Confirm ${booking.customerName} at ${formatTime(booking.slot)}`}
-                      disabled={confirming !== null}
-                      onPress={() => void onConfirm(booking.id)}
-                      style={styles.confirmButton}
-                    >
-                      <Text style={styles.link}>
-                        {confirming === booking.id ? "Confirming…" : "Confirm"}
-                      </Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-              ))
-            )}
-            <TouchableOpacity
-              accessibilityRole="button"
-              activeOpacity={0.65}
-              style={styles.allBookings}
-              onPress={() => navigation.navigate("Bookings")}
-            >
-              <Text style={styles.link}>All bookings</Text>
-              <Icon name="arrow-up-right" size={15} color={colors.accent} />
-            </TouchableOpacity>
-          </>
-        )}
+            </>
+          )}
+        </View>
       </ScrollView>
     </Screen>
   );
 }
 const styles = StyleSheet.create({
   scroll: { paddingBottom: spacing.xl },
+  body: { padding: 20 },
+  heroTitle: {
+    ...typography.title,
+    fontSize: 29,
+    lineHeight: 35,
+    color: colors.white,
+    marginTop: 12,
+  },
+  heroSubtitle: { ...typography.bodySmall, color: colors.onTeal, marginTop: 7 },
   status: {
     ...typography.bodySmall,
     color: colors.textDim,
@@ -241,20 +258,23 @@ const styles = StyleSheet.create({
     gap: spacing.lg,
     padding: 18,
     borderRadius: 18,
-    backgroundColor: colors.forest,
+    backgroundColor: colors.white,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   stat: { flex: 1 },
   value: {
     ...typography.display,
     fontSize: 32,
     lineHeight: 38,
-    color: colors.onAccent,
+    color: colors.teal,
   },
-  statLabel: { ...typography.bodySmall, color: colors.goldSoft, marginTop: 3 },
+  statLabel: { ...typography.bodySmall, color: colors.textDim, marginTop: 3 },
   nudge: {
-    paddingVertical: spacing.lg,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
+    padding: 20,
+    backgroundColor: colors.sandSoft,
+    borderRadius: 24,
+    marginTop: 16,
     marginBottom: spacing.lg,
   },
   nudgeTitle: {

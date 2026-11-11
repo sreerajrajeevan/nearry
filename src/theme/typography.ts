@@ -1,34 +1,36 @@
 import { Platform, TextStyle } from "react-native";
 
 export const fontFamily = {
-  sans: Platform.select({ ios: "Avenir Next", default: "System" }),
+  sans: "NunitoSans",
+  bold: "NunitoSansBold",
+  extraBold: "NunitoSansExtraBold",
   mono: Platform.select({ ios: "Menlo", default: "monospace" }),
 } as const;
 
 export const typography: Record<string, TextStyle> = {
   display: {
-    fontFamily: fontFamily.sans,
+    fontFamily: fontFamily.extraBold,
     fontSize: 36,
     fontWeight: "700",
     letterSpacing: -1.4,
     lineHeight: 41,
   },
   title: {
-    fontFamily: fontFamily.sans,
+    fontFamily: fontFamily.bold,
     fontSize: 23,
     fontWeight: "600",
     letterSpacing: -0.6,
     lineHeight: 29,
   },
   heading: {
-    fontFamily: fontFamily.sans,
+    fontFamily: fontFamily.bold,
     fontSize: 17,
     fontWeight: "600",
     letterSpacing: -0.2,
     lineHeight: 23,
   },
   label: {
-    fontFamily: fontFamily.sans,
+    fontFamily: fontFamily.bold,
     fontSize: 13,
     fontWeight: "600",
     lineHeight: 18,
@@ -36,25 +38,25 @@ export const typography: Record<string, TextStyle> = {
   body: {
     fontFamily: fontFamily.sans,
     fontSize: 15,
-    fontWeight: "500",
+    fontWeight: "400",
     lineHeight: 22,
   },
   bodySmall: {
     fontFamily: fontFamily.sans,
     fontSize: 13,
-    fontWeight: "500",
+    fontWeight: "400",
     lineHeight: 19,
   },
   mono: {
     fontFamily: fontFamily.mono,
     fontSize: 13,
-    fontWeight: "500",
+    fontWeight: "400",
     lineHeight: 19,
   },
   caption: {
     fontFamily: fontFamily.sans,
     fontSize: 11,
-    fontWeight: "500",
+    fontWeight: "400",
     lineHeight: 16,
   },
 };

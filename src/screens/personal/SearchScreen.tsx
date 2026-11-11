@@ -1,7 +1,7 @@
 import { LoadingState } from "../../components/LoadingState";
 import React, { useEffect, useState } from "react";
 import { View, Text, ScrollView, StyleSheet } from "react-native";
-import { useNavigation } from "@react-navigation/native";
+import { RouteProp, useRoute, useNavigation } from "@react-navigation/native";
 import { PlaceSuggestions } from "../../components/PlaceSuggestions";
 import { usePlaceSuggestions } from "../../hooks/usePlaceSuggestions";
 import { Screen } from "../../components/Screen";
@@ -19,7 +19,7 @@ import { searchVenues } from "../../services/venues";
 import { listPosts } from "../../services/posts";
 import { listLiveOffers } from "../../services/offers";
 import { NeedPost, Venue, Offer } from "../../services/mappers";
-import { PersonalTabNav } from "../../navigation/types";
+import { PersonalTabNav, PersonalTabParamList } from "../../navigation/types";
 
 type Filter = "all" | "venues" | "posts" | "offers";
 const filters: { key: Filter; label: string }[] = [
@@ -30,8 +30,12 @@ const filters: { key: Filter; label: string }[] = [
 ];
 export function SearchScreen() {
   const navigation = useNavigation<PersonalTabNav>();
+  const route = useRoute<RouteProp<PersonalTabParamList, "Search">>();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
+  useEffect(() => {
+    if (route.params?.filter) setFilter(route.params.filter);
+  }, [route.params?.filter]);
   const suggestions = usePlaceSuggestions(
     query,
     undefined,
@@ -50,7 +54,7 @@ export function SearchScreen() {
     setVenues([]);
     setPosts([]);
     setOffers([]);
-    if (!q) {
+    if (!q && filter !== "offers") {
       setState("idle");
       return;
     }
@@ -58,8 +62,8 @@ export function SearchScreen() {
     const timer = setTimeout(async () => {
       try {
         const [v, p, o] = await Promise.all([
-          searchVenues(q),
-          listPosts({ search: q }),
+          q ? searchVenues(q) : Promise.resolve([]),
+          q ? listPosts({ search: q }) : Promise.resolve([]),
           listLiveOffers(),
         ]);
         if (!active) return;
@@ -81,7 +85,7 @@ export function SearchScreen() {
       active = false;
       clearTimeout(timer);
     };
-  }, [query, retry]);
+  }, [query, retry, filter]);
   const showVenues = filter === "all" || filter === "venues";
   const showPosts = filter === "all" || filter === "posts";
   const showOffers = filter === "all" || filter === "offers";
@@ -99,8 +103,8 @@ export function SearchScreen() {
         <PersonalHeader />
         <PageHeading
           compact
-          greeting="Something in mind?"
-          title={"Find your\nnext hello."}
+          greeting="Explore your neighbourhood"
+          title="Find your next plan."
         />
         <DiscoverySearch value={query} onChangeText={setQuery} />
         <FilterTabs
@@ -166,7 +170,7 @@ export function SearchScreen() {
             )}
             {showOffers && offers.length > 0 && (
               <>
-                <Text style={styles.sectionLabel}>A little opening</Text>
+                <Text style={styles.sectionLabel}>Offers near you</Text>
                 {offers.map((offer) => (
                   <OfferRow
                     key={offer.id}
