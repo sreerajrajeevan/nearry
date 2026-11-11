@@ -173,7 +173,7 @@ const styles = StyleSheet.create({
   overlay: {
     flex: 1,
     justifyContent: "flex-end",
-    backgroundColor: "rgba(12,59,46,0.45)",
+    backgroundColor: colors.modalScrim,
   },
   sheet: {
     backgroundColor: colors.card,

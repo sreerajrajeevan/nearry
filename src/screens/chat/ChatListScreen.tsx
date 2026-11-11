@@ -24,6 +24,7 @@ import { listConversations } from "../../services/chat";
 import { Conversation } from "../../services/mappers";
 
 type Props = {
+  showBack?: boolean;
   navigation: {
     goBack?: () => void;
     canGoBack?: () => boolean;
@@ -42,7 +43,7 @@ function timeAgo(iso?: string): string {
 }
 
 /** Shared chat list for personal + business lanes. */
-export function ChatListScreen({ navigation }: Props) {
+export function ChatListScreen({ navigation, showBack = true }: Props) {
   const { profile } = useAuth();
   const focused = useRef(false),
     version = useRef(0);
@@ -95,7 +96,7 @@ export function ChatListScreen({ navigation }: Props) {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scroll}
       >
-        {navigation.canGoBack?.() && (
+        {showBack && navigation.canGoBack?.() && (
           <TouchableOpacity
             accessibilityRole="button"
             accessibilityLabel="Back"
@@ -106,8 +107,12 @@ export function ChatListScreen({ navigation }: Props) {
             <Text style={styles.backText}>Back</Text>
           </TouchableOpacity>
         )}
-        <PageHeading compact title="Your conversations" />
-        <Text style={styles.subtitle}>About your plans and bookings</Text>
+        <PageHeading
+          compact
+          title="Messages"
+          subtitle="Good plans start with a conversation."
+        />
+
         {conversations.length > 0 && (
           <Text style={styles.subtitle}>
             Hold a chat for options, or tap its three dots.
@@ -252,7 +257,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 12,
     alignItems: "center",
-    paddingVertical: 20,
+    paddingVertical: 10,
   },
   text: { flex: 1, minWidth: 0 },
   topRow: {
@@ -279,11 +284,16 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: colors.gold,
+    backgroundColor: colors.coral,
   },
   unreadText: {
     ...typography.caption,
-    color: colors.onGold,
+    color: colors.onCoral,
     fontWeight: "600",
   },
 });
+
+/** Tab root has no back button; the stack conversation list retains it. */
+export function InboxScreen(props: Props) {
+  return <ChatListScreen {...props} showBack={false} />;
+}

@@ -54,7 +54,7 @@ export function Button({
               variant === "solid"
                 ? colors.onAccent
                 : variant === "primary"
-                  ? colors.onSage
+                  ? colors.onAction
                   : variant === "danger"
                     ? colors.red
                     : colors.text
@@ -84,19 +84,19 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   base: {
-    minHeight: 50,
+    minHeight: 52,
     paddingVertical: spacing.sm,
     borderRadius: radius.md,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: spacing.md,
   },
-  primary: { backgroundColor: colors.sage },
+  primary: { backgroundColor: colors.action },
   solid: { backgroundColor: colors.forest },
   secondary: {
     backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.borderStrong,
+    borderColor: colors.border,
   },
   ghost: { backgroundColor: "transparent" },
   danger: {
@@ -112,7 +112,7 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     textAlign: "center",
   },
-  primaryText: { color: colors.onSage },
+  primaryText: { color: colors.onAction },
   solidText: { color: colors.onAccent },
   secondaryText: { color: colors.text },
   ghostText: { color: colors.textDim },

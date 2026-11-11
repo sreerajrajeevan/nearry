@@ -31,7 +31,9 @@ export function DiscoverySearch(props: Props) {
         >
           <Icon name="search" size={18} />
           <Text style={styles.placeholder} numberOfLines={1}>
-            {props.compact ? "Find a plan nearby" : "Search places or plans"}
+            {props.compact
+              ? "Find plans, places and offers"
+              : "Search places or plans"}
           </Text>
         </TouchableOpacity>
         {props.onFilterPress && (
@@ -84,11 +86,11 @@ export function DiscoverySearch(props: Props) {
 }
 const styles = StyleSheet.create({
   compact: {
-    minHeight: 44,
-    backgroundColor: colors.hairline,
+    minHeight: 54,
+    backgroundColor: colors.surface,
     borderColor: "transparent",
-    borderRadius: 8,
-    marginBottom: 4,
+    borderRadius: 28,
+    marginBottom: 0,
     paddingHorizontal: 12,
     gap: 0,
   },
@@ -105,7 +107,9 @@ const styles = StyleSheet.create({
     minHeight: 44,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: -10,
+    marginRight: -5,
+    borderRadius: 24,
+    backgroundColor: colors.sandSoft,
   },
   filterDot: {
     position: "absolute",
@@ -130,7 +134,7 @@ const styles = StyleSheet.create({
     minHeight: 52,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 15,
+    borderRadius: 28,
     paddingHorizontal: 14,
     backgroundColor: colors.card,
     marginBottom: spacing.md,

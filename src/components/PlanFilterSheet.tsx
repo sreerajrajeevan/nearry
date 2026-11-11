@@ -237,7 +237,7 @@ export function PlanFilterSheet({
 }
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: "rgba(8,37,27,0.38)" },
+  overlay: { flex: 1, backgroundColor: colors.modalScrim },
   position: { flex: 1, justifyContent: "flex-end", paddingTop: 20 },
   sheet: {
     maxHeight: "94%",

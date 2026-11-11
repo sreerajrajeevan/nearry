@@ -39,7 +39,7 @@ export function FilterTabs<T extends string>({
               <Icon
                 name={option.icon}
                 size={15}
-                color={active ? colors.onGold : colors.textDim}
+                color={active ? colors.onAccent : colors.textDim}
               />
             )}
             <Text style={[styles.label, active && styles.activeLabel]}>
@@ -67,11 +67,11 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 13,
     borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    backgroundColor: colors.card,
+    borderColor: "transparent",
+    borderRadius: 24,
+    backgroundColor: colors.sandSoft,
   },
-  active: { backgroundColor: colors.goldSoft, borderColor: colors.goldDeep },
+  active: { backgroundColor: colors.teal, borderColor: colors.teal },
   label: { ...typography.bodySmall, color: colors.textDim },
-  activeLabel: { color: colors.onGold, fontWeight: "500" },
+  activeLabel: { color: colors.onAccent, fontWeight: "500" },
 });

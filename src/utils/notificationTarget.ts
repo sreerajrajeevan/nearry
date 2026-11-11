@@ -17,7 +17,7 @@ export function notificationTarget(notice: AppNotification, role: AccountType) {
       notice.refId
     )
       return { screen: "PostDetails", params: { postId: notice.refId } };
-    return { screen: "PersonalTabs", params: { screen: "Activity" } };
+    return { screen: "Activity", params: undefined };
   }
   return {
     screen: "BusinessTabs",

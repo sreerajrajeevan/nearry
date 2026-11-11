@@ -5,6 +5,8 @@ import {
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 import { conversationSafety, ConversationSafety } from "../../services/safety";
+import { StatusBar } from "expo-status-bar";
+import { useIsFocused } from "@react-navigation/native";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   AppState,
@@ -80,6 +82,7 @@ function Bubble({
 
 /** 1:1 conversation. Text-only, realtime, server-authorized membership. */
 export function ConversationScreen({ route, navigation }: Props) {
+  const focusedScreen = useIsFocused();
   const { conversationId, title } = route.params;
   const { profile } = useAuth();
   const myId = profile?.id ?? "";
@@ -229,7 +232,11 @@ export function ConversationScreen({ route, navigation }: Props) {
     // The keyboard owner fills the window, outside safe-area padding. Android
     // edge-to-edge does not resize this window; an undefined behavior covers the input.
     <KeyboardAvoidingView style={styles.flex} behavior="padding">
-      <SafeAreaView style={styles.flex} edges={["top", "left", "right"]}>
+      <SafeAreaView
+        style={[styles.flex, { backgroundColor: colors.deepTeal }]}
+        edges={["top", "left", "right"]}
+      >
+        {focusedScreen && <StatusBar style="light" />}
         <View style={styles.heading}>
           <TouchableOpacity
             accessibilityRole="button"
@@ -237,7 +244,7 @@ export function ConversationScreen({ route, navigation }: Props) {
             onPress={() => navigation.goBack()}
             style={styles.iconButton}
           >
-            <Icon name="arrow-left" size={22} color={colors.text} />
+            <Icon name="arrow-left" size={22} color={colors.white} />
           </TouchableOpacity>
           <Avatar
             name={peer?.name ?? title ?? "Conversation"}
@@ -261,7 +268,7 @@ export function ConversationScreen({ route, navigation }: Props) {
             }}
             style={styles.iconButton}
           >
-            <Icon name="more-vertical" size={22} color={colors.text} />
+            <Icon name="more-vertical" size={22} color={colors.white} />
           </TouchableOpacity>
         </View>
         {peer && !peer.canMessage && (
@@ -384,9 +391,9 @@ export function ConversationScreen({ route, navigation }: Props) {
             disabled={!draft.trim() || sending || !peer?.canMessage}
           >
             {sending ? (
-              <ActivityIndicator color={colors.onAccent} size="small" />
+              <ActivityIndicator color={colors.onAction} size="small" />
             ) : (
-              <Icon name="arrow-up" size={20} color={colors.onAccent} />
+              <Icon name="arrow-up" size={20} color={colors.onAction} />
             )}
           </TouchableOpacity>
         </View>
@@ -424,7 +431,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
-    backgroundColor: colors.card,
+    backgroundColor: colors.deepTeal,
     flexShrink: 0,
   },
   iconButton: {
@@ -435,14 +442,19 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   headingText: { flex: 1, minWidth: 0 },
-  title: { ...typography.heading, color: colors.text },
-  subtitle: { ...typography.caption, color: colors.textDim, marginTop: 2 },
+  title: { ...typography.heading, color: colors.white },
+  subtitle: { ...typography.caption, color: colors.onTeal, marginTop: 2 },
   status: {
     ...typography.bodySmall,
     color: colors.textDim,
     padding: spacing.sm,
   },
-  transcript: { flex: 1, minHeight: 0, overflow: "hidden" },
+  transcript: {
+    flex: 1,
+    minHeight: 0,
+    overflow: "hidden",
+    backgroundColor: colors.background,
+  },
   list: { padding: spacing.md, flexGrow: 1, justifyContent: "flex-end" },
   sendError: {
     ...typography.bodySmall,
@@ -454,7 +466,7 @@ const styles = StyleSheet.create({
   bubbleRowMine: { alignItems: "flex-end" },
   bubble: {
     maxWidth: "80%",
-    backgroundColor: colors.claySoft,
+    backgroundColor: colors.white,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     borderRadius: 16,
@@ -495,7 +507,7 @@ const styles = StyleSheet.create({
     textAlignVertical: "top",
     color: colors.text,
     borderWidth: 1,
-    borderColor: colors.borderStrong,
+    borderColor: colors.border,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
     maxHeight: 110,
@@ -505,7 +517,7 @@ const styles = StyleSheet.create({
     borderRadius: 23,
     width: 46,
     height: 46,
-    backgroundColor: colors.accent,
+    backgroundColor: colors.action,
     alignItems: "center",
     justifyContent: "center",
   },

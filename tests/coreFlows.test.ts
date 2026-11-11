@@ -51,9 +51,9 @@ test("notifications open their account's actual workflow rather than a dead-end 
     screen: "PostDetails",
     params: { postId: "context" },
   });
-  assert.equal(
-    notificationTarget(notice("booking_confirmed"), "personal").params.screen,
-    "Activity",
+  assert.deepEqual(
+    notificationTarget(notice("booking_confirmed"), "personal"),
+    { screen: "Activity", params: undefined },
   );
   assert.equal(
     notificationTarget(notice("booking"), "business").params.screen,

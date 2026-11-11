@@ -25,7 +25,8 @@ import { MotionPressable, ScreenReveal } from "../../components/Motion";
 import { LoadingState } from "../../components/LoadingState";
 import { colors, typography, spacing, surfaces } from "../../theme";
 import { useAuth } from "../../store/AuthContext";
-import { PersonalTabNav } from "../../navigation/types";
+import { PersonalStackParamList } from "../../navigation/types";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { listPosts, subscribeToPosts } from "../../services/posts";
 import {
   approveRequest,
@@ -52,7 +53,8 @@ const sections: { key: Section; label: string; icon: IconName }[] = [
 
 export function ActivityScreen() {
   const { profile } = useAuth();
-  const navigation = useNavigation<PersonalTabNav>();
+  const navigation =
+    useNavigation<NativeStackNavigationProp<PersonalStackParamList>>();
   const myId = profile?.id;
   const [section, setSection] = useState<Section>("plans");
   const [history, setHistory] = useState(false);
@@ -253,6 +255,22 @@ export function ActivityScreen() {
           />
         }
       >
+        <MotionPressable
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+          onPress={() => navigation.goBack()}
+          style={{
+            minHeight: 44,
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 6,
+          }}
+        >
+          <Icon name="arrow-left" size={18} />
+          <Text style={{ ...typography.bodySmall, color: colors.text }}>
+            Back
+          </Text>
+        </MotionPressable>
         <PersonalHeader />
         <PageHeading
           compact
@@ -522,7 +540,10 @@ export function ActivityScreen() {
                 !history
                   ? {
                       title: "Explore nearby plans",
-                      onPress: () => navigation.navigate("Nearby"),
+                      onPress: () =>
+                        navigation.navigate("PersonalTabs", {
+                          screen: "Nearby",
+                        }),
                     }
                   : undefined,
               )
@@ -591,7 +612,8 @@ export function ActivityScreen() {
               !history
                 ? {
                     title: "Find nearby offers",
-                    onPress: () => navigation.navigate("Search"),
+                    onPress: () =>
+                      navigation.navigate("PersonalTabs", { screen: "Search" }),
                   }
                 : undefined,
             )

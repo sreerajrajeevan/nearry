@@ -9,6 +9,8 @@ import {
   ViewStyle,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { StatusBar } from "expo-status-bar";
+import { useIsFocused } from "@react-navigation/native";
 import { BottomTabBarHeightContext } from "@react-navigation/bottom-tabs";
 import { colors, spacing } from "../theme";
 import { ScreenReveal } from "./Motion";
@@ -19,6 +21,7 @@ type Props = {
   padded?: boolean;
   scroll?: boolean;
   keyboard?: boolean;
+  brandTop?: boolean;
 };
 
 /** Safe areas belong to the screen at the top and the tab bar at the bottom. */
@@ -28,17 +31,20 @@ export function Screen({
   padded = true,
   scroll = false,
   keyboard = false,
+  brandTop = false,
 }: Props) {
+  const focused = useIsFocused();
   const tabBarHeight = useContext(BottomTabBarHeightContext);
   return (
     <SafeAreaView
-      style={styles.safe}
+      style={[styles.safe, brandTop && { backgroundColor: colors.deepTeal }]}
       edges={
         tabBarHeight == null
           ? ["top", "bottom", "left", "right"]
           : ["top", "left", "right"]
       }
     >
+      {focused && <StatusBar style={brandTop ? "light" : "dark"} />}
       <ScreenReveal style={styles.flex}>
         <KeyboardAvoidingView
           style={styles.flex}

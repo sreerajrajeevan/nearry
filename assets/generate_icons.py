@@ -8,20 +8,21 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 
 ROOT = Path(__file__).resolve().parent
-PAPER = '#F4F3EB'
-INK = '#0C3B2E'
-POINT = '#BB8A52'
+PAPER = '#FFF9F2'
+INK = '#00383D'
+POINT = '#00383D'
+CORAL = '#FF805E'
 
 
-def ink_mask(name: str) -> Image.Image:
+def ink_mask(name: str, color: str = INK) -> Image.Image:
     # Keep the approved geometry and tint its alpha mask to match React.
     source = Image.open(ROOT / 'brand' / name).convert('RGBA')
-    tinted = Image.new('RGBA', source.size, INK)
+    tinted = Image.new('RGBA', source.size, color)
     tinted.putalpha(source.getchannel('A'))
     return tinted
 
 
-PIN = ink_mask('pin.png')
+PIN = ink_mask('pin.png', CORAL)
 WORD = ink_mask('wordmark.png')
 
 
@@ -30,7 +31,7 @@ def resize(image: Image.Image, width: int) -> Image.Image:
 
 
 def symbol(size: int, mono: bool = False) -> Image.Image:
-    canvas = resize(PIN, size)
+    canvas = resize(ink_mask('pin.png') if mono else PIN, size)
     draw = ImageDraw.Draw(canvas)
     # Matches BrandMark: the point is part of the identity, separate from the pin.
     x, y, r = (size * n / 256 for n in (216, 114, 18))

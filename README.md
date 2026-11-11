@@ -148,3 +148,7 @@ See [post editing, cropping and profile requirements](docs/post-participation-an
 ### Optional selfie check
 
 Personal members can submit a private camera selfie from Profile. Review it in the existing admin dashboard’s **Selfie reviews** section. Requires migration **00030**, the updated `admin-console` and a fresh mobile build. See [setup, retention and phone checks](docs/personal-selfie-verification.md). This is a manual photo comparison, not identity, age or liveness verification.
+
+### Coastal interface
+
+The current UI follows the teal, warm-cream and coral direction, with bundled Nunito Sans, photographic plans and a local-offer carousel. Personal tabs are Home, Explore, Create, Messages and Profile; hosting tools and Activity are under Profile. See [the UI review notes](docs/coastal-ui.md) for coverage, assets and device checks. Build a new Android binary after merging this change because it adds Expo LinearGradient.

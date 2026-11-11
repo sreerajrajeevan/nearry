@@ -9,7 +9,6 @@ type Props = {
   compact?: boolean;
   tone?: "forest" | "plain";
 };
-
 export function PageHeading({
   title,
   greeting,
@@ -17,12 +16,12 @@ export function PageHeading({
   compact = false,
   tone = "forest",
 }: Props) {
+  const inverse = tone === "forest";
   return (
-    <View style={[styles.heading, tone === "forest" && styles.forest]}>
+    <View style={[styles.heading, inverse && styles.hero]}>
+      {inverse && <View style={styles.stroke} accessible={false} />}
       {!!greeting && (
-        <Text
-          style={[styles.greeting, tone === "forest" && styles.onForestMuted]}
-        >
+        <Text style={[styles.greeting, inverse && styles.onHeroMuted]}>
           {greeting}
         </Text>
       )}
@@ -31,32 +30,32 @@ export function PageHeading({
         style={[
           styles.title,
           compact && styles.compact,
-          tone === "forest" && styles.onForest,
+          inverse && styles.onHero,
         ]}
       >
         {title}
       </Text>
       {!!subtitle && (
-        <Text
-          style={[styles.subtitle, tone === "forest" && styles.onForestMuted]}
-        >
+        <Text style={[styles.subtitle, inverse && styles.onHeroMuted]}>
           {subtitle}
         </Text>
       )}
     </View>
   );
 }
-
 const styles = StyleSheet.create({
   heading: { marginTop: spacing.sm, marginBottom: spacing.lg },
-  forest: { ...surfaces.hero },
-  onForest: { color: colors.onAccent },
-  onForestMuted: { color: colors.goldSoft },
-  greeting: {
-    ...typography.bodySmall,
-    color: colors.textDim,
-    marginBottom: 10,
+  hero: { ...surfaces.hero, paddingVertical: 24 },
+  stroke: {
+    width: 28,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.coral,
+    marginBottom: 14,
   },
+  onHero: { color: colors.white },
+  onHeroMuted: { color: colors.onTeal },
+  greeting: { ...typography.bodySmall, color: colors.textDim, marginBottom: 7 },
   title: {
     ...typography.display,
     fontSize: 30,
@@ -65,10 +64,10 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   compact: {
-    fontSize: 25,
-    lineHeight: 31,
-    letterSpacing: -1,
-    fontWeight: "600",
+    fontSize: 26,
+    lineHeight: 33,
+    letterSpacing: -0.6,
+    fontWeight: "700",
   },
   subtitle: {
     ...typography.body,

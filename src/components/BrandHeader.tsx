@@ -2,6 +2,7 @@ import React from "react";
 import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import { colors, typography, spacing } from "../theme";
 import { Icon } from "./Icon";
+import { Avatar } from "./Avatar";
 import { BrandLogo } from "./BrandLogo";
 
 type Props = {
@@ -13,6 +14,10 @@ type Props = {
   onNotificationsPress?: () => void;
   unreadNotifications?: number;
   compact?: boolean;
+  inverse?: boolean;
+  onProfilePress?: () => void;
+  profileName?: string;
+  avatarUri?: string;
 };
 
 export function BrandHeader({
@@ -24,22 +29,36 @@ export function BrandHeader({
   onNotificationsPress,
   unreadNotifications = 0,
   compact = false,
+  inverse = false,
+  onProfilePress,
+  profileName = "You",
+  avatarUri,
 }: Props) {
+  const foreground = inverse ? colors.white : colors.text;
   const unread = Math.max(0, Math.floor(unreadMessages));
   const unreadNotifs = Math.max(0, Math.floor(unreadNotifications));
   const contextContent = (
     <>
-      {location && <Icon name="map-pin" size={13} />}
-      <Text style={styles.context} numberOfLines={1}>
+      {location && <Icon name="map-pin" size={16} color={foreground} />}
+      <Text style={[styles.context, { color: foreground }]} numberOfLines={1}>
         {context}
       </Text>
-      {onContextPress && <Icon name="chevron-down" size={13} />}
+      {onContextPress && (
+        <Icon name="chevron-down" size={15} color={foreground} />
+      )}
     </>
   );
   return (
     <View style={[styles.header, compact && styles.compactHeader]}>
       <View style={styles.identity}>
-        <BrandLogo width={compact ? 128 : 148} />
+        <BrandLogo
+          width={compact ? 124 : 148}
+          color={foreground}
+          dotColor={inverse ? colors.white : colors.teal}
+        />
+        {inverse && !compact && (
+          <Text style={styles.tagline}>Discover · Plan · Meet nearby</Text>
+        )}
         {!!context &&
           (onContextPress ? (
             <TouchableOpacity
@@ -47,14 +66,20 @@ export function BrandHeader({
               accessibilityLabel={`Change location, ${context}`}
               hitSlop={4}
               onPress={onContextPress}
-              style={[styles.contextButton, compact && styles.compactContext]}
+              style={[
+                styles.contextButton,
+                (compact || inverse) && styles.compactContext,
+              ]}
               activeOpacity={0.65}
             >
               {contextContent}
             </TouchableOpacity>
           ) : (
             <View
-              style={[styles.contextButton, compact && styles.compactContext]}
+              style={[
+                styles.contextButton,
+                (compact || inverse) && styles.compactContext,
+              ]}
             >
               {contextContent}
             </View>
@@ -74,7 +99,7 @@ export function BrandHeader({
             activeOpacity={0.7}
             style={styles.messagesButton}
           >
-            <Icon name="bell" size={22} color={colors.text} />
+            <Icon name="bell" size={22} color={foreground} />
             {unreadNotifs > 0 && (
               <View
                 style={styles.unreadBadge}
@@ -101,7 +126,7 @@ export function BrandHeader({
             activeOpacity={0.7}
             style={styles.messagesButton}
           >
-            <Icon name="message-circle" size={22} color={colors.text} />
+            <Icon name="message-circle" size={22} color={foreground} />
             {unread > 0 && (
               <View
                 style={styles.unreadBadge}
@@ -115,12 +140,30 @@ export function BrandHeader({
             )}
           </TouchableOpacity>
         )}
+        {onProfilePress && (
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Your profile"
+            onPress={onProfilePress}
+            style={styles.profileButton}
+          >
+            <Avatar name={profileName} uri={avatarUri} size={34} />
+          </TouchableOpacity>
+        )}
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  tagline: { ...typography.caption, color: colors.onTeal, marginTop: 4 },
+  profileButton: {
+    width: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 22,
+  },
   compactHeader: { paddingTop: 4, paddingBottom: 4 },
   compactContext: {
     backgroundColor: "transparent",
@@ -155,7 +198,7 @@ const styles = StyleSheet.create({
   actions: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.sm,
+    gap: 0,
     flexShrink: 1,
     minWidth: 0,
   },
@@ -180,12 +223,12 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: colors.gold,
+    backgroundColor: colors.coral,
   },
   unreadText: {
     ...typography.caption,
     lineHeight: 16,
-    color: colors.onGold,
+    color: colors.onCoral,
     fontWeight: "600",
   },
   context: {

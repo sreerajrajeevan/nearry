@@ -27,7 +27,9 @@ import { Input } from "../../components/Input";
 import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
 import { PostRow } from "../../components/PostRow";
-import { OfferRow } from "../../components/OfferRow";
+import { FeaturedOffers } from "../../components/FeaturedOffers";
+import { CoastalHero } from "../../components/CoastalHero";
+import { SectionHeading } from "../../components/SectionHeading";
 import { VenueRow } from "../../components/VenueRow";
 import { DiscoverySearch } from "../../components/DiscoverySearch";
 import { colors, typography, spacing } from "../../theme";
@@ -277,7 +279,7 @@ export function NearbyScreen() {
   ];
 
   return (
-    <Screen style={styles.page}>
+    <Screen padded={false} brandTop>
       <ScrollView
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
@@ -291,232 +293,249 @@ export function NearbyScreen() {
           />
         }
       >
-        <PersonalHeader
-          compact
-          context={areaLabel}
-          location
-          onContextPress={() => setEditingLocation((v) => !v)}
-        />
-        {editingLocation && (
-          <View style={styles.locationEditor}>
-            <Input
-              clearable
-              label="Your area or city"
-              value={area}
-              onChangeText={setArea}
-              placeholder="Try Infopark or Kakkanad"
-              maxLength={120}
-              returnKeyType="search"
-              onSubmitEditing={applyArea}
-            />
-            {area.trim().length >= 3 && (
-              <PlaceSuggestions
-                {...suggestions}
-                onRetry={suggestions.retry}
-                onSelect={choosePlace}
+        <CoastalHero>
+          <PersonalHeader
+            compact
+            inverse
+            context={areaLabel}
+            location
+            onContextPress={() => setEditingLocation((v) => !v)}
+          />
+          <DiscoverySearch
+            compact
+            onPress={() => navigation.navigate("Search")}
+            onFilterPress={() => {
+              Keyboard.dismiss();
+              setFiltersOpen(true);
+            }}
+            filtersOpen={filtersOpen}
+            filtersActive={hasFilters}
+          />
+        </CoastalHero>
+        <View style={styles.body}>
+          {editingLocation && (
+            <View style={styles.locationEditor}>
+              <Input
+                clearable
+                label="Your area or city"
+                value={area}
+                onChangeText={setArea}
+                placeholder="Try Infopark or Kakkanad"
+                maxLength={120}
+                returnKeyType="search"
+                onSubmitEditing={applyArea}
               />
-            )}
-            <View style={styles.locationActions}>
-              <Button
-                title={area.trim() ? "Apply area" : "All locations"}
-                variant="secondary"
-                onPress={applyArea}
-              />
-              {!demoMode && (
-                <Button
-                  title="Use my location"
-                  variant="ghost"
-                  onPress={() => void locate()}
-                  loading={locating}
+              {area.trim().length >= 3 && (
+                <PlaceSuggestions
+                  {...suggestions}
+                  onRetry={suggestions.retry}
+                  onSelect={choosePlace}
                 />
               )}
-            </View>
-            {!!locationError && (
-              <Text accessibilityRole="alert" style={styles.error}>
-                {locationError}
-              </Text>
-            )}
-          </View>
-        )}
-        {selectedPlace ? (
-          <PlaceAttributions places={[selectedPlace]} />
-        ) : (
-          posts.some((p) => p.location?.source === "google") && (
-            <GoogleMapsCredit />
-          )
-        )}
-
-        <DiscoverySearch
-          compact
-          onPress={() => navigation.navigate("Search")}
-          onFilterPress={() => {
-            Keyboard.dismiss();
-            setFiltersOpen(true);
-          }}
-          filtersOpen={filtersOpen}
-          filtersActive={hasFilters}
-        />
-        {state === "loading" && posts.length === 0 && offers.length === 0 ? (
-          <LoadingState
-            label="Finding nearby places and plans…"
-            layout="list"
-          />
-        ) : state === "error" && posts.length === 0 && offers.length === 0 ? (
-          <>
-            <EmptyState
-              title="Couldn’t load nearby"
-              hint="Check your connection and try again."
-            />
-            <Button
-              title="Try again"
-              variant="ghost"
-              onPress={() => void load()}
-            />
-          </>
-        ) : (
-          <>
-            {state === "error" && (
-              <View>
-                <Text accessibilityRole="alert" style={styles.error}>
-                  Couldn’t refresh. Showing your last results.
-                </Text>
+              <View style={styles.locationActions}>
                 <Button
-                  title="Try again"
-                  variant="ghost"
-                  onPress={() => void load(true)}
+                  title={area.trim() ? "Apply area" : "All locations"}
+                  variant="secondary"
+                  onPress={applyArea}
                 />
+                {!demoMode && (
+                  <Button
+                    title="Use my location"
+                    variant="ghost"
+                    onPress={() => void locate()}
+                    loading={locating}
+                  />
+                )}
               </View>
-            )}
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.dateFilters}
-            >
-              {(
-                [
-                  { key: "all", label: "All plans" },
-                  { key: "today", label: "Today" },
-                  { key: "weekend", label: "This weekend" },
-                ] as const
-              ).map((item) => (
-                <MotionPressable
-                  key={item.key}
-                  accessibilityRole="button"
-                  accessibilityLabel={item.label}
-                  aria-pressed={dateFilter === item.key}
-                  accessibilityState={{ selected: dateFilter === item.key }}
-                  onPress={() => setDateFilter(item.key)}
-                  style={[
-                    styles.dateChip,
-                    dateFilter === item.key && styles.dateChipSelected,
-                  ]}
-                >
-                  <Text
+              {!!locationError && (
+                <Text accessibilityRole="alert" style={styles.error}>
+                  {locationError}
+                </Text>
+              )}
+            </View>
+          )}
+          {selectedPlace ? (
+            <PlaceAttributions places={[selectedPlace]} />
+          ) : (
+            posts.some((p) => p.location?.source === "google") && (
+              <GoogleMapsCredit />
+            )
+          )}
+
+          {state === "loading" && posts.length === 0 && offers.length === 0 ? (
+            <LoadingState
+              label="Finding nearby places and plans…"
+              layout="list"
+            />
+          ) : state === "error" && posts.length === 0 && offers.length === 0 ? (
+            <>
+              <EmptyState
+                title="Couldn’t load nearby"
+                hint="Check your connection and try again."
+              />
+              <Button
+                title="Try again"
+                variant="ghost"
+                onPress={() => void load()}
+              />
+            </>
+          ) : (
+            <>
+              {state === "error" && (
+                <View>
+                  <Text accessibilityRole="alert" style={styles.error}>
+                    Couldn’t refresh. Showing your last results.
+                  </Text>
+                  <Button
+                    title="Try again"
+                    variant="ghost"
+                    onPress={() => void load(true)}
+                  />
+                </View>
+              )}
+              {visibleOffers.length > 0 && (
+                <>
+                  <SectionHeading
+                    title="Offers near you"
+                    subtitle="Local deals, memberships & more"
+                    action="See all"
+                    onAction={() =>
+                      navigation.navigate("Search", { filter: "offers" })
+                    }
+                  />
+                  <FeaturedOffers
+                    offers={visibleOffers}
+                    onOpen={(offerId) =>
+                      navigation.navigate("OfferDetails", { offerId })
+                    }
+                  />
+                </>
+              )}
+              <SectionHeading
+                title="Community posts"
+                subtitle="Plans and activities by people nearby"
+                icon="users"
+              />
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.dateFilters}
+              >
+                {(
+                  [
+                    { key: "all", label: "All plans" },
+                    { key: "today", label: "Today" },
+                    { key: "weekend", label: "This weekend" },
+                  ] as const
+                ).map((item) => (
+                  <MotionPressable
+                    key={item.key}
+                    accessibilityRole="button"
+                    accessibilityLabel={item.label}
+                    aria-pressed={dateFilter === item.key}
+                    accessibilityState={{ selected: dateFilter === item.key }}
+                    onPress={() => setDateFilter(item.key)}
                     style={[
-                      styles.dateText,
-                      dateFilter === item.key && styles.dateTextSelected,
+                      styles.dateChip,
+                      dateFilter === item.key && styles.dateChipSelected,
                     ]}
                   >
-                    {item.label}
-                  </Text>
-                </MotionPressable>
-              ))}
-            </ScrollView>
-            {!!filterSummary && (
-              <Text style={styles.sectionMeta}>{filterSummary}</Text>
-            )}
-            {state === "loading" && posts.length > 0 && (
-              <Text accessibilityLiveRegion="polite" style={styles.sectionMeta}>
-                Updating nearby plans…
-              </Text>
-            )}
-            {chips.length > 0 && (
-              <View style={styles.appliedFilters}>
-                {chips.map((chip) => (
-                  <MotionPressable
-                    key={chip.key}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Remove ${chip.label}`}
-                    onPress={chip.remove}
-                    style={styles.appliedChip}
-                  >
-                    <Text style={styles.appliedText}>{chip.label}</Text>
-                    <Icon name="x" size={13} color={colors.forest} />
+                    <Text
+                      style={[
+                        styles.dateText,
+                        dateFilter === item.key && styles.dateTextSelected,
+                      ]}
+                    >
+                      {item.label}
+                    </Text>
                   </MotionPressable>
                 ))}
-              </View>
-            )}
-            {visiblePosts.map((post) => (
-              <PostRow
-                key={post.id}
-                post={post}
-                now={now}
-                distanceKm={planDistance(post, distances)}
-                onPress={() =>
-                  navigation.navigate("PostDetails", { postId: post.id })
-                }
-              />
-            ))}
-            {visiblePosts.length === 0 && (
-              <>
-                <EmptyState
-                  title={
-                    hasFilters
-                      ? "No plans for these filters"
-                      : "No plans here yet"
-                  }
-                  hint={
-                    hasFilters
-                      ? "Try another day, widen the distance, or remove a filter."
-                      : "Start a plan and invite someone nearby."
+              </ScrollView>
+              {!!filterSummary && (
+                <Text style={styles.sectionMeta}>{filterSummary}</Text>
+              )}
+              {state === "loading" && posts.length > 0 && (
+                <Text
+                  accessibilityLiveRegion="polite"
+                  style={styles.sectionMeta}
+                >
+                  Updating nearby plans…
+                </Text>
+              )}
+              {chips.length > 0 && (
+                <View style={styles.appliedFilters}>
+                  {chips.map((chip) => (
+                    <MotionPressable
+                      key={chip.key}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Remove ${chip.label}`}
+                      onPress={chip.remove}
+                      style={styles.appliedChip}
+                    >
+                      <Text style={styles.appliedText}>{chip.label}</Text>
+                      <Icon name="x" size={13} color={colors.forest} />
+                    </MotionPressable>
+                  ))}
+                </View>
+              )}
+              {visiblePosts.map((post) => (
+                <PostRow
+                  key={post.id}
+                  post={post}
+                  now={now}
+                  distanceKm={planDistance(post, distances)}
+                  onPress={() =>
+                    navigation.navigate("PostDetails", { postId: post.id })
                   }
                 />
-                <Button
-                  title={hasFilters ? "Clear filters" : "Start a plan"}
-                  variant="ghost"
-                  onPress={
-                    hasFilters
-                      ? clearFilters
-                      : () => navigation.navigate("CreatePost")
-                  }
-                />
-              </>
-            )}
-            {visibleOffers.length > 0 && (
-              <>
-                <Text accessibilityRole="header" style={styles.sectionHeading}>
-                  Offers nearby
-                </Text>
-                {visibleOffers.map((offer) => (
-                  <OfferRow
-                    key={offer.id}
-                    offer={offer}
-                    distanceKm={planDistance(offer, distances)}
-                    onPress={() =>
-                      navigation.navigate("OfferDetails", { offerId: offer.id })
+              ))}
+              {visiblePosts.length === 0 && (
+                <>
+                  <EmptyState
+                    title={
+                      hasFilters
+                        ? "No plans for these filters"
+                        : "No plans here yet"
+                    }
+                    hint={
+                      hasFilters
+                        ? "Try another day, widen the distance, or remove a filter."
+                        : "Start a plan and invite someone nearby."
                     }
                   />
-                ))}
-              </>
-            )}
-            {visibleVenues.length > 0 && (
-              <>
-                <Text style={styles.sectionHeading}>
-                  Around the neighbourhood
-                </Text>
-                {visibleVenues.slice(0, 8).map((venue) => (
-                  <VenueRow
-                    key={venue.id}
-                    venue={venue}
-                    onPress={() =>
-                      navigation.navigate("VenueDetails", { venueId: venue.id })
+                  <Button
+                    title={hasFilters ? "Clear filters" : "Start a plan"}
+                    variant="ghost"
+                    onPress={
+                      hasFilters
+                        ? clearFilters
+                        : () => navigation.navigate("CreatePost")
                     }
                   />
-                ))}
-              </>
-            )}
-          </>
-        )}
+                </>
+              )}
+
+              {visibleVenues.length > 0 && (
+                <>
+                  <Text style={styles.sectionHeading}>
+                    Around the neighbourhood
+                  </Text>
+                  {visibleVenues.slice(0, 8).map((venue) => (
+                    <VenueRow
+                      key={venue.id}
+                      venue={venue}
+                      onPress={() =>
+                        navigation.navigate("VenueDetails", {
+                          venueId: venue.id,
+                        })
+                      }
+                    />
+                  ))}
+                </>
+              )}
+            </>
+          )}
+        </View>
       </ScrollView>
       {filtersOpen && (
         <PlanFilterSheet
@@ -538,7 +557,7 @@ export function NearbyScreen() {
   );
 }
 const styles = StyleSheet.create({
-  page: { paddingHorizontal: 18 },
+  body: { paddingHorizontal: 16 },
   scroll: { paddingBottom: spacing.xl },
   locationEditor: { paddingBottom: spacing.md },
   locationActions: { flexDirection: "row", gap: spacing.sm, flexWrap: "wrap" },
@@ -552,6 +571,7 @@ const styles = StyleSheet.create({
     color: colors.textDim,
     flexShrink: 1,
     marginTop: 3,
+    marginBottom: 8,
   },
   sectionHeading: {
     ...typography.heading,
@@ -560,28 +580,26 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   dateFilters: {
-    gap: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-    marginBottom: 2,
+    gap: 8,
+    marginBottom: 12,
   },
   dateChip: {
     minHeight: 44,
     paddingVertical: 10,
-    paddingHorizontal: 4,
-    borderBottomWidth: 2,
-    borderBottomColor: "transparent",
+    paddingHorizontal: 16,
+    borderRadius: 24,
+    backgroundColor: colors.sandSoft,
     justifyContent: "center",
   },
   dateChipSelected: {
-    borderBottomColor: colors.forest,
+    backgroundColor: colors.teal,
   },
   dateText: {
     ...typography.bodySmall,
     fontWeight: "400",
     color: colors.textDim,
   },
-  dateTextSelected: { color: colors.forest, fontWeight: "600" },
+  dateTextSelected: { color: colors.white, fontWeight: "600" },
   appliedFilters: {
     flexDirection: "row",
     flexWrap: "wrap",

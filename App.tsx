@@ -7,6 +7,9 @@ import { StatusBar } from "expo-status-bar";
 import { useFonts } from "expo-font";
 import { useAssets } from "expo-asset";
 import * as SplashScreen from "expo-splash-screen";
+import { NunitoSans_400Regular } from "@expo-google-fonts/nunito-sans/400Regular";
+import { NunitoSans_700Bold } from "@expo-google-fonts/nunito-sans/700Bold";
+import { NunitoSans_800ExtraBold } from "@expo-google-fonts/nunito-sans/800ExtraBold";
 import Feather from "@expo/vector-icons/Feather";
 import { AuthProvider, useAuth } from "./src/store/AuthContext";
 import { RootNavigator } from "./src/navigation/RootNavigator";
@@ -82,7 +85,12 @@ function AppShell({ resourcesReady }: { resourcesReady: boolean }) {
 }
 
 export default function App() {
-  const [fontsLoaded, fontError] = useFonts(Feather.font);
+  const [fontsLoaded, fontError] = useFonts({
+    ...Feather.font,
+    NunitoSans: NunitoSans_400Regular,
+    NunitoSansBold: NunitoSans_700Bold,
+    NunitoSansExtraBold: NunitoSans_800ExtraBold,
+  });
   const [assets, assetError] = useAssets(BRAND_ASSETS);
   return (
     <SafeAreaProvider>

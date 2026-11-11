@@ -95,7 +95,7 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 16,
   },
-  focused: { borderColor: colors.forest, backgroundColor: colors.sageSoft },
+  focused: { borderColor: colors.forest, backgroundColor: colors.surface },
   inputError: { borderColor: colors.red },
   error: { ...typography.caption, color: colors.red, marginTop: spacing.xs },
 });

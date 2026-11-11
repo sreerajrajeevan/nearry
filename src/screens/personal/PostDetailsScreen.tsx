@@ -502,7 +502,7 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
           <View style={styles.participantActions}>
             <Button
               title={requests.length ? "Manage requests" : "Manage plan"}
-              variant="solid"
+              variant="primary"
               onPress={goToRequests}
             />
           </View>
@@ -530,7 +530,7 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
               myRequest.status === "declined" ||
               myRequest.status === "withdrawn" ? (
               <Button
-                variant="solid"
+                variant="primary"
                 title={
                   !personalProfileReady(profile)
                     ? "Complete profile to join"
@@ -720,6 +720,10 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   category: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: colors.sandSoft,
+    borderRadius: 20,
     ...typography.caption,
     color: colors.sageDeep,
     fontWeight: "700",
@@ -742,8 +746,10 @@ const styles = StyleSheet.create({
   hostLabel: { ...typography.caption, color: colors.textDim },
   authorName: { ...typography.body, color: colors.text, fontWeight: "600" },
   facts: {
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderRadius: 24,
+    paddingHorizontal: 16,
     borderColor: colors.border,
   },
   factRow: {
@@ -780,7 +786,7 @@ const styles = StyleSheet.create({
   footer: {
     borderTopWidth: 1,
     borderColor: colors.border,
-    backgroundColor: colors.background,
+    backgroundColor: colors.surface,
     paddingHorizontal: 20,
     paddingVertical: 14,
     gap: 10,
@@ -829,7 +835,7 @@ const styles = StyleSheet.create({
   gap: { height: spacing.sm },
   scrim: {
     flex: 1,
-    backgroundColor: "rgba(8,37,27,0.38)",
+    backgroundColor: colors.modalScrim,
     justifyContent: "flex-end",
   },
   sheet: {
