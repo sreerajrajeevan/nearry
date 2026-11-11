@@ -220,6 +220,8 @@ test("demo attachments appear in the gallery and feed without network requests",
   try {
     const post = await posts.createPost("demo-user", {
       title: "Coffee with photos",
+      venueId: "test-venue",
+      venueName: "Test venue",
       description: "A friendly coffee together",
       startsAt: "2099-01-01T12:00:00Z",
       vacancies: 2,

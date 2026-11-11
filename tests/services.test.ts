@@ -100,6 +100,8 @@ test("publishing, reloading and editing preserve every post audience through the
     };
     const created = await posts.createPost("host", {
       title: "Audience selection",
+      venueId: "test-venue",
+      venueName: "Test venue",
       description: "A friendly plan with the selected audience",
       startsAt: new Date(Date.now() + 14400000).toISOString(),
       vacancies: 4,
@@ -254,6 +256,8 @@ test("demo requests enforce capacity and leaving a full post reopens it", async 
   try {
     const post = await posts.createPost("host", {
       title: "Audit game",
+      venueId: "test-venue",
+      venueName: "Test venue",
       description: "Friendly audit game",
       startsAt: new Date(Date.now() + 7200000).toISOString(),
       vacancies: 1,
@@ -630,4 +634,24 @@ test("nearby plans query coordinates even when no registered venues exist and pr
       nearby: { latitude: 100, longitude: 76, radiusM: 5000 },
     }),
   );
+});
+
+test("publishing without a confirmed meeting place is rejected before any network request", async () => {
+  const draft = {
+    title: "Coffee together",
+    description: "Join me for a friendly coffee",
+    startsAt: new Date(Date.now() + 4 * 3600000).toISOString(),
+    vacancies: 2,
+    tags: [],
+  };
+  await assert.rejects(
+    () => posts.createPost("host", draft),
+    /Select a meeting place/,
+  );
+  await assert.rejects(
+    () =>
+      posts.createPost("host", { ...draft, venueName: "A typed name only" }),
+    /Select a meeting place/,
+  );
+  assert.equal(calls.length, 0);
 });

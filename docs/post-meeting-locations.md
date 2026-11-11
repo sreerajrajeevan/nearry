@@ -7,7 +7,11 @@ Create and Edit Post now share `PostLocationField`:
 - Search registered Nearry venues and Google place predictions. Resolving coordinates happens only after a prediction is selected, using the existing authenticated endpoint, session and quotas.
 - The selected Google name/address and required attribution are displayed transiently. The public plan stores the host's independently entered meeting label, provider ID and coordinates; it does not add a fake venue or verified business. The host can edit the label.
 - “Can’t find it? Add a location” accepts a name plus latitude/longitude, or explicitly requested device location. Device location is appropriate only when the host is at the meeting spot. A name without coordinates is never treated as an exact position. Permission denial, no results and provider errors leave this option usable.
-- Unselected search text blocks publishing until the host selects a location, confirms manual coordinates or clears the optional field. Location changes and removal are saved by Edit Post. Existing registered venue selections remain supported.
+- Unselected search text blocks publishing until the host selects a location, confirms manual coordinates or, when editing an older plan, clears its optional field. New posts must have a registered venue or a named spot with confirmed coordinates. Location changes and removal are saved by Edit Post. Existing registered venue selections remain supported.
+
+## Required venue for new posts
+
+New posts show **Meeting place \***. Publishing rejects a missing selection or a typed name without confirmed coordinates, both in the app/service and at the database INSERT boundary. Apply `00032_require_post_meeting_place.sql` after `00031`. Existing posts are preserved; no historical rows are rewritten or deleted, and existing edit/cancel/retention behavior remains available.
 
 ## Database rollout
 
