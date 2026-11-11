@@ -9,9 +9,10 @@ import { colors, typography } from "../theme";
 /** Reserve room for both the labels and the device's gesture/navigation area. */
 export function useTabBarLayout(): BottomTabNavigationOptions {
   const { bottom } = useSafeAreaInsets();
-  const { fontScale } = useWindowDimensions();
+  const { fontScale, width } = useWindowDimensions();
   const paddingBottom = Math.max(bottom, 8);
   return {
+    tabBarLabelStyle: [styles.label, { fontSize: width < 350 ? 10 : 11 }],
     tabBarStyle: [
       styles.bar,
       {
@@ -36,7 +37,13 @@ export function tabOptions(
     tabBarInactiveTintColor: colors.onTeal,
     tabBarActiveBackgroundColor: colors.teal,
     tabBarLabelPosition: "below-icon",
-    tabBarLabel: title === "Create Offer" ? "Create" : title,
+    tabBarLabel:
+      title === "Create Offer"
+        ? "Create"
+        : title === "Dashboard"
+          ? "Home"
+          : title,
+    tabBarAccessibilityLabel: title,
     tabBarItemStyle: styles.item,
     // Keep tab switches inside the app on web as well; an anchor reload loses drafts.
     tabBarButton: ({ style, disabled, href: _href, ...props }) => (
@@ -46,7 +53,6 @@ export function tabOptions(
         style={[style, styles.tabButton]}
       />
     ),
-    tabBarLabelStyle: styles.label,
     tabBarIcon: ({ color }) =>
       prominent ? (
         <View style={styles.create}>
