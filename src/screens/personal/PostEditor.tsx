@@ -1,3 +1,7 @@
+import {
+  hasPostMeetingPlace,
+  requiredMeetingPlaceMessage,
+} from "../../utils/postLocation";
 import { Alert } from "../../services/appAlert";
 import React, { useEffect, useRef, useState } from "react";
 import { DateSheet, TimeSheet } from "../../components/DateTimeSheets";
@@ -213,6 +217,19 @@ export function PostEditor({
   const handlePublish = async () => {
     if (publishLock.current) return;
     setFormError("");
+    if (
+      !savedPostId &&
+      !postId &&
+      (unfinishedLocation ||
+        !hasPostMeetingPlace({
+          venueId: venue?.venueId,
+          venueName: venue?.name,
+          location: venue?.location,
+        }))
+    ) {
+      setFormError(requiredMeetingPlaceMessage);
+      return;
+    }
     if (!savedPostId && (unfinishedLocation || (venue && !venue.name.trim()))) {
       setFormError(
         "Choose a meeting place or add its coordinates, or clear the field to leave it out.",
@@ -394,6 +411,7 @@ export function PostEditor({
         />
 
         <PostLocationField
+          required={!postId}
           value={venue}
           onChange={setVenue}
           onDraftChange={setUnfinishedLocation}

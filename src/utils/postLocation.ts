@@ -47,3 +47,18 @@ export function postLocationPatch(location: PostLocation | null) {
     location_place_id: location?.placeId ?? null,
   };
 }
+
+/** A typed name is not enough: choose a registered venue or confirm coordinates. */
+export function hasPostMeetingPlace(spot: {
+  venueId?: string | null;
+  venueName?: string | null;
+  location?: PostLocation | null;
+}): boolean {
+  if (spot.venueId?.trim()) return !spot.location;
+  const name = spot.venueName?.trim() ?? "";
+  return (
+    name.length > 0 && name.length <= 120 && validPostLocation(spot.location)
+  );
+}
+export const requiredMeetingPlaceMessage =
+  "Select a meeting place or add a place with coordinates before publishing.";

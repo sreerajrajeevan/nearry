@@ -85,3 +85,24 @@ test("external locations survive read mapping, expire Google coordinates, and su
     10,
   );
 });
+
+test("required meeting place accepts only selected venues or named coordinate-confirmed spots", async () => {
+  const { hasPostMeetingPlace } = await import("../src/utils/postLocation");
+  assert.equal(hasPostMeetingPlace({}), false);
+  assert.equal(hasPostMeetingPlace({ venueName: "Just typed a name" }), false);
+  assert.equal(
+    hasPostMeetingPlace({
+      venueName: " ",
+      location: { source: "manual", latitude: 10, longitude: 76 },
+    }),
+    false,
+  );
+  assert.equal(
+    hasPostMeetingPlace({
+      venueName: "Courtyard",
+      location: { source: "manual", latitude: 10, longitude: 76 },
+    }),
+    true,
+  );
+  assert.equal(hasPostMeetingPlace({ venueId: "selected-venue" }), true);
+});

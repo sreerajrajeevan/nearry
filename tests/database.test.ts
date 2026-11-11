@@ -25,7 +25,7 @@ async function asUser<T>(
 async function post(capacity = 2) {
   return (
     await db.query(
-      `insert into posts(author_id,title,description,starts_at,expires_at,vacancies) values($1,'Football tonight','Friendly football game',now()+interval '4 hours',now()+interval '3 hours',$2) returning id`,
+      `insert into posts(author_id,title,description,starts_at,expires_at,vacancies,venue_id) values($1,'Football tonight','Friendly football game',now()+interval '4 hours',now()+interval '3 hours',$2,'10000000-0000-0000-0000-000000000032') returning id`,
       [host, capacity],
     )
   ).rows[0].id;
@@ -130,6 +130,9 @@ before(async () => {
       );
     }
   }
+  await db.exec(
+    "insert into venues(id,name,category,area) values('10000000-0000-0000-0000-000000000032','Test meeting venue','Café','Kakkanad')",
+  );
   for (const [id, role] of [
     [host, "personal"],
     [b, "personal"],
@@ -1275,7 +1278,7 @@ test("core journey: create, request, approve, chat, read and cancel preserve per
   const p = (
     await asUser(owner, (tx) =>
       tx.query(
-        "insert into posts(author_id,title,description,starts_at,vacancies) values($1,'Chaya and a walk','A friendly evening by the waterfront',now()+interval '4 hours',2) returning id",
+        "insert into posts(author_id,title,description,starts_at,vacancies,venue_id) values($1,'Chaya and a walk','A friendly evening by the waterfront',now()+interval '4 hours',2,'10000000-0000-0000-0000-000000000032') returning id",
         [owner],
       ),
     )
@@ -1364,7 +1367,7 @@ test("core journey: reading one message never acknowledges a newer message from 
     participant = await corePersonal();
   const own = (
     await db.query(
-      "insert into posts(author_id,title,description,starts_at,vacancies) values($1,'Read cursor test','A friendly read cursor regression',now()+interval '4 hours',2) returning id",
+      "insert into posts(author_id,title,description,starts_at,vacancies,venue_id) values($1,'Read cursor test','A friendly read cursor regression',now()+interval '4 hours',2,'10000000-0000-0000-0000-000000000032') returning id",
       [owner],
     )
   ).rows[0].id;
@@ -1504,7 +1507,7 @@ test("core journey: deletion works only for owned empty posts and draft offers w
     (
       await asUser(owner, (tx) =>
         tx.query(
-          "insert into posts(author_id,title,description,starts_at,vacancies) values($1,'Empty plan','A friendly plan without any requests',now()+interval '4 hours',2) returning id",
+          "insert into posts(author_id,title,description,starts_at,vacancies,venue_id) values($1,'Empty plan','A friendly plan without any requests',now()+interval '4 hours',2,'10000000-0000-0000-0000-000000000032') returning id",
           [owner],
         ),
       )
@@ -2000,7 +2003,7 @@ async function chatFixture() {
     member = await corePersonal();
   const pid = (
     await db.query(
-      "insert into posts(author_id,title,description,starts_at,vacancies) values($1,'Chat test','A private chat for regression tests',now()+interval '4 hours',2) returning id",
+      "insert into posts(author_id,title,description,starts_at,vacancies,venue_id) values($1,'Chat test','A private chat for regression tests',now()+interval '4 hours',2,'10000000-0000-0000-0000-000000000032') returning id",
       [owner],
     )
   ).rows[0].id;
@@ -2263,7 +2266,7 @@ test("participation: Google-style incomplete accounts can browse but must supply
   await assert.rejects(
     asUser(user, (tx) =>
       tx.query(
-        "insert into posts(author_id,title,description,starts_at,vacancies) values($1,'My first plan','A friendly first plan',now()+interval '4 hours',2)",
+        "insert into posts(author_id,title,description,starts_at,vacancies,venue_id) values($1,'My first plan','A friendly first plan',now()+interval '4 hours',2,'10000000-0000-0000-0000-000000000032')",
         [user],
       ),
     ),
@@ -2322,7 +2325,7 @@ test("participation: Google-style incomplete accounts can browse but must supply
   await request(user, pid);
   await asUser(user, (tx) =>
     tx.query(
-      "insert into posts(author_id,title,description,starts_at,vacancies) values($1,'My first plan','A friendly first plan',now()+interval '4 hours',2)",
+      "insert into posts(author_id,title,description,starts_at,vacancies,venue_id) values($1,'My first plan','A friendly first plan',now()+interval '4 hours',2,'10000000-0000-0000-0000-000000000032')",
       [user],
     ),
   );
@@ -2333,7 +2336,7 @@ test("participation: Google-style incomplete accounts can browse but must supply
   await assert.rejects(
     asUser(user, (tx) =>
       tx.query(
-        "insert into posts(author_id,title,description,starts_at,vacancies) values($1,'Bypass attempt','A friendly first plan',now()+interval '4 hours',2)",
+        "insert into posts(author_id,title,description,starts_at,vacancies,venue_id) values($1,'Bypass attempt','A friendly first plan',now()+interval '4 hours',2,'10000000-0000-0000-0000-000000000032')",
         [user],
       ),
     ),
@@ -2355,7 +2358,7 @@ test("post_cards preserves the published audience for detail, feed, My posts and
     const saved = (
       await asUser(owner, (tx) =>
         tx.query(
-          "insert into posts(author_id,title,description,starts_at,vacancies,gender_preference) values($1,'Audience roundtrip','Keep the selected audience after publishing',now()+interval '4 hours',4,$2) returning id,gender_preference",
+          "insert into posts(author_id,title,description,starts_at,vacancies,gender_preference,venue_id) values($1,'Audience roundtrip','Keep the selected audience after publishing',now()+interval '4 hours',4,$2,'10000000-0000-0000-0000-000000000032') returning id,gender_preference",
           [owner, audience],
         ),
       )
@@ -2423,7 +2426,7 @@ test("audience: requests and approvals enforce gender; Anyone includes Other; au
   await db.query("update profiles set gender='other' where id=$1", [other]);
   const pid = (
     await db.query(
-      "insert into posts(author_id,title,description,starts_at,vacancies,gender_preference) values($1,'Women’s game','A friendly game for women',now()+interval '4 hours',4,'female') returning id",
+      "insert into posts(author_id,title,description,starts_at,vacancies,gender_preference,venue_id) values($1,'Women’s game','A friendly game for women',now()+interval '4 hours',4,'female','10000000-0000-0000-0000-000000000032') returning id",
       [owner],
     )
   ).rows[0].id;
@@ -2470,7 +2473,7 @@ test("audience: requests and approvals enforce gender; Anyone includes Other; au
   await request(other, pid);
   const men = (
     await db.query(
-      "insert into posts(author_id,title,description,starts_at,vacancies,gender_preference) values($1,'Men’s game','A friendly game for men',now()+interval '4 hours',2,'male') returning id",
+      "insert into posts(author_id,title,description,starts_at,vacancies,gender_preference,venue_id) values($1,'Men’s game','A friendly game for men',now()+interval '4 hours',2,'male','10000000-0000-0000-0000-000000000032') returning id",
       [owner],
     )
   ).rows[0].id;
@@ -2482,7 +2485,7 @@ test("photos: atomic edit keeps existing photos on failure, validates ownership,
   const owner = await corePersonal(),
     pid = (
       await db.query(
-        "insert into posts(author_id,title,description,starts_at,vacancies) values($1,'Photo edit','A photo editing regression',now()+interval '4 hours',2) returning id",
+        "insert into posts(author_id,title,description,starts_at,vacancies,venue_id) values($1,'Photo edit','A photo editing regression',now()+interval '4 hours',2,'10000000-0000-0000-0000-000000000032') returning id",
         [owner],
       )
     ).rows[0].id;
@@ -3497,3 +3500,43 @@ test(
     );
   },
 );
+
+test("new posts require a selected venue or confirmed coordinates, while legacy posts remain readable", async () => {
+  for (const label of [null, "", "  ", "Typed name only"]) {
+    await assert.rejects(
+      () =>
+        asUser(host, (tx) =>
+          tx.query(
+            `insert into posts(author_id,title,description,starts_at,vacancies,venue_id,venue_name)
+      values($1,'A meeting plan','Friendly meeting with neighbours',now()+interval '4 hours',2,null,$2)`,
+            [host, label],
+          ),
+        ),
+      /Select a meeting place/,
+    );
+  }
+  const selected = await asUser(host, (tx) =>
+    tx.query(
+      `insert into posts(author_id,title,description,starts_at,vacancies,venue_id)
+    values($1,'Registered venue','Meet at the selected venue',now()+interval '4 hours',2,'10000000-0000-0000-0000-000000000032') returning id`,
+      [host],
+    ),
+  );
+  assert.ok(selected.rows[0].id);
+  const manual = await asUser(host, (tx) =>
+    tx.query(
+      `insert into posts(author_id,title,description,starts_at,vacancies,venue_name,location_lat,location_lng,location_source)
+    values($1,'Manual meeting spot','Meet at my confirmed meeting spot',now()+interval '4 hours',2,'Courtyard entrance',10,76,'manual') returning id`,
+      [host],
+    ),
+  );
+  assert.ok(manual.rows[0].id);
+  assert.equal(
+    (
+      await db.query(
+        "select venue_id,location_lat from posts where id='10000000-0000-0000-0000-000000000028'",
+      )
+    ).rows[0].venue_id,
+    null,
+  );
+});

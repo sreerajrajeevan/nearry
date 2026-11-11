@@ -2,6 +2,8 @@ import {
   PostLocation,
   postLocationPatch,
   validPostLocation,
+  hasPostMeetingPlace,
+  requiredMeetingPlaceMessage,
 } from "../utils/postLocation";
 import { distanceKm } from "./locationDistance";
 import { demoUserBlocked } from "./safety";
@@ -188,6 +190,7 @@ export async function createPost(
     costCents: input.costCents,
   });
   if (err) throw new Error(err);
+  if (!hasPostMeetingPlace(input)) throw new Error(requiredMeetingPlaceMessage);
   if (input.location && !validPostLocation(input.location))
     throw new Error("Choose a valid meeting location.");
 

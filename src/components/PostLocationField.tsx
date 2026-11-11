@@ -21,11 +21,13 @@ export function PostLocationField({
   onChange,
   onDraftChange,
   disabled = false,
+  required = false,
 }: {
   value: PostMeetingSpot | null;
   onChange: (value: PostMeetingSpot | null) => void;
   onDraftChange: (unfinished: boolean) => void;
   disabled?: boolean;
+  required?: boolean;
 }) {
   const [query, setQuery] = useState("");
   const [venues, setVenues] = useState<Venue[]>([]);
@@ -115,7 +117,14 @@ export function PostLocationField({
   };
   return (
     <View style={styles.section}>
-      <Text style={styles.label}>Meeting place (optional)</Text>
+      <Text style={styles.label}>
+        {required ? "Meeting place *" : "Meeting place (optional)"}
+      </Text>
+      {required && !value && (
+        <Text style={styles.hint}>
+          Choose a venue or add a location before publishing.
+        </Text>
+      )}
       {value ? (
         <>
           <Input
