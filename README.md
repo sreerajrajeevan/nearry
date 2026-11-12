@@ -148,3 +148,5 @@ See [post editing, cropping and profile requirements](docs/post-participation-an
 ### Optional selfie check
 
 Personal members can submit a private camera selfie from Profile. Review it in the existing admin dashboard’s **Selfie reviews** section. Requires migration **00030**, the updated `admin-console` and a fresh mobile build. See [setup, retention and phone checks](docs/personal-selfie-verification.md). This is a manual photo comparison, not identity, age or liveness verification.
+
+Admin dashboard: see [account controls, safety rules and deployment](docs/admin-account-controls.md).

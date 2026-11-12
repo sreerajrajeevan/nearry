@@ -279,6 +279,35 @@ input[readonly] {
   flex-wrap: wrap;
   align-items: center;
 }
+.filter-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.filter-row .active-filter {
+  background: var(--ink);
+  color: var(--white);
+  border-color: var(--ink);
+}
+.detail-row {
+  display: flex;
+  gap: 12px;
+  padding: 8px 0;
+  border-top: 1px solid var(--border);
+}
+.detail-row:first-child {
+  border-top: 0;
+}
+.detail-row span {
+  color: var(--muted);
+  min-width: 150px;
+  flex-shrink: 0;
+}
+.detail-row strong {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
 .table-wrap {
   overflow-x: auto;
   background: var(--white);

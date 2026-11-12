@@ -218,6 +218,36 @@
         </button>
       </div>
     </dialog>
+    <dialog id="account-dialog" aria-labelledby="account-title">
+      <div class="dialog-header">
+        <div>
+          <p class="eyebrow">ACCOUNT</p>
+          <h2 id="account-title">Account</h2>
+        </div>
+        <button
+          id="account-close"
+          class="secondary"
+          aria-label="Close account"
+        >
+          ✕
+        </button>
+      </div>
+      <div id="account-details"></div>
+      <label for="account-note"
+        >Reason
+        <span class="muted">(required — recorded in the audit)</span></label
+      ><textarea id="account-note" rows="3" maxlength="200"></textarea>
+      <p id="account-message" role="status" class="feedback"></p>
+      <div class="actions">
+        <button data-account-decision="suspend" class="danger" hidden>
+          Suspend account</button
+        ><button data-account-decision="unsuspend" class="primary" hidden>
+          Restore account</button
+        ><button data-account-decision="cancel-deletion" class="danger" hidden>
+          Cancel deletion
+        </button>
+      </div>
+    </dialog>
     <script src="./config.js"></script>
     <script type="module" src="./app.js"></script>
   </body>

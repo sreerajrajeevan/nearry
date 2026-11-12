@@ -35,6 +35,15 @@ function fixture(options: any = {}) {
           error: null,
         }),
       },
+      admin: {
+        getUserById: async (id: string) => {
+          if (settings.emailLookupFails) throw new Error("lookup failed");
+          return {
+            data: { user: { id, email: "cafe-owner@example.com" } },
+            error: null,
+          };
+        },
+      },
     },
     from: (table: string) => {
       const call: any = { table };
@@ -78,6 +87,12 @@ function fixture(options: any = {}) {
             },
             error: null,
           };
+        if (table === "account_deletion_jobs" && call.single)
+          return { data: settings.deletionJob ?? null, error: null };
+        if (table === "admin_console_audit")
+          return { data: settings.auditRows ?? [], error: null };
+        if (table === "content_reports")
+          return { data: settings.reportRows ?? [], error: null };
         if (table === "verification_review_jobs")
           return {
             data: {
@@ -105,6 +120,7 @@ function fixture(options: any = {}) {
           return chain;
         },
         in: () => chain,
+        not: () => chain,
         order: () => chain,
         limit: () => chain,
         range: (from: number, to: number) => {
@@ -528,4 +544,228 @@ test("admin: changed/expired selfies, inactive accounts and off-origin avatars c
     }),
   );
   assert.equal(rejected.status, 400);
+});
+
+test("admin: business queue shows the applicant email; a failed lookup never breaks the queue", async () => {
+  const rows = [
+    {
+      id: "0",
+      user_id: user,
+      business_name: "Cafe",
+      business_details: { category: "cafe", area: "Kochi" },
+    },
+    { id: "1", business_name: "No owner", business_details: {} },
+  ];
+  const f = fixture({ rows });
+  const r = await f.handler(req({ action: "list", section: "business" }));
+  const b = await r.json();
+  assert.equal(r.status, 200);
+  assert.equal(b.rows[0].email, "cafe-owner@example.com");
+  assert.equal(b.rows[1].email, null);
+  const broken = fixture({ rows, emailLookupFails: true });
+  const rb = await broken.handler(req({ action: "list", section: "business" }));
+  assert.equal(rb.status, 200);
+  assert.equal((await rb.json()).rows[0].email, null);
+});
+
+test("admin: account detail shows email, suspension reason and pending deletion job", async () => {
+  const f = fixture({
+    profile: {
+      suspended_at: "2026-01-02",
+      deletion_requested_at: "2026-01-03",
+      account_type: "business",
+      business_name: "Cafe",
+    },
+    auditRows: [{ note: "Repeated spam", created_at: "2026-01-02" }],
+    deletionJob: {
+      user_id: user,
+      requested_at: "2026-01-03",
+      attempts: 2,
+      next_attempt_at: "2026-01-04",
+      last_error: null,
+      prepared_at: null,
+    },
+  });
+  const r = await f.handler(req({ action: "account", id: user }));
+  assert.equal(r.status, 200);
+  const b = await r.json();
+  assert.equal(b.email, "cafe-owner@example.com");
+  assert.equal(b.suspendReason, "Repeated spam");
+  assert.equal(b.deletionJob.attempts, 2);
+  assert.equal(b.account_type, "business");
+  assert.equal(
+    (await f.handler(req({ action: "account", id: "bad" }))).status,
+    400,
+  );
+});
+
+test("admin: account detail falls back to the report note when no direct suspend audit exists", async () => {
+  const f = fixture({
+    profile: { suspended_at: "2026-01-02" },
+    auditRows: [],
+    reportRows: [
+      {
+        id: review,
+        review_note: "Harassment in messages",
+        reviewed_at: "2026-01-02",
+      },
+    ],
+  });
+  const b = await (
+    await f.handler(req({ action: "account", id: user }))
+  ).json();
+  assert.equal(b.suspendReason, "Harassment in messages");
+});
+
+test("admin: account actions are owner-only, need a reason and forward the exact decision", async () => {
+  for (const decision of ["suspend", "unsuspend", "cancel-deletion"]) {
+    const f = fixture();
+    const r = await f.handler(
+      req({
+        action: "decide",
+        kind: "account",
+        id: user,
+        decision,
+        note: "Appeal reviewed",
+      }),
+    );
+    assert.equal(r.status, 200, decision);
+    assert.deepEqual(
+      f.calls.find((c) => c.rpc === "admin_console_decide").args,
+      {
+        p_actor: user,
+        p_kind: "account",
+        p_record_id: user,
+        p_decision: decision,
+        p_note: "Appeal reviewed",
+      },
+    );
+    const mod = fixture({ role: "moderator" });
+    assert.equal(
+      (
+        await mod.handler(
+          req({
+            action: "decide",
+            kind: "account",
+            id: user,
+            decision,
+            note: "x",
+          }),
+        )
+      ).status,
+      403,
+    );
+    assert.equal(
+      (
+        await fixture().handler(
+          req({
+            action: "decide",
+            kind: "account",
+            id: user,
+            decision,
+            note: " ",
+          }),
+        )
+      ).status,
+      400,
+    );
+  }
+  assert.equal(
+    (
+      await fixture().handler(
+        req({
+          action: "decide",
+          kind: "account",
+          id: user,
+          decision: "delete",
+          note: "x",
+        }),
+      )
+    ).status,
+    400,
+  );
+  assert.equal(
+    (
+      await fixture().handler(
+        req({
+          action: "decide",
+          kind: "account",
+          id: "bad",
+          decision: "suspend",
+          note: "x",
+        }),
+      )
+    ).status,
+    400,
+  );
+});
+
+test("admin: users list accepts the status filters and rejects unknown ones", async () => {
+  const f = fixture({ rows: [{ id: user, account_type: "personal" }] });
+  for (const filter of ["all", "suspended", "deletion", "active"]) {
+    const r = await f.handler(
+      req({ action: "list", section: "users", filter }),
+    );
+    assert.equal(r.status, 200, filter);
+  }
+  assert.equal(
+    (
+      await f.handler(
+        req({ action: "list", section: "users", filter: "banned" }),
+      )
+    ).status,
+    400,
+  );
+});
+
+test("admin: deletion detail flags a claimed job without disclosing the worker lease", async () => {
+  const f = fixture({
+    deletionJob: {
+      attempts: 0,
+      lease_id: "private-worker-lease",
+      prepared_at: null,
+    },
+  });
+  const response = await f.handler(req({ action: "account", id: user }));
+  const body = await response.json();
+  assert.equal(body.deletionJob.started, true);
+  assert.equal(body.deletionJob.lease_id, undefined);
+});
+
+test("admin: expected account conflicts are actionable and internal errors remain private", async () => {
+  for (const message of [
+    "Deletion already in progress",
+    "Deletion request unavailable",
+    "Cannot suspend an administrator",
+    "Account unavailable",
+    "No deletion pending",
+  ]) {
+    const f = fixture({ rpcError: message });
+    const response = await f.handler(
+      req({
+        action: "decide",
+        kind: "account",
+        id: user,
+        decision: "cancel-deletion",
+        note: "Reviewed request",
+      }),
+    );
+    assert.equal(response.status, 409);
+    assert.equal((await response.json()).error, message);
+  }
+  const f = fixture({ rpcError: "private SQL / secret storage path" });
+  const response = await f.handler(
+    req({
+      action: "decide",
+      kind: "account",
+      id: user,
+      decision: "suspend",
+      note: "Reviewed request",
+    }),
+  );
+  assert.equal(response.status, 500);
+  assert.equal(
+    (await response.json()).error,
+    "Request failed. Please refresh and try again.",
+  );
 });
