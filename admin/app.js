@@ -18,7 +18,7 @@ const NAV = [
   ["plans", "Plans", "Posted activities"],
   ["offers", "Offers", "Business promotions"],
   ["bookings", "Bookings", "Reservations"],
-  ["operations", "Operations", "Background queues — read only"],
+  ["operations", "Operations", "Deletion requests and background queues"],
   ["audit", "Decision history", "Who reviewed what and when"],
 ];
 const safe = (value) =>
@@ -464,9 +464,11 @@ function renderOperations(o) {
 }
 let selected = null,
   proofLoaded = false,
-  selectedAccount = null;
+  selectedAccount = null,
+  accountRevision = 0;
 function closeAccount(force = false) {
   if (actionBusy && !force) return;
+  accountRevision++;
   selectedAccount = null;
   $("account-dialog").close();
   $("account-note").value = "";
@@ -475,9 +477,10 @@ function closeAccount(force = false) {
 }
 async function openAccount(id) {
   if (actionBusy) return;
+  const requestRevision = ++accountRevision;
+  selectedAccount = null;
   $("account-title").textContent = "Account";
-  $("account-details").innerHTML =
-    '<p class="muted">Loading account…</p>';
+  $("account-details").innerHTML = '<p class="muted">Loading account…</p>';
   $("account-note").value = "";
   $("account-message").textContent = "";
   document
@@ -486,7 +489,14 @@ async function openAccount(id) {
   $("account-dialog").showModal();
   try {
     const a = await call({ action: "account", id });
+    if (requestRevision !== accountRevision || !$("account-dialog").open)
+      return;
     selectedAccount = a;
+    const deletionStarted =
+      !!a.deletionJob &&
+      (!!a.deletionJob.prepared_at ||
+        !!a.deletionJob.started ||
+        a.deletionJob.attempts > 0);
     $("account-title").textContent =
       a.business_name || a.display_name || "Nearry member";
     const status = a.deletion_requested_at
@@ -510,8 +520,7 @@ async function openAccount(id) {
       ]);
     if (a.suspended_at) {
       details.push(["Suspended since", date(a.suspended_at)]);
-      if (a.suspendReason)
-        details.push(["Suspension reason", a.suspendReason]);
+      if (a.suspendReason) details.push(["Suspension reason", a.suspendReason]);
     }
     if (a.deletion_requested_at) {
       details.push(["Deletion requested", date(a.deletion_requested_at)]);
@@ -526,12 +535,21 @@ async function openAccount(id) {
         ]);
         if (a.deletionJob.last_error)
           details.push(["Last deletion error", a.deletionJob.last_error]);
-        if (a.deletionJob.prepared_at)
+        if (deletionStarted)
           details.push([
             "Deletion",
             "Already being processed — cancellation is no longer possible",
           ]);
+      } else {
+        details.push([
+          "Deletion",
+          "Cleanup status unavailable. Refresh before taking action.",
+        ]);
       }
+      details.push([
+        "Cancellation",
+        "Cancelled plans and bookings will not be restored.",
+      ]);
     }
     $("account-details").innerHTML = details
       .map(
@@ -548,11 +566,11 @@ async function openAccount(id) {
       !isOwner || !!a.suspended_at;
     document.querySelector('[data-account-decision="unsuspend"]').hidden =
       !isOwner || !a.suspended_at;
-    document.querySelector(
-      '[data-account-decision="cancel-deletion"]',
-    ).hidden = !isOwner || !a.deletion_requested_at;
+    document.querySelector('[data-account-decision="cancel-deletion"]').hidden =
+      !isOwner || !a.deletion_requested_at || !a.deletionJob || deletionStarted;
   } catch (error) {
-    $("account-message").textContent = error.message;
+    if (requestRevision === accountRevision && $("account-dialog").open)
+      $("account-message").textContent = error.message;
   }
 }
 async function decideAccount(decision) {
@@ -940,7 +958,7 @@ async function start() {
     if (decision) void decide(decision.dataset.decision);
   });
   $("view-proof").addEventListener("click", viewProof);
-  $("dialog-close").addEventListener("click", closeDialog);
+  $("dialog-close").addEventListener("click", () => closeDialog());
   $("account-close").addEventListener("click", () => closeAccount());
   $("review-dialog").addEventListener("cancel", (event) => {
     event.preventDefault();

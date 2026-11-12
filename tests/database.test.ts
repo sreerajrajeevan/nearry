@@ -3540,3 +3540,163 @@ test("new posts require a selected venue or confirmed coordinates, while legacy 
     null,
   );
 });
+
+test("admin account controls require owner authorization and reasons, protect admins, and audit suspend/restore", async () => {
+  const owner = await corePersonal(),
+    moderator = await corePersonal(),
+    target = await corePersonal();
+  await db.query(
+    "insert into admin_console_members(user_id,role) values($1,'owner'),($2,'moderator')",
+    [owner, moderator],
+  );
+  const decide = (
+    actor: string,
+    id: string,
+    decision: string,
+    note = "Reviewed appeal",
+  ) =>
+    asUser(
+      null,
+      (tx) =>
+        tx.query("select admin_console_decide($1,'account',$2,$3,$4)", [
+          actor,
+          id,
+          decision,
+          note,
+        ]),
+      "service_role",
+    );
+  await assert.rejects(
+    asUser(owner, (tx) =>
+      tx.query(
+        "select admin_console_decide($1,'account',$2,'suspend','test')",
+        [owner, target],
+      ),
+    ),
+    /permission denied/,
+  );
+  await assert.rejects(decide(moderator, target, "suspend"), /only owner/);
+  await assert.rejects(
+    decide(owner, target, "suspend", "  "),
+    /reason required/,
+  );
+  await assert.rejects(
+    decide(owner, moderator, "suspend"),
+    /Cannot suspend an administrator/,
+  );
+  await decide(owner, target, "suspend");
+  assert.ok(
+    (await db.query("select suspended_at from profiles where id=$1", [target]))
+      .rows[0].suspended_at,
+  );
+  await assert.rejects(decide(owner, target, "suspend"), /already suspended/);
+  await decide(owner, target, "unsuspend");
+  assert.equal(
+    (await db.query("select suspended_at from profiles where id=$1", [target]))
+      .rows[0].suspended_at,
+    null,
+  );
+  assert.deepEqual(
+    (
+      await db.query(
+        "select action,note from admin_console_audit where target_id=$1 order by created_at",
+        [target],
+      )
+    ).rows,
+    [
+      { action: "account:suspend", note: "Reviewed appeal" },
+      { action: "account:unsuspend", note: "Reviewed appeal" },
+    ],
+  );
+});
+
+test("admin cancellation preserves claimed deletion jobs and only cancels an unstarted owner request", async () => {
+  const owner = await corePersonal();
+  await db.query(
+    "insert into admin_console_members(user_id,role) values($1,'owner')",
+    [owner],
+  );
+  const cancel = (id: string) =>
+    asUser(
+      null,
+      (tx) =>
+        tx.query(
+          "select admin_console_decide($1,'account',$2,'cancel-deletion','Owner request reviewed')",
+          [owner, id],
+        ),
+      "service_role",
+    );
+  const target = await corePersonal();
+  await db.query("select queue_account_deletion($1)", [target]);
+  await cancel(target);
+  assert.equal(
+    (
+      await db.query("select deletion_requested_at from profiles where id=$1", [
+        target,
+      ])
+    ).rows[0].deletion_requested_at,
+    null,
+  );
+  assert.equal(
+    (
+      await db.query(
+        "select count(*)::int n from account_deletion_jobs where user_id=$1",
+        [target],
+      )
+    ).rows[0].n,
+    0,
+  );
+  assert.equal(
+    (
+      await db.query(
+        "select action from admin_console_audit where target_id=$1",
+        [target],
+      )
+    ).rows[0].action,
+    "account:cancel-deletion",
+  );
+  // File removal starts when a worker claims the job, not at prepared_at.
+  const claimed = await corePersonal();
+  await db.query("select queue_account_deletion($1)", [claimed]);
+  await db.query("select * from claim_account_deletions()");
+  await assert.rejects(cancel(claimed), /Deletion already in progress/);
+  assert.ok(
+    (
+      await db.query("select deletion_requested_at from profiles where id=$1", [
+        claimed,
+      ])
+    ).rows[0].deletion_requested_at,
+  );
+  assert.ok(
+    (
+      await db.query(
+        "select lease_id from account_deletion_jobs where user_id=$1",
+        [claimed],
+      )
+    ).rows[0].lease_id,
+  );
+  for (const assignment of [
+    "attempts=1,lease_id=null,prepared_at=null",
+    "attempts=0,lease_id=gen_random_uuid(),prepared_at=null",
+    "attempts=0,lease_id=null,prepared_at=now()",
+  ]) {
+    await db.query(
+      `update account_deletion_jobs set ${assignment} where user_id=$1`,
+      [claimed],
+    );
+    await assert.rejects(cancel(claimed), /Deletion already in progress/);
+  }
+  assert.equal(
+    (
+      await db.query(
+        "select count(*)::int n from admin_console_audit where target_id=$1",
+        [claimed],
+      )
+    ).rows[0].n,
+    0,
+  );
+  await db.query("delete from account_deletion_jobs where user_id=$1", [
+    claimed,
+  ]);
+  await assert.rejects(cancel(claimed), /Deletion request unavailable/);
+});

@@ -47,12 +47,7 @@ function json(body: unknown, status: number, origin: string | null) {
   }
   return new Response(JSON.stringify(body), { status, headers });
 }
-async function list(
-  db: Db,
-  section: string,
-  offset: number,
-  filter?: string,
-) {
+async function list(db: Db, section: string, offset: number, filter?: string) {
   if (section === "overview")
     return { metrics: checked(await db.rpc("admin_console_overview")) };
   if (section === "operations") {
@@ -251,7 +246,7 @@ export function createAdminConsoleHandler(
       await db
         .from("account_deletion_jobs")
         .select(
-          "user_id,requested_at,attempts,next_attempt_at,last_error,prepared_at",
+          "user_id,requested_at,attempts,next_attempt_at,last_error,prepared_at,lease_id",
         )
         .eq("user_id", id)
         .maybeSingle(),
@@ -264,6 +259,7 @@ export function createAdminConsoleHandler(
           .select("note,created_at")
           .eq("action", "account:suspend")
           .eq("target_id", id)
+          .eq("created_at", profile.suspended_at)
           .order("created_at", { ascending: false })
           .limit(1),
       );
@@ -276,6 +272,7 @@ export function createAdminConsoleHandler(
             .select("id,review_note,reviewed_at")
             .eq("subject_user_id", id)
             .eq("status", "resolved")
+            .eq("reviewed_at", profile.suspended_at)
             .order("reviewed_at", { ascending: false })
             .limit(5),
         );
@@ -283,7 +280,18 @@ export function createAdminConsoleHandler(
         if (noted) suspendReason = noted.review_note;
       }
     }
-    return { ...profile, email, deletionJob: job ?? null, suspendReason };
+    const deletionJob = job
+      ? {
+          user_id: job.user_id,
+          requested_at: job.requested_at,
+          attempts: job.attempts,
+          next_attempt_at: job.next_attempt_at,
+          last_error: job.last_error,
+          prepared_at: job.prepared_at,
+          started: !!job.prepared_at || !!job.lease_id || job.attempts > 0,
+        }
+      : null;
+    return { ...profile, email, deletionJob, suspendReason };
   }
   const allowed = new Set(
     (allowedOrigins ?? "")
@@ -477,9 +485,13 @@ export function createAdminConsoleHandler(
         )
           return json({ error: "Invalid moderation decision" }, 400, origin);
         if (
-          ["rejected", "remove", "suspend", "unsuspend", "cancel-deletion"].includes(
-            decision,
-          ) &&
+          [
+            "rejected",
+            "remove",
+            "suspend",
+            "unsuspend",
+            "cancel-deletion",
+          ].includes(decision) &&
           !payload.note.trim()
         )
           return json({ error: "Review reason required" }, 400, origin);
@@ -516,7 +528,7 @@ export function createAdminConsoleHandler(
     } catch (e) {
       const message = e instanceof Error ? e.message : "Failed";
       const safe =
-        /^(review unavailable|review expired|report already reviewed|invalid|unsupported|review reason required)/i.test(
+        /^(review unavailable|review expired|report already reviewed|invalid|unsupported|review reason required|account unavailable$|account already suspended$|account is not suspended$|cannot suspend an administrator$|no deletion pending$|deletion already in progress$|deletion request unavailable$)/i.test(
           message,
         );
       return json(

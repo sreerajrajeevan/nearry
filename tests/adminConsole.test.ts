@@ -563,9 +563,7 @@ test("admin: business queue shows the applicant email; a failed lookup never bre
   assert.equal(b.rows[0].email, "cafe-owner@example.com");
   assert.equal(b.rows[1].email, null);
   const broken = fixture({ rows, emailLookupFails: true });
-  const rb = await broken.handler(
-    req({ action: "list", section: "business" }),
-  );
+  const rb = await broken.handler(req({ action: "list", section: "business" }));
   assert.equal(rb.status, 200);
   assert.equal((await rb.json()).rows[0].email, null);
 });
@@ -712,8 +710,62 @@ test("admin: users list accepts the status filters and rejects unknown ones", as
   }
   assert.equal(
     (
-      await f.handler(req({ action: "list", section: "users", filter: "banned" }))
+      await f.handler(
+        req({ action: "list", section: "users", filter: "banned" }),
+      )
     ).status,
     400,
+  );
+});
+
+test("admin: deletion detail flags a claimed job without disclosing the worker lease", async () => {
+  const f = fixture({
+    deletionJob: {
+      attempts: 0,
+      lease_id: "private-worker-lease",
+      prepared_at: null,
+    },
+  });
+  const response = await f.handler(req({ action: "account", id: user }));
+  const body = await response.json();
+  assert.equal(body.deletionJob.started, true);
+  assert.equal(body.deletionJob.lease_id, undefined);
+});
+
+test("admin: expected account conflicts are actionable and internal errors remain private", async () => {
+  for (const message of [
+    "Deletion already in progress",
+    "Deletion request unavailable",
+    "Cannot suspend an administrator",
+    "Account unavailable",
+    "No deletion pending",
+  ]) {
+    const f = fixture({ rpcError: message });
+    const response = await f.handler(
+      req({
+        action: "decide",
+        kind: "account",
+        id: user,
+        decision: "cancel-deletion",
+        note: "Reviewed request",
+      }),
+    );
+    assert.equal(response.status, 409);
+    assert.equal((await response.json()).error, message);
+  }
+  const f = fixture({ rpcError: "private SQL / secret storage path" });
+  const response = await f.handler(
+    req({
+      action: "decide",
+      kind: "account",
+      id: user,
+      decision: "suspend",
+      note: "Reviewed request",
+    }),
+  );
+  assert.equal(response.status, 500);
+  assert.equal(
+    (await response.json()).error,
+    "Request failed. Please refresh and try again.",
   );
 });
