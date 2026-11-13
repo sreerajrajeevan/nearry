@@ -32,7 +32,7 @@ export function DiscoverySearch(props: Props) {
           <Icon name="search" size={18} />
           <Text style={styles.placeholder} numberOfLines={1}>
             {props.compact
-              ? "Search plans, places, offers…"
+              ? "Search plans, sports, offers…"
               : "Search places or plans"}
           </Text>
         </TouchableOpacity>

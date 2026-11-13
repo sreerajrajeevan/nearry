@@ -35,7 +35,10 @@ function OfferTile({
   const category = offerCategory(offer);
   const theme = {
     all: { backgroundColor: "#F3EBDD", emoji: "🎟️" },
-    fitness: { backgroundColor: "#FFE5CE", emoji: "🏋️" },
+    fitness: {
+      backgroundColor: offer.priceCents === 0 ? "#A17BF0" : "#F2A847",
+      emoji: offer.priceCents === 0 ? "💪" : "🏋️",
+    },
     sports: { backgroundColor: "#E7EEDA", emoji: "🏸" },
     food: { backgroundColor: "#FFECDB", emoji: "🍜" },
     wellness: { backgroundColor: "#ECE5FA", emoji: "🧘" },
@@ -63,9 +66,11 @@ function OfferTile({
           : theme.emoji;
   const headline =
     offer.discountPct != null && offer.discountPct > 0
-      ? `${offer.discountPct}% off`
+      ? `${offer.discountPct}% OFF`
       : offer.priceCents === 0
-        ? "Free opening"
+        ? offer.title.length <= 24 && /free/i.test(offer.title)
+          ? offer.title
+          : "Free"
         : offer.priceCents != null
           ? `₹${(offer.priceCents / 100).toLocaleString("en-IN")}`
           : "Local offer";
@@ -97,9 +102,6 @@ function OfferTile({
         <Text style={styles.business} numberOfLines={1}>
           {offer.businessName}
         </Text>
-        <Text style={styles.description} numberOfLines={1}>
-          {offer.title}
-        </Text>
         <Text style={styles.meta} numberOfLines={1}>
           {distanceKm != null ? `${formatDistance(distanceKm)} · ` : ""}Till{" "}
           {new Date(offer.endsAt).toLocaleDateString("en-IN", {
@@ -108,8 +110,7 @@ function OfferTile({
           })}
         </Text>
         <View style={styles.action}>
-          <Text style={styles.actionText}>View offer</Text>
-          <Icon name="arrow-up-right" size={12} color={colors.onAccent} />
+          <Text style={styles.actionText}>Claim</Text>
         </View>
       </View>
     </MotionPressable>
@@ -127,13 +128,15 @@ export function FeaturedOffers({
   now?: Date;
 }) {
   const { width, fontScale } = useWindowDimensions();
-  const [category, setCategory] = useState<OfferCategory>("all");
+  const [category, setCategory] = useState<OfferCategory>(() =>
+    discoverOffers(offers, "fitness", now).length ? "fitness" : "all",
+  );
   const [expanded, setExpanded] = useState(false);
   const available = discoverOffers(offers, "all", now);
   const matches = discoverOffers(offers, category, now);
   const items = expanded ? matches : matches.slice(0, 6);
   const cardWidth =
-    Math.min(320, Math.max(270, width - 85)) * Math.min(fontScale, 1.3);
+    Math.max(172, Math.min(250, (width - 44) / 2)) * Math.min(fontScale, 1.5);
   return (
     <View style={styles.section}>
       <View style={styles.heading}>
@@ -168,7 +171,9 @@ export function FeaturedOffers({
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.categories}
       >
-        {OFFER_CATEGORIES.map((item) => (
+        {OFFER_CATEGORIES.filter(
+          (item) => item.key !== "all" || category === "all" || expanded,
+        ).map((item) => (
           <MotionPressable
             key={item.key}
             accessibilityRole="button"
@@ -200,7 +205,7 @@ export function FeaturedOffers({
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.rail}
           decelerationRate="fast"
-          snapToInterval={cardWidth + 12}
+          snapToInterval={cardWidth + 8}
         >
           {items.map((offer) => (
             <OfferTile
@@ -228,7 +233,7 @@ export function FeaturedOffers({
   );
 }
 const styles = StyleSheet.create({
-  section: { marginTop: 18, marginBottom: 23 },
+  section: { marginTop: 19, marginBottom: 18 },
   heading: {
     flexDirection: "row",
     alignItems: "center",
@@ -244,82 +249,89 @@ const styles = StyleSheet.create({
     color: colors.ink,
     flexShrink: 1,
   },
-  seeAll: { minHeight: 44, flexDirection: "row", alignItems: "center", gap: 5 },
+  seeAll: { minHeight: 44, flexDirection: "row", alignItems: "center", gap: 4 },
   seeAllText: {
     ...typography.bodySmall,
+    fontSize: 14,
     fontWeight: "600",
     color: colors.coralDeep,
   },
-  categories: { gap: 8, paddingBottom: 13, paddingRight: 8 },
+  categories: { gap: 8, paddingBottom: 14, paddingRight: 8 },
   category: {
     flexDirection: "row",
     alignItems: "center",
     gap: 7,
-    paddingHorizontal: 13,
+    paddingHorizontal: 12,
     paddingVertical: 9,
     minHeight: 44,
-    borderRadius: 24,
+    borderRadius: 26,
     backgroundColor: colors.surface,
   },
-  categorySelected: { backgroundColor: colors.ink },
-  categoryEmoji: { fontSize: 16 },
+  categorySelected: { backgroundColor: "#293341" },
+  categoryEmoji: { fontSize: 15 },
   categoryText: {
     ...typography.bodySmall,
     color: colors.textDim,
     fontWeight: "500",
   },
-  categoryTextSelected: { color: colors.onAccent, fontWeight: "600" },
-  rail: { gap: 12, paddingBottom: 2, paddingRight: 12 },
+  categoryTextSelected: { color: colors.onAccent, fontWeight: "700" },
+  rail: { gap: 8, paddingBottom: 4, paddingRight: 8 },
   card: {
     backgroundColor: colors.surface,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: colors.border,
-    padding: 13,
+    borderRadius: 18,
+    paddingHorizontal: 8,
+    paddingVertical: 11,
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
-    minHeight: 140,
+    gap: 9,
+    minHeight: 112,
   },
   art: {
-    width: 76,
-    height: 88,
-    borderRadius: 18,
+    width: 50,
+    height: 56,
+    borderRadius: 15,
     alignItems: "center",
     justifyContent: "center",
     overflow: "hidden",
   },
-  emoji: { fontSize: 39 },
+  emoji: { fontSize: 29 },
   copy: { flex: 1, minWidth: 0 },
   highlight: {
     ...typography.heading,
-    fontSize: 18,
-    lineHeight: 23,
+    fontSize: 15,
+    lineHeight: 20,
     color: colors.coralDeep,
     fontWeight: "700",
   },
   business: {
     ...typography.bodySmall,
+    fontSize: 12,
+    lineHeight: 16,
     fontWeight: "700",
     color: colors.ink,
     marginTop: 2,
   },
-  description: { ...typography.caption, color: colors.textDim, marginTop: 2 },
-  meta: { ...typography.caption, color: colors.textDim, marginTop: 3 },
+  meta: {
+    ...typography.caption,
+    fontSize: 10,
+    lineHeight: 14,
+    color: colors.textDim,
+    marginTop: 4,
+  },
   action: {
     flexDirection: "row",
     alignItems: "center",
     alignSelf: "flex-start",
-    gap: 5,
-    backgroundColor: colors.ink,
-    borderRadius: 9,
-    paddingHorizontal: 11,
-    paddingVertical: 6,
-    marginTop: 8,
+    backgroundColor: "#253342",
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    marginTop: 6,
   },
   actionText: {
     ...typography.caption,
-    fontWeight: "600",
+    fontSize: 11,
+    fontWeight: "700",
     color: colors.onAccent,
   },
   empty: {
@@ -328,8 +340,6 @@ const styles = StyleSheet.create({
     padding: 15,
     backgroundColor: colors.surface,
     borderRadius: 16,
-    borderWidth: 1,
-    borderColor: colors.border,
   },
   emptyText: { ...typography.bodySmall, color: colors.textDim, flex: 1 },
 });

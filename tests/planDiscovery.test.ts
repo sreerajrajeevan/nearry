@@ -409,3 +409,24 @@ test("invalid creation dates sort after dated posts, with stable ties", () => {
     ["dated", "a", "z"],
   );
 });
+
+test("This week uses Monday–Sunday calendar boundaries, including year rollover", () => {
+  for (const now of [local(2026, 12, 31), local(2027, 1, 3)]) {
+    assert.equal(
+      matchesPlanDate(local(2026, 12, 27, 23, 59).toISOString(), "week", now),
+      false,
+    );
+    assert.equal(
+      matchesPlanDate(local(2026, 12, 28, 0).toISOString(), "week", now),
+      true,
+    );
+    assert.equal(
+      matchesPlanDate(local(2027, 1, 3, 23, 59).toISOString(), "week", now),
+      true,
+    );
+    assert.equal(
+      matchesPlanDate(local(2027, 1, 4, 0).toISOString(), "week", now),
+      false,
+    );
+  }
+});

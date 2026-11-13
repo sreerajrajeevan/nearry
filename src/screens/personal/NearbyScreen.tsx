@@ -418,9 +418,9 @@ export function NearbyScreen() {
             >
               {(
                 [
-                  { key: "all", label: "All plans" },
+                  { key: "all", label: "All" },
                   { key: "today", label: "Today" },
-                  { key: "weekend", label: "This weekend" },
+                  { key: "week", label: "This week" },
                 ] as const
               ).map((item) => (
                 <MotionPressable
@@ -441,7 +441,7 @@ export function NearbyScreen() {
                       dateFilter === item.key && styles.dateTextSelected,
                     ]}
                   >
-                    {item.label}
+                    {item.key === "all" ? "🔥 All" : item.label}
                   </Text>
                 </MotionPressable>
               ))}
@@ -468,26 +468,17 @@ export function NearbyScreen() {
                   options.maxDistanceKm === 2 && styles.dateChipSelected,
                 ]}
               >
-                <Icon
-                  name="map-pin"
-                  size={13}
-                  color={
-                    options.maxDistanceKm === 2
-                      ? colors.onAccent
-                      : colors.textDim
-                  }
-                />
                 <Text
                   style={[
                     styles.dateText,
                     options.maxDistanceKm === 2 && styles.dateTextSelected,
                   ]}
                 >
-                  Within 2 km
+                  Under 2 km
                 </Text>
               </MotionPressable>
             </ScrollView>
-            {!!filterSummary && (
+            {demoMode && !!filterSummary && (
               <Text style={styles.sectionMeta}>{filterSummary}</Text>
             )}
             {state === "loading" && posts.length > 0 && (
@@ -641,7 +632,7 @@ const styles = StyleSheet.create({
     gap: 5,
     minHeight: 44,
     paddingVertical: 10,
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
     borderRadius: 24,
     backgroundColor: colors.surface,
   },

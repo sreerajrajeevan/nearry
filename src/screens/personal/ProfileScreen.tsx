@@ -144,6 +144,13 @@ export function ProfileScreen({ navigation }: Props) {
         </Text>
         <View style={styles.group}>
           <AccountMenuRow
+            icon="bookmark"
+            title="Saved plans"
+            hint="Plans you’ve bookmarked on this device"
+            onPress={() => navigation.navigate("SavedPlans")}
+          />
+          <View style={styles.divider} />
+          <AccountMenuRow
             icon="calendar"
             title="My activity"
             hint="Joined plans, requests and bookings"

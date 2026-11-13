@@ -24,6 +24,7 @@ export function PlanCover({
   const [failed, setFailed] = useState(false);
   useEffect(() => setFailed(false), [post.coverPhotoUrl]);
   const category = postCategory(post);
+  const artwork = activityArtwork(post);
   return (
     <View
       style={[
@@ -31,11 +32,13 @@ export function PlanCover({
         fill ? styles.fill : { aspectRatio },
         {
           backgroundColor:
-            category === "Meet"
-              ? colors.sandSoft
-              : category === "Unwind"
-                ? colors.goldSoft
-                : colors.sageSoft,
+            artwork === "fitness"
+              ? "#21232C"
+              : category === "Meet"
+                ? colors.sandSoft
+                : category === "Unwind"
+                  ? colors.goldSoft
+                  : colors.sageSoft,
         },
       ]}
     >
@@ -49,7 +52,7 @@ export function PlanCover({
       ) : post.demoScene && !post.coverPhotoUrl ? (
         <DemoPhoto scene={post.demoScene} />
       ) : (
-        <ActivityArt artwork={activityArtwork(post)} size={artworkSize} />
+        <ActivityArt artwork={artwork} size={artworkSize} />
       )}
     </View>
   );

@@ -1,7 +1,7 @@
 import type { NeedPost } from "../services/mappers";
 import { postCategory, type DiscoveryCategory } from "./discovery";
 
-export type PlanDateFilter = "all" | "today" | "weekend";
+export type PlanDateFilter = "all" | "today" | "week" | "weekend";
 export type PlanSort = "soonest" | "nearest" | "newest";
 export type PlanAudience = "all" | "any" | "female" | "male";
 export type PlanOptions = {
@@ -108,12 +108,16 @@ export function matchesPlanDate(
   const date = new Date(startsAt);
   if (Number.isNaN(date.getTime())) return false;
   const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  if (filter === "weekend") {
+  if (filter === "week") {
+    start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
+  } else if (filter === "weekend") {
     const day = start.getDay();
     start.setDate(start.getDate() + (day === 0 ? -1 : (6 - day + 7) % 7));
   }
   const end = new Date(start);
-  end.setDate(end.getDate() + (filter === "weekend" ? 2 : 1));
+  end.setDate(
+    end.getDate() + (filter === "week" ? 7 : filter === "weekend" ? 2 : 1),
+  );
   return date >= start && date < end;
 }
 

@@ -1,9 +1,12 @@
 import React from "react";
-import { Image, View } from "react-native";
+import { Image, View, Text } from "react-native";
 import { ActivityArtwork } from "../utils/activityArtwork";
 
 const atlas = require("../../assets/discovery/activity-miniatures.png");
-const positions: Record<ActivityArtwork, [number, number]> = {
+const positions: Record<
+  Exclude<ActivityArtwork, "fitness">,
+  [number, number]
+> = {
   football: [0, 0],
   badminton: [1, 0],
   cricket: [2, 0],
@@ -29,6 +32,51 @@ export function ActivityArt({
   artwork: ActivityArtwork;
   size?: number;
 }) {
+  if (artwork === "fitness")
+    return (
+      <View
+        accessible={false}
+        style={{
+          width: size,
+          height: size,
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <View
+          style={{
+            width: size * 0.94,
+            height: size * 0.055,
+            backgroundColor: "#A9AFB8",
+            borderRadius: 2,
+          }}
+        />
+        {[0.08, 0.18, 0.77, 0.87].map((left, index) => (
+          <View
+            key={left}
+            style={{
+              position: "absolute",
+              left: size * left,
+              top: size * (index === 0 || index === 3 ? 0.35 : 0.28),
+              width: size * 0.065,
+              height: size * (index === 0 || index === 3 ? 0.3 : 0.44),
+              borderRadius: 3,
+              backgroundColor: index % 2 ? "#777F8B" : "#C1C6CE",
+            }}
+          />
+        ))}
+        <Text
+          style={{
+            position: "absolute",
+            fontSize: size * 0.28,
+            bottom: 0,
+            right: 0,
+          }}
+        >
+          🏋️
+        </Text>
+      </View>
+    );
   const [column, row] = positions[artwork];
   const x = columns[column],
     y = rows[row];

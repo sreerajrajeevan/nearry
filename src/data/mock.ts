@@ -99,6 +99,25 @@ if (weekend.getTime() <= Date.now())
 
 export const mockPosts: NeedPost[] = [
   {
+    id: "p-reference-gym",
+    authorId: "u-reference-meera",
+    authorName: "Meera Iyer",
+    title: "Looking for a gym partner",
+    description:
+      "Training push-pull-legs 5 days a week. Join me for a session.",
+    venueId: "v2",
+    venueName: "Cult Fit Arena, Kakkanad",
+    startsAt: new Date(Date.now() + 30 * 60000).toISOString(),
+    vacancies: 2,
+    joinedCount: 1,
+    spotsLeft: 1,
+    costCents: 0,
+    tags: ["gym", "advanced"],
+    genderPreference: "male",
+    status: "open",
+    createdAt: new Date(Date.now() - 25 * 60000).toISOString(),
+  },
+  {
     id: "p1",
     demoScene: "court",
     authorId: "u2",
@@ -401,3 +420,31 @@ export const mockNotifications: AppNotification[] = [
     createdAt,
   },
 ];
+
+// Explicit reference-matching demo offers; never mixed into live discovery.
+mockOffers.unshift(
+  {
+    ...mockOffers[0],
+    id: "o-reference-fitness",
+    businessId: "b-demo-cult",
+    businessName: "Cult Fit Arena",
+    title: "Gym training membership",
+    description: "40% off gym training.",
+    discountPct: 40,
+    priceCents: 99000,
+    venueId: "v2",
+    endsAt: new Date(Date.now() + 17 * 86400000).toISOString(),
+  },
+  {
+    ...mockOffers[0],
+    id: "o-reference-trial",
+    businessId: "b-demo-iron",
+    businessName: "Iron Den Gym",
+    title: "1 week free",
+    description: "A free introductory week of gym training.",
+    priceCents: 0,
+    discountPct: undefined,
+    venueId: "v2",
+    endsAt: new Date(Date.now() + 32 * 86400000).toISOString(),
+  },
+);
