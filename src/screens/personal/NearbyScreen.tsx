@@ -351,7 +351,8 @@ export function NearbyScreen() {
         {selectedPlace ? (
           <PlaceAttributions places={[selectedPlace]} />
         ) : (
-          posts.some((p) => p.location?.source === "google") && (
+          ((!!setupAreaLabel && setup.area?.source === "google") ||
+            posts.some((p) => p.location?.source === "google")) && (
             <GoogleMapsCredit />
           )
         )}
