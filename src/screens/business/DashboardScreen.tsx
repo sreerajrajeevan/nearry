@@ -143,14 +143,16 @@ export function DashboardScreen({ navigation }: Props) {
                   ? drafts.length
                     ? `You have ${drafts.length} draft offer${drafts.length === 1 ? "" : "s"}. Finish an invitation for your neighbourhood.`
                     : "Invite your neighbourhood in with a last-minute offer."
-                  : "Complete verification to publish your offers. You can prepare drafts while you wait."}
+                  : "Verify your business first, then create an offer for your neighbourhood."}
               </Text>
               <TouchableOpacity
                 accessibilityRole="button"
                 style={styles.textButton}
                 activeOpacity={0.65}
                 onPress={() =>
-                  navigation.navigate(verified ? "CreateOffer" : "Business")
+                  navigation.navigate(
+                    verified ? "CreateOffer" : "BusinessVerification",
+                  )
                 }
               >
                 <Text style={styles.link}>

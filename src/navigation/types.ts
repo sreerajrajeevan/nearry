@@ -66,6 +66,7 @@ export type BusinessStackParamList = SafetyStackParamList & {
   MyOffers: undefined;
   EditOffer: { offerId: string };
   EditBusinessProfile: undefined;
+  BusinessVerification: undefined;
   ManageVenue: undefined;
 };
 

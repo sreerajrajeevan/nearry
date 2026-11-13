@@ -1,7 +1,9 @@
 import React from "react";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { useUnreadCounts } from "../hooks/useUnreadCounts";
-import { BusinessTabParamList } from "./types";
+import { BusinessTabParamList, BusinessStackParamList } from "./types";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { useAuth } from "../store/AuthContext";
 import { tabOptions, useTabBarLayout } from "./tabOptions";
 import { DashboardScreen } from "../screens/business/DashboardScreen";
 import { CreateOfferScreen } from "../screens/business/CreateOfferScreen";
@@ -12,6 +14,7 @@ import { BusinessProfileScreen } from "../screens/business/BusinessProfileScreen
 const Tab = createBottomTabNavigator<BusinessTabParamList>();
 export function BusinessTabs() {
   const tabBarLayout = useTabBarLayout();
+  const { profile } = useAuth();
   const { messages } = useUnreadCounts();
   return (
     <Tab.Navigator screenOptions={tabBarLayout}>
@@ -24,6 +27,16 @@ export function BusinessTabs() {
         name="CreateOffer"
         component={CreateOfferScreen}
         options={tabOptions("plus", "Create Offer")}
+        listeners={({ navigation }) => ({
+          tabPress: (event) => {
+            if (profile && profile.verificationStatus !== "verified") {
+              event.preventDefault();
+              navigation
+                .getParent<NativeStackNavigationProp<BusinessStackParamList>>()
+                ?.navigate("BusinessVerification");
+            }
+          },
+        })}
       />
       <Tab.Screen
         name="Bookings"
