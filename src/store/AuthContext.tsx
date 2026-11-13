@@ -27,18 +27,13 @@ import {
 } from "../services/auth";
 import { unregisterPushToken } from "../services/notifications";
 import { POLICY_VERSION } from "../utils/legal";
-import {
-  acceptCurrentTerms,
-  AGREEMENT_REQUIRED,
-  beginSignupAgreement,
-  clearSignupAgreement,
-  configureSignupAgreementStorage,
-} from "../services/terms";
+import { acceptCurrentTerms, AGREEMENT_REQUIRED } from "../services/terms";
 import { completePersonalProfile as savePersonalDetails } from "../services/profile";
 import { RequestVersion } from "../utils/requestVersion";
 import type { OnboardingPreferences } from "../utils/onboarding";
+import { AccountChoiceStore } from "../services/accountChoice";
 configureAuthStorage(AsyncStorage);
-configureSignupAgreementStorage(AsyncStorage);
+const accountChoices = new AccountChoiceStore(AsyncStorage);
 
 export type OnboardingData = {
   termsAccepted?: boolean;
@@ -78,14 +73,9 @@ type AuthState = {
     accountType: AccountType,
     displayName?: string,
     signup?: boolean,
-    termsAccepted?: boolean,
   ) => Promise<void>;
   verifyOtp: (email: string, code: string) => Promise<void>;
-  signInGoogle: (
-    accountType: AccountType,
-    signup?: boolean,
-    termsAccepted?: boolean,
-  ) => Promise<void>;
+  signInGoogle: (accountType: AccountType) => Promise<void>;
   signOut: (localOnly?: boolean) => Promise<void>;
   enterDemoMode: (accountType?: AccountType) => void;
   exitDemoMode: () => void;
@@ -134,6 +124,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     demoRef = useRef(false),
     sessionRef = useRef<Session | null>(null);
   const profileRef = useRef<Profile | null>(null);
+  const initialProfiles = useRef(new Map<string, Promise<Profile>>());
+  const sessionEpoch = useRef(0);
   const actionPending = useRef(false);
   const errorText = (e: unknown) =>
     e instanceof Error
@@ -141,6 +133,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       : "Could not load your account. Please retry.";
   async function hydrate(next: Session | null, throwOnError = false) {
     const ticket = version.current.next();
+    if (sessionRef.current?.user.id !== next?.user.id) {
+      sessionEpoch.current++;
+      initialProfiles.current.clear();
+    }
+    const epoch = sessionEpoch.current;
     sessionRef.current = next;
     setSession(next);
     setProfileError("");
@@ -162,15 +159,53 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setProfileLoading(true);
     }
     try {
-      const { data, error } = await requireSupabase().rpc("get_my_profile");
-      if (error) throw error;
-      if (!data)
-        throw new Error(
-          "Your profile is missing. Ask the administrator to restore it, then retry.",
-        );
-      const saved = toProfile(data as DbProfile);
-      if (saved.id !== next.user.id)
-        throw new Error("Account changed. Please retry.");
+      const readProfile = async () => {
+        const { data, error } = await requireSupabase().rpc("get_my_profile");
+        if (error) throw error;
+        if (!data)
+          throw new Error(
+            "Your profile is missing. Ask the administrator to restore it, then retry.",
+          );
+        const saved = toProfile(data as DbProfile);
+        if (saved.id !== next.user.id)
+          throw new Error("Account changed. Please retry.");
+        return saved;
+      };
+      const load = async () =>
+        accountChoices.resolve(await readProfile(), next.user, {
+          isCurrent: () =>
+            mounted.current &&
+            !demoRef.current &&
+            sessionEpoch.current === epoch &&
+            sessionRef.current?.user.id === next.user.id,
+          select: async (role) => {
+            const { error } = await requireSupabase().rpc(
+              "select_account_type",
+              {
+                p_account_type: role,
+              },
+            );
+            if (error) throw error;
+          },
+          read: readProfile,
+        });
+      // Supabase's SIGNED_IN event and the OAuth callback may arrive together.
+      // Share the initial read + selection so neither can publish a stale,
+      // unselected profile after the other has consumed the stored choice.
+      let job = !alreadyLoaded
+        ? initialProfiles.current.get(next.user.id)
+        : undefined;
+      if (!job) {
+        job = load();
+        if (!alreadyLoaded) initialProfiles.current.set(next.user.id, job);
+      }
+      let saved: Profile;
+      try {
+        saved = await job;
+      } finally {
+        if (initialProfiles.current.get(next.user.id) === job)
+          initialProfiles.current.delete(next.user.id);
+      }
       if (
         mounted.current &&
         version.current.current(ticket) &&
@@ -298,10 +333,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       db.auth.stopAutoRefresh();
     };
   }, []);
-  async function remember(role: AccountType) {
+  async function remember(
+    role: AccountType,
+    flow: "email" | "google",
+    email?: string,
+  ) {
     setIntendedRole(role);
     intendedRoleRef.current = role;
+    // Discard old pre-login consent intents from earlier app versions.
+    // New consent is collected only on the final onboarding review screen.
+    await AsyncStorage.removeItem("nearry.signupAgreement");
     await AsyncStorage.setItem("nearry.pendingRole", role);
+    await accountChoices.begin(role, flow, email);
   }
   async function action(work: () => Promise<void>) {
     if (actionPending.current)
@@ -348,6 +391,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       }
       version.current.invalidate();
+      sessionEpoch.current++;
+      initialProfiles.current.clear();
       demoRef.current = false;
       setRoleMismatch(null);
       setDemo(false);
@@ -361,11 +406,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setProfileError("");
       setProfileLoading(false);
       await AsyncStorage.removeItem("nearry.pendingRole");
-      await clearSignupAgreement();
+      await AsyncStorage.removeItem("nearry.signupAgreement");
+      await accountChoices.clear();
     });
   }
   function enterDemoMode(role: AccountType = "personal") {
     version.current.invalidate();
+    sessionEpoch.current++;
+    initialProfiles.current.clear();
     demoRef.current = true;
     setDemoDetails({});
     setDemoRole(role);
@@ -481,16 +529,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         intendedRole,
         roleMismatch,
         clearRoleMismatch: () => setRoleMismatch(null),
-        sendOtp: (email, role, name, signup = true, termsAccepted = false) =>
+        sendOtp: (email, role, name, signup = true) =>
           action(async () => {
-            if (signup)
-              await beginSignupAgreement("email", termsAccepted, email);
-            else await clearSignupAgreement();
-            await remember(role);
+            await remember(role, "email", email);
             try {
               await sendEmailOtp(email, role, name, signup);
             } catch (e) {
-              await clearSignupAgreement();
+              await accountChoices.clear();
               await AsyncStorage.removeItem("nearry.pendingRole");
               throw e;
             }
@@ -500,17 +545,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             const userId = await verifyEmailOtp(email, code);
             await refreshAuthenticatedProfile(userId);
           }),
-        signInGoogle: (role, signup = false, termsAccepted = false) =>
+        signInGoogle: (role) =>
           action(async () => {
-            if (signup) await beginSignupAgreement("google", termsAccepted);
-            else await clearSignupAgreement();
-            await remember(role);
+            await remember(role, "google");
+            let authenticated = false;
             try {
               const userId = await signInWithGoogle(role);
+              authenticated = !!userId;
               if (userId) await refreshAuthenticatedProfile(userId);
             } catch (e) {
-              await clearSignupAgreement();
-              await AsyncStorage.removeItem("nearry.pendingRole");
+              // Retain the choice if sign-in succeeded but profile loading failed;
+              // Retry can finish setup without showing the account picker again.
+              if (!authenticated && !sessionRef.current) {
+                await accountChoices.clear();
+                await AsyncStorage.removeItem("nearry.pendingRole");
+              }
               throw e;
             }
           }),

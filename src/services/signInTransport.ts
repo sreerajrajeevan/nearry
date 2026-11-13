@@ -14,6 +14,7 @@ export function createSignInFetch(
       !(
         address.pathname.startsWith("/auth/v1/") ||
         address.pathname === "/rest/v1/rpc/get_my_profile" ||
+        address.pathname === "/rest/v1/rpc/select_account_type" ||
         address.pathname === "/rest/v1/rpc/finish_personal_onboarding"
       )
     )

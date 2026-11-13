@@ -10,7 +10,6 @@ import {
   onboardingColors as c,
 } from "../../components/onboarding/OnboardingKit";
 import { MotionPressable } from "../../components/Motion";
-import { TermsAgreement } from "../../components/TermsAgreement";
 import { normalizeEmailCode } from "../../utils/emailSignIn";
 import { isValidEmail, isValidOtp } from "../../utils/validation";
 type Props = {
@@ -24,12 +23,10 @@ type Props = {
   errorFor: "email" | "google";
   busy: boolean;
   pendingAction: "send" | "verify" | "google" | null;
-  agreed: boolean;
   resendSeconds: number;
   configured: boolean;
   setEmail: (value: string) => void;
   setCode: (value: string) => void;
-  setAgreed: (value: boolean) => void;
   sendCode: () => Promise<void>;
   confirmCode: () => Promise<void>;
   google: () => Promise<void>;
@@ -61,7 +58,6 @@ export function AuthPresentation(p: Props) {
             disabled={
               p.busy ||
               !p.configured ||
-              (!p.isLogin && !p.agreed) ||
               (code
                 ? !isValidOtp(p.code)
                 : !isValidEmail(p.email) || p.resendSeconds > 0)
@@ -111,14 +107,14 @@ export function AuthPresentation(p: Props) {
             accessibilityRole="button"
             accessibilityLabel="Continue with Google"
             accessibilityState={{
-              disabled: p.busy || (!p.isLogin && !p.agreed),
+              disabled: p.busy || !p.configured,
               busy: p.pendingAction === "google",
             }}
-            disabled={p.busy || !p.configured || (!p.isLogin && !p.agreed)}
+            disabled={p.busy || !p.configured}
             onPress={() => void p.google()}
             style={[
               styles.google,
-              (p.busy || (!p.isLogin && !p.agreed)) && { opacity: 0.6 },
+              (p.busy || !p.configured) && { opacity: 0.6 },
             ]}
           >
             <Text style={styles.g}>G</Text>
@@ -201,21 +197,10 @@ export function AuthPresentation(p: Props) {
           {p.error}
         </Text>
       )}
-      {!p.isLogin && !code && (
-        <TermsAgreement
-          checked={p.agreed}
-          onChange={p.setAgreed}
-          disabled={p.busy}
-          onTerms={p.onTerms}
-          onPrivacy={p.onPrivacy}
-        />
-      )}
-      {p.isLogin && (
-        <View style={styles.legal}>
-          <OnboardingLink title="Privacy Policy" onPress={p.onPrivacy} />
-          <OnboardingLink title="Terms & Guidelines" onPress={p.onTerms} />
-        </View>
-      )}
+      <View style={styles.legal}>
+        <OnboardingLink title="Privacy Policy" onPress={p.onPrivacy} />
+        <OnboardingLink title="Terms & Guidelines" onPress={p.onTerms} />
+      </View>
     </OnboardingLayout>
   );
 }

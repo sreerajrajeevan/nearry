@@ -484,6 +484,15 @@ test("new Google user chooses Business once without changing returning roles", a
     false,
   );
   await asUser(id, (tx) => tx.query("select select_account_type('business')"));
+  // Picking a lane before login is not adult/terms consent or completed setup.
+  const selected = (
+    await asUser(id, (tx) => tx.query("select get_my_profile() p"))
+  ).rows[0].p;
+  assert.equal(selected.role_selected, true);
+  assert.equal(selected.onboarding_completed, false);
+  assert.equal(selected.terms_version, null);
+  // Duplicate OAuth callbacks may repeat this RPC safely.
+  await asUser(id, (tx) => tx.query("select select_account_type('business')"));
   assert.equal(
     (await db.query("select account_type from profiles where id=$1", [id]))
       .rows[0].account_type,

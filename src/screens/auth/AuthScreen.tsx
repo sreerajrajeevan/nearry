@@ -8,7 +8,6 @@ import React, { useEffect, useState, useRef } from "react";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../../navigation/types";
-import { AGREEMENT_REQUIRED } from "../../services/terms";
 import { useAuth } from "../../store/AuthContext";
 import { isSupabaseConfigured } from "../../services/supabase";
 import { isValidEmail, isValidOtp } from "../../utils/validation";
@@ -37,7 +36,6 @@ export function AuthScreen({
   const isLogin = mode === "login";
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const [agreed, setAgreed] = useState(false);
   const { sendOtp, verifyOtp, signInGoogle, loading } = useAuth();
 
   const [step, setStep] = useState<"email" | "code">("email");
@@ -65,7 +63,6 @@ export function AuthScreen({
   }, [resendAt]);
   useEffect(() => {
     version.current++;
-    setAgreed(false);
     setStep("email");
     setCode("");
     setSentTo(null);
@@ -84,14 +81,13 @@ export function AuthScreen({
     setError(null);
     if (Date.now() < cooldowns.current.expiresAt(email))
       return setError("Please wait before requesting another code.");
-    if (!isLogin && !agreed) return setError(AGREEMENT_REQUIRED);
     const clean = normalizeEmail(email);
     if (!isValidEmail(clean)) return setError("Enter a valid email address.");
     const run = version.current;
     actionLock.current = true;
     setPendingAction("send");
     try {
-      await sendOtp(clean, accountType, undefined, !isLogin, agreed);
+      await sendOtp(clean, accountType, undefined, !isLogin);
       cooldowns.current.record(clean);
       if (run !== version.current) return;
       setSentTo(clean);
@@ -110,7 +106,6 @@ export function AuthScreen({
     if (busy || actionLock.current) return;
     setErrorFor("email");
     setError(null);
-    if (!isLogin && !agreed) return setError(AGREEMENT_REQUIRED);
     if (!isValidOtp(code))
       return setError("Enter the full code from your email (6–10 digits).");
     const run = version.current;
@@ -134,12 +129,11 @@ export function AuthScreen({
     if (busy || actionLock.current) return;
     setErrorFor("google");
     setError(null);
-    if (!isLogin && !agreed) return setError(AGREEMENT_REQUIRED);
     const run = version.current;
     actionLock.current = true;
     setPendingAction("google");
     try {
-      await signInGoogle(accountType, !isLogin, agreed);
+      await signInGoogle(accountType);
     } catch (e) {
       if (run === version.current) fail(e);
     } finally {
@@ -160,7 +154,6 @@ export function AuthScreen({
       errorFor={errorFor}
       busy={busy}
       pendingAction={pendingAction}
-      agreed={agreed}
       resendSeconds={resendSeconds}
       configured={isSupabaseConfigured}
       setEmail={(value) => {
@@ -170,10 +163,6 @@ export function AuthScreen({
       }}
       setCode={(value) => {
         setCode(value);
-        setError(null);
-      }}
-      setAgreed={(value) => {
-        setAgreed(value);
         setError(null);
       }}
       sendCode={sendCode}
