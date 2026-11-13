@@ -108,11 +108,12 @@ begin
  end if;
  if exists(select 1 from storage.objects) then raise exception 'Remove uploaded files through Storage API first'; end if;
 end $reset$;
+-- Avatar changes can queue media cleanup; clear links before emptying the queues.
+-- All uploads have already been removed through the Storage API.
+update public.profiles set avatar_url=null,verification_doc_path=null where id in (${admins});
 ${tables.map((t) => `delete from public.${t};`).join("\n")}
 -- Retain global paid-provider quotas, while removing per-account counters.
 delete from public.place_search_usage where scope not in ('global_day','global_second');
--- All uploads have been removed, including old admin avatar/proof files.
-update public.profiles set avatar_url=null,verification_doc_path=null where id in (${admins});
 select true as app_data_cleared;
 commit;`;
 }

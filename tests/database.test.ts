@@ -180,8 +180,11 @@ test("operator testing reset clears the actual schema without removing admin acc
         [owner],
       );
       await tx.query(
-        "update profiles set avatar_url='old-avatar',verification_doc_path='old-proof' where id=$1",
-        [owner],
+        "update profiles set avatar_url=$2,verification_doc_path='old-proof' where id=$1",
+        [
+          owner,
+          `https://${PROJECT}.supabase.co/storage/v1/object/public/avatars/${owner}/avatar.jpg`,
+        ],
       );
       await tx.exec("delete from storage.objects");
       await tx.exec(

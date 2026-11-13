@@ -58,3 +58,16 @@ Personal/Business demo: demos intentionally contain built-in sample data and are
 unaffected by a Supabase reset. Sign in to the dashboard with the preserved admin.
 
 Email delivery/domain setup is unchanged by resetting data.
+
+## Completed reset — 13 November 2026
+
+After explicit owner confirmation, 22 non-admin accounts and 29 uploaded files
+were permanently removed. A read-only verification found zero rows in every
+reset application table and zero remaining Storage objects. One active admin
+owner account, its allowlist membership and verified MFA factor remain.
+
+Clearing the old admin avatar link briefly queued a cleanup record through the
+existing profile trigger; the normal cleanup worker cleared it. The operator
+tool now clears avatar links before deleting queues, and its disposable-database
+test uses a real owned-avatar URL to cover this ordering. This completed action
+does not schedule another reset, and merging the PR performs no deletion.
