@@ -1,53 +1,58 @@
-import { PageHeading } from "../../components/PageHeading";
 import React, { useState } from "react";
-import { Text, View } from "react-native";
-import { Screen } from "../../components/Screen";
-import { Button } from "../../components/Button";
+import { Text } from "react-native";
 import { useAuth } from "../../store/AuthContext";
-import { colors, typography, spacing } from "../../theme";
+import { AccountType } from "../../navigation/types";
+import {
+  OnboardingLayout,
+  OnboardingHero,
+  OnboardingHeading,
+  OnboardingRoleChoice,
+  OnboardingButton,
+  OnboardingLink,
+  ob,
+} from "../../components/onboarding/OnboardingKit";
 export function AccountTypeScreen() {
-  const { selectAccountType, loading, intendedRole } = useAuth();
+  const { selectAccountType, loading, intendedRole, signOut } = useAuth();
+  const [role, setRole] = useState<AccountType>(intendedRole);
   const [error, setError] = useState("");
-  async function choose(role: "personal" | "business") {
+  const choose = async () => {
     setError("");
     try {
       await selectAccountType(role);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Please retry.");
+      setError(e instanceof Error ? e.message : "Please try again.");
     }
-  }
+  };
   return (
-    <Screen padded>
-      <PageHeading compact title="How will you use Nearry?" />
-      <Text
-        style={{
-          ...typography.body,
-          color: colors.textDim,
-          marginVertical: spacing.lg,
-        }}
-      >
-        Choose your account type to finish setup. Your suggested choice is{" "}
-        {intendedRole}.
-      </Text>
-      <Button
-        title="Personal"
-        loading={loading}
-        onPress={() => void choose("personal")}
+    <OnboardingLayout
+      brand
+      footer={
+        <>
+          <OnboardingButton
+            title="Continue"
+            onPress={() => void choose()}
+            loading={loading}
+          />
+          <OnboardingLink
+            title="Use a different account"
+            disabled={loading}
+            onPress={() => void signOut().catch((e) => setError(e.message))}
+          />
+        </>
+      }
+    >
+      <OnboardingHero kind="welcome" compact />
+      <OnboardingHeading
+        kicker="A place for you"
+        title="How will you use Nearry?"
+        subtitle="Confirm your account type to finish setting up your space."
       />
-      <View style={{ height: spacing.md }} />
-      <Button
-        title="Business"
-        loading={loading}
-        onPress={() => void choose("business")}
-      />
+      <OnboardingRoleChoice role={role} onChange={setRole} disabled={loading} />
       {!!error && (
-        <Text
-          accessibilityRole="alert"
-          style={{ color: colors.red, marginTop: spacing.md }}
-        >
+        <Text accessibilityRole="alert" style={ob.error}>
           {error}
         </Text>
       )}
-    </Screen>
+    </OnboardingLayout>
   );
 }

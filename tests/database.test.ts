@@ -3815,3 +3815,158 @@ test("admin cancellation preserves claimed deletion jobs and only cancels an uns
   ]);
   await assert.rejects(cancel(claimed), /Deletion request unavailable/);
 });
+
+test("bright onboarding saves private preferences and profile atomically without weakening adult, role or terms checks", async () => {
+  const user = await corePersonal();
+  await db.query(
+    "update profiles set age=null,gender=null,onboarding_completed=false,terms_version=null where id=$1",
+    [user],
+  );
+  const prefs = {
+    days: ["Sat", "Sun"],
+    times: ["Evening"],
+    radiusKm: 10,
+    area: {
+      label: "Kakkanad",
+      latitude: 10,
+      longitude: 76,
+      source: "google",
+      acquiredAt: new Date().toISOString(),
+    },
+  };
+  const finish = (
+    actor: string,
+    age = 25,
+    terms = true,
+    preferences: unknown = prefs,
+    interests = ["Gym", "Cafés"],
+  ) =>
+    asUser(actor, (tx) =>
+      tx.query(
+        "select finish_personal_onboarding('New Neighbour','female',$1,$2,$3,$4)",
+        [age, interests, JSON.stringify(preferences), terms],
+      ),
+    );
+  await assert.rejects(finish(user, 17), /18 and 100/);
+  await assert.rejects(finish(user, 25, false), /accept/);
+  for (const bad of [
+    { ...prefs, birthday: "2000-01-01" },
+    { ...prefs, radiusKm: 999 },
+    { ...prefs, days: ["invalid"] },
+    { ...prefs, area: { ...prefs.area, latitude: 91 } },
+    null,
+  ])
+    await assert.rejects(finish(user, 25, true, bad), /Invalid setup/);
+  await assert.rejects(finish(biz), /Personal account/);
+  // Fail the second write after complete_personal_profile to prove it cannot mark a partial setup complete.
+  await db.exec(
+    "create function test_reject_setup_interests() returns trigger as $$ begin if new.interests @> array['reject-atomic'] then raise exception 'test rollback'; end if; return new; end; $$ language plpgsql; create trigger test_setup_rollback before update on profiles for each row execute function test_reject_setup_interests();",
+  );
+  try {
+    await assert.rejects(
+      finish(user, 25, true, prefs, ["reject-atomic"]),
+      /test rollback/,
+    );
+  } finally {
+    await db.exec(
+      "drop trigger test_setup_rollback on profiles;drop function test_reject_setup_interests();",
+    );
+  }
+  const unchanged = (
+    await db.query(
+      "select age,onboarding_completed,terms_version from profiles where id=$1",
+      [user],
+    )
+  ).rows[0];
+  assert.equal(unchanged.age, null);
+  assert.equal(unchanged.onboarding_completed, false);
+  assert.equal(unchanged.terms_version, null);
+  await finish(user);
+  const saved = (
+    await asUser(user, (tx) => tx.query("select get_my_profile() p"))
+  ).rows[0].p;
+  assert.equal(saved.onboarding_completed, true);
+  assert.equal(saved.age, 25);
+  assert.equal(saved.gender, "female");
+  assert.deepEqual(saved.onboarding_preferences, prefs);
+  assert.deepEqual(saved.interests, ["Gym", "Cafés"]);
+  assert.equal("birthday" in saved.onboarding_preferences, false);
+  for (const actor of [user, host])
+    await assert.rejects(
+      asUser(actor, (tx) =>
+        tx.query("select onboarding_preferences from profiles where id=$1", [
+          user,
+        ]),
+      ),
+      /permission denied/,
+    );
+  await assert.rejects(
+    asUser(
+      null,
+      (tx) =>
+        tx.query(
+          "select finish_personal_onboarding('Name','female',25,'{}','{}',true)",
+        ),
+      "anon",
+    ),
+    /permission denied/,
+  );
+  const foreignUpdate = await asUser(host, (tx) =>
+    tx.query(
+      "update profiles set onboarding_preferences='{}' where id=$1 returning id",
+      [user],
+    ),
+  );
+  assert.equal(foreignUpdate.rows.length, 0);
+  await asUser(user, (tx) =>
+    tx.query("update profiles set onboarding_preferences=$1 where id=$2", [
+      JSON.stringify({ ...prefs, days: ["Mon"] }),
+      user,
+    ]),
+  );
+  await assert.rejects(
+    asUser(user, (tx) =>
+      tx.query("update profiles set onboarding_preferences=$1 where id=$2", [
+        JSON.stringify({ dob: "2000-01-01" }),
+        user,
+      ]),
+    ),
+    /check constraint/,
+  );
+  await db.query("update profiles set suspended_at=now() where id=$1", [user]);
+  await assert.rejects(finish(user), /Personal account/);
+  const old = new Date(Date.now() - 30 * 86400000).toISOString();
+  await db.query("update profiles set onboarding_preferences=$1 where id=$2", [
+    JSON.stringify({ ...prefs, area: { ...prefs.area, acquiredAt: old } }),
+    user,
+  ]);
+  await db.query(
+    "update profiles set business_details=business_details || $1::jsonb where id=$2",
+    [
+      JSON.stringify({
+        latitude: 10,
+        longitude: 76,
+        locationSource: "google",
+        locationCachedAt: old,
+      }),
+      biz,
+    ],
+  );
+  await asUser(
+    null,
+    (tx) => tx.query("select maintenance_retention_cleanup()"),
+    "service_role",
+  );
+  const retained = (
+    await db.query("select onboarding_preferences from profiles where id=$1", [
+      user,
+    ])
+  ).rows[0].onboarding_preferences;
+  assert.equal(retained.area, undefined);
+  assert.deepEqual(retained.days, ["Sat", "Sun"]);
+  const businessDetails = (
+    await db.query("select business_details from profiles where id=$1", [biz])
+  ).rows[0].business_details;
+  assert.equal(businessDetails.latitude, undefined);
+  assert.equal(businessDetails.longitude, undefined);
+});

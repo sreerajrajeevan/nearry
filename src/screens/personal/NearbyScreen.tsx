@@ -52,19 +52,22 @@ import {
 } from "../../utils/planDiscovery";
 import { useDiscoveryClock } from "../../hooks/useDiscoveryClock";
 import { MotionPressable } from "../../components/Motion";
+import { onboardingPreferences } from "../../utils/onboarding";
 
 export function NearbyScreen() {
   const navigation = useNavigation<PersonalTabNav>();
   const route = useRoute<RouteProp<PersonalTabParamList, "Nearby">>();
   const { demoMode, profile, session } = useAuth();
   const now = useDiscoveryClock();
+  const setup = onboardingPreferences(profile?.onboardingPreferences);
   const [posts, setPosts] = useState<NeedPost[]>([]);
   const [venues, setVenues] = useState<Venue[]>([]);
   const [offers, setOffers] = useState<Offer[]>([]);
   const [state, setState] = useState<"loading" | "error" | "ready">("loading");
   const [refreshing, setRefreshing] = useState(false);
-  const [point, setPoint] = useState<LatLng | null>(null);
+  const [point, setPoint] = useState<LatLng | null>(() => setup.area ?? null);
   const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
+  const [setupAreaLabel, setSetupAreaLabel] = useState(setup.area?.label ?? "");
   const [area, setArea] = useState("");
   const [appliedArea, setAppliedArea] = useState("");
   const [editingLocation, setEditingLocation] = useState(false);
@@ -72,6 +75,7 @@ export function NearbyScreen() {
   const [locationError, setLocationError] = useState("");
   const [options, setOptions] = useState<PlanOptions>({
     ...DEFAULT_PLAN_OPTIONS,
+    maxDistanceKm: setup.area ? setup.radiusKm : null,
   });
   const { category, freeOnly } = options;
   const [dateFilter, setDateFilter] = useState<PlanDateFilter>("all");
@@ -82,6 +86,7 @@ export function NearbyScreen() {
   const scroll = useRef<ScrollView>(null);
   const suggestions = usePlaceSuggestions(area, point, editingLocation);
   const choosePlace = (place: Place) => {
+    setSetupAreaLabel("");
     setSelectedPlace(place);
     setPoint({ latitude: place.latitude, longitude: place.longitude });
     setArea("");
@@ -145,6 +150,7 @@ export function NearbyScreen() {
     setRefreshing(false);
   };
   const applyArea = () => {
+    setSetupAreaLabel("");
     if (!demoMode)
       setOptions((current) => ({
         ...current,
@@ -163,6 +169,7 @@ export function NearbyScreen() {
     try {
       const position = await getCurrentPosition();
       if (position) {
+        setSetupAreaLabel("");
         setSelectedPlace(null);
         setPoint(position);
         setAppliedArea("");
@@ -206,6 +213,7 @@ export function NearbyScreen() {
   const areaLabel =
     selectedPlace?.name ||
     appliedArea ||
+    setupAreaLabel ||
     (demoMode ? "Demo places" : point ? "Near you" : "Choose area");
   const scope = demoMode
     ? "Sample plans"
