@@ -270,7 +270,7 @@ const styles = StyleSheet.create({
   },
   chipSel: { ...surfaces.selected },
   chipText: { ...typography.bodySmall, color: colors.text },
-  chipTextSel: { color: colors.onGold },
+  chipTextSel: { color: colors.accentDeep },
   formError: {
     ...typography.body,
     color: colors.red,

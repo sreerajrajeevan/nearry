@@ -1,6 +1,6 @@
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
-import { colors, typography, spacing } from "../theme";
+import { colors, typography, spacing, radius } from "../theme";
 import { Icon, IconName } from "./Icon";
 
 type Option<T extends string> = { key: T; label: string; icon?: IconName };
@@ -39,7 +39,7 @@ export function FilterTabs<T extends string>({
               <Icon
                 name={option.icon}
                 size={15}
-                color={active ? colors.onGold : colors.textDim}
+                color={active ? colors.onAccent : colors.textDim}
               />
             )}
             <Text style={[styles.label, active && styles.activeLabel]}>
@@ -63,15 +63,15 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    minHeight: 48,
-    paddingVertical: 10,
-    paddingHorizontal: 13,
+    minHeight: 44,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 12,
+    borderRadius: radius.full,
     backgroundColor: colors.card,
   },
-  active: { backgroundColor: colors.goldSoft, borderColor: colors.goldDeep },
-  label: { ...typography.bodySmall, color: colors.textDim },
-  activeLabel: { color: colors.onGold, fontWeight: "500" },
+  active: { backgroundColor: colors.accent, borderColor: colors.accent },
+  label: { ...typography.bodySmall, color: colors.textDim, fontWeight: "600" },
+  activeLabel: { color: colors.onAccent, fontWeight: "700" },
 });

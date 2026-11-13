@@ -19,5 +19,5 @@ const styles = StyleSheet.create({
     ...surfaces.card,
     padding: spacing.md,
   },
-  accent: { borderColor: colors.sage, backgroundColor: colors.sageSoft },
+  accent: { borderColor: colors.accent, backgroundColor: colors.accentSoft },
 });

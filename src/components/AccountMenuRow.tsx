@@ -69,7 +69,7 @@ const styles = StyleSheet.create({
   },
   countText: {
     ...typography.caption,
-    color: colors.onGold,
+    color: colors.accentDeep,
     fontWeight: "700",
   },
 });

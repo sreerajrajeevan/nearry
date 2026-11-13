@@ -56,11 +56,11 @@ const styles = StyleSheet.create({
     backgroundColor: "transparent",
     borderWidth: 1,
     borderColor: "transparent",
-    borderRadius: 14,
+    borderRadius: 18,
   },
   selected: {
-    borderColor: colors.border,
-    backgroundColor: colors.sageSoft,
+    borderColor: colors.accent,
+    backgroundColor: colors.accentSoft,
   },
   label: { ...typography.label, fontSize: 12, color: colors.text },
 });

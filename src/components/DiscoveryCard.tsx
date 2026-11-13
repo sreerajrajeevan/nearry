@@ -2,7 +2,7 @@ import { AudienceBadge, audienceLabel } from "./AudienceBadge";
 import { LoadingImage } from "./LoadingImage";
 import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet } from "react-native";
-import { colors, typography, spacing } from "../theme";
+import { colors, typography, spacing, shadows } from "../theme";
 import { Icon, IconName } from "./Icon";
 import { MotionPressable } from "./Motion";
 import { ActivityArt } from "./ActivityArt";
@@ -88,20 +88,21 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 12,
     padding: 12,
-    backgroundColor: colors.onAccent,
+    backgroundColor: colors.surface,
     borderColor: colors.border,
     borderWidth: 1,
-    borderRadius: 16,
+    borderRadius: 20,
     marginBottom: 12,
+    ...shadows.sm,
   },
   thumbnail: {
-    width: 80,
-    minHeight: 86,
-    borderRadius: 12,
+    width: 84,
+    minHeight: 92,
+    borderRadius: 16,
     overflow: "hidden",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: colors.sandSoft,
+    backgroundColor: colors.accentSoft,
   },
   copy: { flex: 1, minWidth: 0 },
   photo: { width: "100%", height: "100%", position: "absolute" },
@@ -109,14 +110,14 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.accent,
     textTransform: "uppercase",
-    letterSpacing: 1,
-    fontWeight: "600",
+    letterSpacing: 0.8,
+    fontWeight: "700",
     marginBottom: 5,
   },
   title: {
     ...typography.body,
     color: colors.text,
-    fontWeight: "600",
+    fontWeight: "700",
     lineHeight: 20,
     marginBottom: 5,
   },

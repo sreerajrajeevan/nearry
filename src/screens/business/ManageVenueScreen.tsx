@@ -287,7 +287,7 @@ const styles = StyleSheet.create({
   },
   chipActive: { ...surfaces.selected },
   chipText: { ...typography.label, color: colors.text },
-  chipTextActive: { color: colors.onGold },
+  chipTextActive: { color: colors.accentDeep },
   customRow: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.md },
   customInput: {
     flex: 1,

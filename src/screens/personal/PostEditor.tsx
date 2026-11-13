@@ -657,7 +657,7 @@ const styles = StyleSheet.create({
   },
   chipSelected: { ...surfaces.selected },
   chipText: { ...typography.bodySmall, color: colors.textDim },
-  chipTextSelected: { color: colors.onGold, fontWeight: "600" },
+  chipTextSelected: { color: colors.accentDeep, fontWeight: "600" },
   formError: {
     ...typography.body,
     color: colors.red,

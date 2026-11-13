@@ -139,7 +139,7 @@ export function AppAlertHost() {
 }
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: "rgba(8,37,27,0.38)" },
+  overlay: { flex: 1, backgroundColor: colors.scrim },
   position: {
     flex: 1,
     justifyContent: "center",
@@ -186,11 +186,11 @@ const styles = StyleSheet.create({
     minHeight: 50,
     paddingHorizontal: 16,
     paddingVertical: 14,
-    borderRadius: 14,
+    borderRadius: 16,
     justifyContent: "center",
     alignItems: "center",
   },
-  primary: { backgroundColor: colors.forest },
+  primary: { backgroundColor: colors.accent },
   destructive: { backgroundColor: colors.red },
   cancel: { backgroundColor: colors.sageSoft },
   buttonText: {

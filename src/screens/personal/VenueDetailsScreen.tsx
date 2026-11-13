@@ -196,7 +196,7 @@ export function VenueDetailsScreen({ route, navigation }: VenueDetailsProps) {
             </Text>
           </View>
           <View style={styles.rating}>
-            <Icon name="star" size={14} color={colors.gold} />
+            <Icon name="star" size={14} color={colors.onAccentHighlight} />
             <Text style={[styles.ratingText, styles.introText]}>
               {venue.rating > 0
                 ? `${venue.rating.toFixed(1)} · community rating`
@@ -481,7 +481,7 @@ const styles = StyleSheet.create({
     gap: 8,
     marginBottom: 12,
   },
-  category: { ...typography.label, color: colors.gold },
+  category: { ...typography.label, color: colors.onAccentHighlight },
   open: { ...typography.caption, color: colors.sageSoft },
   name: {
     ...typography.display,
