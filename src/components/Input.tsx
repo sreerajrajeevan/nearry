@@ -9,7 +9,7 @@ import {
   TouchableOpacity,
 } from "react-native";
 import { Icon } from "./Icon";
-import { colors, typography, spacing, surfaces } from "../theme";
+import { colors, typography, spacing, surfaces, radius } from "../theme";
 
 type Props = TextInputProps & {
   clearable?: boolean;
@@ -89,13 +89,20 @@ const styles = StyleSheet.create({
   },
   input: {
     ...surfaces.field,
-    minHeight: 52,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    borderRadius: radius.lg,
+    minHeight: 54,
     paddingVertical: 12,
     paddingHorizontal: spacing.md,
     color: colors.text,
     fontSize: 16,
   },
-  focused: { borderColor: colors.forest, backgroundColor: colors.sageSoft },
+  focused: {
+    borderColor: colors.accent,
+    borderWidth: 1.5,
+    backgroundColor: colors.surface,
+  },
   inputError: { borderColor: colors.red },
   error: { ...typography.caption, color: colors.red, marginTop: spacing.xs },
 });

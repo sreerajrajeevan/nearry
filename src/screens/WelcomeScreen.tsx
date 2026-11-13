@@ -111,7 +111,7 @@ const styles = StyleSheet.create({
     letterSpacing: -1.2,
     color: colors.onAccent,
   },
-  accent: { color: colors.gold },
+  accent: { color: colors.onAccentHighlight },
   description: {
     ...typography.body,
     color: colors.goldSoft,

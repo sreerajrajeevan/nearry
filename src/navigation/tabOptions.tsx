@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { BottomTabNavigationOptions } from "@react-navigation/bottom-tabs";
 import { Icon, IconName } from "../components/Icon";
 import { MotionPressable } from "../components/Motion";
-import { colors, typography } from "../theme";
+import { colors, typography, shadows } from "../theme";
 
 /** Reserve room for both the labels and the device's gesture/navigation area. */
 export function useTabBarLayout(): BottomTabNavigationOptions {
@@ -32,7 +32,7 @@ export function tabOptions(
     title,
     headerShown: false,
     tabBarHideOnKeyboard: true,
-    tabBarActiveTintColor: colors.forest,
+    tabBarActiveTintColor: colors.accent,
     tabBarInactiveTintColor: colors.textDim,
     tabBarActiveBackgroundColor: "transparent",
     tabBarLabelPosition: "below-icon",
@@ -63,10 +63,11 @@ export function tabOptions(
 }
 const styles = StyleSheet.create({
   create: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: colors.forest,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.accent,
+    ...shadows.accent,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -77,15 +78,15 @@ const styles = StyleSheet.create({
     marginHorizontal: 0,
     marginBottom: 0,
     paddingHorizontal: 4,
-    elevation: 0,
-    shadowOpacity: 0,
+    ...shadows.md,
   },
-  item: { paddingVertical: 0, marginHorizontal: 2, borderRadius: 12 },
-  tabButton: { borderRadius: 12 },
+  item: { paddingVertical: 0, marginHorizontal: 2, borderRadius: 16 },
+  tabButton: { borderRadius: 16 },
   label: {
     ...typography.caption,
     fontSize: 10,
     lineHeight: 14,
+    fontWeight: "600",
     letterSpacing: 0,
     marginTop: 3,
   },

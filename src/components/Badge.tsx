@@ -29,13 +29,13 @@ const styles = StyleSheet.create({
   base: {
     alignSelf: "flex-start",
     paddingHorizontal: spacing.sm,
-    paddingVertical: 4,
+    paddingVertical: 5,
     borderRadius: radius.full,
   },
-  neutral: { backgroundColor: colors.hairline },
+  neutral: { backgroundColor: colors.surfaceRaised },
   red: { backgroundColor: colors.dangerSoft },
-  green: { backgroundColor: colors.sageSoft },
-  text: { ...typography.bodySmall, color: colors.textDim, fontWeight: "500" },
+  green: { backgroundColor: colors.successSoft },
+  text: { ...typography.bodySmall, color: colors.textDim, fontWeight: "600" },
   redText: { color: colors.red },
   greenText: { color: colors.success },
 });

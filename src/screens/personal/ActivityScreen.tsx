@@ -747,7 +747,7 @@ const styles = StyleSheet.create({
   },
   activeFilter: { ...surfaces.selected },
   filterText: { ...typography.label, color: colors.textDim },
-  activeFilterText: { color: colors.onGold },
+  activeFilterText: { color: colors.accentDeep },
   card: {
     ...surfaces.card,
     padding: spacing.md,

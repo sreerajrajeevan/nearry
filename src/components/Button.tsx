@@ -7,7 +7,7 @@ import {
   StyleProp,
   TextStyle,
 } from "react-native";
-import { colors, typography, spacing, radius } from "../theme";
+import { colors, typography, spacing, radius, shadows } from "../theme";
 import { MotionPressable } from "./Motion";
 import { LoadingDots } from "./LoadingDots";
 
@@ -54,7 +54,7 @@ export function Button({
               variant === "solid"
                 ? colors.onAccent
                 : variant === "primary"
-                  ? colors.onSage
+                  ? colors.onAccent
                   : variant === "danger"
                     ? colors.red
                     : colors.text
@@ -84,19 +84,20 @@ const styles = StyleSheet.create({
     gap: spacing.sm,
   },
   base: {
-    minHeight: 50,
+    minHeight: 54,
     paddingVertical: spacing.sm,
-    borderRadius: radius.md,
+    borderRadius: radius.lg,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: spacing.md,
   },
-  primary: { backgroundColor: colors.sage },
-  solid: { backgroundColor: colors.forest },
+  primary: { backgroundColor: colors.accent, ...shadows.accent },
+  solid: { backgroundColor: colors.ink },
   secondary: {
     backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: colors.borderStrong,
+    borderColor: colors.border,
+    ...shadows.sm,
   },
   ghost: { backgroundColor: "transparent" },
   danger: {
@@ -107,12 +108,12 @@ const styles = StyleSheet.create({
   disabled: { opacity: 0.4 },
   text: {
     ...typography.body,
-    fontWeight: "600",
+    fontWeight: "700",
     color: colors.text,
     flexShrink: 1,
     textAlign: "center",
   },
-  primaryText: { color: colors.onSage },
+  primaryText: { color: colors.onAccent },
   solidText: { color: colors.onAccent },
   secondaryText: { color: colors.text },
   ghostText: { color: colors.textDim },

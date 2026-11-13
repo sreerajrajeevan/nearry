@@ -51,7 +51,7 @@ const styles = StyleSheet.create({
   heading: { marginTop: spacing.sm, marginBottom: spacing.lg },
   forest: { ...surfaces.hero },
   onForest: { color: colors.onAccent },
-  onForestMuted: { color: colors.goldSoft },
+  onForestMuted: { color: colors.accentSoft },
   greeting: {
     ...typography.bodySmall,
     color: colors.textDim,

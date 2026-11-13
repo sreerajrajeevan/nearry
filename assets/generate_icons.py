@@ -8,9 +8,9 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 
 ROOT = Path(__file__).resolve().parent
-PAPER = '#F4F3EB'
-INK = '#0C3B2E'
-POINT = '#BB8A52'
+PAPER = '#F6F7FB'
+INK = '#0F172A'
+POINT = '#F59E0B'
 
 
 def ink_mask(name: str) -> Image.Image:

@@ -5,7 +5,7 @@ import { formatWhen, formatDistance } from "../utils/format";
 import { postState } from "../utils/flowState";
 import { postCategory } from "../utils/discovery";
 import { planCost } from "../utils/planDiscovery";
-import { colors, typography } from "../theme";
+import { colors, typography, shadows } from "../theme";
 import { MotionPressable } from "./Motion";
 import { PlanCover } from "./PlanCover";
 import { Avatar } from "./Avatar";
@@ -86,7 +86,7 @@ export function PostRow({
           <Text style={[styles.spots, !status.accepting && styles.closed]}>
             {spots}
           </Text>
-          <Icon name="chevron-right" size={18} color={colors.forest} />
+          <Icon name="chevron-right" size={18} color={colors.accent} />
         </View>
       </View>
     </MotionPressable>
@@ -97,16 +97,19 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "stretch",
     gap: 14,
-    paddingTop: 12,
-    paddingBottom: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
+    padding: 12,
+    marginBottom: 14,
+    backgroundColor: colors.surface,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: colors.border,
+    ...shadows.md,
   },
   cover: {
     width: "40%",
     maxWidth: 200,
     minHeight: 154,
-    borderRadius: 8,
+    borderRadius: 16,
     overflow: "hidden",
   },
   content: { flex: 1, minWidth: 0, justifyContent: "center" },
@@ -114,8 +117,8 @@ const styles = StyleSheet.create({
     ...typography.caption,
     fontSize: 12,
     lineHeight: 18,
-    color: colors.textDim,
-    fontWeight: "400",
+    color: colors.accent,
+    fontWeight: "700",
   },
   title: {
     ...typography.heading,
@@ -150,7 +153,8 @@ const styles = StyleSheet.create({
   spots: {
     ...typography.caption,
     fontSize: 12,
-    color: colors.forest,
+    color: colors.accent,
+    fontWeight: "700",
     flexShrink: 1,
   },
   closed: { color: colors.textDim },
