@@ -15,6 +15,9 @@ function contrast(a: string, b: string) {
 
 test("small body text, secondary text, links, placeholders and primary buttons meet 4.5:1 contrast", () => {
   for (const [foreground, background] of [
+    [colors.coralDeep, colors.background],
+    [colors.coralDeep, colors.surface],
+    [colors.textDim, colors.coralSoft],
     [colors.text, colors.background],
     [colors.textDim, colors.background],
     [colors.textFaint, colors.background],

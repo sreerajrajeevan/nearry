@@ -157,6 +157,121 @@ before(async () => {
 after(async () => {
   await db?.close();
 });
+// This reset is exercised in a rolled-back transaction, so later fixtures survive.
+test("operator testing reset clears the actual schema without removing admin access or global cost limits", async () => {
+  const { clearDataSql, CLEAR_TABLES, PROJECT } =
+    await import("../scripts/reset-test-data.mjs");
+  const owner = "00000000-0000-0000-0000-00000000ff01";
+  const existingOwner = (
+    await db.query(
+      "select id from auth.users where lower(email)='cocsreeraj@gmail.com'",
+    )
+  ).rows;
+  assert.equal(existingOwner.length, 0);
+  const rolledBack = new Error("expected reset test rollback");
+  try {
+    await db.transaction(async (tx: any) => {
+      await tx.query(
+        "insert into auth.users(id,email,raw_user_meta_data) values($1,'cocsreeraj@gmail.com','{}')",
+        [owner],
+      );
+      await tx.query(
+        "insert into admin_console_members(user_id,role) values($1,'owner')",
+        [owner],
+      );
+      await tx.query(
+        "update profiles set avatar_url=$2,verification_doc_path='old-proof' where id=$1",
+        [
+          owner,
+          `https://${PROJECT}.supabase.co/storage/v1/object/public/avatars/${owner}/avatar.jpg`,
+        ],
+      );
+      await tx.exec("delete from storage.objects");
+      await tx.exec(
+        "insert into place_search_usage(scope,subject,window_start,requests) values('global_day','all',date_trunc('day',now()),7),('user_day','old-account',date_trunc('day',now()),3) on conflict(scope,subject,window_start) do update set requests=excluded.requests",
+      );
+      const tables = (
+        await tx.query(
+          "select table_name from information_schema.tables where table_schema='public' and table_type='BASE TABLE' order by table_name",
+        )
+      ).rows.map((r: any) => r.table_name);
+      const userIds = (
+        await tx.query("select id::text from auth.users order by id::text")
+      ).rows.map((r: any) => r.id);
+      const adminIds = (
+        await tx.query(
+          "select user_id::text from admin_console_members order by user_id::text",
+        )
+      ).rows.map((r: any) => r.user_id);
+      const sql = clearDataSql({
+        project: PROJECT,
+        ownerPresent: true,
+        tables,
+        userIds,
+        adminIds,
+        files: [],
+        counts: {},
+      });
+      // Keep the helper's guards/locks/statements but use this test's rollback boundary.
+      await tx.exec(sql.replace(/^begin;/, "").replace(/commit;$/, ""));
+      for (const table of CLEAR_TABLES.filter((t: string) =>
+        tables.includes(t),
+      ))
+        assert.equal(
+          (await tx.query(`select count(*)::int n from public.${table}`))
+            .rows[0].n,
+          0,
+          table,
+        );
+      assert.equal(
+        (await tx.query("select count(*)::int n from admin_console_members"))
+          .rows[0].n,
+        adminIds.length,
+      );
+      assert.equal(
+        (
+          await tx.query(
+            "select avatar_url,verification_doc_path from profiles where id=$1",
+            [owner],
+          )
+        ).rows[0].avatar_url,
+        null,
+      );
+      assert.equal(
+        (
+          await tx.query(
+            "select requests from place_search_usage where scope='global_day' and subject='all' and window_start=date_trunc('day',now())",
+          )
+        ).rows[0].requests,
+        7,
+      );
+      assert.equal(
+        (
+          await tx.query(
+            "select count(*)::int n from place_search_usage where scope='user_day'",
+          )
+        ).rows[0].n,
+        0,
+      );
+      // Simulate only the final Auth cascade in this disposable database.
+      await tx.query("delete from auth.users where not(id=any($1::uuid[]))", [
+        adminIds,
+      ]);
+      assert.equal(
+        (await tx.query("select count(*)::int n from auth.users")).rows[0].n,
+        adminIds.length,
+      );
+      assert.equal(
+        (await tx.query("select count(*)::int n from profiles")).rows[0].n,
+        adminIds.length,
+      );
+      throw rolledBack;
+    });
+    assert.fail("Reset test must roll back");
+  } catch (error) {
+    if (error !== rolledBack) throw error;
+  }
+});
 test("all migrations preserve legacy data tables", async () => {
   for (const table of [
     "legacy_messages",

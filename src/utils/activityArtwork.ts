@@ -1,5 +1,6 @@
 /** Match specific activities before broad category tags; never choose randomly. */
 export type ActivityArtwork =
+  | "fitness"
   | "football"
   | "badminton"
   | "cricket"
@@ -22,6 +23,10 @@ export function activityArtwork(item: {
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "");
   const subjects: [ActivityArtwork, RegExp][] = [
+    [
+      "fitness",
+      /\b(gym|fitness|workout|strength|weightlifting|dumbbell|barbell)\b/i,
+    ],
     ["badminton", /\b(badminton|shuttle|shuttlecock)\b/i],
     ["cricket", /\b(cricket|wicket|batting)\b/i],
     ["football", /\b(football|soccer|futsal|turf)\b/i],

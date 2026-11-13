@@ -48,6 +48,7 @@ export type PersonalStackParamList = SafetyStackParamList & {
   VenueDetails: { venueId: string };
   EditPost: { postId: string };
   MyPosts: undefined;
+  SavedPlans: undefined;
   EditProfile: undefined;
   CompleteProfile: undefined;
   SelfieVerification: undefined;

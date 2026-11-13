@@ -26,46 +26,58 @@ import { ChatListScreen } from "../screens/chat/ChatListScreen";
 import { ConversationScreen } from "../screens/chat/ConversationScreen";
 import { NotificationCenterScreen } from "../screens/NotificationCenterScreen";
 
+import { SavedPlansProvider } from "../store/SavedPlansContext";
+import { SavedPlansScreen } from "../screens/personal/SavedPlansScreen";
+
 const Stack = createNativeStackNavigator<PersonalStackParamList>();
 
 /** Personal experience: tab bar + pushable detail screens above it. */
 export function PersonalStack() {
   const reduced = useReducedMotion();
   return (
-    <Stack.Navigator
-      screenOptions={{
-        headerShown: false,
-        contentStyle: { backgroundColor: colors.background },
-        animation: reduced ? "none" : "slide_from_right",
-        animationDuration: 240,
-      }}
-    >
-      <Stack.Screen name="PersonalTabs" component={PersonalTabs} />
-      <Stack.Screen name="PostDetails" component={PostDetailsScreen} />
-      <Stack.Screen name="PlaceDetails" component={PlaceDetailsScreen} />
-      <Stack.Screen name="VenueDetails" component={VenueDetailsScreen} />
-      <Stack.Screen name="EditPost" component={EditPostScreen} />
-      <Stack.Screen name="MyPosts" component={MyPostsScreen} />
-      <Stack.Screen name="EditProfile" component={EditProfileScreen} />
-      <Stack.Screen
-        name="SelfieVerification"
-        component={SelfieVerificationScreen}
-      />
-      <Stack.Screen name="CompleteProfile" component={CompleteProfileScreen} />
-      <Stack.Screen name="OfferDetails" component={OfferDetailsScreen} />
-      <Stack.Screen name="Messages" component={ChatListScreen} />
-      <Stack.Screen name="Conversation" component={ConversationScreen} />
-      <Stack.Screen name="Notifications" component={NotificationCenterScreen} />
-      <Stack.Screen name="SafetyPrivacy" component={SafetyPrivacyScreen} />
-      <Stack.Screen name="BlockedUsers" component={BlockedUsersScreen} />
-      <Stack.Screen name="MyReports" component={MyReportsScreen} />
-      <Stack.Screen name="Report" component={ReportScreen} />
-      <Stack.Screen
-        name="NotificationSettings"
-        component={NotificationSettingsScreen}
-      />
-      <Stack.Screen name="DeleteAccount" component={DeleteAccountScreen} />
-      <Stack.Screen name="Legal" component={LegalScreen} />
-    </Stack.Navigator>
+    <SavedPlansProvider>
+      <Stack.Navigator
+        screenOptions={{
+          headerShown: false,
+          contentStyle: { backgroundColor: colors.background },
+          animation: reduced ? "none" : "slide_from_right",
+          animationDuration: 240,
+        }}
+      >
+        <Stack.Screen name="PersonalTabs" component={PersonalTabs} />
+        <Stack.Screen name="PostDetails" component={PostDetailsScreen} />
+        <Stack.Screen name="PlaceDetails" component={PlaceDetailsScreen} />
+        <Stack.Screen name="VenueDetails" component={VenueDetailsScreen} />
+        <Stack.Screen name="EditPost" component={EditPostScreen} />
+        <Stack.Screen name="MyPosts" component={MyPostsScreen} />
+        <Stack.Screen name="SavedPlans" component={SavedPlansScreen} />
+        <Stack.Screen name="EditProfile" component={EditProfileScreen} />
+        <Stack.Screen
+          name="SelfieVerification"
+          component={SelfieVerificationScreen}
+        />
+        <Stack.Screen
+          name="CompleteProfile"
+          component={CompleteProfileScreen}
+        />
+        <Stack.Screen name="OfferDetails" component={OfferDetailsScreen} />
+        <Stack.Screen name="Messages" component={ChatListScreen} />
+        <Stack.Screen name="Conversation" component={ConversationScreen} />
+        <Stack.Screen
+          name="Notifications"
+          component={NotificationCenterScreen}
+        />
+        <Stack.Screen name="SafetyPrivacy" component={SafetyPrivacyScreen} />
+        <Stack.Screen name="BlockedUsers" component={BlockedUsersScreen} />
+        <Stack.Screen name="MyReports" component={MyReportsScreen} />
+        <Stack.Screen name="Report" component={ReportScreen} />
+        <Stack.Screen
+          name="NotificationSettings"
+          component={NotificationSettingsScreen}
+        />
+        <Stack.Screen name="DeleteAccount" component={DeleteAccountScreen} />
+        <Stack.Screen name="Legal" component={LegalScreen} />
+      </Stack.Navigator>
+    </SavedPlansProvider>
   );
 }
