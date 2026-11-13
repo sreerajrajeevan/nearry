@@ -6,6 +6,7 @@ import { postCategory } from "../utils/discovery";
 import { colors } from "../theme";
 import { LoadingImage } from "./LoadingImage";
 import { ActivityArt } from "./ActivityArt";
+import { DemoPhoto } from "./DemoPhoto";
 
 /** Only uploaded photos represent a real plan; missing photos use honest activity artwork. */
 export function PlanCover({
@@ -45,6 +46,8 @@ export function PlanCover({
           style={styles.image}
           onError={() => setFailed(true)}
         />
+      ) : post.demoScene && !post.coverPhotoUrl ? (
+        <DemoPhoto scene={post.demoScene} />
       ) : (
         <ActivityArt artwork={activityArtwork(post)} size={artworkSize} />
       )}

@@ -36,25 +36,25 @@ export const typography: Record<string, TextStyle> = {
   body: {
     fontFamily: fontFamily.sans,
     fontSize: 15,
-    fontWeight: "500",
+    fontWeight: "400",
     lineHeight: 22,
   },
   bodySmall: {
     fontFamily: fontFamily.sans,
     fontSize: 13,
-    fontWeight: "500",
+    fontWeight: "400",
     lineHeight: 19,
   },
   mono: {
     fontFamily: fontFamily.mono,
     fontSize: 13,
-    fontWeight: "500",
+    fontWeight: "400",
     lineHeight: 19,
   },
   caption: {
     fontFamily: fontFamily.sans,
     fontSize: 11,
-    fontWeight: "500",
+    fontWeight: "400",
     lineHeight: 16,
   },
 };

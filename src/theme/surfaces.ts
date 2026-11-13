@@ -1,7 +1,7 @@
 import type { ViewStyle } from "react-native";
 import { colors } from "./colors";
 
-/** Shared Forest & Sand surfaces for headings, forms, lists and selected controls. */
+/** Shared Nearry surfaces for headings, forms, lists and selected controls. */
 export const surfaces = {
   hero: {
     backgroundColor: colors.forest,

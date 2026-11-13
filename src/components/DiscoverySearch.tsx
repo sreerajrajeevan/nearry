@@ -31,7 +31,9 @@ export function DiscoverySearch(props: Props) {
         >
           <Icon name="search" size={18} />
           <Text style={styles.placeholder} numberOfLines={1}>
-            {props.compact ? "Find a plan nearby" : "Search places or plans"}
+            {props.compact
+              ? "Search plans, places, offers…"
+              : "Search places or plans"}
           </Text>
         </TouchableOpacity>
         {props.onFilterPress && (
@@ -47,7 +49,7 @@ export function DiscoverySearch(props: Props) {
             activeOpacity={0.7}
             style={styles.filterAction}
           >
-            <Icon name="sliders" size={18} color={colors.forest} />
+            <Icon name="sliders" size={18} color={colors.onAccent} />
             {props.filtersActive && <View style={styles.filterDot} />}
           </TouchableOpacity>
         )}
@@ -84,10 +86,10 @@ export function DiscoverySearch(props: Props) {
 }
 const styles = StyleSheet.create({
   compact: {
-    minHeight: 44,
-    backgroundColor: colors.hairline,
-    borderColor: "transparent",
-    borderRadius: 8,
+    minHeight: 58,
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 18,
     marginBottom: 4,
     paddingHorizontal: 12,
     gap: 0,
@@ -105,7 +107,9 @@ const styles = StyleSheet.create({
     minHeight: 44,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: -10,
+    backgroundColor: colors.ink,
+    borderRadius: 13,
+    marginRight: -5,
   },
   filterDot: {
     position: "absolute",
@@ -114,7 +118,7 @@ const styles = StyleSheet.create({
     width: 5,
     height: 5,
     borderRadius: 3,
-    backgroundColor: colors.forest,
+    backgroundColor: colors.coral,
   },
   clear: {
     minWidth: 44,

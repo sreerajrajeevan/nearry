@@ -27,7 +27,7 @@ import { Input } from "../../components/Input";
 import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
 import { PostRow } from "../../components/PostRow";
-import { OfferRow } from "../../components/OfferRow";
+import { FeaturedOffers } from "../../components/FeaturedOffers";
 import { VenueRow } from "../../components/VenueRow";
 import { DiscoverySearch } from "../../components/DiscoverySearch";
 import { colors, typography, spacing } from "../../theme";
@@ -79,6 +79,7 @@ export function NearbyScreen() {
   const hasLocation = demoMode || point !== null;
   const radiusKm = options.maxDistanceKm ?? 5;
   const request = useRef(0);
+  const scroll = useRef<ScrollView>(null);
   const suggestions = usePlaceSuggestions(area, point, editingLocation);
   const choosePlace = (place: Place) => {
     setSelectedPlace(place);
@@ -279,6 +280,7 @@ export function NearbyScreen() {
   return (
     <Screen style={styles.page}>
       <ScrollView
+        ref={scroll}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={styles.scroll}
@@ -387,6 +389,28 @@ export function NearbyScreen() {
                 />
               </View>
             )}
+            <FeaturedOffers
+              offers={visibleOffers}
+              distances={distances}
+              now={now}
+              onOpen={(offerId) =>
+                navigation.navigate("OfferDetails", { offerId })
+              }
+            />
+            <View style={styles.plansHeading}>
+              <Text accessibilityRole="header" style={styles.plansTitle}>
+                Plans near you
+              </Text>
+              <MotionPressable
+                accessibilityRole="button"
+                accessibilityLabel="Post a plan"
+                onPress={() => navigation.navigate("CreatePost")}
+                style={styles.postAction}
+              >
+                <Icon name="plus" size={15} color={colors.coralDeep} />
+                <Text style={styles.postActionText}>Post a plan</Text>
+              </MotionPressable>
+            </View>
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -421,6 +445,47 @@ export function NearbyScreen() {
                   </Text>
                 </MotionPressable>
               ))}
+              <MotionPressable
+                accessibilityRole="button"
+                accessibilityLabel="Plans within 2 kilometres"
+                accessibilityState={{ selected: options.maxDistanceKm === 2 }}
+                onPress={() => {
+                  if (!hasLocation) {
+                    setEditingLocation(true);
+                    scroll.current?.scrollTo({ y: 0, animated: false });
+                    setLocationError(
+                      "Choose an area or use your location to find plans within 2 km.",
+                    );
+                    return;
+                  }
+                  setOptions((current) => ({
+                    ...current,
+                    maxDistanceKm: current.maxDistanceKm === 2 ? null : 2,
+                  }));
+                }}
+                style={[
+                  styles.dateChip,
+                  options.maxDistanceKm === 2 && styles.dateChipSelected,
+                ]}
+              >
+                <Icon
+                  name="map-pin"
+                  size={13}
+                  color={
+                    options.maxDistanceKm === 2
+                      ? colors.onAccent
+                      : colors.textDim
+                  }
+                />
+                <Text
+                  style={[
+                    styles.dateText,
+                    options.maxDistanceKm === 2 && styles.dateTextSelected,
+                  ]}
+                >
+                  Within 2 km
+                </Text>
+              </MotionPressable>
             </ScrollView>
             {!!filterSummary && (
               <Text style={styles.sectionMeta}>{filterSummary}</Text>
@@ -482,23 +547,6 @@ export function NearbyScreen() {
                 />
               </>
             )}
-            {visibleOffers.length > 0 && (
-              <>
-                <Text accessibilityRole="header" style={styles.sectionHeading}>
-                  Offers nearby
-                </Text>
-                {visibleOffers.map((offer) => (
-                  <OfferRow
-                    key={offer.id}
-                    offer={offer}
-                    distanceKm={planDistance(offer, distances)}
-                    onPress={() =>
-                      navigation.navigate("OfferDetails", { offerId: offer.id })
-                    }
-                  />
-                ))}
-              </>
-            )}
             {visibleVenues.length > 0 && (
               <>
                 <Text style={styles.sectionHeading}>
@@ -531,6 +579,7 @@ export function NearbyScreen() {
           onChooseArea={() => {
             setFiltersOpen(false);
             setEditingLocation(true);
+            scroll.current?.scrollTo({ y: 0, animated: false });
           }}
         />
       )}
@@ -538,7 +587,7 @@ export function NearbyScreen() {
   );
 }
 const styles = StyleSheet.create({
-  page: { paddingHorizontal: 18 },
+  page: { paddingHorizontal: 16 },
   scroll: { paddingBottom: spacing.xl },
   locationEditor: { paddingBottom: spacing.md },
   locationActions: { flexDirection: "row", gap: spacing.sm, flexWrap: "wrap" },
@@ -559,29 +608,50 @@ const styles = StyleSheet.create({
     marginTop: spacing.lg,
     marginBottom: spacing.md,
   },
-  dateFilters: {
-    gap: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-    marginBottom: 2,
+  plansHeading: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10,
+    marginBottom: 8,
   },
+  plansTitle: {
+    ...typography.heading,
+    color: colors.ink,
+    fontSize: 20,
+    lineHeight: 26,
+    fontWeight: "700",
+    flexShrink: 1,
+  },
+  postAction: {
+    minHeight: 44,
+    flexDirection: "row",
+    gap: 4,
+    alignItems: "center",
+  },
+  postActionText: {
+    ...typography.bodySmall,
+    fontWeight: "600",
+    color: colors.coralDeep,
+  },
+  dateFilters: { gap: 7, paddingBottom: 13, paddingRight: 8 },
   dateChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
     minHeight: 44,
     paddingVertical: 10,
-    paddingHorizontal: 4,
-    borderBottomWidth: 2,
-    borderBottomColor: "transparent",
-    justifyContent: "center",
+    paddingHorizontal: 14,
+    borderRadius: 24,
+    backgroundColor: colors.surface,
   },
-  dateChipSelected: {
-    borderBottomColor: colors.forest,
-  },
+  dateChipSelected: { backgroundColor: colors.ink },
   dateText: {
     ...typography.bodySmall,
-    fontWeight: "400",
+    fontWeight: "500",
     color: colors.textDim,
   },
-  dateTextSelected: { color: colors.forest, fontWeight: "600" },
+  dateTextSelected: { color: colors.onAccent, fontWeight: "600" },
   appliedFilters: {
     flexDirection: "row",
     flexWrap: "wrap",

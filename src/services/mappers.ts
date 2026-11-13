@@ -149,6 +149,8 @@ export type DbPost = {
 };
 
 export type NeedPost = {
+  /** Explicit demo fixture only; database mappers never provide sample photography. */
+  demoScene?: "coffee" | "court" | "walk";
   id: string;
   authorId: string;
   authorName: string;

@@ -41,7 +41,7 @@ export const mockVenues: Venue[] = [
   },
   {
     id: "v2",
-    name: "Unity Turf",
+    name: "Unity Sports Hub",
     category: "Sports",
     area: "Kakkanad",
     distanceKm: 1.2,
@@ -88,27 +88,38 @@ export const mockVenues: Venue[] = [
   },
 ];
 
+let weekend = new Date();
+weekend.setDate(
+  weekend.getDate() +
+    (weekend.getDay() === 0 ? 0 : (6 - weekend.getDay() + 7) % 7),
+);
+weekend.setHours(10, 0, 0, 0);
+if (weekend.getTime() <= Date.now())
+  weekend = new Date(Date.now() + 45 * 60_000);
+
 export const mockPosts: NeedPost[] = [
   {
     id: "p1",
+    demoScene: "court",
     authorId: "u2",
     authorName: "Anjali",
-    title: "Anyone for football at 8?",
+    title: "Anyone up for badminton?",
     description:
-      "A friendly game with the neighbourhood crew. Any skill level is welcome. Bring your boots!",
+      "A friendly game with the neighbourhood crew. Any skill level is welcome. Bring your racket!",
     venueId: "v2",
-    venueName: "Unity Turf",
-    startsAt: at(20),
+    venueName: "Unity Sports Hub",
+    startsAt: new Date(Date.now() + 90 * 60_000).toISOString(),
     vacancies: 5,
     joinedCount: 2,
     spotsLeft: 3,
     costCents: 15000,
-    tags: ["sports", "football"],
+    tags: ["sports", "badminton"],
     status: "open",
     createdAt,
   },
   {
     id: "p2",
+    demoScene: "walk",
     authorId: "u3",
     authorName: "Dev",
     title: "Sunset on the water?",
@@ -126,6 +137,7 @@ export const mockPosts: NeedPost[] = [
   },
   {
     id: "p3",
+    demoScene: "coffee",
     authorId: "u4",
     authorName: "Meera",
     title: "Coffee with someone new?",
@@ -133,15 +145,37 @@ export const mockPosts: NeedPost[] = [
       "A slow coffee and an easy conversation after work. Come as you are. New faces are welcome.",
     venueId: "v1",
     venueName: "Loaf Café",
-    startsAt: at(17, 30),
+    startsAt: new Date(Date.now() + 60 * 60_000).toISOString(),
     vacancies: 2,
-    joinedCount: 0,
-    spotsLeft: 2,
+    joinedCount: 1,
+    spotsLeft: 1,
+    costCents: 0,
+    genderPreference: "any",
     tags: ["coffee", "social"],
     status: "open",
     createdAt,
   },
 ];
+
+mockPosts.push({
+  id: "p-weekend",
+  authorId: "u5",
+  authorName: "Nikhil",
+  demoScene: "walk",
+  title: "An easy weekend walk",
+  description: "A morning by the water. Come along for some fresh air.",
+  venueId: "v5",
+  venueName: "Kumbalam waterfront",
+  startsAt: weekend.toISOString(),
+  vacancies: 4,
+  joinedCount: 1,
+  spotsLeft: 3,
+  costCents: 0,
+  genderPreference: "any",
+  tags: ["outdoors"],
+  status: "open",
+  createdAt,
+});
 
 export const mockOffers: Offer[] = [
   {
@@ -181,6 +215,40 @@ export const mockOffers: Offer[] = [
     createdAt,
   },
 ];
+
+mockOffers.push(
+  {
+    ...mockOffers[0],
+    id: "o-demo-turf",
+    businessId: "b2",
+    businessName: "Unity Turf",
+    title: "Your next game, for less",
+    description: "20% off football court slots.",
+    venueId: "v2",
+    discountPct: 20,
+    priceCents: 80000,
+  },
+  {
+    ...mockOffers[0],
+    id: "o-demo-cafe",
+    businessId: "b3",
+    businessName: "Loaf Café",
+    title: "An afternoon coffee break",
+    description: "A little coffee and cake at your local cafe.",
+    venueId: "v1",
+    priceCents: 19900,
+  },
+  {
+    ...mockOffers[0],
+    id: "o-demo-gym",
+    businessId: "b4",
+    businessName: "Neighbourhood Fitness",
+    title: "Make time for a workout",
+    description: "An introductory gym training session.",
+    venueId: "v2",
+    priceCents: 0,
+  },
+);
 
 export const mockBookings: Booking[] = [
   {
