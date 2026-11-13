@@ -187,7 +187,7 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     overflow: "hidden",
   },
-  stackedCover: { width: "100%", maxWidth: undefined, minHeight: undefined },
+  stackedCover: { width: "100%", maxWidth: "100%", minHeight: 0 },
   lastSpot: {
     position: "absolute",
     top: 7,
