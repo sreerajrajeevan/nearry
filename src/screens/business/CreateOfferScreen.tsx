@@ -1,6 +1,6 @@
 import { Alert } from "../../services/appAlert";
 import { DateSheet, TimeSheet } from "../../components/DateTimeSheets";
-import React, { useRef, useState } from "react";
+import React, { useCallback, useRef, useState } from "react";
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   TouchableOpacity,
   Image,
 } from "react-native";
+import { useFocusEffect } from "@react-navigation/native";
 import { PageHeading } from "../../components/PageHeading";
 import { Screen } from "../../components/Screen";
 import { Button } from "../../components/Button";
@@ -25,10 +26,10 @@ import {
 } from "../../services/offers";
 import { validateOfferInput } from "../../utils/validation";
 import { pickPhoto, uploadPhoto } from "../../services/photos";
-import { BusinessTabParamList } from "../../navigation/types";
+import { BusinessTabNav } from "../../navigation/types";
 
 type Props = {
-  navigation: { navigate: (screen: keyof BusinessTabParamList) => void };
+  navigation: BusinessTabNav;
 };
 
 const pad = (n: number) => String(n).padStart(2, "0");
@@ -97,6 +98,16 @@ export function CreateOfferScreen({ navigation }: Props) {
   const savingLock = useRef(false);
 
   const verified = profile?.verificationStatus === "verified";
+  useFocusEffect(
+    useCallback(() => {
+      if (profile && !verified) {
+        // Programmatic/deep-link entry must respect the same gate as a tab tap.
+        // Leave Dashboard underneath so Back never re-enters a redirect loop.
+        navigation.navigate("Dashboard");
+        navigation.navigate("BusinessVerification");
+      }
+    }, [profile?.id, verified, navigation]),
+  );
 
   if (!profile) {
     return (
@@ -104,6 +115,21 @@ export function CreateOfferScreen({ navigation }: Props) {
         <EmptyState
           title="Sign in required"
           hint="Log in as a business to create offers."
+        />
+      </Screen>
+    );
+  }
+
+  if (!verified) {
+    return (
+      <Screen>
+        <EmptyState
+          title="Verify your business first"
+          hint="Complete verification before creating an offer."
+        />
+        <Button
+          title="Business verification"
+          onPress={() => navigation.navigate("BusinessVerification")}
         />
       </Screen>
     );
@@ -199,12 +225,7 @@ export function CreateOfferScreen({ navigation }: Props) {
           title={"A good offer.\nA new face."}
         />
         <View style={styles.statusRow}>
-          <Badge
-            label={
-              verified ? "VERIFIED — CAN PUBLISH" : "UNVERIFIED — DRAFTS ONLY"
-            }
-            tone={verified ? "green" : "red"}
-          />
+          <Badge label="VERIFIED — CAN PUBLISH" tone="green" />
         </View>
 
         <Input
@@ -374,12 +395,6 @@ export function CreateOfferScreen({ navigation }: Props) {
           disabled={!verified}
           style={styles.btn}
         />
-        {!verified && (
-          <Text style={styles.note}>
-            Publishing needs a verified business. Drafts are safe to create
-            anytime — submit your documents from the Business tab.
-          </Text>
-        )}
       </ScrollView>
     </Screen>
   );

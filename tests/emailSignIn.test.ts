@@ -112,10 +112,15 @@ test("sign-in transport: profile hydration has a deadline; uploads and unrelated
     (() => new Promise(() => {})) as typeof fetch,
     15,
   );
-  await assert.rejects(
-    profile("https://auth.invalid/rest/v1/rpc/get_my_profile"),
-    /connection took too long/,
-  );
+  for (const rpc of [
+    "get_my_profile",
+    "select_account_type",
+    "finish_personal_onboarding",
+  ])
+    await assert.rejects(
+      profile(`https://auth.invalid/rest/v1/rpc/${rpc}`),
+      /connection took too long/,
+    );
 });
 test("sign-in transport: caller cancellation still reaches the underlying request", async () => {
   let underlying: AbortSignal | undefined;

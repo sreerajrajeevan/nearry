@@ -68,17 +68,22 @@ function OfferTile({
     offer.discountPct != null && offer.discountPct > 0
       ? `${offer.discountPct}% OFF`
       : offer.priceCents === 0
-        ? offer.title.length <= 24 && /free/i.test(offer.title)
-          ? offer.title
-          : "Free"
+        ? "Free"
         : offer.priceCents != null
           ? `₹${(offer.priceCents / 100).toLocaleString("en-IN")}`
-          : "Local offer";
+          : null;
   return (
     <MotionPressable
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`${headline}. ${offer.title}. ${offer.businessName}. View offer`}
+      accessibilityLabel={[
+        headline,
+        offer.title,
+        offer.businessName,
+        "View offer",
+      ]
+        .filter(Boolean)
+        .join(". ")}
       style={[styles.card, { width }]}
     >
       <View style={[styles.art, { backgroundColor: theme.backgroundColor }]}>
@@ -96,8 +101,13 @@ function OfferTile({
         )}
       </View>
       <View style={styles.copy}>
-        <Text style={styles.highlight} numberOfLines={1}>
-          {headline}
+        {headline && (
+          <Text style={styles.highlight} numberOfLines={1}>
+            {headline}
+          </Text>
+        )}
+        <Text style={styles.offerTitle} numberOfLines={2}>
+          {offer.title}
         </Text>
         <Text style={styles.business} numberOfLines={1}>
           {offer.businessName}
@@ -284,7 +294,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 9,
-    minHeight: 112,
+    minHeight: 138,
   },
   art: {
     width: 50,
@@ -303,13 +313,20 @@ const styles = StyleSheet.create({
     color: colors.coralDeep,
     fontWeight: "700",
   },
-  business: {
+  offerTitle: {
     ...typography.bodySmall,
-    fontSize: 12,
-    lineHeight: 16,
+    fontSize: 13,
+    lineHeight: 17,
     fontWeight: "700",
     color: colors.ink,
     marginTop: 2,
+  },
+  business: {
+    ...typography.caption,
+    fontSize: 11,
+    lineHeight: 15,
+    color: colors.textDim,
+    marginTop: 3,
   },
   meta: {
     ...typography.caption,

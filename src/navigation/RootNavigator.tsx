@@ -15,6 +15,9 @@ import { useAuth } from "../store/AuthContext";
 import { usePushSetup } from "../hooks/useUnreadCounts";
 import { LoadingState } from "../components/LoadingState";
 import { WelcomeScreen } from "../screens/WelcomeScreen";
+import { IntroductionScreen } from "../screens/onboarding/IntroductionScreen";
+import { PersonalOnboardingScreen } from "../screens/onboarding/PersonalOnboardingScreen";
+import { onboardingLane } from "../utils/onboarding";
 import { PersonalAuthScreen } from "../screens/auth/PersonalAuthScreen";
 import { BusinessAuthScreen } from "../screens/auth/BusinessAuthScreen";
 import { BusinessOnboardingScreen } from "../screens/onboarding/BusinessOnboardingScreen";
@@ -41,7 +44,8 @@ export function RootNavigator() {
     bootstrapping,
     accountType,
     needsOnboarding,
-    pendingOnboarding,
+    onboardingDeferred,
+    onboardingCelebration,
     profile,
     profileLoading,
     profileError,
@@ -113,10 +117,25 @@ export function RootNavigator() {
       }}
     >
       {demoMode || (session && accountType) ? (
-        needsOnboarding && pendingOnboarding === "business" ? (
+        onboardingLane(
+          accountType,
+          needsOnboarding,
+          onboardingDeferred,
+          onboardingCelebration,
+        ) === "business" ? (
           <Stack.Screen
             name="BusinessOnboarding"
             component={BusinessOnboardingScreen}
+          />
+        ) : onboardingLane(
+            accountType,
+            needsOnboarding,
+            onboardingDeferred,
+            onboardingCelebration,
+          ) === "personal" ? (
+          <Stack.Screen
+            name="PersonalOnboarding"
+            component={PersonalOnboardingScreen}
           />
         ) : accountType === "business" ? (
           <Stack.Screen name="BusinessApp" component={BusinessStack} />
@@ -126,6 +145,7 @@ export function RootNavigator() {
       ) : (
         <>
           <Stack.Screen name="Welcome" component={WelcomeScreen} />
+          <Stack.Screen name="Introduction" component={IntroductionScreen} />
           <Stack.Screen name="PersonalAuth" component={PersonalAuthScreen} />
           <Stack.Screen name="BusinessAuth" component={BusinessAuthScreen} />
         </>

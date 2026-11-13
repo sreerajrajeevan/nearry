@@ -4,6 +4,10 @@ import {
   postLocationPatch,
 } from "../utils/postLocation";
 import { AccountType } from "../navigation/types";
+import {
+  onboardingPreferences,
+  type OnboardingPreferences,
+} from "../utils/onboarding";
 
 /**
  * Explicit mappings between Postgres rows (snake_case) and application
@@ -14,6 +18,7 @@ import { AccountType } from "../navigation/types";
 // ── Profiles ──────────────────────────────────────────────
 
 export type DbProfile = {
+  onboarding_preferences?: unknown;
   suspended_at?: string | null;
   deletion_requested_at?: string | null;
   terms_version?: string | null;
@@ -34,6 +39,7 @@ export type DbProfile = {
 };
 
 export type Profile = {
+  onboardingPreferences?: OnboardingPreferences;
   suspendedAt?: string;
   deletionRequestedAt?: string;
   termsVersion?: string;
@@ -55,6 +61,7 @@ export type Profile = {
 
 export function toProfile(row: DbProfile): Profile {
   return {
+    onboardingPreferences: onboardingPreferences(row.onboarding_preferences),
     suspendedAt: row.suspended_at ?? undefined,
     deletionRequestedAt: row.deletion_requested_at ?? undefined,
     termsVersion: row.terms_version ?? undefined,

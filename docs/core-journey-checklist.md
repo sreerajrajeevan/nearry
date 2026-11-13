@@ -1,5 +1,9 @@
 # Core journey verification
 
+Business Create now opens **Business verification** before showing the offer form unless the saved business status is verified. The tab, Dashboard, My offers and programmatic Create entry share this requirement; Back returns without a redirect loop. Pending businesses see their existing review status, rejected businesses can resubmit, and approved businesses can continue to Create after refreshing. Existing drafts remain accessible through My offers; the server still authorizes publication.
+
+Home offer/Spotlight cards show the discount or price, the actual offer heading (up to two lines), business name and expiry separately. Offers without a numeric discount still show their heading. Check two offers from one business with the same discount remain distinguishable, and long titles remain readable at narrow phone widths.
+
 ## This change
 
 - Saved offers have a **My offers** manager, linked from Dashboard and Business. Drafts can be reopened, edited and published after verification; live offers can be edited without changing their reserved slots, or ended. A publish retry keeps the saved draft ID.

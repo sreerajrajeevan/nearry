@@ -18,6 +18,7 @@ import { NotificationCenterScreen } from "../screens/NotificationCenterScreen";
 import { MyOffersScreen } from "../screens/business/MyOffersScreen";
 import { EditOfferScreen } from "../screens/business/EditOfferScreen";
 import { EditBusinessProfileScreen } from "../screens/business/EditBusinessProfileScreen";
+import { BusinessVerificationScreen } from "../screens/business/BusinessVerificationScreen";
 import { ManageVenueScreen } from "../screens/business/ManageVenueScreen";
 
 const Stack = createNativeStackNavigator<BusinessStackParamList>();
@@ -38,6 +39,10 @@ export function BusinessStack() {
       <Stack.Screen name="Conversation" component={ConversationScreen} />
       <Stack.Screen name="Notifications" component={NotificationCenterScreen} />
       <Stack.Screen name="MyOffers" component={MyOffersScreen} />
+      <Stack.Screen
+        name="BusinessVerification"
+        component={BusinessVerificationScreen}
+      />
       <Stack.Screen name="EditOffer" component={EditOfferScreen} />
       <Stack.Screen
         name="EditBusinessProfile"

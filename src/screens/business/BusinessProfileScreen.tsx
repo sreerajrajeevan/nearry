@@ -1,5 +1,5 @@
 import { Alert } from "../../services/appAlert";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useState } from "react";
 import {
   View,
   Text,
@@ -9,6 +9,9 @@ import {
   TouchableOpacity,
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import type { BusinessStackParamList } from "../../navigation/types";
+import { PageHeading } from "../../components/PageHeading";
 import { Screen } from "../../components/Screen";
 import { Card } from "../../components/Card";
 import { Button } from "../../components/Button";
@@ -43,10 +46,19 @@ function statusTone(s: VerificationState): "neutral" | "green" | "red" {
 
 /** Business profile: verification, venue association, sign out. */
 type Props = {
-  navigation: { navigate: (screen: string) => void };
+  navigation: Pick<
+    NativeStackNavigationProp<BusinessStackParamList>,
+    "navigate" | "goBack"
+  >;
+  verificationOnly?: boolean;
+  onCreateOffer?: () => void;
 };
 
-export function BusinessProfileScreen({ navigation }: Props) {
+export function BusinessProfileScreen({
+  navigation,
+  verificationOnly = false,
+  onCreateOffer,
+}: Props) {
   const { profile, refreshProfile, signOut } = useAuth();
   const { notifications } = useUnreadCounts();
   const [verif, setVerif] = useState<{
@@ -54,26 +66,34 @@ export function BusinessProfileScreen({ navigation }: Props) {
     docPath?: string;
     note?: string;
   }>({
-    status: "unverified",
+    status: profile?.verificationStatus ?? "unverified",
   });
   const [venue, setVenue] = useState<Venue | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [verificationError, setVerificationError] = useState("");
+  const submitLock = React.useRef(false);
 
   const load = useCallback(async () => {
     if (!profile || isDemoMode()) return;
     try {
-      setVerif(await getVerificationState(profile.id));
-      const venues = await listVenues();
-      setVenue(venues.find((v) => v.businessId === profile.id) ?? null);
-    } catch {
-      /* keep last known */
+      setVerificationError("");
+      const latest = await getVerificationState(profile.id);
+      setVerif(latest);
+      // Approval can arrive while this screen is open. Keep the Create gate in sync.
+      if (latest.status !== profile.verificationStatus) await refreshProfile();
+      if (!verificationOnly) {
+        const venues = await listVenues();
+        setVenue(venues.find((v) => v.businessId === profile.id) ?? null);
+      }
+    } catch (error) {
+      setVerificationError(
+        error instanceof Error
+          ? error.message
+          : "Could not refresh verification. Please try again.",
+      );
     }
-  }, [profile]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  }, [profile, verificationOnly]);
   useFocusEffect(
     useCallback(() => {
       void load();
@@ -88,7 +108,8 @@ export function BusinessProfileScreen({ navigation }: Props) {
   const category = details.category || "";
 
   const onSubmitDoc = async () => {
-    if (!profile) return;
+    if (!profile || submitLock.current) return;
+    submitLock.current = true;
     setBusy("doc");
     try {
       await submitVerificationDoc(profile.id);
@@ -101,9 +122,127 @@ export function BusinessProfileScreen({ navigation }: Props) {
         e instanceof Error ? e.message : "Please try again.",
       );
     } finally {
+      submitLock.current = false;
       setBusy(null);
     }
   };
+
+  const verificationCard = (
+    <>
+      {verif.status === "verified" ? (
+        <VerifiedWelcome businessName={name} />
+      ) : (
+        <Card style={styles.verifyCard} accent={true}>
+          <View style={styles.verifyRow}>
+            <Text style={styles.verifyTitle}>Business verification</Text>
+            <Badge
+              label={verif.status.toUpperCase()}
+              tone={statusTone(verif.status)}
+            />
+          </View>
+          <Text style={styles.verifyDesc}>{STATUS_COPY[verif.status]}</Text>
+          {verif.status === "rejected" && verif.note ? (
+            <Text style={styles.verifyNote}>Reason: {verif.note}</Text>
+          ) : null}
+          {(verif.status === "unverified" || verif.status === "rejected") &&
+            !isDemoMode() && (
+              <Button
+                title="Submit document"
+                variant="secondary"
+                loading={busy === "doc"}
+                onPress={onSubmitDoc}
+                style={styles.verifyBtn}
+              />
+            )}
+        </Card>
+      )}
+      {!!verificationError && (
+        <View style={{ marginTop: spacing.md }}>
+          <Text accessibilityRole="alert" style={styles.verifyNote}>
+            {verificationError}
+          </Text>
+          <Button
+            title="Retry verification status"
+            variant="secondary"
+            onPress={() => void load()}
+          />
+        </View>
+      )}
+    </>
+  );
+  if (verificationOnly) {
+    return (
+      <Screen>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scroll}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={async () => {
+                setRefreshing(true);
+                try {
+                  await load();
+                } finally {
+                  setRefreshing(false);
+                }
+              }}
+            />
+          }
+        >
+          <Button
+            title="Back"
+            variant="ghost"
+            onPress={() => navigation.goBack()}
+          />
+          <PageHeading
+            greeting={name}
+            title="Business verification"
+            subtitle="Get verified before creating an offer."
+          />
+          {verificationCard}
+          {isDemoMode() ? (
+            <Text style={styles.verifyDesc}>
+              Preview only. Document submission needs a real business account.
+            </Text>
+          ) : null}
+          {verif.status === "verified" &&
+          !verificationError &&
+          onCreateOffer ? (
+            <Button
+              title="Create an offer"
+              onPress={onCreateOffer}
+              style={styles.verifyBtn}
+            />
+          ) : (
+            <>
+              <Text style={styles.verifyDesc}>
+                {verif.status === "pending"
+                  ? "Your document is with the Nearry team. You don’t need to submit it again while it’s under review."
+                  : verif.status === "verified"
+                    ? "Refresh to check your latest verification status."
+                    : "Upload a clear image of your business licence or registration. The document is private and reviewed by the Nearry team."}
+              </Text>
+              <Button
+                title="Refresh verification status"
+                variant="secondary"
+                onPress={async () => {
+                  setRefreshing(true);
+                  try {
+                    await load();
+                  } finally {
+                    setRefreshing(false);
+                  }
+                }}
+                loading={refreshing}
+                style={styles.verifyBtn}
+              />
+            </>
+          )}
+        </ScrollView>
+      </Screen>
+    );
+  }
 
   return (
     <Screen>
@@ -139,33 +278,7 @@ export function BusinessProfileScreen({ navigation }: Props) {
         )}
 
         <Text style={styles.sectionTitle}>Verification</Text>
-        {verif.status === "verified" ? (
-          <VerifiedWelcome businessName={name} />
-        ) : (
-          <Card style={styles.verifyCard} accent={true}>
-            <View style={styles.verifyRow}>
-              <Text style={styles.verifyTitle}>Business verification</Text>
-              <Badge
-                label={verif.status.toUpperCase()}
-                tone={statusTone(verif.status)}
-              />
-            </View>
-            <Text style={styles.verifyDesc}>{STATUS_COPY[verif.status]}</Text>
-            {verif.status === "rejected" && verif.note ? (
-              <Text style={styles.verifyNote}>Reason: {verif.note}</Text>
-            ) : null}
-            {(verif.status === "unverified" || verif.status === "rejected") &&
-              !isDemoMode() && (
-                <Button
-                  title="Submit document"
-                  variant="secondary"
-                  loading={busy === "doc"}
-                  onPress={onSubmitDoc}
-                  style={styles.verifyBtn}
-                />
-              )}
-          </Card>
-        )}
+        {verificationCard}
 
         <TouchableOpacity
           accessibilityRole="button"

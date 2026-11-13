@@ -24,6 +24,7 @@ export type SafetyStackParamList = {
 export type RootStackParamList = {
   Legal: { page?: import("../utils/legal").LegalPage } | undefined;
   Welcome: undefined;
+  Introduction: { accountType: AccountType };
   PersonalAuth: { mode: "login" | "signup" } | undefined;
   BusinessAuth: { mode: "login" | "signup" } | undefined;
   PersonalOnboarding: undefined;
@@ -65,6 +66,7 @@ export type BusinessStackParamList = SafetyStackParamList & {
   MyOffers: undefined;
   EditOffer: { offerId: string };
   EditBusinessProfile: undefined;
+  BusinessVerification: undefined;
   ManageVenue: undefined;
 };
 

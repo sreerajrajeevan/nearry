@@ -163,9 +163,14 @@ export function MyOffersScreen({ navigation }: Props) {
             <Button
               title="Create an offer"
               variant="secondary"
-              onPress={() =>
-                navigation.navigate("BusinessTabs", { screen: "CreateOffer" })
-              }
+              onPress={() => {
+                if (profile?.verificationStatus !== "verified")
+                  navigation.navigate("BusinessVerification");
+                else
+                  navigation.navigate("BusinessTabs", {
+                    screen: "CreateOffer",
+                  });
+              }}
               style={styles.create}
             />
             <FilterTabs
