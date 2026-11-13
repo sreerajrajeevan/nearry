@@ -21,3 +21,9 @@ The bookmark is functional. Profile → Saved plans opens the shortlist. Only po
 TypeScript, the SQL bundle check, 24 targeted tests and production web/Android exports pass. Tests cover account isolation, bookmark persistence/concurrent toggles/error recovery, calendar-week boundaries, existing date/distance/sort logic, offer categorization and text contrast. Browser QA uses explicit demo fixtures and checks the saved list and the reference controls at phone sizes.
 
 No new package, database migration or production data update is required. Existing demo fixtures alone include the reference-style gym examples. A real phone build still needs visual checks, particularly system text sizes and image/keyboard behaviour. Preview screenshots live outside Git under outputs/nearry-reference-ui.
+
+## Fresh testing
+
+The optional [fresh testing reset](fresh-test-reset.md) is a manual operator
+workflow. Merging this UI does not delete existing accounts or data. The reset
+requires a reviewed inventory and explicit confirmation, and preserves admin access.
