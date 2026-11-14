@@ -655,3 +655,58 @@ test("publishing without a confirmed meeting place is rejected before any networ
   );
   assert.equal(calls.length, 0);
 });
+
+test("plan group services use authenticated RPCs, retain retry keys and fetch bounded chronological messages", async () => {
+  const groups = await import("../src/services/planGroups");
+  handler = (url) =>
+    url.pathname.endsWith("send_plan_group_message")
+      ? {
+          id: "message",
+          seq: 2,
+          sender_id: "me",
+          sender_name: "Me",
+          body: "See you soon",
+          created_at: "2026-11-14T10:00:00Z",
+        }
+      : [];
+  const message = await groups.sendPlanGroupMessage(
+    "group",
+    "me",
+    " See you soon ",
+    "stable-retry-key-1",
+  );
+  assert.equal(message.mine, true);
+  assert.deepEqual(calls[0].body, {
+    p_group_id: "group",
+    p_body: "See you soon",
+    p_client_key: "stable-retry-key-1",
+  });
+  assert.ok(!("sender_id" in calls[0].body));
+  calls.length = 0;
+  handler = () => [
+    {
+      id: "new",
+      seq: 2,
+      sender_id: "other",
+      body: "New",
+      created_at: "2026-11-14T10:00:00Z",
+    },
+    {
+      id: "old",
+      seq: 1,
+      sender_id: "me",
+      body: "Old",
+      created_at: "2026-11-14T09:00:00Z",
+    },
+  ];
+  assert.deepEqual(
+    (await groups.listPlanGroupMessages("group", "me", 99)).map((m) => m.id),
+    ["old", "new"],
+  );
+  assert.equal(calls[0].url.searchParams.get("seq"), "lt.99");
+  assert.equal(calls[0].url.searchParams.get("limit"), "60");
+  calls.length = 0;
+  handler = () => null;
+  await groups.leavePlanGroup("group", "forged-user-does-not-go-to-server");
+  assert.deepEqual(calls[0].body, { p_group_id: "group" });
+});

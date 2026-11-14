@@ -33,7 +33,7 @@ export function useUnreadCounts() {
     const refresh = async () => {
       const ticket = version.next();
       try {
-        const result = await getUnreadCounts();
+        const result = await getUnreadCounts(profile.id);
         if (active && version.current(ticket)) setCounts(result);
       } catch {
         /* keep last known */

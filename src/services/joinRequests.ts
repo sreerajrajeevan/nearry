@@ -283,3 +283,10 @@ function friendlyRequestError(message: string): string {
   if (m.includes("only the host")) return "Only the host can approve requests.";
   return message;
 }
+
+/** Derived demo roster; the real group service uses approved rows in SQL. */
+export function demoApprovedPlanMembers(postId: string) {
+  return mockRequests
+    .filter((r) => r.postId === postId && r.status === "approved")
+    .map((r) => ({ id: r.requesterId, name: r.requesterName, host: false }));
+}

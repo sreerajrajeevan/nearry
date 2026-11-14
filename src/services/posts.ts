@@ -198,6 +198,7 @@ export async function createPost(
     const created: NeedPost = {
       id: `mock-post-${Date.now()}`,
       authorId,
+      planDetails: input.planDetails ?? {},
       authorName: "You",
       title: input.title.trim(),
       description: input.description.trim(),
@@ -242,6 +243,7 @@ export type PostPatch = {
     | "startsAt"
     | "vacancies"
     | "tags"
+    | "planDetails"
     | "genderPreference"
   >
 >;
@@ -257,6 +259,7 @@ export async function updatePost(
   const dbPatch: Record<string, unknown> = {};
   if (patch.location !== undefined)
     Object.assign(dbPatch, postLocationPatch(patch.location));
+  if (patch.planDetails !== undefined) dbPatch.plan_details = patch.planDetails;
   if (patch.title !== undefined) dbPatch.title = patch.title.trim();
   if (patch.description !== undefined)
     dbPatch.description = patch.description.trim();
@@ -279,6 +282,7 @@ export async function updatePost(
     const p = mockPosts[i];
     const next: NeedPost = {
       ...p,
+      planDetails: patch.planDetails ?? p.planDetails,
       title: (patch.title ?? p.title).trim(),
       description: (patch.description ?? p.description).trim(),
       venueId:

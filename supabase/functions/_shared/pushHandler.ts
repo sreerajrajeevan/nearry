@@ -153,7 +153,7 @@ export async function processPush(
               to: t.token,
               title: "Nearry",
               body:
-                job.kind === "message"
+                job.kind === "message" || job.kind === "plan_group_message"
                   ? "You have a new message."
                   : "You have an update in Nearry.",
               sound: "default",
@@ -171,35 +171,31 @@ export async function processPush(
               t = batch[i];
             if (ticket.status === "ok" && typeof ticket.id === "string") {
               check(
-                await db
-                  .from("push_deliveries")
-                  .upsert(
-                    {
-                      job_id: job.id,
-                      token: t.token,
-                      registered_at: t.updated_at,
-                      ticket_id: ticket.id,
-                      status: "ticket",
-                      last_error: null,
-                    },
-                    { onConflict: "job_id,token" },
-                  ),
+                await db.from("push_deliveries").upsert(
+                  {
+                    job_id: job.id,
+                    token: t.token,
+                    registered_at: t.updated_at,
+                    ticket_id: ticket.id,
+                    status: "ticket",
+                    last_error: null,
+                  },
+                  { onConflict: "job_id,token" },
+                ),
               );
             } else if (ticket.details?.error === "DeviceNotRegistered") {
               await removeStaleToken(db, t.token, t.updated_at);
               check(
-                await db
-                  .from("push_deliveries")
-                  .upsert(
-                    {
-                      job_id: job.id,
-                      token: t.token,
-                      registered_at: t.updated_at,
-                      status: "dead",
-                      last_error: "DeviceNotRegistered",
-                    },
-                    { onConflict: "job_id,token" },
-                  ),
+                await db.from("push_deliveries").upsert(
+                  {
+                    job_id: job.id,
+                    token: t.token,
+                    registered_at: t.updated_at,
+                    status: "dead",
+                    last_error: "DeviceNotRegistered",
+                  },
+                  { onConflict: "job_id,token" },
+                ),
               );
             } else rejected = true;
           }

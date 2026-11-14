@@ -2,6 +2,12 @@ import type { AccountType } from "../navigation/types";
 import type { AppNotification } from "../services/mappers";
 
 export function notificationTarget(notice: AppNotification, role: AccountType) {
+  if (
+    role === "personal" &&
+    notice.kind === "plan_group_message" &&
+    notice.refId
+  )
+    return { screen: "PlanGroup", params: { messageId: notice.refId } };
   if (notice.kind === "message" && notice.refId)
     return { screen: "Conversation", params: { conversationId: notice.refId } };
   if (role === "personal") {
