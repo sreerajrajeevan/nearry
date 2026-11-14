@@ -3903,6 +3903,7 @@ create table plan_groups(id uuid primary key default gen_random_uuid(),post_id u
 create table plan_group_messages(id uuid primary key default gen_random_uuid(),seq bigint generated always as identity unique,group_id uuid not null references plan_groups(id) on delete cascade,sender_id uuid not null references profiles(id) on delete cascade,body text not null check(char_length(btrim(body)) between 1 and 2000),client_key text not null check(char_length(client_key) between 8 and 100),created_at timestamptz not null default clock_timestamp(),unique(group_id,sender_id,client_key));
 create index plan_group_memberships on join_requests(requester_id,post_id) where status='approved';
 create index plan_groups_hosted on posts(author_id,created_at desc);
+create index plan_group_sender_rate on plan_group_messages(sender_id,created_at desc);
 create index plan_group_message_page on plan_group_messages(group_id,seq desc);
 create table plan_group_reads(group_id uuid not null references plan_groups(id) on delete cascade,user_id uuid not null references profiles(id) on delete cascade,last_seq bigint not null default 0,primary key(group_id,user_id));
 -- Membership is derived, so old approved users and future approvals work identically.
@@ -3974,11 +3975,20 @@ $$ language plpgsql security definer set search_path=public,pg_temp;
 create function send_plan_group_message(p_group_id uuid,p_body text,p_client_key text) returns jsonb as $$
 declare pid uuid; p posts; m plan_group_messages; result jsonb;
 begin
+ if auth.uid() is null then raise exception 'Sign in first';end if;
+ -- Serialize a sender across groups without locking profile/FK rows.
+ perform pg_advisory_xact_lock(hashtextextended('nearry-plan-chat:'||auth.uid()::text,0));
  select post_id into pid from plan_groups where id=p_group_id;
  select * into p from posts where id=pid for update;
  if not plan_group_member(p_group_id,auth.uid()) then raise exception 'You are no longer in this plan group';end if;
  if p.status='cancelled' then raise exception 'This plan was cancelled. The group is read-only.';end if;
  if p_body is null or char_length(btrim(p_body)) not between 1 and 2000 or p_client_key is null or char_length(p_client_key) not between 8 and 100 then raise exception 'Write a message under 2000 characters';end if;
+ select * into m from plan_group_messages where group_id=p_group_id and sender_id=auth.uid() and client_key=p_client_key;
+ if found then
+  if m.body<>btrim(p_body) then raise exception 'This retry key belongs to a different message';end if;
+  return to_jsonb(m)||jsonb_build_object('sender_name',(select display_name from profiles where id=m.sender_id));
+ end if;
+ if (select count(*) from plan_group_messages where sender_id=auth.uid() and created_at>clock_timestamp()-interval '1 minute')>=30 then raise exception 'Please wait a moment before sending more messages';end if;
  insert into plan_group_messages(group_id,sender_id,body,client_key) values(p_group_id,auth.uid(),btrim(p_body),p_client_key) on conflict(group_id,sender_id,client_key) do nothing returning * into m;
  if m.id is null then select * into m from plan_group_messages where group_id=p_group_id and sender_id=auth.uid() and client_key=p_client_key; if m.body<>btrim(p_body) then raise exception 'This retry key belongs to a different message';end if;end if;
  return to_jsonb(m)||jsonb_build_object('sender_name',(select display_name from profiles where id=m.sender_id));
@@ -4021,7 +4031,9 @@ create or replace function unread_counts() returns jsonb as $$
  declare result jsonb; n bigint; notices bigint;
  begin
  result=unread_counts_before_plan_groups();
- select count(*) into n from plan_group_messages m left join plan_group_reads r on r.group_id=m.group_id and r.user_id=auth.uid() where plan_group_member(m.group_id,auth.uid()) and m.sender_id<>auth.uid() and m.seq>coalesce(r.last_seq,0) and visible_author(m.sender_id) and content_visible('plan_message',m.id);
+ with eligible as materialized (
+  select g.id from plan_groups g where g.post_id in(select id from posts where author_id=auth.uid() union select post_id from join_requests where requester_id=auth.uid() and status='approved') and plan_group_member(g.id,auth.uid())
+ ) select count(*) into n from eligible g join plan_group_messages m on m.group_id=g.id left join plan_group_reads r on r.group_id=g.id and r.user_id=auth.uid() where m.sender_id<>auth.uid() and m.seq>coalesce(r.last_seq,0) and visible_author(m.sender_id) and content_visible('plan_message',m.id);
  select count(*) into notices from notifications where user_id=auth.uid() and read_at is null and kind='plan_group_message' and notification_allowed(auth.uid(),kind,ref_id);
  -- Group message notices contribute to Messages once, not again to Activity.
  return result||jsonb_build_object('messages',(result->>'messages')::bigint+n,'other_notifications',greatest(0,(result->>'other_notifications')::bigint-notices));

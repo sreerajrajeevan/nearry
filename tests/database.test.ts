@@ -4023,7 +4023,7 @@ test("plan groups are automatic, private and follow approved membership and rele
   assert.equal(
     (
       await db.query(
-        "select count(*) n from plan_group_messages where group_id=$1",
+        "select count(*)::int n from plan_group_messages where group_id=$1",
         [group],
       )
     ).rows[0].n,
@@ -4150,7 +4150,7 @@ test("group read markers, notifications, blocks and message reports keep authori
     (
       await asUser(b, (tx) =>
         tx.query(
-          "select count(*) n from notifications where kind='plan_group_message' and ref_id=$1 and read_at is null",
+          "select count(*)::int n from notifications where kind='plan_group_message' and ref_id=$1 and read_at is null",
           [second.id],
         ),
       )
@@ -4313,9 +4313,10 @@ test("existing plans receive a private group without rewriting their participant
   const legacy = "10000000-0000-0000-0000-000000000028";
   assert.equal(
     (
-      await db.query("select count(*) n from plan_groups where post_id=$1", [
-        legacy,
-      ])
+      await db.query(
+        "select count(*)::int n from plan_groups where post_id=$1",
+        [legacy],
+      )
     ).rows[0].n,
     1,
   );
@@ -4373,5 +4374,40 @@ test("members approved before the group migration are included without rejoining
       )
     ).rows[0].status,
     "approved",
+  );
+});
+
+test("group message throttling spans groups and still permits a safe retry", async () => {
+  const actor = await corePersonal();
+  const pid = (
+    await db.query(
+      "insert into posts(author_id,title,description,starts_at,vacancies,venue_id) values($1,'Rate test plan','A safe message rate test',now()+interval '6 hours',2,'10000000-0000-0000-0000-000000000032') returning id",
+      [actor],
+    )
+  ).rows[0].id;
+  const group = (
+    await db.query("select id from plan_groups where post_id=$1", [pid])
+  ).rows[0].id;
+  await db.query(
+    "insert into plan_group_messages(group_id,sender_id,body,client_key) select $1,$2,'Seed message','rate-test-key-'||n from generate_series(1,30) n",
+    [group, actor],
+  );
+  const retry = (
+    await asUser(actor, (tx) =>
+      tx.query(
+        "select send_plan_group_message($1,'Seed message','rate-test-key-1') m",
+        [group],
+      ),
+    )
+  ).rows[0].m;
+  assert.ok(retry.id);
+  await assert.rejects(
+    asUser(actor, (tx) =>
+      tx.query(
+        "select send_plan_group_message($1,'One more message','rate-test-new-key')",
+        [group],
+      ),
+    ),
+    /wait a moment/,
   );
 });
