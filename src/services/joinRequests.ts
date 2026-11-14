@@ -271,6 +271,60 @@ export async function myRequestForPost(
   });
 }
 
+/** Pending requests across every post I host, newest first (Messages screen). */
+export type HostJoinRequest = JoinRequest & {
+  postTitle: string;
+  postStartsAt?: string;
+  postVenueName?: string;
+};
+export async function listPendingRequestsForHost(
+  hostId: string,
+): Promise<HostJoinRequest[]> {
+  if (useMock())
+    return mockRequests
+      .filter(
+        (r) =>
+          r.status === "pending" &&
+          mockPosts.find((p) => p.id === r.postId)?.authorId === hostId,
+      )
+      .map((r) => {
+        const p = mockPosts.find((x) => x.id === r.postId);
+        return {
+          ...r,
+          postTitle: p?.title ?? "Post",
+          postStartsAt: p?.startsAt,
+          postVenueName: p?.venueName,
+        };
+      });
+  const supabase = getSupabase()!;
+  const { data, error } = await supabase
+    .from("join_requests")
+    .select(
+      "*, requester:profiles!join_requests_requester_id_fkey(display_name), post:posts!join_requests_post_id_fkey!inner(title,starts_at,venue_name,author_id)",
+    )
+    .eq("status", "pending")
+    .eq("post.author_id", hostId)
+    .order("created_at", { ascending: false });
+  if (error) throw new Error(error.message);
+  return ((data ?? []) as Record<string, unknown>[]).map((row) => {
+    const req = row.requester as { display_name?: string } | null;
+    const post = row.post as {
+      title?: string;
+      starts_at?: string;
+      venue_name?: string;
+    } | null;
+    return {
+      ...toJoinRequest({
+        ...(row as unknown as DbJoinRequest),
+        requester: { display_name: req?.display_name ?? "Someone" },
+      }),
+      postTitle: post?.title ?? "Post",
+      postStartsAt: post?.starts_at,
+      postVenueName: post?.venue_name ?? undefined,
+    };
+  });
+}
+
 function friendlyRequestError(message: string): string {
   const m = message.toLowerCase();
   if (m.includes("duplicate") || m.includes("unique"))
