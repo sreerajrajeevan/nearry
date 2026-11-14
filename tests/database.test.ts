@@ -4411,3 +4411,86 @@ test("group message throttling spans groups and still permits a safe retry", asy
     /wait a moment/,
   );
 });
+
+test("plan inbox uses the plan calendar before the 200 group limit and returns reminder metadata privately", async () => {
+  const owner = await corePersonal();
+  const next = await db.query(
+    `insert into posts(author_id,title,description,starts_at,vacancies,venue_id,plan_details)
+    select $1,'Future noisy plan','A future plan with recent messages',now()+interval '3 days'+n*interval '1 minute',3,'10000000-0000-0000-0000-000000000032','{"durationMinutes":90,"activity":"movies"}'::jsonb from generate_series(1,201) n returning id`,
+    [owner],
+  );
+  const today = (
+    await db.query(
+      `insert into posts(author_id,title,description,starts_at,vacancies,venue_name,location_lat,location_lng,location_source,plan_details)
+    values($1,'Today movie date','A plan pinned by its actual date',timezone('Pacific/Kiritimati',date_trunc('day',timezone('Pacific/Kiritimati',now()))+interval '23 hours 59 minutes'),3,'Cinema',-30,-140,'manual','{"durationMinutes":120,"activity":"movies"}') returning id,starts_at`,
+      [owner],
+    )
+  ).rows[0];
+  const firstGroup = (
+    await db.query("select id from plan_groups where post_id=$1", [today.id])
+  ).rows[0].id;
+  const laterGroup = (
+    await db.query("select id from plan_groups where post_id=$1", [
+      next.rows[0].id,
+    ])
+  ).rows[0].id;
+  await asUser(owner, (tx) =>
+    tx.query(
+      "select send_plan_group_message($1,'Tomorrow has a newer message','calendar-test-key')",
+      [laterGroup],
+    ),
+  );
+  const inbox = (
+    await asUser(owner, (tx) =>
+      tx.query("select list_my_plan_groups('Pacific/Kiritimati') g"),
+    )
+  ).rows[0].g;
+  assert.equal(inbox.length, 200);
+  assert.equal(inbox[0].postId, today.id);
+  assert.equal(inbox[0].venueName, "Cinema");
+  assert.equal(inbox[0].durationMinutes, 120);
+  assert.equal(inbox[0].activity, "movies");
+  assert.equal(
+    new Date(inbox[0].startsAt).getTime(),
+    new Date(today.starts_at).getTime(),
+  );
+  const details = (
+    await asUser(owner, (tx) =>
+      tx.query("select get_plan_group($1) g", [firstGroup]),
+    )
+  ).rows[0].g;
+  assert.equal(details.startsAt, inbox[0].startsAt);
+  assert.equal(details.durationMinutes, 120);
+  assert.ok(!("age" in details) && !("email" in details));
+  const invisible = (
+    await asUser(outsider, (tx) =>
+      tx.query("select list_my_plan_groups('Pacific/Kiritimati') g"),
+    )
+  ).rows[0].g;
+  assert.ok(!invisible.some((g: any) => g.postId === today.id));
+  assert.equal(
+    (
+      await db.query(
+        "select has_function_privilege('anon','public.list_my_plan_groups(text)','execute') ok",
+      )
+    ).rows[0].ok,
+    false,
+  );
+  await assert.rejects(
+    asUser(
+      null,
+      (tx) => tx.query("select list_my_plan_groups('Pacific/Kiritimati')"),
+      "anon",
+    ),
+    /permission denied/,
+  );
+  const fallback = (
+    await asUser(owner, (tx) =>
+      tx.query("select list_my_plan_groups('not-a-timezone') g"),
+    )
+  ).rows[0].g;
+  const legacy = (
+    await asUser(owner, (tx) => tx.query("select list_my_plan_groups() g"))
+  ).rows[0].g;
+  assert.deepEqual(fallback, legacy);
+});

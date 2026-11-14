@@ -15,6 +15,11 @@ export type PlanGroup = {
   name: string;
   hostId: string;
   planTitle: string;
+  startsAt?: string;
+  durationMinutes?: number;
+  venueName?: string;
+  activity?: string;
+  lastSenderName?: string;
   cancelled: boolean;
   memberCount: number;
   members?: { id: string; name: string; host: boolean }[];
@@ -75,6 +80,11 @@ function demoGroup(postId: string, userId: string): PlanGroup {
     hostId: p.authorId,
     name: names.get(id) ?? p.title,
     planTitle: p.title,
+    startsAt: p.startsAt,
+    durationMinutes: p.planDetails?.durationMinutes,
+    venueName: p.venueName,
+    activity: p.planDetails?.activity,
+    lastSenderName: messages.at(-1)?.senderName,
     cancelled: p.status === "cancelled",
     memberCount: members.length,
     members,
@@ -94,7 +104,11 @@ export async function listPlanGroups(myId: string): Promise<PlanGroup[]> {
         return [];
       }
     });
-  return (await rpc("list_my_plan_groups")) ?? [];
+  let timezone = "Asia/Kolkata";
+  try {
+    timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || timezone;
+  } catch {}
+  return (await rpc("list_my_plan_groups", { p_timezone: timezone })) ?? [];
 }
 export type GroupAddress = {
   groupId?: string;

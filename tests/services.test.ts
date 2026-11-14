@@ -710,3 +710,54 @@ test("plan group services use authenticated RPCs, retain retry keys and fetch bo
   await groups.leavePlanGroup("group", "forged-user-does-not-go-to-server");
   assert.deepEqual(calls[0].body, { p_group_id: "group" });
 });
+
+test("plan chat inbox sends a device timezone and uses only server-authorized groups", async () => {
+  const groups = await import("../src/services/planGroups");
+  handler = () => [
+    {
+      id: "g1",
+      postId: "p1",
+      name: "Movie night",
+      planTitle: "Movie night",
+      startsAt: "2027-01-01T18:00:00Z",
+      memberCount: 3,
+    },
+  ];
+  const result = await groups.listPlanGroups(
+    "not-a-server-membership-parameter",
+  );
+  assert.equal(result[0].name, "Movie night");
+  assert.equal(calls[0].url.pathname, "/rest/v1/rpc/list_my_plan_groups");
+  assert.deepEqual(calls[0].body, {
+    p_timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+  });
+});
+
+test("host inbox requests are bounded, unexpired and scoped to the host's own posts", async () => {
+  const requests = await import("../src/services/joinRequests");
+  handler = () => [
+    {
+      id: "r1",
+      post_id: "p1",
+      requester_id: "u2",
+      status: "pending",
+      decline_count: 0,
+      created_at: new Date().toISOString(),
+      requester: { display_name: "Meera" },
+      post: {
+        title: "Movie night",
+        starts_at: "2027-01-01T18:00:00Z",
+        venue_name: "Cinema",
+      },
+    },
+  ];
+  const result = await requests.listPendingRequestsForHost("host");
+  const url = calls[0].url;
+  assert.equal(url.searchParams.get("post.author_id"), "eq.host");
+  assert.equal(url.searchParams.get("limit"), "100");
+  assert.equal(url.searchParams.get("status"), "eq.pending");
+  assert.match(url.searchParams.get("post.starts_at")!, /^gt\./);
+  assert.match(url.searchParams.get("post.or")!, /expires_at\.is\.null/);
+  assert.equal(result[0].requesterName, "Meera");
+  assert.equal(result[0].postTitle, "Movie night");
+});

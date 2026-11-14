@@ -271,6 +271,81 @@ export async function myRequestForPost(
   });
 }
 
+/** Pending requests across every post I host, newest first (Messages screen). */
+export type HostJoinRequest = JoinRequest & {
+  postTitle: string;
+  postStartsAt?: string;
+  postVenueName?: string;
+};
+export async function listPendingRequestsForHost(
+  hostId: string,
+): Promise<HostJoinRequest[]> {
+  if (useMock())
+    return mockRequests
+      .filter((r) => {
+        const post = mockPosts.find((p) => p.id === r.postId);
+        return (
+          r.status === "pending" &&
+          post?.authorId === hostId &&
+          post.status !== "cancelled" &&
+          new Date(post.startsAt).getTime() > Date.now() &&
+          (!post.expiresAt || new Date(post.expiresAt).getTime() > Date.now())
+        );
+      })
+      .slice(0, 100)
+      .map((r) => {
+        const p = mockPosts.find((x) => x.id === r.postId);
+        return {
+          ...r,
+          postTitle: p?.title ?? "Post",
+          postStartsAt: p?.startsAt,
+          postVenueName: p?.venueName,
+        };
+      });
+  const supabase = getSupabase()!;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 20000);
+  let result;
+  try {
+    result = await supabase
+      .from("join_requests")
+      .select(
+        "*, requester:profiles!join_requests_requester_id_fkey(display_name), post:posts!join_requests_post_id_fkey!inner(title,starts_at,venue_name,author_id)",
+      )
+      .eq("status", "pending")
+      .eq("post.author_id", hostId)
+      .in("post.status", ["open", "closed"])
+      .gt("post.starts_at", new Date().toISOString())
+      .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`, {
+        referencedTable: "post",
+      })
+      .order("created_at", { ascending: false })
+      .limit(100)
+      .abortSignal(controller.signal);
+  } finally {
+    clearTimeout(timer);
+  }
+  const { data, error } = result;
+  if (error) throw new Error(error.message);
+  return ((data ?? []) as Record<string, unknown>[]).map((row) => {
+    const req = row.requester as { display_name?: string } | null;
+    const post = row.post as {
+      title?: string;
+      starts_at?: string;
+      venue_name?: string;
+    } | null;
+    return {
+      ...toJoinRequest({
+        ...(row as unknown as DbJoinRequest),
+        requester: { display_name: req?.display_name ?? "Someone" },
+      }),
+      postTitle: post?.title ?? "Post",
+      postStartsAt: post?.starts_at,
+      postVenueName: post?.venue_name ?? undefined,
+    };
+  });
+}
+
 function friendlyRequestError(message: string): string {
   const m = message.toLowerCase();
   if (m.includes("duplicate") || m.includes("unique"))
