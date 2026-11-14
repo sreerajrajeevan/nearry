@@ -103,7 +103,7 @@ export function ChatListScreen({ navigation }: Props) {
   const [query, setQuery] = useState("");
   const [busyKey, setBusyKey] = useState<string | null>(null);
 
-  const isPersonal = profile?.account_type !== "business";
+  const isPersonal = profile?.accountType !== "business";
 
   const load = useCallback(
     async (silent = false) => {
@@ -120,7 +120,7 @@ export function ChatListScreen({ navigation }: Props) {
       }
       // Pending join requests are best-effort: a failure there must never
       // hide the chats, so it is loaded separately and quietly.
-      if (profile?.id && profile.account_type === "personal") {
+      if (profile?.id && profile.accountType === "personal") {
         try {
           const pending = await listPendingRequestsForHost(profile.id);
           if (focused.current && ticket === version.current)
@@ -130,7 +130,7 @@ export function ChatListScreen({ navigation }: Props) {
         }
       }
     },
-    [profile?.id, profile?.account_type],
+    [profile?.id, profile?.accountType],
   );
 
   useFocusEffect(
