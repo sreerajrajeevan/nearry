@@ -1,3 +1,4 @@
+import { listPlanGroups } from "./planGroups";
 import { requireSupabase, isDemoMode } from "./supabase";
 import { mockConversations, mockNotifications } from "../data/mock";
 
@@ -6,9 +7,12 @@ export type UnreadCounts = {
   notifications: number;
   activity: number;
 };
-export async function getUnreadCounts(): Promise<UnreadCounts> {
+export async function getUnreadCounts(myId?: string): Promise<UnreadCounts> {
   if (isDemoMode()) {
-    const messages = mockConversations.reduce((n, c) => n + c.unreadCount, 0);
+    const groups = myId ? await listPlanGroups(myId) : [];
+    const messages =
+      mockConversations.reduce((n, c) => n + c.unreadCount, 0) +
+      groups.reduce((n, g) => n + (g.unreadCount ?? 0), 0);
     const unread = mockNotifications.filter((n) => !n.read);
     return {
       messages,

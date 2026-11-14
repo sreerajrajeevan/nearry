@@ -114,6 +114,17 @@ before(async () => {
         await db.exec(`insert into posts(id,author_id,title,description,starts_at,vacancies,gender_preference)
           values('10000000-0000-0000-0000-000000000028','00000000-0000-0000-0000-000000000009','Existing women’s plan','Preserve the existing saved audience',now()+interval '4 hours',4,'female');`);
       }
+      if (file === "00036_plan_groups_and_editor.sql") {
+        // Real upgrade fixture: these approved members exist before groups do.
+        await db.exec(`
+          insert into auth.users(id,email,raw_user_meta_data) values
+          ('00000000-0000-0000-0000-000000003601','upgrade-host@test.example','{"account_type":"personal"}'),
+          ('00000000-0000-0000-0000-000000003602','upgrade-member@test.example','{"account_type":"personal"}');
+          update profiles set display_name='Existing member',role_selected=true,onboarding_completed=true,gender='female',age=25,terms_version='2026-10-19' where id in ('00000000-0000-0000-0000-000000003601','00000000-0000-0000-0000-000000003602');
+          insert into posts(id,author_id,title,description,starts_at,vacancies,venue_name,location_lat,location_lng,location_source) values ('10000000-0000-0000-0000-000000003601','00000000-0000-0000-0000-000000003601','Before groups existed','Preserve approved participants during upgrade',now()+interval '10 hours',2,'Existing meeting spot',-30,-140,'manual');
+          insert into join_requests(post_id,requester_id,status) values ('10000000-0000-0000-0000-000000003601','00000000-0000-0000-0000-000000003602','approved');
+        `);
+      }
       await db.exec(sql);
       if (file === "00009_offers_bookings.sql") {
         await db.exec(`insert into auth.users(id,email,raw_user_meta_data)values('00000000-0000-0000-0000-000000000009','legacy@test.example','{"account_type":"business"}');
@@ -3978,4 +3989,389 @@ test("bright onboarding saves private preferences and profile atomically without
   ).rows[0].business_details;
   assert.equal(businessDetails.latitude, undefined);
   assert.equal(businessDetails.longitude, undefined);
+});
+
+test("plan groups are automatic, private and follow approved membership and released capacity", async () => {
+  const pid = await post(1);
+  const group = (
+    await db.query("select id from plan_groups where post_id=$1", [pid])
+  ).rows[0].id;
+  const get = (actor: string) =>
+    asUser(actor, (tx) => tx.query("select get_plan_group($1) g", [group]));
+  assert.equal((await get(host)).rows[0].g.memberCount, 1);
+  const requestId = await request(b, pid);
+  await assert.rejects(get(b), /approved plan members/);
+  await asUser(host, (tx) =>
+    tx.query("select approve_join_request($1)", [requestId]),
+  );
+  assert.equal((await get(b)).rows[0].g.memberCount, 2);
+  assert.equal(
+    (await db.query("select status from posts where id=$1", [pid])).rows[0]
+      .status,
+    "closed",
+  );
+  const send = () =>
+    asUser(host, (tx) =>
+      tx.query("select send_plan_group_message($1,$2,$3) m", [
+        group,
+        "Meet by the entrance",
+        "test-client-key-0001",
+      ]),
+    );
+  const first = (await send()).rows[0].m;
+  assert.equal((await send()).rows[0].m.id, first.id);
+  assert.equal(
+    (
+      await db.query(
+        "select count(*) n from plan_group_messages where group_id=$1",
+        [group],
+      )
+    ).rows[0].n,
+    1,
+  );
+  assert.equal(
+    (
+      await asUser(b, (tx) =>
+        tx.query("select id from plan_group_messages where group_id=$1", [
+          group,
+        ]),
+      )
+    ).rows.length,
+    1,
+  );
+  assert.equal(
+    (
+      await asUser(c, (tx) =>
+        tx.query("select id from plan_group_messages where group_id=$1", [
+          group,
+        ]),
+      )
+    ).rows.length,
+    0,
+  );
+  await assert.rejects(
+    asUser(c, (tx) =>
+      tx.query(
+        "select send_plan_group_message($1,'Not a member','outsider-client-1')",
+        [group],
+      ),
+    ),
+    /no longer/,
+  );
+  await assert.rejects(
+    asUser(b, (tx) =>
+      tx.query("select rename_plan_group($1,'New group')", [group]),
+    ),
+    /Only the host/,
+  );
+  await asUser(host, (tx) =>
+    tx.query("select rename_plan_group($1,'Weekend crew')", [group]),
+  );
+  await asUser(b, (tx) => tx.query("select leave_plan_group($1)", [group]));
+  await asUser(b, (tx) => tx.query("select leave_plan_group($1)", [group]));
+  assert.equal(
+    (await db.query("select status from posts where id=$1", [pid])).rows[0]
+      .status,
+    "open",
+  );
+  assert.equal(
+    (await db.query("select approved_join_count($1) n", [pid])).rows[0].n,
+    0,
+  );
+  await assert.rejects(get(b), /approved plan members/);
+  assert.equal(
+    (
+      await asUser(b, (tx) =>
+        tx.query("select id from plan_group_messages where group_id=$1", [
+          group,
+        ]),
+      )
+    ).rows.length,
+    0,
+  );
+  await assert.rejects(
+    asUser(host, (tx) => tx.query("select leave_plan_group($1)", [group])),
+    /host cannot leave/,
+  );
+  await asUser(host, (tx) =>
+    tx.query("update posts set title='Updated plan title' where id=$1", [pid]),
+  );
+  assert.equal((await get(host)).rows[0].g.name, "Weekend crew");
+  const again = await request(b, pid);
+  await asUser(host, (tx) =>
+    tx.query("select approve_join_request($1)", [again]),
+  );
+  assert.equal((await get(b)).rows[0].g.memberCount, 2);
+  await assert.rejects(
+    asUser(
+      null,
+      (tx) => tx.query("select get_plan_group($1)", [group]),
+      "anon",
+    ),
+    /permission denied/,
+  );
+});
+
+test("group read markers, notifications, blocks and message reports keep authorization after leaving", async () => {
+  const pid = await post(3),
+    group = (
+      await db.query("select id from plan_groups where post_id=$1", [pid])
+    ).rows[0].id;
+  for (const member of [b, c]) {
+    const r = await request(member, pid);
+    await asUser(host, (tx) =>
+      tx.query("select approve_join_request($1)", [r]),
+    );
+  }
+  const first = (
+    await asUser(host, (tx) =>
+      tx.query(
+        "select send_plan_group_message($1,'First message','read-test-message-1') m",
+        [group],
+      ),
+    )
+  ).rows[0].m;
+  const second = (
+    await asUser(host, (tx) =>
+      tx.query(
+        "select send_plan_group_message($1,'Second message','read-test-message-2') m",
+        [group],
+      ),
+    )
+  ).rows[0].m;
+  await asUser(b, (tx) =>
+    tx.query("select mark_plan_group_read($1,$2)", [group, first.id]),
+  );
+  const groups = (
+    await asUser(b, (tx) => tx.query("select list_my_plan_groups() g"))
+  ).rows[0].g;
+  assert.equal(groups.find((g: any) => g.id === group).unreadCount, 1);
+  assert.equal(
+    (
+      await asUser(b, (tx) =>
+        tx.query(
+          "select count(*) n from notifications where kind='plan_group_message' and ref_id=$1 and read_at is null",
+          [second.id],
+        ),
+      )
+    ).rows[0].n,
+    1,
+  );
+  await assert.rejects(
+    asUser(b, (tx) =>
+      tx.query(
+        "select submit_content_report('plan_message',$1,'spam','private group evidence')",
+        ["00000000-0000-0000-0000-000000000000"],
+      ),
+    ),
+    /unavailable/,
+  );
+  const reportId = (
+    await asUser(b, (tx) =>
+      tx.query(
+        "select submit_content_report('plan_message',$1,'spam','private group evidence') r",
+        [first.id],
+      ),
+    )
+  ).rows[0].r;
+  assert.match(
+    (
+      await db.query("select snapshot from content_reports where id=$1", [
+        reportId,
+      ])
+    ).rows[0].snapshot,
+    /First message/,
+  );
+  await asUser(
+    null,
+    (tx) =>
+      tx.query(
+        "select review_content_report($1,'remove','Reviewed group message')",
+        [reportId],
+      ),
+    "service_role",
+  );
+  assert.equal(
+    (
+      await db.query("select id from plan_group_messages where id=$1", [
+        first.id,
+      ])
+    ).rows.length,
+    0,
+  );
+  assert.equal(
+    (
+      await db.query(
+        "select id from notifications where kind='plan_group_message' and ref_id=$1",
+        [first.id],
+      )
+    ).rows.length,
+    0,
+  );
+  await asUser(b, (tx) => tx.query("select set_user_block($1,true)", [host]));
+  assert.equal(
+    (
+      await asUser(b, (tx) =>
+        tx.query(
+          "select id from notifications where kind='plan_group_message' and ref_id=$1",
+          [second.id],
+        ),
+      )
+    ).rows.length,
+    0,
+  );
+  await asUser(b, (tx) => tx.query("select leave_plan_group($1)", [group]));
+  await asUser(b, (tx) => tx.query("select set_user_block($1,false)", [host]));
+  await assert.rejects(
+    asUser(b, (tx) =>
+      tx.query("select mark_plan_group_read($1,$2)", [group, second.id]),
+    ),
+    /unavailable/,
+  );
+  assert.equal(
+    (
+      await asUser(b, (tx) =>
+        tx.query(
+          "select id from notifications where kind='plan_group_message' and ref_id=$1",
+          [second.id],
+        ),
+      )
+    ).rows.length,
+    0,
+  );
+  await asUser(host, (tx) => tx.query("select cancel_post($1)", [pid]));
+  await assert.rejects(
+    asUser(c, (tx) =>
+      tx.query(
+        "select send_plan_group_message($1,'After cancellation','cancelled-message-1')",
+        [group],
+      ),
+    ),
+    /read-only/,
+  );
+});
+
+test("editor preferences survive reads and enforce private age eligibility on the server", async () => {
+  const pid = await post(3);
+  const prefs = {
+    activity: "badminton",
+    durationMinutes: 90,
+    level: "beginner",
+    venueBooked: true,
+    costMode: "free",
+    ageMin: 18,
+    ageMax: 30,
+  };
+  await asUser(host, (tx) =>
+    tx.query("update posts set plan_details=$1 where id=$2", [
+      JSON.stringify(prefs),
+      pid,
+    ]),
+  );
+  assert.deepEqual(
+    (
+      await asUser(host, (tx) =>
+        tx.query("select plan_details from post_cards where id=$1", [pid]),
+      )
+    ).rows[0].plan_details,
+    prefs,
+  );
+  await db.query("update profiles set age=40 where id=$1", [b]);
+  try {
+    await assert.rejects(request(b, pid), /age range/);
+  } finally {
+    await db.query("update profiles set age=25 where id=$1", [b]);
+  }
+  const r = await request(b, pid);
+  await asUser(host, (tx) => tx.query("select approve_join_request($1)", [r]));
+  await assert.rejects(
+    asUser(host, (tx) =>
+      tx.query("update posts set plan_details=$1 where id=$2", [
+        JSON.stringify({ ...prefs, ageMin: 30 }),
+        pid,
+      ]),
+    ),
+    /age range.*approved/,
+  );
+  for (const invalid of [
+    { ...prefs, ageMin: 17 },
+    { ...prefs, ageMax: 101 },
+    { ...prefs, durationMinutes: 500 },
+    { ...prefs, birthday: "2000-01-01" },
+  ])
+    await assert.rejects(
+      asUser(host, (tx) =>
+        tx.query("update posts set plan_details=$1 where id=$2", [
+          JSON.stringify(invalid),
+          pid,
+        ]),
+      ),
+    );
+});
+
+test("existing plans receive a private group without rewriting their participants", async () => {
+  const legacy = "10000000-0000-0000-0000-000000000028";
+  assert.equal(
+    (
+      await db.query("select count(*) n from plan_groups where post_id=$1", [
+        legacy,
+      ])
+    ).rows[0].n,
+    1,
+  );
+});
+
+test("a concurrent group departure and last-spot approval keep membership and capacity consistent", async (t) => {
+  if (!external) return t.skip("Requires the disposable PostGIS database.");
+  const pid = await post(2),
+    group = (
+      await db.query("select id from plan_groups where post_id=$1", [pid])
+    ).rows[0].id;
+  const first = await request(b, pid),
+    second = await request(c, pid);
+  await asUser(host, (tx) =>
+    tx.query("select approve_join_request($1)", [first]),
+  );
+  await Promise.all([
+    asUser(b, (tx) => tx.query("select leave_plan_group($1)", [group])),
+    asUser(host, (tx) => tx.query("select approve_join_request($1)", [second])),
+  ]);
+  const snapshot = (
+    await asUser(host, (tx) => tx.query("select get_plan_group($1) g", [group]))
+  ).rows[0].g;
+  assert.equal(snapshot.memberCount, 2);
+  assert.deepEqual(
+    snapshot.members.map((m: any) => m.id).sort(),
+    [host, c].sort(),
+  );
+  assert.equal(
+    (await db.query("select approved_join_count($1) n", [pid])).rows[0].n,
+    1,
+  );
+  assert.equal(
+    (await db.query("select status from posts where id=$1", [pid])).rows[0]
+      .status,
+    "open",
+  );
+});
+
+test("members approved before the group migration are included without rejoining", async () => {
+  const member = "00000000-0000-0000-0000-000000003602",
+    postId = "10000000-0000-0000-0000-000000003601";
+  const snapshot = (
+    await asUser(member, (tx) =>
+      tx.query("select get_plan_group(null,$1) g", [postId]),
+    )
+  ).rows[0].g;
+  assert.equal(snapshot.memberCount, 2);
+  assert.ok(snapshot.members.some((m: any) => m.id === member));
+  assert.equal(
+    (
+      await db.query(
+        "select status from join_requests where post_id=$1 and requester_id=$2",
+        [postId, member],
+      )
+    ).rows[0].status,
+    "approved",
+  );
 });

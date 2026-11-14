@@ -21,6 +21,7 @@ import { useAuth } from "../../store/AuthContext";
 import { subscribeToNotifications } from "../../services/notifications";
 import { onUnreadChanged } from "../../services/unreadEvents";
 import { listConversations } from "../../services/chat";
+import { listPlanGroups, PlanGroup } from "../../services/planGroups";
 import { Conversation } from "../../services/mappers";
 
 type Props = {
@@ -48,21 +49,33 @@ export function ChatListScreen({ navigation }: Props) {
     version = useRef(0);
   const [selected, setSelected] = useState<Conversation | null>(null);
   const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [groups, setGroups] = useState<PlanGroup[]>([]);
+  const [groupError, setGroupError] = useState(false);
   const [state, setState] = useState<"loading" | "error" | "ready">("loading");
 
-  const load = useCallback(async (silent = false) => {
-    const ticket = ++version.current;
-    if (!silent) setState("loading");
-    try {
-      const result = await listConversations();
-      if (!focused.current || ticket !== version.current) return;
-      setConversations(result);
-      setState("ready");
-    } catch {
-      if (focused.current && ticket === version.current && !silent)
-        setState("error");
-    }
-  }, []);
+  const load = useCallback(
+    async (silent = false) => {
+      const ticket = ++version.current;
+      if (!silent) setState("loading");
+      try {
+        const [result, planGroups] = await Promise.all([
+          listConversations(),
+          profile?.accountType === "personal"
+            ? listPlanGroups(profile.id).catch(() => null)
+            : Promise.resolve([]),
+        ]);
+        if (!focused.current || ticket !== version.current) return;
+        setConversations(result);
+        setGroupError(planGroups === null);
+        if (planGroups) setGroups(planGroups);
+        setState("ready");
+      } catch {
+        if (focused.current && ticket === version.current && !silent)
+          setState("error");
+      }
+    },
+    [profile?.id, profile?.accountType],
+  );
 
   useFocusEffect(
     useCallback(() => {
@@ -108,6 +121,65 @@ export function ChatListScreen({ navigation }: Props) {
         )}
         <PageHeading compact title="Your conversations" />
         <Text style={styles.subtitle}>About your plans and bookings</Text>
+        {groupError && (
+          <View>
+            <Text accessibilityRole="alert" style={styles.subtitle}>
+              Couldn’t load plan groups. Your direct chats are still available.
+            </Text>
+            <Button
+              title="Retry plan groups"
+              variant="ghost"
+              onPress={() => void load(true)}
+            />
+          </View>
+        )}
+        {groups.length > 0 && (
+          <View>
+            <Text accessibilityRole="header" style={styles.name}>
+              Plan groups
+            </Text>
+            {groups.map((group) => (
+              <TouchableOpacity
+                key={group.id}
+                accessibilityRole="button"
+                accessibilityLabel={`${group.name}. ${group.memberCount} members. ${group.unreadCount ?? 0} unread messages`}
+                style={styles.chatContent}
+                onPress={() =>
+                  navigation.navigate("PlanGroup", { groupId: group.id })
+                }
+              >
+                <Avatar name={group.name} size={44} tone="clay" />
+                <View style={styles.text}>
+                  <View style={styles.topRow}>
+                    <Text style={styles.name} numberOfLines={1}>
+                      {group.name}
+                    </Text>
+                    <Text style={styles.time}>{timeAgo(group.lastAt)}</Text>
+                  </View>
+                  <Text style={styles.context} numberOfLines={1}>
+                    {group.memberCount} members ·{" "}
+                    {group.cancelled ? "Cancelled plan" : group.planTitle}
+                  </Text>
+                  <View style={styles.bottomRow}>
+                    <Text style={styles.preview} numberOfLines={1}>
+                      {group.lastBody ?? "Say hello to your group…"}
+                    </Text>
+                    {!!group.unreadCount && (
+                      <View style={styles.unreadBadge}>
+                        <Text style={styles.unreadText}>
+                          {group.unreadCount > 99 ? "99+" : group.unreadCount}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+              </TouchableOpacity>
+            ))}
+            <Text accessibilityRole="header" style={styles.name}>
+              Direct messages
+            </Text>
+          </View>
+        )}
         {conversations.length > 0 && (
           <Text style={styles.subtitle}>
             Hold a chat for options, or tap its three dots.
@@ -123,7 +195,7 @@ export function ChatListScreen({ navigation }: Props) {
             />
             <Button title="Retry" onPress={() => void load()} />
           </View>
-        ) : conversations.length === 0 ? (
+        ) : conversations.length === 0 && groups.length === 0 ? (
           <EmptyState
             title="No conversations"
             hint="Approve a join request or confirm a booking to start chatting."

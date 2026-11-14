@@ -1,3 +1,4 @@
+import type { PlanDetails } from "../utils/planComposer";
 import {
   PostLocation,
   validPostLocation,
@@ -130,6 +131,7 @@ export function toVenue(row: DbVenue): Venue {
 // ── Posts ─────────────────────────────────────────────────
 
 export type DbPost = {
+  plan_details?: PlanDetails;
   id: string;
   author_id: string;
   title: string;
@@ -156,6 +158,7 @@ export type DbPost = {
 };
 
 export type NeedPost = {
+  planDetails?: PlanDetails;
   /** Explicit demo fixture only; database mappers never provide sample photography. */
   demoScene?: "coffee" | "court" | "walk";
   id: string;
@@ -188,6 +191,7 @@ export type NeedPost = {
 export function toNeedPost(row: DbPost): NeedPost {
   const joinedCount = row.approved_count ?? 0;
   return {
+    planDetails: row.plan_details ?? {},
     id: row.id,
     authorId: row.author_id,
     authorName: row.author?.display_name ?? "Someone",
@@ -228,6 +232,7 @@ export function toNeedPost(row: DbPost): NeedPost {
 }
 
 export type NewPostInput = {
+  planDetails?: PlanDetails;
   title: string;
   description: string;
   venueId?: string;
@@ -246,6 +251,7 @@ export function toDbNewPost(
   input: NewPostInput,
 ): Record<string, unknown> {
   return {
+    plan_details: input.planDetails ?? {},
     author_id: authorId,
     title: input.title,
     description: input.description,

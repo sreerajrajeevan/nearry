@@ -84,3 +84,13 @@ test("an ongoing live offer can edit its description without pretending its star
     /ended/,
   );
 });
+
+test("group-message notifications open the authenticated personal group context", () => {
+  assert.deepEqual(
+    notificationTarget(
+      { kind: "plan_group_message", refId: "ref" } as AppNotification,
+      "personal",
+    ),
+    { screen: "PlanGroup", params: { messageId: "ref" } },
+  );
+});

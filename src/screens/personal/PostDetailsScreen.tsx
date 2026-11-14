@@ -347,6 +347,47 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
         <View style={styles.audience}>
           <AudienceBadge preference={post.genderPreference} />
         </View>
+        {post.planDetails && (
+          <View style={{ marginBottom: 12 }}>
+            {!!post.planDetails.durationMinutes && (
+              <Text style={styles.meta}>
+                Set aside {post.planDetails.durationMinutes} minutes
+                {post.planDetails.level && post.planDetails.level !== "any"
+                  ? ` · ${post.planDetails.level} level`
+                  : ""}
+              </Text>
+            )}
+            <Text style={styles.meta}>
+              Ages {post.planDetails.ageMin ?? 18}–
+              {post.planDetails.ageMax ?? 100}
+              {post.planDetails.venueBooked
+                ? " · Venue already booked by the host"
+                : ""}
+            </Text>
+            {post.planDetails.costMode === "split" && (
+              <Text style={styles.meta}>
+                Shared cost: ₹
+                {((post.planDetails.totalCostCents ?? 0) / 100).toLocaleString(
+                  "en-IN",
+                )}{" "}
+                total. Shown per-person share assumes a full group; final shares
+                may vary.
+              </Text>
+            )}
+          </View>
+        )}
+        {(isHost || myRequest?.status === "approved") && (
+          <View style={{ marginBottom: 16 }}>
+            <Button
+              title="Open plan group"
+              variant="secondary"
+              onPress={() => navigation.navigate("PlanGroup", { postId })}
+            />
+            <Text style={styles.meta}>
+              You and the approved members. New approvals join automatically.
+            </Text>
+          </View>
+        )}
         {post.tags.length > 0 && (
           <View style={styles.tags}>
             {post.tags.map((tag) => (
