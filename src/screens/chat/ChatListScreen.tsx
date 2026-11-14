@@ -435,7 +435,7 @@ export function ChatListScreen({ navigation }: Props) {
                     hint={
                       q
                         ? "Try another plan or place."
-                        : "A group is created for each plan. You join its chat when the host approves you."
+                        : "A plan chat opens after the first member is approved to join."
                     }
                   />
                 )}

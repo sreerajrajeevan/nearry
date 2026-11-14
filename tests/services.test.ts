@@ -761,3 +761,48 @@ test("host inbox requests are bounded, unexpired and scoped to the host's own po
   assert.equal(result[0].requesterName, "Meera");
   assert.equal(result[0].postTitle, "Movie night");
 });
+
+test("demo plan groups stay absent until approval and disappear when the last participant leaves", async () => {
+  const { setDemoMode } = await import("../src/services/supabase");
+  const { mockPosts } = await import("../src/data/mock");
+  const groups = await import("../src/services/planGroups");
+  const requests = await import("../src/services/joinRequests");
+  const id = "test-group-after-approval",
+    owner = "test-group-owner",
+    member = "test-group-member";
+  mockPosts.unshift({
+    ...mockPosts[0],
+    id,
+    authorId: owner,
+    title: "Movie plan without a chat",
+    startsAt: new Date(Date.now() + 7200000).toISOString(),
+    expiresAt: undefined,
+    vacancies: 2,
+    joinedCount: 0,
+    spotsLeft: 2,
+    status: "open",
+  });
+  setDemoMode(true);
+  try {
+    assert.equal((await groups.listPlanGroups(owner)).length, 0);
+    await assert.rejects(
+      groups.getPlanGroup({ postId: id }, owner),
+      /first member/,
+    );
+    const req = await requests.requestToJoin(id, member);
+    assert.equal((await groups.listPlanGroups(owner)).length, 0);
+    await requests.approveRequest(req.id);
+    const group = (await groups.listPlanGroups(owner))[0];
+    assert.equal(group.name, "Movie plan without a chat");
+    assert.equal(group.memberCount, 2);
+    await groups.leavePlanGroup(group.id, member);
+    assert.equal((await groups.listPlanGroups(owner)).length, 0);
+    assert.equal(mockPosts.find((p) => p.id === id)!.spotsLeft, 2);
+  } finally {
+    setDemoMode(false);
+    mockPosts.splice(
+      mockPosts.findIndex((p) => p.id === id),
+      1,
+    );
+  }
+});

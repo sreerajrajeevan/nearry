@@ -357,7 +357,8 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
             )}
           </View>
         )}
-        {(isHost || myRequest?.status === "approved") && (
+        {((isHost && post.joinedCount > 0) ||
+          myRequest?.status === "approved") && (
           <View style={{ marginBottom: 16 }}>
             <Button
               title="Open plan group"
@@ -368,6 +369,11 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
               You and the approved members. New approvals join automatically.
             </Text>
           </View>
+        )}
+        {isHost && post.joinedCount === 0 && (
+          <Text style={[styles.meta, { marginBottom: 16 }]}>
+            Your group chat opens when your first member is approved to join.
+          </Text>
         )}
         {post.tags.length > 0 && (
           <View style={styles.tags}>

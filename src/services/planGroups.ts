@@ -70,6 +70,10 @@ function demoGroup(postId: string, userId: string): PlanGroup {
     { id: p.authorId, name: p.authorName, host: true },
     ...demoApprovedPlanMembers(postId),
   ];
+  if (members.length < 2)
+    throw new Error(
+      "The group chat opens when the first member joins your plan.",
+    );
   if (!members.some((m) => m.id === userId))
     throw new Error("This group is only for approved plan members.");
   const id = "plan-" + p.id,
