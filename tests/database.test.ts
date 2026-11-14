@@ -125,6 +125,13 @@ before(async () => {
           insert into join_requests(post_id,requester_id,status) values ('10000000-0000-0000-0000-000000003601','00000000-0000-0000-0000-000000003602','approved');
         `);
       }
+      if (file === "00038_plan_groups_after_first_join.sql") {
+        await db.exec(`
+          insert into posts(id,author_id,title,description,starts_at,vacancies,venue_name,location_lat,location_lng,location_source) values ('10000000-0000-0000-0000-000000003801','00000000-0000-0000-0000-000000003601','Previously host-only chat','Keep this existing history private',now()+interval '12 hours',2,'Meeting spot',-30,-140,'manual');
+          update plan_groups set name='Original custom name',custom_name=true where post_id='10000000-0000-0000-0000-000000003801';
+          insert into plan_group_messages(group_id,sender_id,body,client_key) select id,'00000000-0000-0000-0000-000000003601','Preserve this old message','before-first-join-migration' from plan_groups where post_id='10000000-0000-0000-0000-000000003801';
+        `);
+      }
       await db.exec(sql);
       if (file === "00009_offers_bookings.sql") {
         await db.exec(`insert into auth.users(id,email,raw_user_meta_data)values('00000000-0000-0000-0000-000000000009','legacy@test.example','{"account_type":"business"}');
@@ -3993,17 +4000,32 @@ test("bright onboarding saves private preferences and profile atomically without
 
 test("plan groups are automatic, private and follow approved membership and released capacity", async () => {
   const pid = await post(1);
+  assert.equal(
+    (await db.query("select id from plan_groups where post_id=$1", [pid])).rows
+      .length,
+    0,
+  );
+  const hostInbox = () =>
+    asUser(host, (tx) => tx.query("select list_my_plan_groups() g"));
+  assert.ok(!(await hostInbox()).rows[0].g.some((g: any) => g.postId === pid));
+  const requestId = await request(b, pid);
+  assert.equal(
+    (await db.query("select id from plan_groups where post_id=$1", [pid])).rows
+      .length,
+    0,
+  );
+  await assert.rejects(
+    asUser(b, (tx) => tx.query("select get_plan_group(null,$1) g", [pid])),
+    /approved plan members/,
+  );
+  await asUser(host, (tx) =>
+    tx.query("select approve_join_request($1)", [requestId]),
+  );
   const group = (
     await db.query("select id from plan_groups where post_id=$1", [pid])
   ).rows[0].id;
   const get = (actor: string) =>
     asUser(actor, (tx) => tx.query("select get_plan_group($1) g", [group]));
-  assert.equal((await get(host)).rows[0].g.memberCount, 1);
-  const requestId = await request(b, pid);
-  await assert.rejects(get(b), /approved plan members/);
-  await asUser(host, (tx) =>
-    tx.query("select approve_join_request($1)", [requestId]),
-  );
   assert.equal((await get(b)).rows[0].g.memberCount, 2);
   assert.equal(
     (await db.query("select status from posts where id=$1", [pid])).rows[0]
@@ -4096,12 +4118,20 @@ test("plan groups are automatic, private and follow approved membership and rele
   await asUser(host, (tx) =>
     tx.query("update posts set title='Updated plan title' where id=$1", [pid]),
   );
-  assert.equal((await get(host)).rows[0].g.name, "Weekend crew");
+  await assert.rejects(get(host), /approved plan members/);
+  assert.ok(!(await hostInbox()).rows[0].g.some((g: any) => g.postId === pid));
+  assert.equal(
+    (await db.query("select name from plan_groups where id=$1", [group]))
+      .rows[0].name,
+    "Weekend crew",
+  );
   const again = await request(b, pid);
   await asUser(host, (tx) =>
     tx.query("select approve_join_request($1)", [again]),
   );
   assert.equal((await get(b)).rows[0].g.memberCount, 2);
+  assert.equal((await get(host)).rows[0].g.name, "Weekend crew");
+  assert.equal((await get(host)).rows[0].g.id, group);
   await assert.rejects(
     asUser(
       null,
@@ -4113,16 +4143,16 @@ test("plan groups are automatic, private and follow approved membership and rele
 });
 
 test("group read markers, notifications, blocks and message reports keep authorization after leaving", async () => {
-  const pid = await post(3),
-    group = (
-      await db.query("select id from plan_groups where post_id=$1", [pid])
-    ).rows[0].id;
+  const pid = await post(3);
   for (const member of [b, c]) {
     const r = await request(member, pid);
     await asUser(host, (tx) =>
       tx.query("select approve_join_request($1)", [r]),
     );
   }
+  const group = (
+    await db.query("select id from plan_groups where post_id=$1", [pid])
+  ).rows[0].id;
   const first = (
     await asUser(host, (tx) =>
       tx.query(
@@ -4324,15 +4354,15 @@ test("existing plans receive a private group without rewriting their participant
 
 test("a concurrent group departure and last-spot approval keep membership and capacity consistent", async (t) => {
   if (!external) return t.skip("Requires the disposable PostGIS database.");
-  const pid = await post(2),
-    group = (
-      await db.query("select id from plan_groups where post_id=$1", [pid])
-    ).rows[0].id;
+  const pid = await post(2);
   const first = await request(b, pid),
     second = await request(c, pid);
   await asUser(host, (tx) =>
     tx.query("select approve_join_request($1)", [first]),
   );
+  const group = (
+    await db.query("select id from plan_groups where post_id=$1", [pid])
+  ).rows[0].id;
   await Promise.all([
     asUser(b, (tx) => tx.query("select leave_plan_group($1)", [group])),
     asUser(host, (tx) => tx.query("select approve_join_request($1)", [second])),
@@ -4385,6 +4415,11 @@ test("group message throttling spans groups and still permits a safe retry", asy
       [actor],
     )
   ).rows[0].id;
+  const participant = await corePersonal();
+  const join = await request(participant, pid);
+  await asUser(actor, (tx) =>
+    tx.query("select approve_join_request($1)", [join]),
+  );
   const group = (
     await db.query("select id from plan_groups where post_id=$1", [pid])
   ).rows[0].id;
@@ -4426,6 +4461,11 @@ test("plan inbox uses the plan calendar before the 200 group limit and returns r
       [owner],
     )
   ).rows[0];
+  const participant = await corePersonal();
+  await db.query(
+    "insert into join_requests(post_id,requester_id,status) select id,$2,'approved' from posts where author_id=$1",
+    [owner, participant],
+  );
   const firstGroup = (
     await db.query("select id from plan_groups where post_id=$1", [today.id])
   ).rows[0].id;
@@ -4493,4 +4533,96 @@ test("plan inbox uses the plan calendar before the 200 group limit and returns r
     await asUser(owner, (tx) => tx.query("select list_my_plan_groups() g"))
   ).rows[0].g;
   assert.deepEqual(fallback, legacy);
+});
+
+test("legacy host-only groups are hidden without losing custom names or message history", async () => {
+  const owner = "00000000-0000-0000-0000-000000003601",
+    participant = "00000000-0000-0000-0000-000000003602",
+    pid = "10000000-0000-0000-0000-000000003801";
+  const group = (
+    await db.query("select id,name from plan_groups where post_id=$1", [pid])
+  ).rows[0];
+  const inbox = () =>
+    asUser(owner, (tx) => tx.query("select list_my_plan_groups() g"));
+  assert.ok(!(await inbox()).rows[0].g.some((g: any) => g.id === group.id));
+  assert.equal(
+    (
+      await asUser(owner, (tx) =>
+        tx.query("select id from plan_groups where id=$1", [group.id]),
+      )
+    ).rows.length,
+    0,
+  );
+  await assert.rejects(
+    asUser(owner, (tx) =>
+      tx.query(
+        "select send_plan_group_message($1,'No more host-only messages','host-only-send-001')",
+        [group.id],
+      ),
+    ),
+    /no longer/,
+  );
+  assert.equal(
+    (
+      await db.query(
+        "select count(*)::int n from plan_group_messages where group_id=$1",
+        [group.id],
+      )
+    ).rows[0].n,
+    1,
+  );
+  const req = await request(participant, pid);
+  await asUser(owner, (tx) =>
+    tx.query("select approve_join_request($1)", [req]),
+  );
+  const reopened = (await inbox()).rows[0].g.find((g: any) => g.postId === pid);
+  assert.equal(reopened.id, group.id);
+  assert.equal(reopened.name, "Original custom name");
+  assert.equal(reopened.lastBody, "Preserve this old message");
+  assert.equal(reopened.memberCount, 2);
+});
+
+test("rolling back the first approval leaves no group and no approved participant", async () => {
+  const pid = await post(2),
+    req = await request(b, pid);
+  await assert.rejects(
+    asUser(host, async (tx) => {
+      await tx.query("select approve_join_request($1)", [req]);
+      throw new Error("rollback approval");
+    }),
+    /rollback approval/,
+  );
+  assert.equal(
+    (await db.query("select id from plan_groups where post_id=$1", [pid])).rows
+      .length,
+    0,
+  );
+  assert.equal(
+    (await db.query("select status from join_requests where id=$1", [req]))
+      .rows[0].status,
+    "pending",
+  );
+});
+
+test("concurrent first approvals create exactly one shared group", async (t) => {
+  if (!external) return t.skip("Requires the disposable PostGIS database.");
+  const pid = await post(2),
+    r1 = await request(b, pid),
+    r2 = await request(c, pid);
+  await Promise.all([
+    asUser(host, (tx) => tx.query("select approve_join_request($1)", [r1])),
+    asUser(host, (tx) => tx.query("select approve_join_request($1)", [r2])),
+  ]);
+  const rows = (
+    await db.query("select id from plan_groups where post_id=$1", [pid])
+  ).rows;
+  assert.equal(rows.length, 1);
+  assert.equal(
+    (
+      await asUser(host, (tx) =>
+        tx.query("select get_plan_group($1) g", [rows[0].id]),
+      )
+    ).rows[0].g.memberCount,
+    3,
+  );
 });
