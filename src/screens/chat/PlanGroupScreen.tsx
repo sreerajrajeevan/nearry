@@ -43,6 +43,7 @@ import { Input } from "../../components/Input";
 import { EmptyState } from "../../components/EmptyState";
 import { LoadingState } from "../../components/LoadingState";
 import { colors } from "../../theme";
+import { planChatReminder, planChatTime } from "../../utils/planChatSchedule";
 import { useReducedMotion } from "../../store/MotionContext";
 
 type Props = NativeStackScreenProps<PersonalStackParamList, "PlanGroup">;
@@ -50,6 +51,7 @@ export function PlanGroupScreen({ route, navigation }: Props) {
   const { profile } = useAuth(),
     myId = profile?.id ?? "";
   const reduced = useReducedMotion();
+  const [now, setNow] = useState(Date.now());
   const address = route.params,
     roomKey = JSON.stringify(address) + myId;
   const [group, setGroup] = useState<PlanGroup | null>(null),
@@ -154,12 +156,19 @@ export function PlanGroupScreen({ route, navigation }: Props) {
       focused.current = true;
       setSending(lock.current === roomKey);
       visit.current++;
+      setNow(Date.now());
       void load();
       const app = AppState.addEventListener("change", (state) => {
-        if (state === "active") void load();
+        if (state === "active") {
+          setNow(Date.now());
+          void load();
+        }
       });
       const timer = setInterval(() => {
-        if (AppState.currentState === "active") void load();
+        if (AppState.currentState === "active") {
+          setNow(Date.now());
+          void load();
+        }
       }, 30000);
       return () => {
         focused.current = false;
@@ -291,6 +300,7 @@ export function PlanGroupScreen({ route, navigation }: Props) {
       if (currentRoom.current === room) setOlder(false);
     }
   };
+  const reminder = group ? planChatReminder(group, group.planTitle, now) : null;
   return (
     <KeyboardAvoidingView style={styles.flex} behavior="padding">
       <SafeAreaView style={styles.flex} edges={["top", "left", "right"]}>
@@ -338,6 +348,40 @@ export function PlanGroupScreen({ route, navigation }: Props) {
             <Icon name="more-vertical" size={21} />
           </TouchableOpacity>
         </View>
+        {group && !group.cancelled && (
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel={`${reminder?.text ?? planChatTime(group, now)} View plan`}
+            style={[styles.planBanner, reminder && styles.soonBanner]}
+            onPress={() =>
+              navigation.navigate("PostDetails", { postId: group.postId })
+            }
+          >
+            <Icon
+              name={reminder ? "clock" : "calendar"}
+              size={18}
+              color={reminder ? colors.red : colors.textDim}
+            />
+            <View style={{ flex: 1 }}>
+              <Text
+                style={[
+                  styles.planBannerText,
+                  reminder && { color: colors.red, fontWeight: "700" },
+                ]}
+              >
+                {reminder?.text ?? planChatTime(group, now)}
+              </Text>
+              {!!reminder && (
+                <Text style={styles.help}>{planChatTime(group, now)}</Text>
+              )}
+            </View>
+            <Icon
+              name="chevron-right"
+              size={17}
+              color={reminder ? colors.red : colors.textDim}
+            />
+          </TouchableOpacity>
+        )}
         {group?.cancelled && (
           <Text style={styles.notice}>
             The plan was cancelled. This group is read-only.
@@ -655,6 +699,18 @@ export function PlanGroupScreen({ route, navigation }: Props) {
   );
 }
 const styles = StyleSheet.create({
+  planBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginHorizontal: 16,
+    marginBottom: 8,
+    padding: 12,
+    borderRadius: 14,
+    backgroundColor: colors.surfaceRaised,
+  },
+  soonBanner: { backgroundColor: colors.dangerSoft },
+  planBannerText: { fontSize: 13, lineHeight: 19, color: colors.text },
   flex: { flex: 1, backgroundColor: colors.background },
   heading: {
     flexDirection: "row",

@@ -30,7 +30,6 @@ import { EmptyState } from "../../components/EmptyState";
 import { Avatar } from "../../components/Avatar";
 import { PostPhotoGallery } from "../../components/PostPhotoGallery";
 import { colors, typography, spacing } from "../../theme";
-import { getOrCreateConversation } from "../../services/chat";
 import { PostDetailsProps } from "../../navigation/types";
 import { useAuth } from "../../store/AuthContext";
 import {
@@ -133,24 +132,6 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
       Alert.alert(
         key === "join" ? "Request not sent" : "Could not update this plan",
         e instanceof Error ? e.message : "Something went wrong.",
-      );
-    } finally {
-      setBusy(null);
-    }
-  };
-
-  const openChat = async (otherUserId: string, otherName: string) => {
-    if (!myId) return;
-    setBusy("msg");
-    try {
-      const conversationId = await getOrCreateConversation(otherUserId, {
-        postId,
-      });
-      navigation.navigate("Conversation", { conversationId, title: otherName });
-    } catch (e) {
-      Alert.alert(
-        "Could not open chat",
-        e instanceof Error ? e.message : "Please try again.",
       );
     } finally {
       setBusy(null);
@@ -483,9 +464,9 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
                 <TouchableOpacity
                   accessibilityRole="button"
                   activeOpacity={0.7}
-                  onPress={() => openChat(r.requesterId, r.requesterName)}
+                  onPress={() => navigation.navigate("PlanGroup", { postId })}
                 >
-                  <Text style={styles.messageLink}>Message</Text>
+                  <Text style={styles.messageLink}>Group chat</Text>
                 </TouchableOpacity>
               </View>
             ))}
@@ -616,12 +597,9 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
                 />
                 <View style={styles.gap} />
                 <Button
-                  title="Message host"
+                  title="Open plan chat"
                   variant="secondary"
-                  loading={busy === "msg"}
-                  onPress={() =>
-                    post && myId && openChat(post.authorId, post.authorName)
-                  }
+                  onPress={() => navigation.navigate("PlanGroup", { postId })}
                 />
                 <View style={styles.gap} />
                 {flow.canLeave && (
