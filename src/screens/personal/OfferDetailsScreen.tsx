@@ -12,7 +12,6 @@ import { useLiveQuery } from "../../hooks/useLiveQuery";
 import { bookingState } from "../../utils/flowState";
 import { Screen } from "../../components/Screen";
 import { Button } from "../../components/Button";
-import { Badge } from "../../components/Badge";
 import { Input } from "../../components/Input";
 import { EmptyState } from "../../components/EmptyState";
 import { colors, typography, spacing, weight } from "../../theme";
@@ -24,15 +23,19 @@ import {
   listOfferSlots,
   AvailableSlot,
   bookOffer,
+  cancelBooking,
   listMyBookings,
+  MAX_PARTY_SIZE,
   subscribeToBookings,
 } from "../../services/bookings";
+import { Alert } from "../../services/appAlert";
+import { useMyRequests } from "../../store/MyRequestsContext";
 import { Offer } from "../../services/mappers";
 import { Icon } from "../../components/Icon";
 import { LoadingImage } from "../../components/LoadingImage";
 import { ActivityArt } from "../../components/ActivityArt";
 import { activityArtwork } from "../../utils/activityArtwork";
-import { formatTime } from "../../utils/format";
+import { formatTime, formatWhen } from "../../utils/format";
 
 type Props = NativeStackScreenProps<PersonalStackParamList, "OfferDetails">;
 
@@ -50,7 +53,8 @@ export function OfferDetailsScreen({ route, navigation }: Props) {
   const [partySize, setPartySize] = useState(1);
   const [formError, setFormError] = useState("");
   const [booking, setBooking] = useState(false);
-  const [bookingId, setBookingId] = useState<string | null>(null);
+  const [cancelling, setCancelling] = useState<string | null>(null);
+  const refreshMine = useMyRequests()?.refresh;
   const [photoFailed, setPhotoFailed] = useState(false);
   const {
     data,
@@ -71,7 +75,14 @@ export function OfferDetailsScreen({ route, navigation }: Props) {
   );
   const offer = data?.offer,
     slots = data?.slots ?? [];
-  const requestedBooking = data?.bookings.find((b) => b.id === bookingId);
+  // My upcoming, still-active bookings for this offer (one per day at most).
+  const mine = useMemo(
+    () =>
+      (data?.bookings ?? [])
+        .filter((b) => b.offerId === offerId && bookingState(b).canCancel)
+        .sort((a, b) => Date.parse(a.slot) - Date.parse(b.slot)),
+    [data, offerId],
+  );
 
   const dayKey = (iso: string) => {
     const d = new Date(iso);
@@ -104,7 +115,15 @@ export function OfferDetailsScreen({ route, navigation }: Props) {
     return [...map.values()];
   }, [slots]);
 
-  const activeDay = days.find((d) => d.key === daySel) ?? days[0];
+  const bookedDays = useMemo(
+    () => new Set(mine.map((b) => dayKey(b.slot))),
+    [mine],
+  );
+  // Days I can still book: not already booked by me.
+  const bookableDays = days.filter((d) => !bookedDays.has(d.key));
+  const activeDay =
+    days.find((d) => d.key === daySel && !bookedDays.has(d.key)) ??
+    days.find((d) => !bookedDays.has(d.key));
 
   const onSelectDay = (key: string) => {
     setDaySel(key);
@@ -114,24 +133,25 @@ export function OfferDetailsScreen({ route, navigation }: Props) {
   };
 
   useEffect(() => {
-    setBookingId(null);
     setPartySize(1);
     setSlotId("");
     setDaySel("");
   }, [offerId]);
   useEffect(() => {
     if (!data) return;
+    const open = (s: AvailableSlot) =>
+      s.seats_left > 0 && !bookedDays.has(dayKey(s.starts_at));
     const selected =
-      data.slots.find((s) => s.id === slotId && s.seats_left > 0) ??
-      data.slots.find((s) => s.seats_left > 0);
+      data.slots.find((s) => s.id === slotId && open(s)) ??
+      data.slots.find(open);
     setSlotId(selected?.id ?? "");
     if (selected) {
       setDaySel(dayKey(selected.starts_at));
       setPartySize((size) =>
-        Math.max(1, Math.min(size, selected.seats_left, 50)),
+        Math.max(1, Math.min(size, selected.seats_left, MAX_PARTY_SIZE)),
       );
     }
-  }, [data]);
+  }, [data, bookedDays]);
 
   const onBook = async () => {
     if (booking) return;
@@ -147,8 +167,8 @@ export function OfferDetailsScreen({ route, navigation }: Props) {
     }
     setBooking(true);
     try {
-      const result = await bookOffer(offerId, slot.id, partySize);
-      setBookingId(result.bookingId);
+      await bookOffer(offerId, slot.id, partySize);
+      void refreshMine?.();
       await load(true);
     } catch (e) {
       setFormError(
@@ -159,6 +179,29 @@ export function OfferDetailsScreen({ route, navigation }: Props) {
       setBooking(false);
     }
   };
+
+  const onCancel = (bookingId: string) =>
+    Alert.alert("Cancel this booking?", "Your place will be released.", [
+      { text: "Keep it", style: "cancel" },
+      {
+        text: "Cancel booking",
+        style: "destructive",
+        onPress: () => {
+          setCancelling(bookingId);
+          void cancelBooking(bookingId)
+            .then(() => {
+              void refreshMine?.();
+              return load(true);
+            })
+            .catch((e) =>
+              setFormError(
+                e instanceof Error ? e.message : "Could not cancel. Try again.",
+              ),
+            )
+            .finally(() => setCancelling(null));
+        },
+      },
+    ]);
 
   if (state === "loading") {
     return (
@@ -280,51 +323,70 @@ export function OfferDetailsScreen({ route, navigation }: Props) {
             </View>
           </View>
 
-          {bookingId ? (
-            <View style={styles.doneBox}>
-              <Badge
-                label={
-                  requestedBooking
-                    ? bookingState(requestedBooking).label
-                    : "Request sent"
-                }
-                tone="neutral"
-              />
-              <Text style={styles.doneText}>
-                {requestedBooking?.status === "confirmed"
-                  ? "The business confirmed your booking."
-                  : requestedBooking &&
-                      (bookingState(requestedBooking).expired ||
-                        requestedBooking.status === "cancelled")
-                    ? "This reservation is no longer active. You can request another available time."
-                    : "Your seats are held for up to 30 minutes while the business confirms."}
+          {mine.length > 0 && (
+            <View style={styles.mineBox}>
+              <Text style={styles.sectionTitle}>
+                {mine.length === 1 ? "YOUR BOOKING" : "YOUR BOOKINGS"}
               </Text>
-              <Button
-                title="View in Activity"
-                variant="secondary"
-                onPress={() =>
-                  navigation.navigate("PersonalTabs", { screen: "Activity" })
-                }
-              />
-              {requestedBooking &&
-                (bookingState(requestedBooking).expired ||
-                  requestedBooking.status === "cancelled") && (
-                  <Button
-                    title="Choose another time"
-                    variant="ghost"
-                    onPress={() => setBookingId(null)}
-                  />
-                )}
+              {mine.map((b) => (
+                <View key={b.id} style={styles.mineRow}>
+                  <View style={styles.mineIcon}>
+                    <Icon
+                      name={b.status === "confirmed" ? "check" : "clock"}
+                      size={18}
+                      color={
+                        b.status === "confirmed"
+                          ? colors.success
+                          : colors.amberDeep
+                      }
+                    />
+                  </View>
+                  <View style={styles.mineCopy}>
+                    <Text style={styles.mineWhen}>
+                      {formatWhen(b.slot)} · {b.partySize}{" "}
+                      {b.partySize === 1 ? "person" : "people"}
+                    </Text>
+                    <Text style={styles.mineStatus}>
+                      {b.status === "confirmed"
+                        ? "Confirmed by the business"
+                        : `Waiting for ${offer.businessName} to confirm${
+                            b.holdExpiresAt
+                              ? ` · held till ${formatTime(b.holdExpiresAt)}`
+                              : ""
+                          }`}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    accessibilityRole="button"
+                    accessibilityLabel={`Cancel booking for ${formatWhen(b.slot)}`}
+                    disabled={cancelling !== null}
+                    onPress={() => onCancel(b.id)}
+                    hitSlop={8}
+                  >
+                    <Text style={styles.mineCancel}>
+                      {cancelling === b.id ? "…" : "Cancel"}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
+              <Text style={styles.mineNote}>
+                {bookableDays.length
+                  ? "One booking per day for this offer. Pick another day below, or cancel to change your time."
+                  : "One booking per day for this offer. To change your time, cancel and pick another slot."}
+              </Text>
             </View>
-          ) : offer.status !== "live" ||
-            new Date(offer.endsAt).getTime() <= Date.now() ? (
+          )}
+          {offer.status !== "live" ||
+          new Date(offer.endsAt).getTime() <= Date.now() ? (
             <EmptyState
               title="This offer isn't live"
               hint="Check back for the next one."
             />
-          ) : (
+          ) : mine.length > 0 && bookableDays.length === 0 ? null : (
             <View style={styles.bookBox}>
-              <Text style={styles.sectionTitle}>CHOOSE A DAY</Text>
+              <Text style={styles.sectionTitle}>
+                {mine.length ? "BOOK ANOTHER DAY" : "CHOOSE A DAY"}
+              </Text>
               {days.length === 0 && (
                 <Text style={{ color: colors.textDim }}>
                   No upcoming slots are available.
@@ -337,15 +399,17 @@ export function OfferDetailsScreen({ route, navigation }: Props) {
               >
                 {days.map((d) => {
                   const sel = d.key === activeDay?.key;
-                  const open = d.slots.some((s) => s.seats_left > 0);
+                  const booked = bookedDays.has(d.key);
+                  const open = !booked && d.slots.some((s) => s.seats_left > 0);
                   return (
                     <TouchableOpacity
                       key={d.key}
                       activeOpacity={0.8}
+                      disabled={booked}
                       onPress={() => onSelectDay(d.key)}
                       style={[styles.dayPill, sel && styles.dayPillSel]}
                       accessibilityRole="button"
-                      accessibilityState={{ selected: sel }}
+                      accessibilityState={{ selected: sel, disabled: booked }}
                     >
                       <Text style={[styles.dayDow, sel && styles.dayDowSel]}>
                         {d.date.toLocaleDateString("en-US", {
@@ -362,7 +426,7 @@ export function OfferDetailsScreen({ route, navigation }: Props) {
                           !open && styles.dayFull,
                         ]}
                       >
-                        {open ? "" : "Full"}
+                        {booked ? "Booked" : open ? "" : "Full"}
                       </Text>
                     </TouchableOpacity>
                   );
@@ -431,7 +495,7 @@ export function OfferDetailsScreen({ route, navigation }: Props) {
                   onPress={() =>
                     setPartySize((v) =>
                       Math.min(
-                        50,
+                        MAX_PARTY_SIZE,
                         slots.find((s) => s.id === slotId)?.seats_left ??
                           offer.slotCapacity,
                         v + 1,
@@ -458,8 +522,9 @@ export function OfferDetailsScreen({ route, navigation }: Props) {
                 style={styles.bookBtn}
               />
               <Text style={styles.note}>
-                Your place is held for up to 30 minutes while the business
-                confirms. No payment is collected here.
+                Up to {MAX_PARTY_SIZE} people per booking. Your place is held
+                for up to 30 minutes while the business confirms. No payment is
+                collected here.
               </Text>
             </View>
           )}
@@ -675,6 +740,29 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
     textAlign: "center",
   },
-  doneBox: { marginTop: spacing.xl, alignItems: "flex-start", gap: spacing.md },
-  doneText: { ...typography.body, color: colors.text },
+  mineBox: { marginTop: spacing.xl },
+  mineRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    padding: 14,
+    marginBottom: 8,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  mineIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.amberSoft,
+  },
+  mineCopy: { flex: 1, minWidth: 0, gap: 2 },
+  mineWhen: { ...typography.body, color: colors.text, ...weight("700") },
+  mineStatus: { ...typography.caption, color: colors.textDim },
+  mineCancel: { ...typography.label, color: colors.red, ...weight("700") },
+  mineNote: { ...typography.caption, color: colors.textDim, marginTop: 4 },
 });

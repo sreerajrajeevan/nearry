@@ -1,4 +1,5 @@
 import { Alert } from "../../services/appAlert";
+import { useMyRequests } from "../../store/MyRequestsContext";
 import { AudienceBadge } from "../../components/AudienceBadge";
 import { PageHeading } from "../../components/PageHeading";
 
@@ -138,6 +139,7 @@ export function ActivityScreen() {
         ? Date.parse(b.slot) - Date.parse(a.slot)
         : Date.parse(a.slot) - Date.parse(b.slot),
     );
+  const refreshMine = useMyRequests()?.refresh;
   const run = async (
     key: string,
     action: () => Promise<void>,
@@ -149,6 +151,8 @@ export function ActivityScreen() {
     setNotice(null);
     try {
       await action();
+      // Cancelling or leaving changes what plan and offer cards show.
+      void refreshMine?.();
       setConfirmation(null);
       if (success) setNotice({ text: success });
       setNow(Date.now());

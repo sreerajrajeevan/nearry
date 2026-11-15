@@ -18,6 +18,20 @@ function fromView(row: Record<string, unknown>): Booking {
   });
 }
 
+/** Most people one booking can cover (also enforced by the database). */
+export const MAX_PARTY_SIZE = 2;
+/** Waiting (unconfirmed) requests one person may hold at a time. */
+export const MAX_WAITING_REQUESTS = 3;
+
+/** True while a booking still holds a place: confirmed, or pending and unexpired. */
+const holdsPlace = (b: Booking, now = Date.now()) =>
+  new Date(b.slot).getTime() > now &&
+  (b.status === "confirmed" ||
+    (b.status === "pending" &&
+      (!b.holdExpiresAt || new Date(b.holdExpiresAt).getTime() > now)));
+const sameLocalDay = (a: string, b: string) =>
+  new Date(a).toDateString() === new Date(b).toDateString();
+
 /**
  * Book seats in the selected business-defined slot. book_offer_slot() locks the offer row,
  * so concurrent bookings for the same slot serialize — no overbooking.
@@ -27,13 +41,47 @@ export async function bookOffer(
   slotId: string,
   partySize: number,
 ): Promise<{ bookingId: string; seatsLeft: number }> {
-  if (!Number.isInteger(partySize) || partySize < 1 || partySize > 50)
-    throw new Error("Party size must be between 1 and 50.");
+  if (
+    !Number.isInteger(partySize) ||
+    partySize < 1 ||
+    partySize > MAX_PARTY_SIZE
+  )
+    throw new Error(`A booking can be for 1 or ${MAX_PARTY_SIZE} people.`);
   if (useMock()) {
     const offer = mockOffers.find((o) => o.id === offerId);
     const slot = (await listOfferSlots(offerId)).find((s) => s.id === slotId);
-    if (!offer || !slot || slot.seats_left < partySize)
+    if (!offer || !slot)
       throw new Error("Choose an available slot with enough places.");
+    // Same fair-use rules as the database.
+    const mine = mockBookings.filter(
+      (b) => b.customerId === "demo-user" && holdsPlace(b),
+    );
+    const retry = mine.find(
+      (b) => b.offerId === offerId && b.slot === slot.starts_at,
+    );
+    if (retry) {
+      if (retry.partySize !== partySize)
+        throw new Error(
+          "You already requested this slot. Manage the existing booking in Activity.",
+        );
+      return { bookingId: retry.id, seatsLeft: slot.seats_left };
+    }
+    if (slot.seats_left < partySize)
+      throw new Error("Choose an available slot with enough places.");
+    if (
+      mine.some(
+        (b) => b.offerId === offerId && sameLocalDay(b.slot, slot.starts_at),
+      )
+    )
+      throw new Error(
+        "You already have one booking for this offer on that day. Cancel it in Activity to pick another time.",
+      );
+    if (
+      mine.filter((b) => b.status === "pending").length >= MAX_WAITING_REQUESTS
+    )
+      throw new Error(
+        `You can have up to ${MAX_WAITING_REQUESTS} requests waiting for a business to confirm. Try again once one is confirmed or cancelled.`,
+      );
     const b: Booking = {
       id: `mock-bk-${Date.now()}`,
       offerId,
@@ -170,10 +218,13 @@ function friendlyBookingError(message: string): string {
   const m = message.toLowerCase();
   if (m.includes("not live")) return "This offer is no longer live.";
   if (m.includes("own offer")) return "You can't book your own offer.";
-  if (m.includes("outside the offer window"))
-    return "Pick a slot within the offer dates.";
+  if (m.includes("offer window")) return "Pick a slot within the offer dates.";
   if (m.includes("future")) return "Pick a future slot.";
   if (m.includes("seats left")) return "Not enough seats left for that slot.";
+  if (m.includes("resource already booked"))
+    return "That time was just taken. Please pick another slot.";
+  if (m.includes("not verified"))
+    return "This business can't take bookings right now.";
   return message;
 }
 

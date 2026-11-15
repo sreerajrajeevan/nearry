@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { useMyOfferStatus } from "../store/MyRequestsContext";
 import {
   View,
   Text,
@@ -43,6 +44,7 @@ function OfferSlide({
   const [failed, setFailed] = useState(false);
   useEffect(() => setFailed(false), [offer.coverPhotoUrl]);
   const headline = offerHeadline(offer);
+  const mine = useMyOfferStatus(offer.id);
   const ends = new Date(offer.endsAt).toLocaleDateString("en-IN", {
     day: "numeric",
     month: "short",
@@ -61,6 +63,11 @@ function OfferSlide({
         offer.businessName,
         distanceKm != null && formatDistance(distanceKm),
         `Till ${ends}`,
+        mine === "booked"
+          ? "You've booked this"
+          : mine === "requested"
+            ? "Booking requested"
+            : null,
         "View offer",
       ]
         .filter(Boolean)
@@ -105,8 +112,33 @@ function OfferSlide({
             {meta}
           </Text>
         </View>
-        <View style={styles.claim}>
-          <Text style={styles.claimText}>Claim</Text>
+        <View
+          style={[
+            styles.claim,
+            mine === "requested" && styles.claimWaiting,
+            mine === "booked" && styles.claimBooked,
+          ]}
+        >
+          {mine && (
+            <Icon
+              name={mine === "booked" ? "check" : "clock"}
+              size={14}
+              color={mine === "booked" ? colors.success : colors.textDim}
+            />
+          )}
+          <Text
+            style={[
+              styles.claimText,
+              mine === "requested" && styles.claimTextWaiting,
+              mine === "booked" && styles.claimTextBooked,
+            ]}
+          >
+            {mine === "booked"
+              ? "Booked"
+              : mine === "requested"
+                ? "Requested"
+                : "Claim"}
+          </Text>
         </View>
       </View>
     </MotionPressable>
@@ -338,6 +370,20 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  claimWaiting: {
+    flexDirection: "row",
+    gap: 5,
+    paddingHorizontal: 12,
+    backgroundColor: colors.surfaceRaised,
+  },
+  claimBooked: {
+    flexDirection: "row",
+    gap: 5,
+    paddingHorizontal: 12,
+    backgroundColor: colors.successSoft,
+  },
+  claimTextWaiting: { color: colors.textDim },
+  claimTextBooked: { color: colors.success },
   claimText: {
     ...typography.label,
     color: colors.onAccent,

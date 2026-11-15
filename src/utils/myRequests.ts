@@ -1,4 +1,4 @@
-import type { JoinRequest } from "../services/mappers";
+import type { Booking, JoinRequest } from "../services/mappers";
 
 export type MyPlanStatus = "pending" | "approved";
 
@@ -17,5 +17,31 @@ export function myRequestStatuses(
   for (const [postId, status] of latest)
     if (status === "pending" || status === "approved")
       result.set(postId, status);
+  return result;
+}
+
+export type MyOfferStatus = "requested" | "booked";
+
+/**
+ * My status per offer from my bookings: "booked" if any upcoming booking is
+ * confirmed, else "requested" while a request is still waiting. Expired,
+ * past and cancelled bookings don't count.
+ */
+export function myOfferStatuses(
+  bookings: Pick<Booking, "offerId" | "status" | "slot" | "holdExpiresAt">[],
+  now = new Date(),
+): Map<string, MyOfferStatus> {
+  const result = new Map<string, MyOfferStatus>();
+  for (const b of bookings) {
+    if (new Date(b.slot).getTime() <= now.getTime()) continue;
+    if (b.status === "confirmed") result.set(b.offerId, "booked");
+    else if (
+      b.status === "pending" &&
+      (!b.holdExpiresAt ||
+        new Date(b.holdExpiresAt).getTime() > now.getTime()) &&
+      !result.has(b.offerId)
+    )
+      result.set(b.offerId, "requested");
+  }
   return result;
 }

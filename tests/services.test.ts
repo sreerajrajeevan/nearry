@@ -412,7 +412,7 @@ test("clearing offer price/discount sends null; oversized booking groups never r
     discount_pct: null,
   });
   calls.length = 0;
-  await assert.rejects(bookings.bookOffer("offer", "slot", 51), /1 and 50/);
+  await assert.rejects(bookings.bookOffer("offer", "slot", 3), /1 or 2 people/);
   assert.equal(calls.length, 0);
 });
 
@@ -868,4 +868,41 @@ test("a host's public profile reads only public columns", async () => {
     avatarUrl: "https://example.invalid/a.jpg",
     bio: "Morning runs and filter coffee.",
   });
+});
+
+test("demo bookings follow the same limits: 2 people, one per offer per day, 3 waiting", async () => {
+  const { setDemoMode } = await import("../src/services/supabase");
+  const bookings = await import("../src/services/bookings");
+  const { mockBookings, mockOffers } = await import("../src/data/mock");
+  setDemoMode(true);
+  const before = mockBookings.length;
+  try {
+    await assert.rejects(
+      bookings.bookOffer(mockOffers[0].id, "x", 3),
+      /1 or 2 people/,
+    );
+    const offer = mockOffers.find((o) => o.id === "o-demo-turf")!;
+    const slots = (await bookings.listOfferSlots(offer.id)).filter(
+      (s) => s.seats_left > 0,
+    );
+    const first = await bookings.bookOffer(offer.id, slots[0].id, 1);
+    assert.equal(
+      (await bookings.bookOffer(offer.id, slots[0].id, 1)).bookingId,
+      first.bookingId,
+    );
+    const sameDay = slots.find(
+      (s, i) =>
+        i > 0 &&
+        new Date(s.starts_at).toDateString() ===
+          new Date(slots[0].starts_at).toDateString(),
+    );
+    if (sameDay)
+      await assert.rejects(
+        bookings.bookOffer(offer.id, sameDay.id, 1),
+        /one booking for this offer on that day/,
+      );
+  } finally {
+    mockBookings.splice(0, mockBookings.length - before);
+    setDemoMode(false);
+  }
 });

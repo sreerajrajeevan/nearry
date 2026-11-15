@@ -4735,3 +4735,68 @@ test("selfie poses: older app builds can still submit without a pose, shown to t
   ).rows.find((r: any) => r.user_id === p.id);
   assert.equal(queue.pose_label, null);
 });
+
+test("booking limits: up to 2 people, one booking per offer per day, at most 3 waiting requests", async () => {
+  const business = await auditBusiness(),
+    customer = await corePersonal();
+  // Slots every hour from 10:00 India time two days ahead to 12:00 the day after.
+  const offer = (
+    await db.query(
+      `insert into offers(business_id,title,description,starts_at,ends_at,slot_capacity,slot_minutes,resource_key,status)
+       values($1,'Gym session','A friendly gym session',
+        (date_trunc('day',now() at time zone 'Asia/Kolkata')+interval '2 days 10 hours') at time zone 'Asia/Kolkata',
+        (date_trunc('day',now() at time zone 'Asia/Kolkata')+interval '3 days 12 hours') at time zone 'Asia/Kolkata',
+        4,60,gen_random_uuid()::text,'live') returning id`,
+      [business],
+    )
+  ).rows[0].id;
+  const slots = (
+    await db.query(
+      "select id from offer_slots where offer_id=$1 order by starts_at",
+      [offer],
+    )
+  ).rows.map((r: any) => r.id);
+  const [dayOne10, dayOne11] = slots;
+  const dayTwo10 = slots[24];
+  const book = (slot: string, party = 1, who = customer) =>
+    asUser(
+      who,
+      async (tx) =>
+        (await tx.query("select book_offer_slot($1,$2) r", [slot, party]))
+          .rows[0].r,
+    );
+  await assert.rejects(book(dayOne10, 3), /2 people/);
+  const first = await book(dayOne10, 2);
+  // A retry of the same slot still returns the same booking.
+  assert.equal((await book(dayOne10, 2)).booking_id, first.booking_id);
+  await assert.rejects(
+    book(dayOne11),
+    /one booking for this offer on that day/,
+  );
+  await book(dayTwo10);
+  await asUser(customer, (tx) =>
+    tx.query("select change_booking_status($1,'cancelled')", [
+      first.booking_id,
+    ]),
+  );
+  // After cancelling, another time that day is fine.
+  await book(dayOne11);
+
+  // Waiting (unconfirmed) requests are capped at 3 across all offers.
+  const busy = await corePersonal();
+  const offers = [];
+  for (let i = 0; i < 4; i++) offers.push(await auditOffer(business));
+  for (const o of offers.slice(0, 3)) await book(o.slot, 1, busy);
+  await assert.rejects(book(offers[3].slot, 1, busy), /3 requests/);
+  // Once the business confirms one, there is room again.
+  const pending = (
+    await db.query(
+      "select id from bookings where customer_id=$1 and status='pending' limit 1",
+      [busy],
+    )
+  ).rows[0].id;
+  await asUser(business, (tx) =>
+    tx.query("select change_booking_status($1,'confirmed')", [pending]),
+  );
+  await book(offers[3].slot, 1, busy);
+});

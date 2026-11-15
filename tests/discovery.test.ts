@@ -97,3 +97,22 @@ test("dashboard only counts unexpired live offers and keeps drafts separate", ()
   assert.deepEqual(result.liveOffers, [active]);
   assert.deepEqual(result.drafts, [draft]);
 });
+
+test("activity pictures: a bare 'game' doesn't mean chess when the copy says football", async () => {
+  const { activityArtwork } = await import("../src/utils/activityArtwork");
+  assert.equal(
+    activityArtwork({
+      title: "Your next game, for less",
+      description: "20% off football court slots.",
+    }),
+    "football",
+  );
+  assert.equal(
+    activityArtwork({ title: "Chess in the park", description: "" }),
+    "games",
+  );
+  assert.equal(
+    activityArtwork({ title: "Board game night", description: "" }),
+    "games",
+  );
+});
