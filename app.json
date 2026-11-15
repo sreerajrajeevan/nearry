@@ -91,6 +91,12 @@
     "androidNavigationBar": {
       "barStyle": "dark-content"
     },
-    "newArchEnabled": true
+    "newArchEnabled": true,
+    "extra": {
+      "eas": {
+        "projectId": "f70e106f-cecc-4ec8-9266-34a23c9096d3"
+      }
+    },
+    "owner": "nearry_in"
   }
 }

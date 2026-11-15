@@ -1,3 +1,4 @@
+import { emailOtpEnabled } from "../utils/authAvailability";
 import { normalizeEmail, normalizeEmailCode } from "../utils/emailSignIn";
 import { requireSupabase } from "./supabase";
 import type { AccountType } from "../navigation/types";
@@ -21,6 +22,10 @@ export async function sendEmailOtp(
   displayName?: string,
   signup = true,
 ): Promise<void> {
+  if (!emailOtpEnabled)
+    throw new Error(
+      "Email sign-in is not available in this build. Please continue with Google.",
+    );
   const supabase = requireSupabase();
   const { error } = await supabase.auth.signInWithOtp({
     email: normalizeEmail(email),
@@ -37,6 +42,10 @@ export async function verifyEmailOtp(
   email: string,
   code: string,
 ): Promise<string> {
+  if (!emailOtpEnabled)
+    throw new Error(
+      "Email sign-in is not available in this build. Please continue with Google.",
+    );
   const supabase = requireSupabase();
   const { data, error } = await supabase.auth.verifyOtp({
     email: normalizeEmail(email),

@@ -35,3 +35,6 @@ __pycache__/
 
 # Bundled admin hosting output
 dist-admin/
+
+# Local Android/web test-release verification output
+dist-test-release/

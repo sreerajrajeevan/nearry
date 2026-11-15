@@ -3,6 +3,11 @@ import {
   normalizeEmail,
   normalizeEmailCode,
 } from "../../utils/emailSignIn";
+import { signInReviewer } from "../../services/reviewerAuth";
+import {
+  emailOtpEnabled,
+  reviewerLoginEnabled,
+} from "../../utils/authAvailability";
 import { AuthPresentation } from "./AuthPresentation";
 import React, { useEffect, useState, useRef } from "react";
 import { useNavigation } from "@react-navigation/native";
@@ -41,12 +46,16 @@ export function AuthScreen({
   const [step, setStep] = useState<"email" | "code">("email");
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
+  const [reviewerMode, setReviewerMode] = useState(false);
+  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [sentTo, setSentTo] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<
-    "send" | "verify" | "google" | null
+    "send" | "verify" | "google" | "reviewer" | null
   >(null);
-  const [errorFor, setErrorFor] = useState<"email" | "google">("email");
+  const [errorFor, setErrorFor] = useState<"email" | "google" | "reviewer">(
+    "email",
+  );
   const actionLock = useRef(false);
   const version = useRef(0);
   const cooldowns = useRef(new EmailCodeCooldowns());
@@ -64,6 +73,8 @@ export function AuthScreen({
   useEffect(() => {
     version.current++;
     setStep("email");
+    setReviewerMode(false);
+    setPassword("");
     setCode("");
     setSentTo(null);
     setError(null);
@@ -76,6 +87,7 @@ export function AuthScreen({
     setError(e instanceof Error ? e.message : "Something went wrong.");
 
   const sendCode = async () => {
+    if (!emailOtpEnabled) return;
     if (busy || actionLock.current) return;
     setErrorFor("email");
     setError(null);
@@ -103,6 +115,7 @@ export function AuthScreen({
   };
 
   const confirmCode = async () => {
+    if (!emailOtpEnabled) return;
     if (busy || actionLock.current) return;
     setErrorFor("email");
     setError(null);
@@ -142,8 +155,37 @@ export function AuthScreen({
     }
   };
 
+  const reviewer = async () => {
+    if (busy || actionLock.current || !reviewerLoginEnabled) return;
+    const run = version.current;
+    setError(null);
+    setErrorFor("reviewer");
+    actionLock.current = true;
+    setPendingAction("reviewer");
+    try {
+      await signInReviewer(email, password);
+      if (run === version.current) setPassword("");
+      // The normal auth subscription restores the real profile and saved role.
+    } catch (e) {
+      if (run === version.current) fail(e);
+    } finally {
+      actionLock.current = false;
+      if (run === version.current) setPendingAction(null);
+    }
+  };
+
   return (
     <AuthPresentation
+      reviewerMode={reviewerMode}
+      password={password}
+      setPassword={setPassword}
+      reviewer={reviewer}
+      toggleReviewer={() => {
+        setReviewerMode(!reviewerMode);
+        setStep("email");
+        setPassword("");
+        setError(null);
+      }}
       kicker={kicker}
       isLogin={isLogin}
       step={step}

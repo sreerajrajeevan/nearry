@@ -26,7 +26,13 @@ import {
   setPushEnabled,
 } from "../../services/safety";
 import { enablePushNotifications } from "../../services/notifications";
-import { legalSections, legalContact, LegalPage } from "../../utils/legal";
+import {
+  legalSections,
+  legalContact,
+  legalTitle,
+  legalUpdated,
+  LegalPage,
+} from "../../utils/legal";
 
 type Nav = { goBack(): void; navigate(name: string, params?: any): void };
 const errorText = (e: unknown) =>
@@ -441,10 +447,8 @@ export function LegalScreen({
     <Screen scroll style={styles.page}>
       <Back navigation={navigation} />
       <PageHeading
-        greeting="Nearry · Last updated 19 October 2026"
-        title={
-          page === "privacy" ? "Your privacy" : "Community guidelines & terms"
-        }
+        greeting={`Nearry · Last updated ${legalUpdated(page)}`}
+        title={legalTitle(page)}
       />
       {legalSections(page).map((section) => (
         <View key={section.title} style={styles.section}>

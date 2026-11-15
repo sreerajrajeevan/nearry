@@ -19,6 +19,14 @@
       "android": {
         "buildType": "app-bundle"
       }
+    },
+    "play-test": {
+      "extends": "production",
+      "env": {
+        "EXPO_PUBLIC_EMAIL_OTP_ENABLED": "false",
+        "EXPO_PUBLIC_REVIEWER_LOGIN_ENABLED": "true"
+      },
+      "credentialsSource": "local"
     }
   }
 }
