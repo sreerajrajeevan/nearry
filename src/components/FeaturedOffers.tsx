@@ -151,7 +151,7 @@ export function FeaturedOffers({
     <View style={styles.section}>
       <View style={styles.heading}>
         <Text accessibilityRole="header" style={styles.title}>
-          Perks nearby
+          Offers nearby
         </Text>
         {matches.length > 6 && (
           <MotionPressable
