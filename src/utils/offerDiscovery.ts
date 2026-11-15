@@ -58,6 +58,10 @@ export function discoverOffers(
   );
 }
 
+/** The home carousel: only offers the business has spotlighted, still live. */
+export const spotlightOffers = (offers: Offer[], now = new Date()) =>
+  discoverOffers(offers, "all", now).filter((offer) => offer.isSpotlight);
+
 const SHARED_CATEGORY: Record<
   Exclude<OfferCategory, "all">,
   DiscoveryCategory

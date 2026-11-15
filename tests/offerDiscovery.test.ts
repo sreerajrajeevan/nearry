@@ -79,3 +79,24 @@ test("offers map into the shared Home categories using business names and fitnes
     cases.map(([, expected]) => expected),
   );
 });
+
+test("the home carousel shows only spotlighted live offers; View all keeps every live offer", async () => {
+  const { spotlightOffers } = await import("../src/utils/offerDiscovery");
+  const offers = [
+    offer("plain", "Coffee and cake"),
+    offer("star", "Gym training session", { isSpotlight: true }),
+    offer("ended", "Old deal", {
+      isSpotlight: true,
+      endsAt: "2026-11-13T09:30:00Z",
+    }),
+    offer("draft", "Not yet", { isSpotlight: true, status: "draft" }),
+  ];
+  assert.deepEqual(
+    spotlightOffers(offers, now).map((o) => o.id),
+    ["star"],
+  );
+  assert.deepEqual(
+    discoverOffers(offers, "all", now).map((o) => o.id),
+    ["plain", "star"],
+  );
+});

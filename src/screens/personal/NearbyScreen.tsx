@@ -468,6 +468,18 @@ export function NearbyScreen() {
               onOpen={(offerId) =>
                 navigation.navigate("OfferDetails", { offerId })
               }
+              onViewAll={() =>
+                navigation.navigate("AllOffers", {
+                  // Same area as Home: only the venues it is showing.
+                  venueIds:
+                    point || appliedArea ? venues.map((v) => v.id) : undefined,
+                  distances: venues.flatMap((v) =>
+                    v.distanceKm == null
+                      ? []
+                      : [[v.id, v.distanceKm] as [string, number]],
+                  ),
+                })
+              }
             />
             <StartingSoon
               posts={startingSoon}

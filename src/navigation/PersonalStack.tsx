@@ -1,4 +1,5 @@
 import { SelfieVerificationScreen } from "../screens/personal/SelfieVerificationScreen";
+import { AllOffersScreen } from "../screens/personal/AllOffersScreen";
 import { HostProfileScreen } from "../screens/personal/HostProfileScreen";
 import {
   SafetyPrivacyScreen,
@@ -49,6 +50,7 @@ export function PersonalStack() {
         <Stack.Screen name="PersonalTabs" component={PersonalTabs} />
         <Stack.Screen name="PostDetails" component={PostDetailsScreen} />
         <Stack.Screen name="HostProfile" component={HostProfileScreen} />
+        <Stack.Screen name="AllOffers" component={AllOffersScreen} />
         <Stack.Screen name="PlaceDetails" component={PlaceDetailsScreen} />
         <Stack.Screen name="VenueDetails" component={VenueDetailsScreen} />
         <Stack.Screen name="EditPost" component={EditPostScreen} />

@@ -11,7 +11,7 @@ import {
 import { LinearGradient } from "expo-linear-gradient";
 import { Offer } from "../services/mappers";
 import { colors, typography, weight } from "../theme";
-import { discoverOffers } from "../utils/offerDiscovery";
+import { discoverOffers, spotlightOffers } from "../utils/offerDiscovery";
 import { activityArtwork } from "../utils/activityArtwork";
 import { formatDistance } from "../utils/format";
 import { MotionPressable } from "./Motion";
@@ -113,24 +113,28 @@ function OfferSlide({
   );
 }
 
-/** Live offers as a swipeable photo carousel. Category filtering happens on Home. */
+/**
+ * Spotlighted offers as a swipeable photo carousel; "View all" opens every
+ * live offer. Category filtering happens on Home.
+ */
 export function FeaturedOffers({
   offers,
   distances,
   onOpen,
+  onViewAll,
   now = new Date(),
 }: {
   offers: Offer[];
   distances?: ReadonlyMap<string, number | undefined>;
   onOpen: (id: string) => void;
+  onViewAll: () => void;
   now?: Date;
 }) {
   const { width, fontScale } = useWindowDimensions();
-  const [expanded, setExpanded] = useState(false);
   const [page, setPage] = useState(0);
   const rail = useRef<ScrollView>(null);
   const matches = discoverOffers(offers, "all", now);
-  const items = expanded ? matches : matches.slice(0, 6);
+  const items = spotlightOffers(offers, now);
   const slideWidth = Math.round(
     Math.min(340, Math.max(260, (width - 32) * 0.86)) *
       Math.min(Math.max(fontScale, 1), 1.2),
@@ -139,7 +143,7 @@ export function FeaturedOffers({
   useEffect(() => {
     setPage(0);
     rail.current?.scrollTo({ x: 0, animated: false });
-  }, [matches.length]);
+  }, [items.length]);
   const onScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) =>
     setPage(
       Math.min(
@@ -153,18 +157,18 @@ export function FeaturedOffers({
         <Text accessibilityRole="header" style={styles.title}>
           Offers nearby
         </Text>
-        {matches.length > 6 && (
+        {matches.length > 0 && (
           <MotionPressable
             accessibilityRole="button"
-            accessibilityLabel={
-              expanded ? "Show fewer offers" : "See all nearby offers"
-            }
-            onPress={() => setExpanded(!expanded)}
+            accessibilityLabel={`View all ${matches.length} offers nearby`}
+            onPress={onViewAll}
             style={styles.seeAll}
           >
-            <Text style={styles.seeAllText}>
-              {expanded ? "Show less" : "See all"}
-            </Text>
+            <Text style={styles.seeAllText}>View all</Text>
+            <View style={styles.countPill}>
+              <Text style={styles.countText}>{matches.length}</Text>
+            </View>
+            <Icon name="chevron-right" size={16} color={colors.ink} />
           </MotionPressable>
         )}
       </View>
@@ -207,6 +211,21 @@ export function FeaturedOffers({
             </View>
           )}
         </>
+      ) : matches.length ? (
+        // Nothing spotlighted: a slim card still leads to every offer.
+        <MotionPressable
+          accessibilityRole="button"
+          accessibilityLabel={`View all ${matches.length} offers nearby`}
+          onPress={onViewAll}
+          style={styles.empty}
+        >
+          <Icon name="tag" size={18} color={colors.amberDeep} />
+          <Text style={styles.emptyText}>
+            {matches.length} {matches.length === 1 ? "offer" : "offers"} from
+            local businesses
+          </Text>
+          <Icon name="chevron-right" size={18} color={colors.ink} />
+        </MotionPressable>
       ) : (
         <View style={styles.empty}>
           <Icon name="tag" size={18} />
@@ -237,15 +256,28 @@ const styles = StyleSheet.create({
     color: colors.ink,
     flexShrink: 1,
   },
-  seeAll: { minHeight: 44, justifyContent: "center" },
+  seeAll: {
+    minHeight: 44,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
   seeAllText: {
     ...typography.bodySmall,
     fontSize: 14,
     ...weight("700"),
     color: colors.ink,
-    textDecorationLine: "underline",
-    textDecorationColor: colors.amber,
   },
+  countPill: {
+    minWidth: 22,
+    height: 22,
+    paddingHorizontal: 6,
+    borderRadius: 11,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.amberSoft,
+  },
+  countText: { fontSize: 12, ...weight("800"), color: colors.amberDeep },
   rail: { gap: 14, paddingRight: 16 },
   slide: {
     borderRadius: 24,
@@ -321,6 +353,7 @@ const styles = StyleSheet.create({
   dotActive: { width: 20, backgroundColor: colors.ink },
   empty: {
     flexDirection: "row",
+    alignItems: "center",
     gap: 9,
     padding: 15,
     backgroundColor: colors.surface,
