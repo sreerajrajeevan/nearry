@@ -1,5 +1,12 @@
 import React, { useEffect, useRef, useState } from "react";
-import { View, Text, StyleSheet } from "react-native";
+import {
+  View,
+  Text,
+  StyleSheet,
+  TextInput,
+  TouchableOpacity,
+} from "react-native";
+import { Icon } from "./Icon";
 import { Input } from "./Input";
 import { Button } from "./Button";
 import { PlaceSuggestions, PlaceAttributions } from "./PlaceSuggestions";
@@ -9,7 +16,7 @@ import { Venue } from "../services/mappers";
 import { getCurrentPosition } from "../services/location";
 import { Place } from "../services/places";
 import { manualPostLocation, PostLocation } from "../utils/postLocation";
-import { colors, spacing, typography } from "../theme";
+import { colors, radius, spacing, typography, weight } from "../theme";
 
 export type PostMeetingSpot = {
   name: string;
@@ -120,52 +127,49 @@ export function PostLocationField({
       <Text style={styles.label}>
         {required ? "Meeting place *" : "Meeting place (optional)"}
       </Text>
-      {required && !value && (
-        <Text style={styles.hint}>
-          Choose a venue or add a location before publishing.
-        </Text>
-      )}
       {value ? (
-        <>
-          <Input
-            label="Place name for your post"
-            value={value.name}
-            maxLength={120}
-            editable={!disabled}
-            onChangeText={(name) => onChange({ ...value, name })}
-          />
-          {preview && (
-            <>
-              <Text style={styles.hint}>
-                {preview.name} · {preview.address}
-              </Text>
-              <PlaceAttributions places={[preview]} />
-            </>
-          )}
-          {value.location ? (
-            <Text style={styles.hint}>
-              Location selected · {value.location.latitude.toFixed(5)},{" "}
-              {value.location.longitude.toFixed(5)}
+        <View style={styles.selected}>
+          <View style={styles.pin}>
+            <Icon name="map-pin" size={18} color={colors.amberDeep} />
+          </View>
+          <View style={styles.selectedCopy}>
+            {/* The host's own label for the place; tap to rename. */}
+            <TextInput
+              accessibilityLabel="Place name for your post"
+              value={value.name}
+              maxLength={120}
+              editable={!disabled}
+              onChangeText={(name) => onChange({ ...value, name })}
+              style={styles.selectedName}
+              placeholder="Name this place"
+              placeholderTextColor={colors.textFaint}
+            />
+            <Text style={styles.selectedMeta} numberOfLines={1}>
+              {preview?.address ||
+                (value.venueId
+                  ? "Nearry venue"
+                  : value.location
+                    ? "Pinned on the map"
+                    : "No map pin yet. Choose a place so it shows nearby.")}
             </Text>
-          ) : (
-            <Text style={styles.hint}>
-              {value.venueId
-                ? "Nearry venue selected"
-                : "This older post has no coordinates. Choose a location to include it in nearby filters."}
-            </Text>
-          )}
-          <Button
-            title="Change or remove place"
-            variant="ghost"
+            {preview && <PlaceAttributions places={[preview]} />}
+          </View>
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Change place"
             disabled={disabled}
             onPress={clear}
-          />
-        </>
+            hitSlop={8}
+            style={styles.change}
+          >
+            <Icon name="x" size={18} color={colors.textDim} />
+          </TouchableOpacity>
+        </View>
       ) : (
         <>
           <Input
             clearable
-            label={manual ? "Place name" : "Find a place"}
+            label={manual ? "Place name" : undefined}
             placeholder="Search a venue, landmark or address"
             value={query}
             maxLength={120}
@@ -178,17 +182,27 @@ export function PostLocationField({
           />
           {!manual && !disabled && (
             <>
-              {!!venues.length && <Text style={styles.hint}>On Nearry</Text>}
+              {!!venues.length && (
+                <Text style={[styles.hint, styles.group]}>On Nearry</Text>
+              )}
               {venues.map((v) => (
-                <Button
+                <TouchableOpacity
                   key={v.id}
-                  title={`${v.name} · ${v.area}`}
-                  variant="ghost"
+                  accessibilityRole="button"
+                  accessibilityLabel={`Select ${v.name}, ${v.area}`}
+                  style={styles.venueRow}
                   onPress={() => {
                     suggestions.onSessionEnd();
                     onChange({ name: v.name, venueId: v.id });
                   }}
-                />
+                >
+                  <Icon name="map-pin" size={18} color={colors.amberDeep} />
+                  <View style={styles.selectedCopy}>
+                    <Text style={styles.selectedName}>{v.name}</Text>
+                    <Text style={styles.selectedMeta}>{v.area}</Text>
+                  </View>
+                  <Icon name="arrow-up-right" size={16} color={colors.accent} />
+                </TouchableOpacity>
               ))}
               {!!venueError && <Text style={styles.hint}>{venueError}</Text>}
               {query.trim().length >= 3 && (
@@ -297,4 +311,48 @@ const styles = StyleSheet.create({
     marginBottom: spacing.sm,
   },
   error: { ...typography.bodySmall, color: colors.red },
+  group: { marginTop: spacing.sm, marginBottom: 0 },
+  selected: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: radius.lg,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  venueRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+    paddingVertical: spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  pin: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.amberSoft,
+  },
+  selectedCopy: { flex: 1, minWidth: 0 },
+  selectedName: {
+    ...typography.body,
+    ...weight("700"),
+    color: colors.text,
+    padding: 0,
+  },
+  selectedMeta: { ...typography.caption, color: colors.textDim, marginTop: 2 },
+  change: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.surfaceRaised,
+  },
 });

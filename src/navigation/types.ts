@@ -46,6 +46,7 @@ export type PersonalStackParamList = SafetyStackParamList & {
   PersonalTabs: NavigatorScreenParams<PersonalTabParamList> | undefined;
   PlaceDetails: { place: Place };
   PostDetails: { postId: string };
+  HostProfile: { userId: string; name?: string };
   VenueDetails: { venueId: string };
   EditPost: { postId: string };
   MyPosts: undefined;
@@ -55,6 +56,9 @@ export type PersonalStackParamList = SafetyStackParamList & {
   CompleteProfile: undefined;
   SelfieVerification: undefined;
   OfferDetails: { offerId: string };
+  /** Every live offer in Home's area; distances are [venueId, km] pairs. */
+  AllOffers:
+    { venueIds?: string[]; distances?: [string, number][] } | undefined;
   Messages: undefined;
   Conversation: { conversationId: string; title?: string };
   Notifications: undefined;

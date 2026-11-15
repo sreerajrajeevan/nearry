@@ -127,3 +127,44 @@ export function planCost(post: Pick<NeedPost, "costCents">) {
     ? "Free to join"
     : `₹${(post.costCents / 100).toLocaleString("en-IN", { maximumFractionDigits: 2 })} / person`;
 }
+
+/** Open plans with a spot left that start within the window, soonest first. */
+export function startingSoonPlans(
+  posts: NeedPost[],
+  now = new Date(),
+  windowMinutes = 180,
+  limit = 8,
+) {
+  const start = now.getTime(),
+    end = start + windowMinutes * 60_000;
+  return posts
+    .filter((post) => {
+      const at = new Date(post.startsAt).getTime();
+      return (
+        post.status === "open" &&
+        post.spotsLeft > 0 &&
+        at > start &&
+        at <= end &&
+        (!post.expiresAt || new Date(post.expiresAt).getTime() > start)
+      );
+    })
+    .sort(
+      (a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime(),
+    )
+    .slice(0, limit);
+}
+
+/** "Starting now", "Starts in 45 min", "Starts in 1 hr 20 min". */
+export function startsInLabel(startsAt: string, now = new Date()) {
+  const mins = Math.floor(
+    (new Date(startsAt).getTime() - now.getTime()) / 60_000,
+  );
+  if (mins < 1) return "Starting now";
+  if (mins < 60) return `Starts in ${mins} min`;
+  const hours = Math.floor(mins / 60),
+    rest = mins % 60;
+  return `Starts in ${hours} hr${rest ? ` ${rest} min` : ""}`;
+}
+
+export const spotsLeftLabel = (spots: number) =>
+  `${spots} ${spots === 1 ? "spot" : "spots"} left`;

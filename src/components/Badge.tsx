@@ -1,6 +1,6 @@
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
-import { colors, typography, radius, spacing } from "../theme";
+import { colors, typography, radius, spacing, weight } from "../theme";
 
 type Props = {
   label: string;
@@ -35,7 +35,7 @@ const styles = StyleSheet.create({
   neutral: { backgroundColor: colors.hairline },
   red: { backgroundColor: colors.dangerSoft },
   green: { backgroundColor: colors.sageSoft },
-  text: { ...typography.bodySmall, color: colors.textDim, fontWeight: "500" },
+  text: { ...typography.bodySmall, color: colors.textDim, ...weight("500") },
   redText: { color: colors.red },
   greenText: { color: colors.success },
 });

@@ -430,3 +430,51 @@ test("This week uses Monday–Sunday calendar boundaries, including year rollove
     );
   }
 });
+
+test("notification times read as relative phrases, not raw timestamps", async () => {
+  const { timeAgo } = await import("../src/utils/format");
+  const now = new Date(2026, 10, 15, 16, 52);
+  const at = (mins: number) =>
+    new Date(now.getTime() - mins * 60000).toISOString();
+  assert.equal(timeAgo(at(0), now), "Just now");
+  assert.equal(timeAgo(at(12), now), "12 min ago");
+  assert.equal(timeAgo(at(180), now), "3 hr ago");
+  assert.equal(
+    timeAgo(new Date(2026, 10, 14, 20, 0).toISOString(), now),
+    "Yesterday",
+  );
+  assert.equal(
+    timeAgo(new Date(2026, 10, 10, 9, 0).toISOString(), now),
+    "10 Nov",
+  );
+  assert.equal(timeAgo("not a date", now), "");
+});
+
+test("starting soon: open plans with a spot left in the next 3 hours, soonest first", async () => {
+  const { startingSoonPlans, startsInLabel, spotsLeftLabel } =
+    await import("../src/utils/planDiscovery");
+  const now = new Date(2026, 10, 15, 17, 0);
+  const at = (mins: number) => new Date(now.getTime() + mins * 60000);
+  const posts = [
+    plan("later", at(200)),
+    plan("soon", at(45), { spotsLeft: 1, joinedCount: 1 }),
+    plan("full", at(30), { spotsLeft: 0, joinedCount: 2 }),
+    plan("closed", at(20), { status: "closed" }),
+    plan("past", at(-5)),
+    plan("soonest", at(10)),
+    plan("expired", at(60), { expiresAt: at(-1).toISOString() }),
+  ];
+  assert.deepEqual(
+    startingSoonPlans(posts, now).map((p) => p.id),
+    ["soonest", "soon"],
+  );
+  assert.equal(startsInLabel(at(0.5).toISOString(), now), "Starting now");
+  assert.equal(startsInLabel(at(45).toISOString(), now), "Starts in 45 min");
+  assert.equal(startsInLabel(at(60).toISOString(), now), "Starts in 1 hr");
+  assert.equal(
+    startsInLabel(at(80).toISOString(), now),
+    "Starts in 1 hr 20 min",
+  );
+  assert.equal(spotsLeftLabel(1), "1 spot left");
+  assert.equal(spotsLeftLabel(3), "3 spots left");
+});

@@ -1,4 +1,5 @@
 import { Alert } from "../../services/appAlert";
+import { BackButton } from "../../components/BackButton";
 import { PageHeading } from "../../components/PageHeading";
 import React, { useState } from "react";
 import {
@@ -140,13 +141,7 @@ export function EditProfileScreen({ navigation }: Props) {
         contentContainerStyle={styles.scroll}
         keyboardShouldPersistTaps="handled"
       >
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          activeOpacity={0.7}
-          style={styles.back}
-        >
-          <Text style={styles.backText}>← Back</Text>
-        </TouchableOpacity>
+        <BackButton onPress={() => navigation.goBack()} />
         <PageHeading compact title="Edit profile." />
 
         <TouchableOpacity
@@ -236,8 +231,6 @@ export function EditProfileScreen({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   scroll: { paddingBottom: spacing.xl },
-  back: { marginBottom: spacing.md, alignSelf: "flex-start" },
-  backText: { ...typography.label, color: colors.textDim },
   header: {
     ...typography.display,
     fontSize: 32,

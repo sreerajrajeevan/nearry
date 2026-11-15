@@ -1,6 +1,6 @@
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
-import { colors, typography, spacing, surfaces } from "../theme";
+import { colors, typography, spacing, surfaces, weight } from "../theme";
 
 type Props = {
   title: string;
@@ -15,7 +15,7 @@ export function PageHeading({
   greeting,
   subtitle,
   compact = false,
-  tone = "forest",
+  tone = "plain",
 }: Props) {
   return (
     <View style={[styles.heading, tone === "forest" && styles.forest]}>
@@ -48,7 +48,7 @@ export function PageHeading({
 }
 
 const styles = StyleSheet.create({
-  heading: { marginTop: spacing.sm, marginBottom: spacing.lg },
+  heading: { marginTop: spacing.sm, marginBottom: spacing.md },
   forest: { ...surfaces.hero },
   onForest: { color: colors.onAccent },
   onForestMuted: { color: colors.goldSoft },
@@ -59,16 +59,16 @@ const styles = StyleSheet.create({
   },
   title: {
     ...typography.display,
-    fontSize: 30,
-    lineHeight: 36,
+    fontSize: 28,
+    lineHeight: 34,
     letterSpacing: -0.8,
     color: colors.text,
   },
   compact: {
-    fontSize: 25,
-    lineHeight: 31,
-    letterSpacing: -1,
-    fontWeight: "600",
+    fontSize: 24,
+    lineHeight: 30,
+    letterSpacing: -0.7,
+    ...weight("800"),
   },
   subtitle: {
     ...typography.body,

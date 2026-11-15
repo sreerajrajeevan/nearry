@@ -1,4 +1,5 @@
 import React from "react";
+import { useMyOfferStatus } from "../store/MyRequestsContext";
 import { Offer } from "../services/mappers";
 import { formatDistance, formatWhen } from "../utils/format";
 import { postCategory } from "../utils/discovery";
@@ -7,6 +8,8 @@ import { activityArtwork } from "../utils/activityArtwork";
 
 type Props = { offer: Offer; distanceKm?: number; onPress: () => void };
 export function OfferRow({ offer, distanceKm, onPress }: Props) {
+  // After booking, say so instead of inviting another booking.
+  const mine = useMyOfferStatus(offer.id);
   const category = postCategory({
     title: `${offer.title} ${offer.description}`,
     tags: [],
@@ -40,7 +43,13 @@ export function OfferRow({ offer, distanceKm, onPress }: Props) {
             ? "Free"
             : `₹${(offer.priceCents / 100).toFixed(0)}`
       }
-      action="Choose a time"
+      action={
+        mine === "booked"
+          ? "Booked"
+          : mine === "requested"
+            ? "Requested"
+            : "Choose a time"
+      }
       onPress={onPress}
     />
   );

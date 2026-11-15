@@ -1,5 +1,38 @@
 import { getSupabase, isDemoMode } from "./supabase";
 
+export type PublicProfile = {
+  id: string;
+  displayName: string;
+  avatarUrl?: string;
+  bio?: string;
+};
+
+/**
+ * What anyone may see about another person: name, photo and bio. Age, gender
+ * and interests stay private (the database only grants these columns).
+ */
+export async function getPublicProfile(
+  userId: string,
+  fallbackName = "Someone",
+): Promise<PublicProfile> {
+  const supabase = getSupabase();
+  if (isDemoMode() || !supabase)
+    return { id: userId, displayName: fallbackName };
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id,display_name,avatar_url,bio")
+    .eq("id", userId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error("This profile is no longer available.");
+  return {
+    id: data.id,
+    displayName: data.display_name || fallbackName,
+    ...(data.avatar_url ? { avatarUrl: data.avatar_url } : {}),
+    ...(data.bio?.trim() ? { bio: data.bio.trim() } : {}),
+  };
+}
+
 /** Optional public avatar URLs only, batched to avoid one profile request per feed card. */
 export async function publicAvatars(
   userIds: string[],

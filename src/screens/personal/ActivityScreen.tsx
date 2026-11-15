@@ -1,7 +1,9 @@
 import { Alert } from "../../services/appAlert";
+import { useMyRequests } from "../../store/MyRequestsContext";
 import { AudienceBadge } from "../../components/AudienceBadge";
 import { PageHeading } from "../../components/PageHeading";
 
+import { RequestNote } from "../../components/RequestNote";
 import React, { useEffect, useRef, useState } from "react";
 import {
   View,
@@ -23,7 +25,7 @@ import { Avatar } from "../../components/Avatar";
 import { Icon, IconName } from "../../components/Icon";
 import { MotionPressable, ScreenReveal } from "../../components/Motion";
 import { LoadingState } from "../../components/LoadingState";
-import { colors, typography, spacing, surfaces } from "../../theme";
+import { colors, typography, spacing, surfaces, weight } from "../../theme";
 import { useAuth } from "../../store/AuthContext";
 import { PersonalTabNav } from "../../navigation/types";
 import { listPosts, subscribeToPosts } from "../../services/posts";
@@ -137,6 +139,7 @@ export function ActivityScreen() {
         ? Date.parse(b.slot) - Date.parse(a.slot)
         : Date.parse(a.slot) - Date.parse(b.slot),
     );
+  const refreshMine = useMyRequests()?.refresh;
   const run = async (
     key: string,
     action: () => Promise<void>,
@@ -148,6 +151,8 @@ export function ActivityScreen() {
     setNotice(null);
     try {
       await action();
+      // Cancelling or leaving changes what plan and offer cards show.
+      void refreshMine?.();
       setConfirmation(null);
       if (success) setNotice({ text: success });
       setNow(Date.now());
@@ -473,6 +478,7 @@ export function ActivityScreen() {
                           </Text>
                         </View>
                       </View>
+                      <RequestNote note={request.note} />
                       <View style={styles.actions}>
                         <Button
                           title="Decline"
@@ -688,7 +694,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  cardTitle: { ...typography.body, color: colors.text, fontWeight: "600" },
+  cardTitle: { ...typography.body, color: colors.text, ...weight("600") },
   copy: { ...typography.bodySmall, color: colors.textDim, marginTop: 3 },
   attention: {
     flexDirection: "row",

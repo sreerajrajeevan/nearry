@@ -1,4 +1,5 @@
 import { Alert } from "../../services/appAlert";
+import { BackButton } from "../../components/BackButton";
 import { PageHeading } from "../../components/PageHeading";
 import { LoadingState } from "../../components/LoadingState";
 import { DateSheet, TimeSheet } from "../../components/DateTimeSheets";
@@ -279,13 +280,7 @@ export function EditOfferScreen({ route, navigation }: Props) {
         contentContainerStyle={styles.scroll}
         keyboardShouldPersistTaps="handled"
       >
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          activeOpacity={0.7}
-          style={styles.back}
-        >
-          <Text style={styles.backText}>← Back</Text>
-        </TouchableOpacity>
+        <BackButton onPress={() => navigation.goBack()} />
         <PageHeading compact title="Edit offer." />
         {isLive && (
           <Text style={styles.liveNote}>
@@ -471,8 +466,6 @@ export function EditOfferScreen({ route, navigation }: Props) {
 const styles = StyleSheet.create({
   scroll: { paddingBottom: spacing.xl },
   status: { ...typography.label, color: colors.textDim, marginTop: spacing.xl },
-  back: { marginBottom: spacing.md, alignSelf: "flex-start" },
-  backText: { ...typography.label, color: colors.textDim },
   header: {
     ...typography.display,
     fontSize: 32,

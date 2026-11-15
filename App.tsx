@@ -8,12 +8,20 @@ import { useFonts } from "expo-font";
 import { useAssets } from "expo-asset";
 import * as SplashScreen from "expo-splash-screen";
 import Feather from "@expo/vector-icons/Feather";
+import {
+  PlusJakartaSans_400Regular,
+  PlusJakartaSans_500Medium,
+  PlusJakartaSans_600SemiBold,
+  PlusJakartaSans_700Bold,
+  PlusJakartaSans_800ExtraBold,
+} from "@expo-google-fonts/plus-jakarta-sans";
 import { AuthProvider, useAuth } from "./src/store/AuthContext";
 import { RootNavigator } from "./src/navigation/RootNavigator";
 import { BRAND_ASSETS } from "./src/components/BrandLogo";
 import { StartupSplash } from "./src/components/StartupSplash";
 import { colors } from "./src/theme";
 import { MotionProvider } from "./src/store/MotionContext";
+import { ToastProvider } from "./src/store/ToastContext";
 import { AppAlertHost } from "./src/components/AppAlertHost";
 
 // Hold the native brand artwork until React has laid out its matching launch frame.
@@ -82,19 +90,28 @@ function AppShell({ resourcesReady }: { resourcesReady: boolean }) {
 }
 
 export default function App() {
-  const [fontsLoaded, fontError] = useFonts(Feather.font);
+  const [fontsLoaded, fontError] = useFonts({
+    ...Feather.font,
+    PlusJakartaSans_400Regular,
+    PlusJakartaSans_500Medium,
+    PlusJakartaSans_600SemiBold,
+    PlusJakartaSans_700Bold,
+    PlusJakartaSans_800ExtraBold,
+  });
   const [assets, assetError] = useAssets(BRAND_ASSETS);
   return (
     <SafeAreaProvider>
       <MotionProvider>
         <StatusBar style="dark" />
-        <AuthProvider>
-          <AppShell
-            resourcesReady={
-              !!(fontsLoaded || fontError) && !!(assets || assetError)
-            }
-          />
-        </AuthProvider>
+        <ToastProvider>
+          <AuthProvider>
+            <AppShell
+              resourcesReady={
+                !!(fontsLoaded || fontError) && !!(assets || assetError)
+              }
+            />
+          </AuthProvider>
+        </ToastProvider>
         <AppAlertHost />
       </MotionProvider>
     </SafeAreaProvider>

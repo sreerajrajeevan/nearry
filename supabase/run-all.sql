@@ -4193,4 +4193,219 @@ $$ language sql stable security definer set search_path=public,pg_temp;
 -- guard, so no host-only room can leak through a different screen or an older build.
 
 
+-- 00039_join_request_note.sql
+-- An optional note with a join request ("I'll bring the football").
+-- Visible only to the requester and the host, through the existing
+-- "jr read involved" policy. Kept on the request, never posted to chat.
+
+alter table join_requests add column note text;
+alter table join_requests add constraint join_request_note_length
+  check (note is null or char_length(note) between 1 and 280);
+
+drop function public.request_join(uuid);
+create function public.request_join(p_post_id uuid, p_note text default null)
+returns jsonb as $$
+declare p posts; r join_requests; v_note text := nullif(btrim(p_note), '');
+begin
+  if auth.uid() is null then raise exception 'not authenticated'; end if;
+  if char_length(v_note) > 280 then raise exception 'Keep your note under 280 characters'; end if;
+  if not exists(select 1 from profiles where id = auth.uid() and account_type = 'personal' and onboarding_completed) then raise exception 'personal onboarding required'; end if;
+  select * into p from posts where id = p_post_id for update;
+  if not found or p.author_id = auth.uid() then raise exception 'post not found or cannot join your own post'; end if;
+  if p.status <> 'open' or coalesce(p.expires_at,p.starts_at) <= now() or p.starts_at <= now() then raise exception 'post is closed or expired'; end if;
+  if (select count(*) from join_requests where post_id=p.id and status='approved') >= p.vacancies then raise exception 'post is full'; end if;
+  select * into r from join_requests where post_id=p.id and requester_id=auth.uid() for update;
+  if found and r.status in ('pending','approved') then raise exception 'you already requested or joined this post'; end if;
+  if found and r.decline_count >= 2 then raise exception 'no more requests allowed for this post'; end if;
+  if r.id is null then
+    insert into join_requests(post_id,requester_id,status,note)
+      values(p.id,auth.uid(),'pending',v_note) returning * into r;
+  else
+    -- Re-request after a decline/withdrawal: fresh row (new id) so the host
+    -- is notified again, carrying the decline count forward.
+    delete from join_requests where id=r.id;
+    insert into join_requests(post_id,requester_id,status,decline_count,note)
+      values(p.id,auth.uid(),'pending',r.decline_count,v_note) returning * into r;
+  end if;
+  return to_jsonb(r);
+end;
+$$ language plpgsql security definer set search_path = public;
+revoke execute on function public.request_join(uuid, text) from public, anon, authenticated;
+grant execute on function public.request_join(uuid, text) to authenticated;
+
+
+-- 00040_selfie_pose_challenge.sql
+-- 00040: a random pose for each selfie check, issued by the server.
+-- The person copies the pose in a front-camera selfie within ten minutes, so a
+-- reviewer can tell the photo was taken just now and not reused. Each pose is
+-- used once. No face templates or biometric processing are added.
+
+-- The poses, with the wording shown in the app and to reviewers.
+create function public.selfie_poses() returns table(id text, label text) as $$
+ values
+  ('thumbs_up','Thumbs up next to your face'),
+  ('peace','Peace sign next to your face'),
+  ('ok','OK sign next to your face'),
+  ('point_up','Point one finger up beside your face'),
+  ('open_palm','Open palm beside your face'),
+  ('call_me','Call-me sign (thumb and little finger) by your ear'),
+  ('thinking','Hand on your chin, like you are thinking'),
+  ('wave','Wave at the camera');
+$$ language sql immutable set search_path=public,pg_temp;
+grant execute on function public.selfie_poses() to authenticated, service_role;
+
+create table public.personal_selfie_challenges (
+ user_id uuid primary key references public.profiles(id) on delete cascade,
+ challenge_id uuid not null unique default gen_random_uuid(),
+ pose text not null,
+ issued_at timestamptz not null default now(),
+ expires_at timestamptz not null
+);
+alter table public.personal_selfie_challenges enable row level security;
+revoke all on public.personal_selfie_challenges from public,anon,authenticated;
+grant all on public.personal_selfie_challenges to service_role;
+
+-- The pose asked for, kept with the submission for the reviewer.
+alter table public.personal_selfie_reviews add column pose text;
+
+create function public.start_selfie_challenge() returns jsonb as $$
+declare p profiles; r personal_selfie_reviews; previous text; chosen record; c personal_selfie_challenges;
+begin
+ if auth.uid() is null or not personal_profile_ready(auth.uid()) then
+  raise exception 'Complete your profile first';end if;
+ select * into p from profiles where id=auth.uid() for update;
+ select * into r from personal_selfie_reviews where user_id=p.id;
+ if r.status in ('pending','verified') then raise exception 'Your selfie is already pending or checked';end if;
+ select pose into previous from personal_selfie_challenges where user_id=p.id;
+ -- A fresh random pose, never the same one twice in a row.
+ select * into chosen from selfie_poses() s where s.id is distinct from previous order by random() limit 1;
+ insert into personal_selfie_challenges(user_id,challenge_id,pose,issued_at,expires_at)
+  values(p.id,gen_random_uuid(),chosen.id,now(),now()+interval '10 minutes')
+ on conflict(user_id) do update set challenge_id=excluded.challenge_id,pose=excluded.pose,
+  issued_at=excluded.issued_at,expires_at=excluded.expires_at
+ returning * into c;
+ return jsonb_build_object('challengeId',c.challenge_id,'pose',c.pose,'label',chosen.label,'expiresAt',c.expires_at);
+end;
+$$ language plpgsql volatile security definer set search_path=public,pg_temp;
+revoke all on function public.start_selfie_challenge() from public,anon;
+grant execute on function public.start_selfie_challenge() to authenticated;
+
+-- New builds submit against their pose. The existing two-argument version stays
+-- for older builds; those submissions carry no pose.
+create function public.submit_personal_selfie(p_path text,p_consent boolean,p_challenge uuid) returns void as $$
+declare c personal_selfie_challenges;
+begin
+ if auth.uid() is null then raise exception 'Sign in first';end if;
+ select * into c from personal_selfie_challenges where user_id=auth.uid() for update;
+ if not found or c.challenge_id is distinct from p_challenge then
+  raise exception 'This pose is no longer valid. Get a new pose and try again';end if;
+ if c.expires_at<=now() then
+  raise exception 'Your pose expired. Get a new pose and try again';end if;
+ perform submit_personal_selfie(p_path,p_consent);
+ update personal_selfie_reviews set pose=c.pose where user_id=auth.uid();
+ delete from personal_selfie_challenges where user_id=auth.uid();
+end;
+$$ language plpgsql security definer set search_path=public,pg_temp;
+revoke all on function public.submit_personal_selfie(text,boolean,uuid) from public,anon;
+grant execute on function public.submit_personal_selfie(text,boolean,uuid) to authenticated;
+
+-- A two-argument submission (older build) must not inherit an earlier pose.
+create or replace function public.clear_selfie_pose_on_resubmit() returns trigger as $$
+begin
+ if new.submission_id is distinct from old.submission_id then new.pose:=null;end if;
+ return new;
+end;
+$$ language plpgsql set search_path=public,pg_temp;
+create trigger clear_selfie_pose_on_resubmit before update on personal_selfie_reviews
+ for each row execute function public.clear_selfie_pose_on_resubmit();
+
+-- The reviewer queue also returns the pose that was asked for (null: older build).
+drop function public.admin_console_selfie_queue(int,int);
+create function public.admin_console_selfie_queue(p_offset int default 0,p_limit int default 26)
+returns table(id uuid,user_id uuid,display_name text,submitted_at timestamptz,pose_label text)
+language sql stable security definer set search_path=public,pg_temp as $$
+ select r.submission_id,r.user_id,p.display_name,r.submitted_at,s.label
+ from personal_selfie_reviews r join profiles p on p.id=r.user_id
+ left join selfie_poses() s on s.id=r.pose
+ where r.status='pending' and r.submitted_at>now()-interval '7 days' and r.avatar_url_at_submission=p.avatar_url and account_active(p.id)
+ order by r.submitted_at,r.user_id limit least(greatest(p_limit,1),100) offset least(greatest(p_offset,0),5000);
+$$;
+revoke all on function public.admin_console_selfie_queue(int,int) from public,anon,authenticated;
+grant execute on function public.admin_console_selfie_queue(int,int) to service_role;
+
+-- Old challenges are cleaned up by the existing retention job (wrapped, as
+-- earlier migrations do, so every previous cleanup step still runs).
+alter function public.maintenance_retention_cleanup() rename to maintenance_retention_before_selfie_poses;
+revoke all on function public.maintenance_retention_before_selfie_poses() from public,anon,authenticated,service_role;
+create function public.maintenance_retention_cleanup() returns void as $$
+begin
+ perform public.maintenance_retention_before_selfie_poses();
+ delete from public.personal_selfie_challenges where expires_at<now()-interval '1 day';
+end;
+$$ language plpgsql security definer set search_path=public,pg_temp;
+revoke all on function public.maintenance_retention_cleanup() from public,anon,authenticated;
+grant execute on function public.maintenance_retention_cleanup() to service_role;
+notify pgrst,'reload schema';
+
+
+-- 00041_booking_limits.sql
+-- 00041: fair-use limits on offer bookings.
+-- - A booking is for at most 2 people.
+-- - One active booking per person per offer per day (India time), so one
+--   person cannot hold several slots of the same offer on the same day.
+-- - At most 3 waiting (unconfirmed) requests per person at a time, so nobody
+--   can hold many slots while businesses confirm.
+-- A retry of the same slot still returns the existing booking.
+
+create or replace function book_offer_slot(p_slot_id uuid,p_party_size int) returns json as $$
+declare s offer_slots;o offers;bid uuid;oid uuid;taken int;booking_id uuid; existing_id uuid; existing_party int;
+begin
+ if auth.uid() is null then raise exception 'not authenticated'; end if;
+ if p_party_size is null or p_party_size not between 1 and 2 then raise exception 'A booking can be for 1 or 2 people'; end if;
+ if not exists(select 1 from profiles where id=auth.uid() and account_type='personal' and onboarding_completed) then raise exception 'personal onboarding required'; end if;
+ select offer_id into oid from offer_slots where id=p_slot_id;
+ select business_id into bid from offers where id=oid;
+ -- Serialize every resource reservation at the business, then offer, slot, booking.
+ perform 1 from profiles where id=bid for update;
+ select * into o from offers where id=oid for update;
+ select * into s from offer_slots where id=p_slot_id for update;
+ if not found or o.status<>'live' or o.ends_at<=now() then raise exception 'offer is not live'; end if;
+ if o.business_id=auth.uid() then raise exception 'cannot book your own offer'; end if;
+ if s.starts_at<=now() then raise exception 'slot must be in the future'; end if;
+ if s.starts_at<o.starts_at or s.ends_at>o.ends_at then raise exception 'slot outside offer window'; end if;
+ if not exists(select 1 from profiles where id=bid and verification_status='verified') then raise exception 'business is not verified'; end if;
+ -- Overlapping legacy offers on one resource cannot bypass the slot model.
+ if exists(select 1 from bookings b join offers other on other.id=b.offer_id join offer_slots bs on bs.id=b.slot_id
+   where other.business_id=bid and other.resource_key=o.resource_key and other.id<>o.id
+     and b.status in ('pending','confirmed') and (b.status='confirmed' or b.hold_expires_at is null or b.hold_expires_at>now())
+     and bs.starts_at<s.ends_at and bs.ends_at>s.starts_at) then raise exception 'resource already booked'; end if;
+ select coalesce(sum(b.party_size),0) into taken from bookings b join offer_slots bs on bs.id=b.slot_id
+ where b.offer_id=o.id and bs.starts_at<s.ends_at and bs.ends_at>s.starts_at and b.status in ('pending','confirmed')
+   and (b.status='confirmed' or b.hold_expires_at is null or b.hold_expires_at>now());
+ -- A retry after a lost response returns the same active reservation.
+ select b.id,b.party_size into existing_id,existing_party from bookings b
+ where b.slot_id=s.id and b.customer_id=auth.uid() and b.status in ('pending','confirmed')
+ and (b.status='confirmed' or b.hold_expires_at is null or b.hold_expires_at>now())
+ order by b.created_at desc,b.id desc limit 1;
+ if existing_id is not null then
+  if existing_party<>p_party_size then raise exception 'You already requested this slot. Manage the existing booking in Activity.'; end if;
+  return json_build_object('booking_id',existing_id,'seats_left',greatest(0,s.capacity-taken));
+ end if;
+ -- Serialize this person's own bookings so the limits below hold under retries.
+ perform 1 from profiles where id=auth.uid() for update;
+ if exists(select 1 from bookings b where b.offer_id=o.id and b.customer_id=auth.uid()
+   and b.status in ('pending','confirmed') and (b.status='confirmed' or b.hold_expires_at is null or b.hold_expires_at>now())
+   and (b.slot at time zone 'Asia/Kolkata')::date=(s.starts_at at time zone 'Asia/Kolkata')::date) then
+  raise exception 'You already have one booking for this offer on that day. Cancel it in Activity to pick another time.'; end if;
+ if (select count(*) from bookings b where b.customer_id=auth.uid() and b.status='pending'
+   and b.slot>now() and (b.hold_expires_at is null or b.hold_expires_at>now()))>=3 then
+  raise exception 'You can have up to 3 requests waiting for a business to confirm. Try again once one is confirmed or cancelled.'; end if;
+ if taken+p_party_size>s.capacity then raise exception 'not enough seats left for this slot'; end if;
+ insert into bookings(offer_id,customer_id,slot_id,slot,party_size,status,hold_expires_at)
+ values(o.id,auth.uid(),s.id,s.starts_at,p_party_size,'pending',least(now()+interval '30 minutes',s.starts_at)) returning id into booking_id;
+ return json_build_object('booking_id',booking_id,'seats_left',s.capacity-taken-p_party_size);
+end;
+$$ language plpgsql security definer set search_path=public;
+
+
 commit;

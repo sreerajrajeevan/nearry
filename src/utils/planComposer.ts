@@ -88,6 +88,54 @@ export type PlanDetails = {
   ageMax?: number;
   totalCostCents?: number;
 };
+type ActivityId = (typeof PLAN_ACTIVITIES)[number]["id"];
+/** Skill level only matters for sports and open-ended activities such as games. */
+const LEVEL_ACTIVITIES: ReadonlySet<ActivityId> = new Set([
+  "gym",
+  "football",
+  "badminton",
+  "cricket",
+  "running",
+  "cycling",
+  "tennis",
+  "other",
+]);
+const BOOKING_LABELS: Partial<Record<ActivityId, string>> = {
+  football: "Turf already booked",
+  badminton: "Court already booked",
+  tennis: "Court already booked",
+  cricket: "Ground already booked",
+  food: "Table already booked",
+  movies: "Tickets already booked",
+  other: "Venue already booked",
+};
+export const planAsksLevel = (activity?: ActivityId) =>
+  !!activity && LEVEL_ACTIVITIES.has(activity);
+export const planBookingLabel = (activity?: ActivityId) =>
+  (activity && BOOKING_LABELS[activity]) ?? null;
+const JOIN_NOTE_HINTS: Partial<Record<ActivityId, string>> = {
+  football: "e.g. I’ll bring the football",
+  badminton: "e.g. I have my own racket",
+  tennis: "e.g. I have my own racket",
+  cricket: "e.g. I can bring a bat",
+  gym: "e.g. I usually train legs on this day",
+  running: "e.g. I run about 6 min/km",
+  cycling: "e.g. I have a road bike",
+  movies: "e.g. Have you picked a show time?",
+  coffee: "e.g. I’m new to the area",
+  food: "e.g. I’m vegetarian, hope that’s fine",
+  walk: "e.g. I’m new to the area",
+};
+/** An example note that fits the activity, shown in the join sheet. */
+export const joinNoteHint = (activity?: ActivityId) =>
+  `Anything the host should know? ${(activity && JOIN_NOTE_HINTS[activity]) ?? "e.g. A question about the plan"}`;
+/** A readable age limit, or null when the plan is open to any adult. */
+export function planAgeLabel(v: Pick<PlanDetails, "ageMin" | "ageMax">) {
+  const min = v.ageMin ?? 18,
+    max = v.ageMax ?? 100;
+  if (min <= 18 && max >= 100) return null;
+  return max >= 100 ? `Ages ${min}+` : `Ages ${min}–${max}`;
+}
 export function planPreferencesError(v: PlanDetails) {
   if (
     !Number.isInteger(v.ageMin ?? 18) ||

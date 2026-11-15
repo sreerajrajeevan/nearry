@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, Image, StyleSheet } from "react-native";
-import { colors, typography, radius } from "../theme";
+import { colors, typography, radius, weight } from "../theme";
 
 type Props = {
   name: string;
@@ -60,7 +60,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  text: { fontFamily: "System", fontWeight: "500", color: colors.muted },
+  text: { fontFamily: "System", ...weight("500"), color: colors.muted },
   clay: { backgroundColor: colors.claySoft },
   clayText: { color: colors.accent },
 });

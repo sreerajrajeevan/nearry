@@ -2,7 +2,7 @@ import { AudienceBadge, audienceLabel } from "./AudienceBadge";
 import { LoadingImage } from "./LoadingImage";
 import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet } from "react-native";
-import { colors, typography, spacing } from "../theme";
+import { colors, typography, spacing, weight } from "../theme";
 import { Icon, IconName } from "./Icon";
 import { MotionPressable } from "./Motion";
 import { ActivityArt } from "./ActivityArt";
@@ -110,13 +110,13 @@ const styles = StyleSheet.create({
     color: colors.accent,
     textTransform: "uppercase",
     letterSpacing: 1,
-    fontWeight: "600",
+    ...weight("600"),
     marginBottom: 5,
   },
   title: {
     ...typography.body,
     color: colors.text,
-    fontWeight: "600",
+    ...weight("600"),
     lineHeight: 20,
     marginBottom: 5,
   },
@@ -140,7 +140,7 @@ const styles = StyleSheet.create({
     ...typography.caption,
     fontSize: 12,
     color: colors.accent,
-    fontWeight: "600",
+    ...weight("600"),
     flexShrink: 1,
   },
 });

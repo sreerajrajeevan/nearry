@@ -53,3 +53,9 @@ was renumbered. Existing email review remains unchanged. Never grant ordinary
 clients access to admin tables or let users add themselves as administrators.
 
 - **00030_personal_selfie_verification.sql** — optional private camera selfie reviews, versioned admin decisions, current-avatar binding and cleanup. Requires 00029. See [selfie setup](../../docs/personal-selfie-verification.md). New camera and immutable avatar paths require a fresh phone build.
+
+`00039`: optional join request note (up to 280 characters), readable only by the requester and the host. Replaces `request_join(uuid)` with `request_join(uuid, text default null)`; apply it before or with the matching app build. Older builds still call it with one argument, which keeps working; the new build only sends a note when the person writes one.
+
+`00040`: random pose for the optional selfie check. Adds `selfie_poses()`, a private `personal_selfie_challenges` table, `start_selfie_challenge()` and `submit_personal_selfie(text, boolean, uuid)`; the reviewer queue now returns `pose_label`. The two-argument submit stays for older builds (no pose). Wraps `maintenance_retention_cleanup()` to remove old challenges. Apply it before releasing the matching app build, and deploy the updated `admin/` dashboard at the same time.
+
+`00041`: fair-use limits on offer bookings in `book_offer_slot`: at most 2 people per booking, one active booking per person per offer per day (India time), and at most 3 waiting (unconfirmed) requests per person. A retry of the same slot still returns the existing booking. Apply it before or with the matching app build.

@@ -1,4 +1,5 @@
 import { LoadingState } from "../../components/LoadingState";
+import { useMyRequests } from "../../store/MyRequestsContext";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   View,
@@ -28,21 +29,23 @@ import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
 import { PostRow } from "../../components/PostRow";
 import { FeaturedOffers } from "../../components/FeaturedOffers";
+import { StartingSoon } from "../../components/StartingSoon";
 import { VenueRow } from "../../components/VenueRow";
 import { DiscoverySearch } from "../../components/DiscoverySearch";
-import { colors, typography, spacing } from "../../theme";
+import { colors, typography, spacing, weight } from "../../theme";
 import { listPosts, subscribeToPosts } from "../../services/posts";
 import { listLiveOffers, subscribeToOffers } from "../../services/offers";
 import { getCurrentPosition, LatLng } from "../../services/location";
 import { nearbyVenues, listVenues } from "../../services/venues";
 import { NeedPost, Venue, Offer } from "../../services/mappers";
-import { postCategory, venueCategory } from "../../utils/discovery";
+import { DiscoveryCategory, venueCategory } from "../../utils/discovery";
 import { useAuth } from "../../store/AuthContext";
 import { PersonalTabNav, PersonalTabParamList } from "../../navigation/types";
 import { PlanFilterSheet } from "../../components/PlanFilterSheet";
 import { Icon } from "../../components/Icon";
 import {
   discoveryPlans,
+  startingSoonPlans,
   planDistance,
   DEFAULT_PLAN_OPTIONS,
   PLAN_SORT_LABELS,
@@ -51,8 +54,22 @@ import {
   PlanOptions,
 } from "../../utils/planDiscovery";
 import { useDiscoveryClock } from "../../hooks/useDiscoveryClock";
-import { MotionPressable } from "../../components/Motion";
+import { EnterView, MotionPressable } from "../../components/Motion";
+import { offerDiscoveryCategory } from "../../utils/offerDiscovery";
 import { onboardingPreferences } from "../../utils/onboarding";
+
+const DISCOVERY_CATEGORIES: readonly DiscoveryCategory[] = [
+  "Play",
+  "Meet",
+  "Explore",
+  "Unwind",
+];
+const DATE_LABELS: Record<PlanDateFilter, string> = {
+  all: "Any day",
+  today: "Today",
+  week: "This week",
+  weekend: "This weekend",
+};
 
 export function NearbyScreen() {
   const navigation = useNavigation<PersonalTabNav>();
@@ -79,6 +96,7 @@ export function NearbyScreen() {
   });
   const { category, freeOnly } = options;
   const [dateFilter, setDateFilter] = useState<PlanDateFilter>("all");
+  const [dateMenuOpen, setDateMenuOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const hasLocation = demoMode || point !== null;
   const radiusKm = options.maxDistanceKm ?? 5;
@@ -134,13 +152,16 @@ export function NearbyScreen() {
     [point, appliedArea, radiusKm],
   );
 
+  // A stable function, so it can sit in the focus effect's dependencies.
+  const refreshMyRequests = useMyRequests()?.refresh;
   useFocusEffect(
     useCallback(() => {
       void load();
+      void refreshMyRequests?.();
       return () => {
         request.current++;
       };
-    }, [load]),
+    }, [load, refreshMyRequests]),
   );
   useEffect(() => subscribeToPosts(() => void load(true)), [load]);
   useEffect(() => subscribeToOffers(() => void load(true)), [load]);
@@ -195,11 +216,23 @@ export function NearbyScreen() {
     },
     now,
   );
+  // Ignores the day filter: "soon" is always the next few hours.
+  const startingSoon = startingSoonPlans(
+    discoveryPlans(
+      posts,
+      {
+        ...options,
+        date: "all",
+        distances,
+        excludeAuthorId: profile?.id ?? session?.user.id,
+      },
+      now,
+    ),
+    now,
+  );
   const visibleOffers = offers.filter(
     (o) =>
-      (!category ||
-        postCategory({ title: `${o.title} ${o.description}`, tags: [] }) ===
-          category) &&
+      (!category || offerDiscoveryCategory(o) === category) &&
       (options.maxDistanceKm == null ||
         (planDistance(o, distances) ?? Infinity) <= options.maxDistanceKm),
   );
@@ -367,6 +400,40 @@ export function NearbyScreen() {
           filtersOpen={filtersOpen}
           filtersActive={hasFilters}
         />
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.categories}
+          style={styles.categoryRail}
+        >
+          {([null, ...DISCOVERY_CATEGORIES] as const).map((item) => {
+            const selected = category === item;
+            const label = item ?? "All";
+            return (
+              <MotionPressable
+                key={label}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  item ? `${item} plans and offers` : "All plans and offers"
+                }
+                aria-pressed={selected}
+                accessibilityState={{ selected }}
+                onPress={() => setOptions((o) => ({ ...o, category: item }))}
+                style={[styles.categoryChip, selected && styles.categoryChipOn]}
+              >
+                {selected && <View style={styles.categoryDot} />}
+                <Text
+                  style={[
+                    styles.categoryText,
+                    selected && styles.categoryTextOn,
+                  ]}
+                >
+                  {label}
+                </Text>
+              </MotionPressable>
+            );
+          })}
+        </ScrollView>
         {state === "loading" && posts.length === 0 && offers.length === 0 ? (
           <LoadingState
             label="Finding nearby places and plans…"
@@ -405,6 +472,26 @@ export function NearbyScreen() {
               onOpen={(offerId) =>
                 navigation.navigate("OfferDetails", { offerId })
               }
+              onViewAll={() =>
+                navigation.navigate("AllOffers", {
+                  // Same area as Home: only the venues it is showing.
+                  venueIds:
+                    point || appliedArea ? venues.map((v) => v.id) : undefined,
+                  distances: venues.flatMap((v) =>
+                    v.distanceKm == null
+                      ? []
+                      : [[v.id, v.distanceKm] as [string, number]],
+                  ),
+                })
+              }
+            />
+            <StartingSoon
+              posts={startingSoon}
+              now={now}
+              distanceOf={(post) => planDistance(post, distances)}
+              onOpen={(postId) =>
+                navigation.navigate("PostDetails", { postId })
+              }
             />
             <View style={styles.plansHeading}>
               <Text accessibilityRole="header" style={styles.plansTitle}>
@@ -412,81 +499,48 @@ export function NearbyScreen() {
               </Text>
               <MotionPressable
                 accessibilityRole="button"
-                accessibilityLabel="Post a plan"
-                onPress={() => navigation.navigate("CreatePost")}
-                style={styles.postAction}
+                accessibilityLabel={`When: ${DATE_LABELS[dateFilter]}`}
+                accessibilityHint="Choose which days to show"
+                accessibilityState={{ expanded: dateMenuOpen }}
+                onPress={() => setDateMenuOpen((open) => !open)}
+                style={styles.whenButton}
               >
-                <Icon name="plus" size={15} color={colors.coralDeep} />
-                <Text style={styles.postActionText}>Post a plan</Text>
+                <Text style={styles.whenText}>{DATE_LABELS[dateFilter]}</Text>
+                <Icon
+                  name={dateMenuOpen ? "chevron-up" : "chevron-down"}
+                  size={15}
+                  color={colors.ink}
+                />
               </MotionPressable>
             </View>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.dateFilters}
-            >
-              {(
-                [
-                  { key: "all", label: "All" },
-                  { key: "today", label: "Today" },
-                  { key: "week", label: "This week" },
-                ] as const
-              ).map((item) => (
-                <MotionPressable
-                  key={item.key}
-                  accessibilityRole="button"
-                  accessibilityLabel={item.label}
-                  aria-pressed={dateFilter === item.key}
-                  accessibilityState={{ selected: dateFilter === item.key }}
-                  onPress={() => setDateFilter(item.key)}
-                  style={[
-                    styles.dateChip,
-                    dateFilter === item.key && styles.dateChipSelected,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.dateText,
-                      dateFilter === item.key && styles.dateTextSelected,
-                    ]}
+            {dateMenuOpen && (
+              <View style={styles.whenMenu} accessibilityRole="menu">
+                {(Object.keys(DATE_LABELS) as PlanDateFilter[]).map((key) => (
+                  <MotionPressable
+                    key={key}
+                    accessibilityRole="menuitem"
+                    accessibilityState={{ selected: dateFilter === key }}
+                    onPress={() => {
+                      setDateFilter(key);
+                      setDateMenuOpen(false);
+                    }}
+                    style={styles.whenOption}
                   >
-                    {item.key === "all" ? "🔥 All" : item.label}
-                  </Text>
-                </MotionPressable>
-              ))}
-              <MotionPressable
-                accessibilityRole="button"
-                accessibilityLabel="Plans within 2 kilometres"
-                accessibilityState={{ selected: options.maxDistanceKm === 2 }}
-                onPress={() => {
-                  if (!hasLocation) {
-                    setEditingLocation(true);
-                    scroll.current?.scrollTo({ y: 0, animated: false });
-                    setLocationError(
-                      "Choose an area or use your location to find plans within 2 km.",
-                    );
-                    return;
-                  }
-                  setOptions((current) => ({
-                    ...current,
-                    maxDistanceKm: current.maxDistanceKm === 2 ? null : 2,
-                  }));
-                }}
-                style={[
-                  styles.dateChip,
-                  options.maxDistanceKm === 2 && styles.dateChipSelected,
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.dateText,
-                    options.maxDistanceKm === 2 && styles.dateTextSelected,
-                  ]}
-                >
-                  Under 2 km
-                </Text>
-              </MotionPressable>
-            </ScrollView>
+                    <Text
+                      style={[
+                        styles.whenOptionText,
+                        dateFilter === key && styles.whenOptionTextOn,
+                      ]}
+                    >
+                      {DATE_LABELS[key]}
+                    </Text>
+                    {dateFilter === key && (
+                      <Icon name="check" size={17} color={colors.ink} />
+                    )}
+                  </MotionPressable>
+                ))}
+              </View>
+            )}
             {demoMode && !!filterSummary && (
               <Text style={styles.sectionMeta}>{filterSummary}</Text>
             )}
@@ -511,16 +565,17 @@ export function NearbyScreen() {
                 ))}
               </View>
             )}
-            {visiblePosts.map((post) => (
-              <PostRow
-                key={post.id}
-                post={post}
-                now={now}
-                distanceKm={planDistance(post, distances)}
-                onPress={() =>
-                  navigation.navigate("PostDetails", { postId: post.id })
-                }
-              />
+            {visiblePosts.map((post, index) => (
+              <EnterView key={post.id} index={index}>
+                <PostRow
+                  post={post}
+                  now={now}
+                  distanceKm={planDistance(post, distances)}
+                  onPress={() =>
+                    navigation.navigate("PostDetails", { postId: post.id })
+                  }
+                />
+              </EnterView>
             ))}
             {visiblePosts.length === 0 && (
               <>
@@ -613,45 +668,81 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
     gap: 10,
-    marginBottom: 8,
+    marginBottom: 12,
   },
   plansTitle: {
     ...typography.heading,
     color: colors.ink,
     fontSize: 20,
     lineHeight: 26,
-    fontWeight: "700",
+    ...weight("800"),
     flexShrink: 1,
   },
-  postAction: {
-    minHeight: 44,
+  categoryRail: { flexGrow: 0, marginHorizontal: -16 },
+  categories: { gap: 8, paddingHorizontal: 16, paddingBottom: 4 },
+  categoryChip: {
     flexDirection: "row",
-    gap: 4,
     alignItems: "center",
+    gap: 7,
+    minHeight: 44,
+    paddingHorizontal: 16,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
   },
-  postActionText: {
-    ...typography.bodySmall,
-    fontWeight: "600",
-    color: colors.coralDeep,
+  categoryChipOn: { backgroundColor: colors.night, borderColor: colors.night },
+  categoryDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.amberBright,
   },
-  dateFilters: { gap: 7, paddingBottom: 13, paddingRight: 8 },
-  dateChip: {
+  categoryText: {
+    ...typography.label,
+    fontSize: 14,
+    color: colors.gray800,
+    ...weight("700"),
+  },
+  categoryTextOn: { color: colors.onAccent },
+  whenButton: {
     flexDirection: "row",
     alignItems: "center",
     gap: 5,
-    minHeight: 44,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: 24,
+    minHeight: 40,
+    paddingHorizontal: 14,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: colors.border,
     backgroundColor: colors.surface,
   },
-  dateChipSelected: { backgroundColor: colors.ink },
-  dateText: {
-    ...typography.bodySmall,
-    fontWeight: "500",
-    color: colors.textDim,
+  whenText: { ...typography.label, color: colors.ink },
+  whenMenu: {
+    alignSelf: "flex-end",
+    minWidth: 190,
+    marginTop: -2,
+    marginBottom: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    shadowColor: colors.ink,
+    shadowOpacity: 0.1,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 4,
   },
-  dateTextSelected: { color: colors.onAccent, fontWeight: "600" },
+  whenOption: {
+    minHeight: 44,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+    paddingHorizontal: 16,
+  },
+  whenOptionText: { ...typography.body, color: colors.textDim },
+  whenOptionTextOn: { color: colors.ink, ...weight("700") },
   appliedFilters: {
     flexDirection: "row",
     flexWrap: "wrap",

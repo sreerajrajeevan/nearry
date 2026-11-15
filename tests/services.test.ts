@@ -412,7 +412,7 @@ test("clearing offer price/discount sends null; oversized booking groups never r
     discount_pct: null,
   });
   calls.length = 0;
-  await assert.rejects(bookings.bookOffer("offer", "slot", 51), /1 and 50/);
+  await assert.rejects(bookings.bookOffer("offer", "slot", 3), /1 or 2 people/);
   assert.equal(calls.length, 0);
 });
 
@@ -804,5 +804,105 @@ test("demo plan groups stay absent until approval and disappear when the last pa
       mockPosts.findIndex((p) => p.id === id),
       1,
     );
+  }
+});
+
+test("a join request sends a trimmed optional note and rejects one over 280 characters", async () => {
+  const requests = await import("../src/services/joinRequests");
+  const row = {
+    id: "r1",
+    post_id: "p1",
+    requester_id: "u1",
+    status: "pending",
+    decline_count: 0,
+    created_at: "2026-11-15T10:00:00Z",
+    note: "I’ll bring the football",
+    requester: { display_name: "Asha" },
+  };
+  handler = () => row;
+  calls.length = 0;
+  const sent = await requests.requestToJoin(
+    "p1",
+    "u1",
+    "  I’ll bring the football  ",
+  );
+  const rpc = () =>
+    calls.filter((c) => c.url.pathname.endsWith("/rpc/request_join")).at(-1);
+  assert.deepEqual(rpc()?.body, {
+    p_post_id: "p1",
+    p_note: "I’ll bring the football",
+  });
+  assert.equal(sent.note, "I’ll bring the football");
+  handler = () => ({ ...row, note: null });
+  await requests.requestToJoin("p1", "u1", "   ");
+  assert.deepEqual(rpc()?.body, { p_post_id: "p1" });
+  calls.length = 0;
+  await assert.rejects(
+    requests.requestToJoin("p1", "u1", "x".repeat(281)),
+    /280/,
+  );
+  assert.equal(rpc(), undefined);
+});
+
+test("a host's public profile reads only public columns", async () => {
+  const profile = await import("../src/services/profile");
+  handler = () => [
+    {
+      id: "h1",
+      display_name: "Meera Iyer",
+      avatar_url: "https://example.invalid/a.jpg",
+      bio: "Morning runs and filter coffee.",
+    },
+  ];
+  calls.length = 0;
+  const host = await profile.getPublicProfile("h1");
+  const read = calls.find((c) => c.url.pathname.endsWith("/profiles"));
+  assert.equal(
+    read?.url.searchParams.get("select"),
+    "id,display_name,avatar_url,bio",
+  );
+  assert.equal(read?.url.searchParams.get("id"), "eq.h1");
+  assert.deepEqual(host, {
+    id: "h1",
+    displayName: "Meera Iyer",
+    avatarUrl: "https://example.invalid/a.jpg",
+    bio: "Morning runs and filter coffee.",
+  });
+});
+
+test("demo bookings follow the same limits: 2 people, one per offer per day, 3 waiting", async () => {
+  const { setDemoMode } = await import("../src/services/supabase");
+  const bookings = await import("../src/services/bookings");
+  const { mockBookings, mockOffers } = await import("../src/data/mock");
+  setDemoMode(true);
+  const before = mockBookings.length;
+  try {
+    await assert.rejects(
+      bookings.bookOffer(mockOffers[0].id, "x", 3),
+      /1 or 2 people/,
+    );
+    const offer = mockOffers.find((o) => o.id === "o-demo-turf")!;
+    const slots = (await bookings.listOfferSlots(offer.id)).filter(
+      (s) => s.seats_left > 0,
+    );
+    const first = await bookings.bookOffer(offer.id, slots[0].id, 1);
+    assert.equal(
+      (await bookings.bookOffer(offer.id, slots[0].id, 1)).bookingId,
+      first.bookingId,
+    );
+    const sameDay = slots.find(
+      (s, i) =>
+        i > 0 &&
+        new Date(s.starts_at).toDateString() ===
+          new Date(slots[0].starts_at).toDateString(),
+    );
+    if (sameDay)
+      await assert.rejects(
+        bookings.bookOffer(offer.id, sameDay.id, 1),
+        /one booking for this offer on that day/,
+      );
+  } finally {
+    mockBookings.splice(0, mockBookings.length - before);
+    setDemoMode(false);
   }
 });

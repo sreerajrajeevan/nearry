@@ -1,4 +1,13 @@
 import { Alert } from "../../services/appAlert";
+import { useToast } from "../../store/ToastContext";
+import { useMyRequests } from "../../store/MyRequestsContext";
+import {
+  joinNoteHint,
+  planAgeLabel,
+  planBookingLabel,
+} from "../../utils/planComposer";
+import { JoinRequestSheet } from "../../components/JoinRequestSheet";
+import { RequestNote } from "../../components/RequestNote";
 import { AudienceBadge, audienceLabel } from "../../components/AudienceBadge";
 import { ProfileRequired } from "../../components/ProfileRequired";
 import {
@@ -29,7 +38,7 @@ import { isPersonalSelfieChecked } from "../../services/selfieVerification";
 import { EmptyState } from "../../components/EmptyState";
 import { Avatar } from "../../components/Avatar";
 import { PostPhotoGallery } from "../../components/PostPhotoGallery";
-import { colors, typography, spacing } from "../../theme";
+import { colors, typography, spacing, weight } from "../../theme";
 import { PostDetailsProps } from "../../navigation/types";
 import { useAuth } from "../../store/AuthContext";
 import {
@@ -115,11 +124,44 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
   const pending = requests.filter((r) => r.status === "pending");
   const approved = requests.filter((r) => r.status === "approved");
 
+  const myRequests = useMyRequests();
+  const toast = useToast();
+  const [joinOpen, setJoinOpen] = useState(false);
+  const [joinError, setJoinError] = useState("");
+  const sendJoin = async (note: string) => {
+    if (!myId || busy) return;
+    setBusy("join");
+    setJoinError("");
+    try {
+      await requestToJoin(postId, myId, note);
+      setJoinOpen(false);
+      toast(
+        `Request sent to ${post?.authorName.split(" ")[0] || "the host"}`,
+        "send",
+      );
+      void myRequests?.refresh();
+      await load();
+    } catch (e) {
+      if (isProfileCompletionError(e)) {
+        setJoinOpen(false);
+        setProfilePrompt(true);
+        void refreshProfile().catch(() => {});
+        return;
+      }
+      setJoinError(e instanceof Error ? e.message : "Something went wrong.");
+    } finally {
+      setBusy(null);
+    }
+  };
   const run = async (key: string, fn: () => Promise<void>) => {
     if (busy) return;
     setBusy(key);
     try {
       await fn();
+      // Withdraw / leave change what plan cards show elsewhere.
+      void myRequests?.refresh();
+      if (key === "wd") toast("Request withdrawn", "rotate-ccw");
+      else if (key === "lv") toast("You left this plan", "log-out");
       await load();
     } catch (e) {
       if (key === "join" && isProfileCompletionError(e)) {
@@ -258,17 +300,32 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
         <Text accessibilityRole="header" style={styles.title}>
           {post.title}
         </Text>
-        <View style={styles.authorRow}>
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel={`Hosted by ${post.authorName}. View profile`}
+          activeOpacity={0.7}
+          disabled={isHost}
+          onPress={() =>
+            navigation.navigate("HostProfile", {
+              userId: post.authorId,
+              name: post.authorName,
+            })
+          }
+          style={styles.authorRow}
+        >
           <Avatar name={post.authorName} uri={data?.authorAvatar} size={40} />
           <View style={styles.flex}>
             <Text style={styles.hostLabel}>Hosted by</Text>
             <Text style={styles.authorName}>{post.authorName}</Text>
           </View>
           {data?.selfieChecked && <Badge label="Selfie checked" tone="green" />}
-        </View>
+          {!isHost && (
+            <Icon name="chevron-right" size={18} color={colors.textDim} />
+          )}
+        </TouchableOpacity>
         <View style={styles.facts}>
           <View style={styles.factRow}>
-            <Icon name="calendar" size={22} color={colors.text} />
+            <Icon name="calendar" size={21} color={colors.amberDeep} />
             <View style={styles.flex}>
               <Text style={styles.factTitle}>
                 {new Date(post.startsAt).toLocaleDateString("en-IN", {
@@ -282,7 +339,7 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
             </View>
           </View>
           <View style={styles.factRow}>
-            <Icon name="map-pin" size={22} color={colors.text} />
+            <Icon name="map-pin" size={21} color={colors.amberDeep} />
             <View style={styles.flex}>
               <Text style={styles.factTitle}>
                 {locationName || "Location to be confirmed"}
@@ -310,7 +367,7 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
           </View>
           {post.location?.source === "google" && <GoogleMapsCredit />}
           <View style={[styles.factRow, styles.lastFact]}>
-            <Icon name="users" size={22} color={colors.text} />
+            <Icon name="users" size={21} color={colors.amberDeep} />
             <View style={styles.flex}>
               <Text style={styles.factTitle}>
                 {flow.accepting
@@ -338,13 +395,18 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
                   : ""}
               </Text>
             )}
-            <Text style={styles.meta}>
-              Ages {post.planDetails.ageMin ?? 18}–
-              {post.planDetails.ageMax ?? 100}
-              {post.planDetails.venueBooked
-                ? " · Venue already booked by the host"
-                : ""}
-            </Text>
+            {(!!planAgeLabel(post.planDetails) ||
+              !!post.planDetails.venueBooked) && (
+              <Text style={styles.meta}>
+                {[
+                  planAgeLabel(post.planDetails),
+                  post.planDetails.venueBooked &&
+                    `${planBookingLabel(post.planDetails.activity) ?? "Venue already booked"} by the host`,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </Text>
+            )}
             {post.planDetails.costMode === "split" && (
               <Text style={styles.meta}>
                 Shared cost: ₹
@@ -442,6 +504,7 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
                     </Text>
                   </TouchableOpacity>
                 </View>
+                <RequestNote note={r.note} />
                 <SafetyActions
                   target={{
                     kind: "user",
@@ -558,7 +621,6 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
               myRequest.status === "declined" ||
               myRequest.status === "withdrawn" ? (
               <Button
-                variant="solid"
                 title={
                   !personalProfileReady(profile)
                     ? "Complete profile to join"
@@ -576,10 +638,10 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
                     setProfilePrompt(true);
                     return;
                   }
-                  if (myId && matchesPostAudience(post, profile?.gender))
-                    void run("join", () =>
-                      requestToJoin(postId, myId).then(() => {}),
-                    );
+                  if (myId && matchesPostAudience(post, profile?.gender)) {
+                    setJoinError("");
+                    setJoinOpen(true);
+                  }
                 }}
               />
             ) : myRequest.status === "full" ? (
@@ -587,6 +649,7 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
             ) : myRequest.status === "pending" ? (
               <>
                 <Badge label="Request pending" tone="neutral" />
+                <RequestNote note={myRequest.note} mine />
                 <View style={styles.gap} />
                 <Button
                   title="Withdraw request"
@@ -631,6 +694,16 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
           navigation.navigate("CompleteProfile");
         }}
         onBrowse={() => setProfilePrompt(false)}
+      />
+      <JoinRequestSheet
+        visible={joinOpen}
+        planTitle={post.title}
+        hostName={post.authorName.split(" ")[0] || "the host"}
+        placeholder={joinNoteHint(post.planDetails?.activity)}
+        sending={busy === "join"}
+        error={joinError}
+        onSend={(note) => void sendJoin(note)}
+        onClose={() => setJoinOpen(false)}
       />
       <Modal
         visible={optionsOpen}
@@ -747,7 +820,7 @@ const styles = StyleSheet.create({
   category: {
     ...typography.caption,
     color: colors.sageDeep,
-    fontWeight: "700",
+    ...weight("700"),
     textTransform: "uppercase",
     letterSpacing: 1,
   },
@@ -765,7 +838,7 @@ const styles = StyleSheet.create({
     marginVertical: 20,
   },
   hostLabel: { ...typography.caption, color: colors.textDim },
-  authorName: { ...typography.body, color: colors.text, fontWeight: "600" },
+  authorName: { ...typography.body, color: colors.text, ...weight("600") },
   facts: {
     borderTopWidth: 1,
     borderBottomWidth: 1,
@@ -780,13 +853,13 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   lastFact: { borderBottomWidth: 0 },
-  factTitle: { ...typography.body, fontWeight: "600", color: colors.text },
+  factTitle: { ...typography.body, ...weight("600"), color: colors.text },
   meta: { ...typography.bodySmall, color: colors.textDim, marginTop: 3 },
   directions: { minHeight: 44, justifyContent: "center", paddingLeft: 4 },
   directionsText: {
     ...typography.bodySmall,
     color: colors.forest,
-    fontWeight: "600",
+    ...weight("600"),
     textDecorationLine: "underline",
   },
   sectionHeading: {
@@ -810,7 +883,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     gap: 10,
   },
-  cost: { ...typography.bodySmall, color: colors.text, fontWeight: "600" },
+  cost: { ...typography.bodySmall, color: colors.text, ...weight("600") },
   participantActions: { gap: 4 },
   footerStatus: { ...typography.body, color: colors.textDim },
   section: { marginTop: 26 },
@@ -835,7 +908,7 @@ const styles = StyleSheet.create({
   approveText: {
     ...typography.bodySmall,
     color: colors.onAccent,
-    fontWeight: "600",
+    ...weight("600"),
   },
   approvedRow: {
     flexDirection: "row",
@@ -848,7 +921,7 @@ const styles = StyleSheet.create({
   messageLink: {
     ...typography.bodySmall,
     color: colors.forest,
-    fontWeight: "600",
+    ...weight("600"),
   },
   hostActions: { marginTop: 20, gap: 8 },
   gap: { height: spacing.sm },

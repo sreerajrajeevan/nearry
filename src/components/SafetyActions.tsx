@@ -1,5 +1,6 @@
 import React, { useState } from "react";
-import { Text, View, StyleSheet } from "react-native";
+import { Text, View, StyleSheet, TouchableOpacity } from "react-native";
+import { Icon } from "./Icon";
 import { Button } from "./Button";
 import { colors, typography } from "../theme";
 import { blockUser, ReportTarget } from "../services/safety";
@@ -22,19 +23,30 @@ export function SafetyActions({
   return (
     <View style={styles.wrap}>
       <View style={styles.actions}>
-        <Button
-          title="Report"
-          variant="ghost"
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel={`Report ${target.name ?? ""}`.trim()}
           onPress={onReport}
           disabled={busy}
-        />
+          hitSlop={8}
+          style={styles.link}
+        >
+          <Icon name="flag" size={13} color={colors.textDim} />
+          <Text style={styles.linkText}>Report</Text>
+        </TouchableOpacity>
         {!!target.userId && (
-          <Button
-            title="Block person"
-            variant="ghost"
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel={`Block ${target.name ?? "this person"}`}
+            accessibilityState={{ expanded: confirm }}
             onPress={() => setConfirm(!confirm)}
             disabled={busy}
-          />
+            hitSlop={8}
+            style={styles.link}
+          >
+            <Icon name="slash" size={13} color={colors.textDim} />
+            <Text style={styles.linkText}>Block</Text>
+          </TouchableOpacity>
         )}
       </View>
       {confirm && (
@@ -78,8 +90,15 @@ export function SafetyActions({
   );
 }
 const styles = StyleSheet.create({
-  wrap: { marginVertical: 12 },
-  actions: { flexDirection: "row", gap: 12 },
+  wrap: { marginVertical: 8 },
+  actions: { flexDirection: "row", gap: 18 },
+  link: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingVertical: 6,
+  },
+  linkText: { ...typography.caption, color: colors.textDim },
   note: {
     ...typography.caption,
     color: colors.textDim,

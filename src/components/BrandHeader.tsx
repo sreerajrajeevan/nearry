@@ -1,6 +1,6 @@
 import React from "react";
 import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
-import { colors, typography, spacing } from "../theme";
+import { colors, typography, spacing, weight } from "../theme";
 import { Icon } from "./Icon";
 import { BrandLogo } from "./BrandLogo";
 
@@ -29,11 +29,13 @@ export function BrandHeader({
   const unreadNotifs = Math.max(0, Math.floor(unreadNotifications));
   const contextContent = (
     <>
-      {location && <Icon name="map-pin" size={13} />}
+      {location && <Icon name="map-pin" size={15} color={colors.amberDeep} />}
       <Text style={styles.context} numberOfLines={1}>
         {context}
       </Text>
-      {onContextPress && <Icon name="chevron-down" size={13} />}
+      {onContextPress && (
+        <Icon name="chevron-down" size={14} color={colors.lineStrong} />
+      )}
     </>
   );
   return (
@@ -74,7 +76,7 @@ export function BrandHeader({
             activeOpacity={0.7}
             style={styles.messagesButton}
           >
-            <Icon name="bell" size={22} color={colors.text} />
+            <Icon name="bell" size={20} color={colors.text} />
             {unreadNotifs > 0 && (
               <View
                 style={styles.unreadBadge}
@@ -101,7 +103,7 @@ export function BrandHeader({
             activeOpacity={0.7}
             style={styles.messagesButton}
           >
-            <Icon name="message-circle" size={22} color={colors.text} />
+            <Icon name="message-circle" size={20} color={colors.text} />
             {unread > 0 && (
               <View
                 style={styles.unreadBadge}
@@ -121,16 +123,11 @@ export function BrandHeader({
 }
 
 const styles = StyleSheet.create({
-  compactHeader: { paddingTop: 4, paddingBottom: 4 },
-  compactContext: {
-    backgroundColor: "transparent",
-    marginTop: 0,
-    paddingHorizontal: 0,
-    minHeight: 44,
-  },
+  compactHeader: { paddingTop: 4, paddingBottom: 8 },
+  compactContext: { marginTop: 2, minHeight: 32 },
   header: {
     flexDirection: "row",
-    alignItems: "flex-start",
+    alignItems: "center",
     justifyContent: "space-between",
     gap: spacing.sm,
     paddingTop: spacing.sm,
@@ -140,38 +137,35 @@ const styles = StyleSheet.create({
   contextButton: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.xs,
-    minHeight: 40,
-    paddingHorizontal: 10,
-    borderRadius: 20,
-    backgroundColor: colors.sageSoft,
-    marginTop: 10,
+    gap: 5,
+    minHeight: 36,
+    marginTop: 4,
     flexShrink: 1,
     minWidth: 0,
-    justifyContent: "flex-start",
     alignSelf: "flex-start",
     maxWidth: "100%",
   },
   actions: {
     flexDirection: "row",
     alignItems: "center",
-    gap: spacing.sm,
-    flexShrink: 1,
-    minWidth: 0,
+    gap: 10,
+    flexShrink: 0,
   },
   messagesButton: {
     width: 44,
     height: 44,
-    borderRadius: 14,
-    backgroundColor: "transparent",
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
     alignItems: "center",
     justifyContent: "center",
     flexShrink: 0,
   },
   unreadBadge: {
     position: "absolute",
-    top: -4,
-    right: -4,
+    top: -3,
+    right: -3,
     minWidth: 20,
     minHeight: 20,
     paddingHorizontal: 4,
@@ -180,17 +174,17 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: colors.gold,
+    backgroundColor: colors.amber,
   },
   unreadText: {
     ...typography.caption,
     lineHeight: 16,
-    color: colors.onGold,
-    fontWeight: "600",
+    color: colors.onAmber,
+    ...weight("800"),
   },
   context: {
-    ...typography.caption,
-    fontSize: 13,
+    ...typography.label,
+    fontSize: 14,
     color: colors.text,
     flexShrink: 1,
   },

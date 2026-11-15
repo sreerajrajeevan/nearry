@@ -434,6 +434,31 @@ test("capacity, consistent counts, withdrawal and closure", async () => {
     "cancelled",
   );
 });
+test("join requests carry an optional note only the host and requester can read", async () => {
+  const p = await post();
+  const note = (id: string) =>
+    asUser(id, (tx) =>
+      tx.query("select note from join_requests where post_id=$1", [p]),
+    );
+  await assert.rejects(
+    asUser(b, (tx) =>
+      tx.query("select request_join($1,$2)", [p, "x".repeat(281)]),
+    ),
+    /280/,
+  );
+  await asUser(b, (tx) =>
+    tx.query("select request_join($1,$2)", [p, "  I’ll bring the football  "]),
+  );
+  assert.equal((await note(host)).rows[0].note, "I’ll bring the football");
+  assert.equal((await note(b)).rows[0].note, "I’ll bring the football");
+  assert.equal((await note(outsider)).rows.length, 0);
+  // A blank note is stored as no note.
+  await asUser(c, (tx) => tx.query("select request_join($1,$2)", [p, "   "]));
+  const rows = (
+    await db.query("select note from join_requests where requester_id=$1", [c])
+  ).rows;
+  assert.equal(rows[0].note, null);
+});
 test("no self-joining, duplicates, expired joins or direct post status edits", async () => {
   const p = await post();
   await assert.rejects(request(host, p), /own post/);
@@ -4625,4 +4650,153 @@ test("concurrent first approvals create exactly one shared group", async (t) => 
     ).rows[0].g.memberCount,
     3,
   );
+});
+
+test("selfie poses: the server issues a random pose; a submission must use it once, in time, and the reviewer sees it", async () => {
+  const p = await selfieApplicant();
+  const start = async (id = p.id) =>
+    (await asUser(id, (tx) => tx.query("select start_selfie_challenge() c")))
+      .rows[0].c;
+  const submitWith = (challenge: string, id = p.id, path = p.path) =>
+    asUser(id, (tx) =>
+      tx.query("select submit_personal_selfie($1,true,$2)", [path, challenge]),
+    );
+  const first = await start();
+  const poses = (await db.query("select id,label from selfie_poses()")).rows;
+  assert.ok(poses.length >= 6);
+  assert.ok(poses.some((pose: any) => pose.id === first.pose));
+  assert.equal(
+    first.label,
+    poses.find((pose: any) => pose.id === first.pose).label,
+  );
+  const minutes = (Date.parse(first.expiresAt) - Date.now()) / 60000;
+  assert.ok(minutes > 9 && minutes <= 10, String(minutes));
+  // Challenges are private: not readable or writable directly.
+  await assert.rejects(
+    asUser(p.id, (tx) => tx.query("select * from personal_selfie_challenges")),
+    /permission denied/,
+  );
+  // A new request replaces the old pose.
+  const second = await start();
+  assert.notEqual(second.challengeId, first.challengeId);
+  await assert.rejects(submitWith(first.challengeId), /pose|expired/i);
+  // Another person cannot use my challenge.
+  const other = await selfieApplicant();
+  await assert.rejects(
+    submitWith(second.challengeId, other.id, other.path),
+    /pose|expired/i,
+  );
+  // An expired pose is refused.
+  await db.query(
+    "update personal_selfie_challenges set expires_at=now()-interval '1 second' where user_id=$1",
+    [p.id],
+  );
+  await assert.rejects(submitWith(second.challengeId), /expired/i);
+  const third = await start();
+  await submitWith(third.challengeId);
+  const review = (
+    await db.query(
+      "select status,pose from personal_selfie_reviews where user_id=$1",
+      [p.id],
+    )
+  ).rows[0];
+  assert.deepEqual(review, { status: "pending", pose: third.pose });
+  // One-time: the challenge is consumed.
+  assert.equal(
+    (
+      await db.query(
+        "select count(*)::int n from personal_selfie_challenges where user_id=$1",
+        [p.id],
+      )
+    ).rows[0].n,
+    0,
+  );
+  // No new pose while a review is pending.
+  await assert.rejects(start(), /pending|checked/i);
+  const queue = (
+    await asUser(
+      null,
+      (tx) => tx.query("select * from admin_console_selfie_queue(0,100)"),
+      "service_role",
+    )
+  ).rows.find((r: any) => r.user_id === p.id);
+  assert.equal(queue.pose_label, third.label);
+});
+
+test("selfie poses: older app builds can still submit without a pose, shown to the reviewer as no pose", async () => {
+  const p = await selfieApplicant();
+  await submitSelfie(p.id, p.path);
+  const queue = (
+    await asUser(
+      null,
+      (tx) => tx.query("select * from admin_console_selfie_queue(0,100)"),
+      "service_role",
+    )
+  ).rows.find((r: any) => r.user_id === p.id);
+  assert.equal(queue.pose_label, null);
+});
+
+test("booking limits: up to 2 people, one booking per offer per day, at most 3 waiting requests", async () => {
+  const business = await auditBusiness(),
+    customer = await corePersonal();
+  // Slots every hour from 10:00 India time two days ahead to 12:00 the day after.
+  const offer = (
+    await db.query(
+      `insert into offers(business_id,title,description,starts_at,ends_at,slot_capacity,slot_minutes,resource_key,status)
+       values($1,'Gym session','A friendly gym session',
+        (date_trunc('day',now() at time zone 'Asia/Kolkata')+interval '2 days 10 hours') at time zone 'Asia/Kolkata',
+        (date_trunc('day',now() at time zone 'Asia/Kolkata')+interval '3 days 12 hours') at time zone 'Asia/Kolkata',
+        4,60,gen_random_uuid()::text,'live') returning id`,
+      [business],
+    )
+  ).rows[0].id;
+  const slots = (
+    await db.query(
+      "select id from offer_slots where offer_id=$1 order by starts_at",
+      [offer],
+    )
+  ).rows.map((r: any) => r.id);
+  const [dayOne10, dayOne11] = slots;
+  const dayTwo10 = slots[24];
+  const book = (slot: string, party = 1, who = customer) =>
+    asUser(
+      who,
+      async (tx) =>
+        (await tx.query("select book_offer_slot($1,$2) r", [slot, party]))
+          .rows[0].r,
+    );
+  await assert.rejects(book(dayOne10, 3), /2 people/);
+  const first = await book(dayOne10, 2);
+  // A retry of the same slot still returns the same booking.
+  assert.equal((await book(dayOne10, 2)).booking_id, first.booking_id);
+  await assert.rejects(
+    book(dayOne11),
+    /one booking for this offer on that day/,
+  );
+  await book(dayTwo10);
+  await asUser(customer, (tx) =>
+    tx.query("select change_booking_status($1,'cancelled')", [
+      first.booking_id,
+    ]),
+  );
+  // After cancelling, another time that day is fine.
+  await book(dayOne11);
+
+  // Waiting (unconfirmed) requests are capped at 3 across all offers.
+  const busy = await corePersonal();
+  const offers = [];
+  for (let i = 0; i < 4; i++) offers.push(await auditOffer(business));
+  for (const o of offers.slice(0, 3)) await book(o.slot, 1, busy);
+  await assert.rejects(book(offers[3].slot, 1, busy), /3 requests/);
+  // Once the business confirms one, there is room again.
+  const pending = (
+    await db.query(
+      "select id from bookings where customer_id=$1 and status='pending' limit 1",
+      [busy],
+    )
+  ).rows[0].id;
+  await asUser(business, (tx) =>
+    tx.query("select change_booking_status($1,'confirmed')", [pending]),
+  );
+  await book(offers[3].slot, 1, busy);
 });

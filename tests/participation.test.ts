@@ -126,3 +126,41 @@ test("crop export follows the preview and clamps drags to image bounds for all a
     /dimensions/,
   );
 });
+
+test("plan cards know my latest request per plan: pending or approved, others ignored", async () => {
+  const { myRequestStatuses } = await import("../src/utils/myRequests");
+  const map = myRequestStatuses([
+    // Newest first, as listMyRequests returns them.
+    { postId: "a", status: "pending" },
+    { postId: "a", status: "declined" },
+    { postId: "b", status: "approved" },
+    { postId: "c", status: "withdrawn" },
+    { postId: "d", status: "declined" },
+    { postId: "e", status: "full" },
+  ] as any);
+  assert.deepEqual(Object.fromEntries(map), { a: "pending", b: "approved" });
+});
+
+test("offer cards know my upcoming booking per offer: requested while waiting, booked once confirmed", async () => {
+  const { myOfferStatuses } = await import("../src/utils/myRequests");
+  const now = new Date("2026-11-15T12:00:00Z");
+  const b = (offerId: string, status: string, slot: string, hold?: string) =>
+    ({ offerId, status, slot, holdExpiresAt: hold }) as any;
+  const map = myOfferStatuses(
+    [
+      b("waiting", "pending", "2026-11-15T15:00:00Z", "2026-11-15T12:20:00Z"),
+      b("booked", "confirmed", "2026-11-16T10:00:00Z"),
+      b("both", "pending", "2026-11-16T10:00:00Z", "2026-11-15T12:20:00Z"),
+      b("both", "confirmed", "2026-11-17T10:00:00Z"),
+      b("expired", "pending", "2026-11-15T15:00:00Z", "2026-11-15T11:50:00Z"),
+      b("past", "confirmed", "2026-11-15T09:00:00Z"),
+      b("cancelled", "cancelled", "2026-11-16T10:00:00Z"),
+    ],
+    now,
+  );
+  assert.deepEqual(Object.fromEntries(map), {
+    waiting: "requested",
+    booked: "booked",
+    both: "booked",
+  });
+});

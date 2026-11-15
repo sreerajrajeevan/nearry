@@ -18,7 +18,7 @@ import { Button } from "../../components/Button";
 import { Badge } from "../../components/Badge";
 import { Avatar } from "../../components/Avatar";
 import { EmptyState } from "../../components/EmptyState";
-import { colors, typography, spacing, surfaces } from "../../theme";
+import { colors, typography, spacing, surfaces, weight } from "../../theme";
 import { useAuth } from "../../store/AuthContext";
 import {
   listBookingsForBusiness,
@@ -214,13 +214,15 @@ export function BookingsScreen({ navigation }: Props) {
                         </Text>
                       </TouchableOpacity>
                       <TouchableOpacity
+                        accessibilityRole="button"
                         activeOpacity={0.7}
                         disabled={busy === `c${b.id}`}
                         onPress={() =>
                           run(`c${b.id}`, () => confirmBooking(b.id))
                         }
+                        style={styles.confirmPill}
                       >
-                        <Text style={[styles.actionLink, styles.confirmLink]}>
+                        <Text style={styles.confirmText}>
                           {busy === `c${b.id}` ? "…" : "Confirm"}
                         </Text>
                       </TouchableOpacity>
@@ -306,7 +308,16 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
   },
   actionLink: { ...typography.bodySmall, color: colors.textDim },
-  confirmLink: { color: colors.accent, fontWeight: "600" },
+  confirmPill: {
+    marginLeft: "auto",
+    height: 38,
+    paddingHorizontal: 18,
+    borderRadius: 19,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.amber,
+  },
+  confirmText: { fontSize: 14, ...weight("800"), color: colors.onAmber },
   gap: { width: spacing.sm },
   expiredNote: {
     ...typography.caption,

@@ -42,7 +42,7 @@ import { Button } from "../../components/Button";
 import { Input } from "../../components/Input";
 import { EmptyState } from "../../components/EmptyState";
 import { LoadingState } from "../../components/LoadingState";
-import { colors } from "../../theme";
+import { colors, weight } from "../../theme";
 import { planChatReminder, planChatTime } from "../../utils/planChatSchedule";
 import { useReducedMotion } from "../../store/MotionContext";
 
@@ -366,7 +366,7 @@ export function PlanGroupScreen({ route, navigation }: Props) {
               <Text
                 style={[
                   styles.planBannerText,
-                  reminder && { color: colors.red, fontWeight: "700" },
+                  reminder && { color: colors.red, ...weight("700") },
                 ]}
               >
                 {reminder?.text ?? planChatTime(group, now)}
@@ -728,7 +728,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   headingCopy: { flex: 1, minWidth: 0 },
-  title: { fontSize: 16, fontWeight: "700", color: colors.text },
+  title: { fontSize: 16, ...weight("700"), color: colors.text },
   help: {
     fontSize: 11,
     lineHeight: 17,
@@ -755,7 +755,7 @@ const styles = StyleSheet.create({
   mineText: { color: colors.onAccent },
   sender: {
     fontSize: 11,
-    fontWeight: "700",
+    ...weight("700"),
     color: colors.coralDeep,
     marginBottom: 4,
   },

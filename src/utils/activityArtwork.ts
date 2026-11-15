@@ -38,7 +38,10 @@ export function activityArtwork(item: {
       "wellness",
       /\b(yoga|meditation|salon|spa|massage|wellness|haircut|unwind)\b/i,
     ],
-    ["games", /\b(chess|board\s*games?|games?|carrom|cards)\b/i],
+    [
+      "games",
+      /\b(chess|board\s*games?|game\s*night|carrom|cards|card\s*games?)\b/i,
+    ],
     ["coffee", /\b(coffee|cafe|tea|chaya|chai|brunch)\b/i],
     ["food", /\b(food|dining|restaurant|lunch|dinner|noodles|meal|eat\w*)\b/i],
   ];

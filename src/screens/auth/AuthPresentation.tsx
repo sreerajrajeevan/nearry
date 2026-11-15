@@ -10,8 +10,10 @@ import {
   onboardingColors as c,
 } from "../../components/onboarding/OnboardingKit";
 import { MotionPressable } from "../../components/Motion";
+import { Icon } from "../../components/Icon";
 import { normalizeEmailCode } from "../../utils/emailSignIn";
 import { isValidEmail, isValidOtp } from "../../utils/validation";
+import { weight } from "../../theme";
 type Props = {
   kicker: string;
   isLogin: boolean;
@@ -75,8 +77,8 @@ export function AuthPresentation(p: Props) {
         </>
       }
     >
-      <View style={styles.hello}>
-        <Text style={{ fontSize: 36 }}>👋</Text>
+      <View style={styles.hello} accessible={false}>
+        <Icon name="map-pin" size={34} color={c.amber} />
       </View>
       <OnboardingHeading
         kicker={`${p.kicker} account`}
@@ -209,7 +211,7 @@ const styles = StyleSheet.create({
     width: 74,
     height: 74,
     borderRadius: 23,
-    backgroundColor: c.peach,
+    backgroundColor: c.night,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 27,
@@ -227,8 +229,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 11,
   },
-  g: { fontSize: 23, color: "#4285F4", fontWeight: "700" },
-  googleText: { fontSize: 14, fontWeight: "600", color: c.ink },
+  g: { fontSize: 23, color: "#4285F4", ...weight("700") },
+  googleText: { fontSize: 14, ...weight("600"), color: c.ink },
   divider: {
     flexDirection: "row",
     alignItems: "center",

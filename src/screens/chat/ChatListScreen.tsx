@@ -1,3 +1,5 @@
+import { RequestNote } from "../../components/RequestNote";
+import { BackButton } from "../../components/BackButton";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   AppState,
@@ -16,7 +18,7 @@ import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
 import { LoadingState } from "../../components/LoadingState";
 import { ConversationActions } from "../../components/ConversationActions";
-import { colors, typography, spacing, radius } from "../../theme";
+import { colors, typography, spacing, radius, weight } from "../../theme";
 import { useAuth } from "../../store/AuthContext";
 import { Alert } from "../../services/appAlert";
 import { subscribeToNotifications } from "../../services/notifications";
@@ -248,15 +250,7 @@ export function ChatListScreen({ navigation }: Props) {
         contentContainerStyle={styles.scroll}
       >
         {navigation.canGoBack?.() && (
-          <TouchableOpacity
-            accessibilityRole="button"
-            accessibilityLabel="Back"
-            style={styles.back}
-            onPress={() => navigation.goBack?.()}
-          >
-            <Icon name="arrow-left" size={16} />
-            <Text style={styles.meta}>Back</Text>
-          </TouchableOpacity>
+          <BackButton onPress={() => navigation.goBack?.()} />
         )}
         <View style={styles.headerRow}>
           <Text accessibilityRole="header" style={styles.title}>
@@ -384,6 +378,7 @@ export function ChatListScreen({ navigation }: Props) {
                         <Text style={styles.requestPlan}>{r.postTitle}</Text>
                       </View>
                     </View>
+                    <RequestNote note={r.note} />
                     <Text style={styles.requestDate}>
                       {planChatTime(
                         { id: r.postId, startsAt: r.postStartsAt },
@@ -648,13 +643,6 @@ export function ChatListScreen({ navigation }: Props) {
 }
 const styles = StyleSheet.create({
   scroll: { paddingBottom: spacing.xl },
-  back: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    minHeight: 44,
-    alignSelf: "flex-start",
-  },
   headerRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -709,7 +697,7 @@ const styles = StyleSheet.create({
   activeTab: { backgroundColor: colors.ink, borderColor: colors.ink },
   tabText: {
     ...typography.bodySmall,
-    fontWeight: "600",
+    ...weight("600"),
     color: colors.textDim,
   },
   activeText: { color: colors.onAccent },
@@ -722,7 +710,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: colors.coralDeep,
   },
-  badgeText: { ...typography.caption, fontWeight: "700", color: colors.white },
+  badgeText: { ...typography.caption, ...weight("700"), color: colors.white },
   requestSummary: {
     flexDirection: "row",
     alignItems: "center",
@@ -733,7 +721,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     minHeight: 48,
   },
-  link: { ...typography.bodySmall, fontWeight: "600", color: colors.coralDeep },
+  link: { ...typography.bodySmall, ...weight("600"), color: colors.coralDeep },
   sectionRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -772,7 +760,7 @@ const styles = StyleSheet.create({
   name: { ...typography.heading, color: colors.text, flexShrink: 1 },
   planDate: {
     ...typography.bodySmall,
-    fontWeight: "600",
+    ...weight("600"),
     color: colors.text,
     marginTop: 3,
   },
@@ -784,7 +772,7 @@ const styles = StyleSheet.create({
     gap: 5,
     marginTop: 2,
   },
-  reminder: { ...typography.bodySmall, fontWeight: "700", color: colors.red },
+  reminder: { ...typography.bodySmall, ...weight("700"), color: colors.red },
   requestCard: {
     backgroundColor: colors.card,
     borderWidth: StyleSheet.hairlineWidth,
@@ -797,13 +785,13 @@ const styles = StyleSheet.create({
   requestTop: { flexDirection: "row", gap: 10, alignItems: "flex-start" },
   requestPlan: {
     ...typography.body,
-    fontWeight: "600",
+    ...weight("600"),
     color: colors.text,
     marginTop: 4,
   },
   requestDate: {
     ...typography.bodySmall,
-    fontWeight: "600",
+    ...weight("600"),
     color: colors.text,
   },
   requestActions: {

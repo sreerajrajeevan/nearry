@@ -116,3 +116,91 @@ export function ScreenReveal({
     </Animated.View>
   );
 }
+
+/**
+ * Cards ease in when a list first appears, one after another. The first few
+ * are staggered; with reduced motion they simply appear.
+ */
+export function EnterView({
+  index = 0,
+  children,
+  style,
+}: {
+  index?: number;
+  children: React.ReactNode;
+  style?: StyleProp<ViewStyle>;
+}) {
+  const reduced = useReducedMotion();
+  const progress = useRef(new Animated.Value(reduced ? 1 : 0)).current;
+  useEffect(() => {
+    if (reduced) {
+      progress.setValue(1);
+      return;
+    }
+    const animation = Animated.timing(progress, {
+      toValue: 1,
+      duration: 320,
+      delay: Math.min(index, 6) * 60,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: Platform.OS !== "web",
+    });
+    animation.start();
+    return () => animation.stop();
+    // Only on first appearance.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reduced]);
+  return (
+    <Animated.View
+      style={[
+        style,
+        {
+          opacity: progress,
+          transform: [
+            {
+              translateY: progress.interpolate({
+                inputRange: [0, 1],
+                outputRange: [14, 0],
+              }),
+            },
+          ],
+        },
+      ]}
+    >
+      {children}
+    </Animated.View>
+  );
+}
+
+/** A quick pop whenever `trigger` changes (not on first render). */
+export function PopView({
+  trigger,
+  children,
+  style,
+}: {
+  trigger: unknown;
+  children: React.ReactNode;
+  style?: StyleProp<ViewStyle>;
+}) {
+  const reduced = useReducedMotion();
+  const scale = useRef(new Animated.Value(1)).current;
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    if (reduced) return;
+    scale.setValue(0.82);
+    Animated.spring(scale, {
+      toValue: 1,
+      speed: 18,
+      bounciness: 12,
+      useNativeDriver: Platform.OS !== "web",
+    }).start();
+  }, [trigger, reduced, scale]);
+  return (
+    <Animated.View style={[style, { transform: [{ scale }] }]}>
+      {children}
+    </Animated.View>
+  );
+}

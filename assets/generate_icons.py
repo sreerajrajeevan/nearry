@@ -8,20 +8,27 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 
 ROOT = Path(__file__).resolve().parent
-PAPER = '#F4F3EB'
-INK = '#0C3B2E'
-POINT = '#BB8A52'
+# Amber theme. Splash matches the in-app header logo on the app background;
+# the launcher icon uses the dark tab-bar colour with an amber pin.
+PAPER = '#F8FAFC'
+INK = '#111827'
+POINT = '#F59E0B'
+ICON_BG = '#030712'
+ICON_PIN = '#FBBF24'
+ICON_POINT = '#FFFFFF'
 
 
-def ink_mask(name: str) -> Image.Image:
+def ink_mask(name: str, color: str = INK) -> Image.Image:
     # Keep the approved geometry and tint its alpha mask to match React.
     source = Image.open(ROOT / 'brand' / name).convert('RGBA')
-    tinted = Image.new('RGBA', source.size, INK)
+    tinted = Image.new('RGBA', source.size, color)
     tinted.putalpha(source.getchannel('A'))
     return tinted
 
 
 PIN = ink_mask('pin.png')
+ICON_PIN_MASK = ink_mask('pin.png', ICON_PIN)
+MONO_PIN = ink_mask('pin.png', '#000000')
 WORD = ink_mask('wordmark.png')
 
 
@@ -29,19 +36,20 @@ def resize(image: Image.Image, width: int) -> Image.Image:
     return image.resize((width, round(width * image.height / image.width)), Image.Resampling.LANCZOS)
 
 
-def symbol(size: int, mono: bool = False) -> Image.Image:
-    canvas = resize(PIN, size)
+def symbol(size: int, pin: Image.Image = PIN, point: str = POINT) -> Image.Image:
+    canvas = resize(pin, size)
     draw = ImageDraw.Draw(canvas)
     # Matches BrandMark: the point is part of the identity, separate from the pin.
     x, y, r = (size * n / 256 for n in (216, 114, 18))
-    draw.ellipse((round(x-r), round(y-r), round(x+r), round(y+r)), fill=INK if mono else POINT)
+    draw.ellipse((round(x-r), round(y-r), round(x+r), round(y+r)), fill=point)
     return canvas
 
 
 def tile(size: int, transparent: bool = False, mono: bool = False) -> Image.Image:
     # Square source without baked-in rounded corners; each launcher supplies its mask.
-    canvas = Image.new('RGBA', (1024, 1024), (0, 0, 0, 0) if transparent else PAPER)
-    mark = symbol(512 if transparent else 676, mono)
+    canvas = Image.new('RGBA', (1024, 1024), (0, 0, 0, 0) if transparent else ICON_BG)
+    pin, point = (MONO_PIN, '#000000') if mono else (ICON_PIN_MASK, ICON_POINT)
+    mark = symbol(512 if transparent else 676, pin, point)
     canvas.alpha_composite(mark, ((1024-mark.width)//2, (1024-mark.height)//2-16))
     return canvas.resize((size, size), Image.Resampling.LANCZOS)
 
@@ -68,4 +76,4 @@ if __name__ == '__main__':
     splash(True).save(ROOT/'splash-android.png')
     # A background tile keeps the icon visible on light and dark browser chrome.
     tile(48).save(ROOT/'favicon.png')
-    print('Around You launcher, splash and favicon assets generated')
+    print('Nearry launcher, splash and favicon assets generated')
