@@ -554,3 +554,18 @@ textarea {
   margin: 8px 0;
   color: #0c3b2e;
 }
+
+.pose-banner {
+  margin: 12px 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #fef3c7;
+  color: #111827;
+  font-weight: 600;
+  line-height: 1.5;
+}
+.pose-banner.missing {
+  background: #f3f4f6;
+  color: var(--muted);
+  font-weight: 500;
+}

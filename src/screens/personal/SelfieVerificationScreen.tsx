@@ -22,9 +22,12 @@ import { PersonalStackParamList } from "../../navigation/types";
 import {
   getMySelfieReview,
   hasSelfieComparisonAvatar,
+  startSelfieChallenge,
   withdrawPersonalSelfie,
+  SelfieChallenge,
   SelfieReview,
 } from "../../services/selfieVerification";
+import { poseEmoji, poseTimeLeft } from "../../utils/selfiePoses";
 
 import { submitPersonalSelfie } from "../../services/selfiePhoto";
 import { personalProfileReady } from "../../utils/profileReadiness";
@@ -49,6 +52,35 @@ export function SelfieVerificationScreen({ navigation }: Props) {
   const captureLock = useRef(false);
   const active = useRef(0);
   const [statusFailed, setStatusFailed] = useState(false);
+  const [challenge, setChallenge] = useState<SelfieChallenge | null>(null);
+  const [posing, setPosing] = useState(false);
+  const [now, setNow] = useState(() => new Date());
+  // Tick once a second while a pose is active, for the countdown.
+  useEffect(() => {
+    if (!challenge) return;
+    const timer = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, [challenge]);
+  const timeLeft = challenge ? poseTimeLeft(challenge.expiresAt, now) : null;
+  const getPose = async () => {
+    if (posing || busy) return;
+    const run = active.current;
+    setPosing(true);
+    setError("");
+    try {
+      const next = await startSelfieChallenge();
+      if (run !== active.current) return;
+      setChallenge(next);
+      setNow(new Date());
+      setPhoto(null);
+      setAgreed(false);
+    } catch (e) {
+      if (run === active.current)
+        setError(e instanceof Error ? e.message : "Could not get a pose.");
+    } finally {
+      if (run === active.current) setPosing(false);
+    }
+  };
   useEffect(
     () => () => {
       if (photo && Platform.OS !== "web")
@@ -87,6 +119,7 @@ export function SelfieVerificationScreen({ navigation }: Props) {
       setReview(EMPTY);
       setPhoto(null);
       setAgreed(false);
+      setChallenge(null);
       void refresh();
       return () => {
         active.current++;
@@ -136,23 +169,33 @@ export function SelfieVerificationScreen({ navigation }: Props) {
     }
   };
   const submit = async () => {
-    if (!profile || !photo || !agreed || submitLock.current) return;
+    if (!profile || !photo || !agreed || !challenge || submitLock.current)
+      return;
     const run = active.current;
     submitLock.current = true;
     setBusy(true);
     setError("");
     try {
-      await submitPersonalSelfie(profile.id, photo);
+      await submitPersonalSelfie(profile.id, photo, challenge.challengeId);
       if (run !== active.current) return;
       setPhoto(null);
       setAgreed(false);
+      setChallenge(null);
       await refresh();
     } catch (e) {
       if (run !== active.current) return;
       // A lost response can follow a committed submission. Refresh before retrying.
       await refresh();
-      if (run === active.current)
-        setError(e instanceof Error ? e.message : "Could not submit selfie.");
+      if (run === active.current) {
+        const message =
+          e instanceof Error ? e.message : "Could not submit selfie.";
+        // An expired or used pose cannot be retried; ask for a new one.
+        if (/pose/i.test(message)) {
+          setChallenge(null);
+          setPhoto(null);
+        }
+        setError(message);
+      }
     } finally {
       submitLock.current = false;
       setBusy(false);
@@ -181,9 +224,9 @@ export function SelfieVerificationScreen({ navigation }: Props) {
           greeting="OPTIONAL SELFIE CHECK"
         />
         <Text style={styles.body}>
-          Help other Nearry members recognise the person behind an account. A
-          reviewer compares your private selfie with your current public profile
-          picture.
+          Help other Nearry members recognise the person behind an account. You
+          copy a random pose in a selfie, and a reviewer compares it with your
+          current public profile picture.
         </Text>
         {loading ? (
           <LoadingState label="Checking verification status…" layout="detail" />
@@ -234,46 +277,107 @@ export function SelfieVerificationScreen({ navigation }: Props) {
               </>
             ) : (
               <>
-                <Text style={styles.instructions}>
-                  Take a clear front-camera selfie in good light. No sunglasses
-                  or masks. Gallery uploads are not accepted in this flow.
-                </Text>
-                {photo && (
-                  <Image
-                    source={{ uri: photo }}
-                    style={styles.preview}
-                    resizeMode="cover"
-                  />
-                )}
-                <Button
-                  title={photo ? "Retake selfie" : "Open front camera"}
-                  variant="secondary"
-                  disabled={busy}
-                  onPress={() => void capture()}
-                />
-                <TouchableOpacity
-                  accessibilityRole="checkbox"
-                  accessibilityState={{ checked: agreed }}
-                  disabled={busy}
-                  onPress={() => setAgreed((v) => !v)}
-                  style={styles.consent}
-                >
-                  <View style={[styles.checkbox, agreed && styles.checked]}>
-                    {agreed && <Text style={styles.tick}>✓</Text>}
+                {!challenge ? (
+                  <View style={styles.poseIntro}>
+                    <Text style={styles.poseIntroTitle}>
+                      You’ll copy a random pose
+                    </Text>
+                    <Text style={styles.body}>
+                      We’ll show you a pose, like a thumbs up. Take a selfie
+                      doing it within 10 minutes. This shows the reviewer the
+                      photo was taken just now, not an old picture.
+                    </Text>
+                    <Button
+                      title="Get my pose"
+                      loading={posing}
+                      onPress={() => void getPose()}
+                    />
                   </View>
-                  <Text style={[styles.body, styles.consentText]}>
-                    I agree to Nearry storing this selfie privately for manual
-                    comparison with my profile picture and queuing the review
-                    photo for deletion after a decision, cancellation, or seven
-                    days without a decision.
-                  </Text>
-                </TouchableOpacity>
-                <Button
-                  title="Submit for human review"
-                  onPress={() => void submit()}
-                  loading={busy}
-                  disabled={!photo || !agreed || Platform.OS === "web"}
-                />
+                ) : !timeLeft ? (
+                  <View style={styles.poseIntro}>
+                    <Text style={styles.poseIntroTitle}>That pose expired</Text>
+                    <Text style={styles.body}>
+                      No problem. Get a new pose and take your selfie within 10
+                      minutes.
+                    </Text>
+                    <Button
+                      title="Get a new pose"
+                      loading={posing}
+                      onPress={() => void getPose()}
+                    />
+                  </View>
+                ) : (
+                  <>
+                    <View
+                      style={styles.poseCard}
+                      accessible
+                      accessibilityLabel={`Your pose: ${challenge.label}. ${timeLeft} left.`}
+                    >
+                      <Text style={styles.poseEmoji}>
+                        {poseEmoji(challenge.pose)}
+                      </Text>
+                      <View style={styles.poseCopy}>
+                        <Text style={styles.poseKicker}>YOUR POSE</Text>
+                        <Text style={styles.poseLabel}>{challenge.label}</Text>
+                        <Text style={styles.poseTimer}>{timeLeft} left</Text>
+                      </View>
+                    </View>
+                    <Text style={styles.instructions}>
+                      Copy the pose in a clear front-camera selfie, in good
+                      light. Keep your whole face visible: no sunglasses or
+                      masks. Gallery photos are not accepted.
+                    </Text>
+                    {photo && (
+                      <Image
+                        source={{ uri: photo }}
+                        style={styles.preview}
+                        resizeMode="cover"
+                      />
+                    )}
+                    <Button
+                      title={photo ? "Retake selfie" : "Open front camera"}
+                      variant="secondary"
+                      disabled={busy}
+                      onPress={() => void capture()}
+                    />
+                    {!photo && (
+                      <Button
+                        title="Get a different pose"
+                        variant="ghost"
+                        disabled={busy || posing}
+                        onPress={() => void getPose()}
+                      />
+                    )}
+                  </>
+                )}
+                {!!challenge && !!timeLeft && (
+                  <>
+                    <TouchableOpacity
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: agreed }}
+                      disabled={busy}
+                      onPress={() => setAgreed((v) => !v)}
+                      style={styles.consent}
+                    >
+                      <View style={[styles.checkbox, agreed && styles.checked]}>
+                        {agreed && <Text style={styles.tick}>✓</Text>}
+                      </View>
+                      <Text style={[styles.body, styles.consentText]}>
+                        I agree to Nearry storing this selfie privately for
+                        manual comparison with my profile picture and the
+                        requested pose and queuing the review photo for deletion
+                        after a decision, cancellation, or seven days without a
+                        decision.
+                      </Text>
+                    </TouchableOpacity>
+                    <Button
+                      title="Submit for human review"
+                      onPress={() => void submit()}
+                      loading={busy}
+                      disabled={!photo || !agreed || Platform.OS === "web"}
+                    />
+                  </>
+                )}
               </>
             )}
           </View>
@@ -332,6 +436,42 @@ export function SelfieVerificationScreen({ navigation }: Props) {
   );
 }
 const styles = StyleSheet.create({
+  poseIntro: {
+    gap: spacing.sm,
+    padding: spacing.md,
+    borderRadius: 18,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  poseIntroTitle: { ...typography.body, ...weight("700"), color: colors.text },
+  poseCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 16,
+    padding: 16,
+    borderRadius: 20,
+    backgroundColor: colors.night,
+  },
+  poseEmoji: { fontSize: 52, lineHeight: 62 },
+  poseCopy: { flex: 1, gap: 3 },
+  poseKicker: {
+    fontSize: 11,
+    letterSpacing: 1,
+    color: colors.amberBright,
+    ...weight("800"),
+  },
+  poseLabel: {
+    fontSize: 18,
+    lineHeight: 23,
+    color: "#FFFFFF",
+    ...weight("800"),
+  },
+  poseTimer: {
+    fontSize: 13,
+    color: "rgba(255,255,255,0.75)",
+    ...weight("600"),
+  },
   scroll: { padding: spacing.lg, paddingBottom: spacing.xl, gap: spacing.md },
   heading: { ...typography.display, color: colors.text, fontSize: 30 },
   body: { ...typography.bodySmall, color: colors.textDim, lineHeight: 21 },

@@ -6,6 +6,7 @@ import { submitSelfieImage } from "./selfieVerification";
 export async function submitPersonalSelfie(
   userId: string,
   uri: string,
+  challengeId?: string,
 ): Promise<void> {
   if (Platform.OS === "web")
     throw new Error("Use the Nearry phone app to take your selfie.");
@@ -18,7 +19,7 @@ export async function submitPersonalSelfie(
     const text = await FileSystem.readAsStringAsync(normalized.uri, {
       encoding: FileSystem.EncodingType.Base64,
     });
-    await submitSelfieImage(userId, base64Bytes(text));
+    await submitSelfieImage(userId, base64Bytes(text), challengeId);
   } finally {
     await FileSystem.deleteAsync(normalized.uri, { idempotent: true }).catch(
       () => {},

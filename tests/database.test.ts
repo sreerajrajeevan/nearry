@@ -4651,3 +4651,87 @@ test("concurrent first approvals create exactly one shared group", async (t) => 
     3,
   );
 });
+
+test("selfie poses: the server issues a random pose; a submission must use it once, in time, and the reviewer sees it", async () => {
+  const p = await selfieApplicant();
+  const start = async (id = p.id) =>
+    (await asUser(id, (tx) => tx.query("select start_selfie_challenge() c")))
+      .rows[0].c;
+  const submitWith = (challenge: string, id = p.id, path = p.path) =>
+    asUser(id, (tx) =>
+      tx.query("select submit_personal_selfie($1,true,$2)", [path, challenge]),
+    );
+  const first = await start();
+  const poses = (await db.query("select id,label from selfie_poses()")).rows;
+  assert.ok(poses.length >= 6);
+  assert.ok(poses.some((pose: any) => pose.id === first.pose));
+  assert.equal(
+    first.label,
+    poses.find((pose: any) => pose.id === first.pose).label,
+  );
+  const minutes = (Date.parse(first.expiresAt) - Date.now()) / 60000;
+  assert.ok(minutes > 9 && minutes <= 10, String(minutes));
+  // Challenges are private: not readable or writable directly.
+  await assert.rejects(
+    asUser(p.id, (tx) => tx.query("select * from personal_selfie_challenges")),
+    /permission denied/,
+  );
+  // A new request replaces the old pose.
+  const second = await start();
+  assert.notEqual(second.challengeId, first.challengeId);
+  await assert.rejects(submitWith(first.challengeId), /pose|expired/i);
+  // Another person cannot use my challenge.
+  const other = await selfieApplicant();
+  await assert.rejects(
+    submitWith(second.challengeId, other.id, other.path),
+    /pose|expired/i,
+  );
+  // An expired pose is refused.
+  await db.query(
+    "update personal_selfie_challenges set expires_at=now()-interval '1 second' where user_id=$1",
+    [p.id],
+  );
+  await assert.rejects(submitWith(second.challengeId), /expired/i);
+  const third = await start();
+  await submitWith(third.challengeId);
+  const review = (
+    await db.query(
+      "select status,pose from personal_selfie_reviews where user_id=$1",
+      [p.id],
+    )
+  ).rows[0];
+  assert.deepEqual(review, { status: "pending", pose: third.pose });
+  // One-time: the challenge is consumed.
+  assert.equal(
+    (
+      await db.query(
+        "select count(*)::int n from personal_selfie_challenges where user_id=$1",
+        [p.id],
+      )
+    ).rows[0].n,
+    0,
+  );
+  // No new pose while a review is pending.
+  await assert.rejects(start(), /pending|checked/i);
+  const queue = (
+    await asUser(
+      null,
+      (tx) => tx.query("select * from admin_console_selfie_queue(0,100)"),
+      "service_role",
+    )
+  ).rows.find((r: any) => r.user_id === p.id);
+  assert.equal(queue.pose_label, third.label);
+});
+
+test("selfie poses: older app builds can still submit without a pose, shown to the reviewer as no pose", async () => {
+  const p = await selfieApplicant();
+  await submitSelfie(p.id, p.path);
+  const queue = (
+    await asUser(
+      null,
+      (tx) => tx.query("select * from admin_console_selfie_queue(0,100)"),
+      "service_role",
+    )
+  ).rows.find((r: any) => r.user_id === p.id);
+  assert.equal(queue.pose_label, null);
+});

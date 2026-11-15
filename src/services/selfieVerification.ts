@@ -67,10 +67,37 @@ export async function withdrawPersonalSelfie(): Promise<void> {
   const { error } = await getSupabase()!.rpc("withdraw_personal_selfie");
   if (error) throw new Error(error.message);
 }
+export type SelfieChallenge = {
+  challengeId: string;
+  /** Server pose id, e.g. "peace". */
+  pose: string;
+  /** What to do, e.g. "Peace sign next to your face". */
+  label: string;
+  expiresAt: string;
+};
+/** A fresh random pose from the server, valid for ten minutes and used once. */
+export async function startSelfieChallenge(): Promise<SelfieChallenge> {
+  if (isDemoMode())
+    throw new Error("Selfie review is unavailable in demo mode.");
+  const db = getSupabase();
+  if (!db) throw new Error("Selfie review requires a configured backend.");
+  const { data, error } = await db.rpc("start_selfie_challenge");
+  if (error) throw new Error(error.message);
+  const c = data as Partial<SelfieChallenge> | null;
+  if (!c?.challengeId || !c.pose || !c.label || !c.expiresAt)
+    throw new Error("Could not get a pose. Please try again.");
+  return {
+    challengeId: c.challengeId,
+    pose: c.pose,
+    label: c.label,
+    expiresAt: c.expiresAt,
+  };
+}
 /** Bytes are normalized on device; the private bucket and RPC enforce ownership. */
 export async function submitSelfieImage(
   userId: string,
   bytes: Uint8Array,
+  challengeId?: string,
 ): Promise<void> {
   if (isDemoMode())
     throw new Error("Selfie review is unavailable in demo mode.");
@@ -96,6 +123,7 @@ export async function submitSelfieImage(
   const { error } = await db.rpc("submit_personal_selfie", {
     p_path: name,
     p_consent: true,
+    ...(challengeId ? { p_challenge: challengeId } : {}),
   });
   if (error) {
     // RLS prevents deletion if the submission committed but its response was lost.
