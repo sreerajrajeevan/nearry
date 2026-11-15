@@ -72,12 +72,6 @@ export function PostRow({
 
   const titleBlock = (
     <>
-      {restricted && (
-        <AudienceBadge
-          preference={post.genderPreference}
-          style={styles.audience}
-        />
-      )}
       <Text
         style={[
           styles.title,
@@ -182,6 +176,13 @@ export function PostRow({
           </View>
         </View>
         {!overlay && <View style={styles.plainCopy}>{titleBlock}</View>}
+        {/* Who can join sits in the white area, above the joined count. */}
+        {restricted && (
+          <AudienceBadge
+            preference={post.genderPreference}
+            style={styles.audience}
+          />
+        )}
       </MotionPressable>
       <View style={styles.footer}>
         <View style={styles.joinedIcon}>
@@ -312,7 +313,7 @@ const styles = StyleSheet.create({
   },
   badgeTextMuted: { color: colors.ink },
   photoCopy: { paddingHorizontal: 2, gap: 3 },
-  audience: { marginTop: 0, marginBottom: 4 },
+  audience: { marginTop: 12, marginHorizontal: 16, marginBottom: 0 },
   plainCopy: { paddingHorizontal: 16, paddingTop: 12, gap: 4 },
   title: {
     ...typography.heading,
