@@ -126,3 +126,17 @@ test("crop export follows the preview and clamps drags to image bounds for all a
     /dimensions/,
   );
 });
+
+test("plan cards know my latest request per plan: pending or approved, others ignored", async () => {
+  const { myRequestStatuses } = await import("../src/utils/myRequests");
+  const map = myRequestStatuses([
+    // Newest first, as listMyRequests returns them.
+    { postId: "a", status: "pending" },
+    { postId: "a", status: "declined" },
+    { postId: "b", status: "approved" },
+    { postId: "c", status: "withdrawn" },
+    { postId: "d", status: "declined" },
+    { postId: "e", status: "full" },
+  ] as any);
+  assert.deepEqual(Object.fromEntries(map), { a: "pending", b: "approved" });
+});

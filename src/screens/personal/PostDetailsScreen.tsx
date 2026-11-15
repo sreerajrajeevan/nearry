@@ -1,4 +1,5 @@
 import { Alert } from "../../services/appAlert";
+import { useMyRequests } from "../../store/MyRequestsContext";
 import {
   joinNoteHint,
   planAgeLabel,
@@ -122,6 +123,7 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
   const pending = requests.filter((r) => r.status === "pending");
   const approved = requests.filter((r) => r.status === "approved");
 
+  const myRequests = useMyRequests();
   const [joinOpen, setJoinOpen] = useState(false);
   const [joinError, setJoinError] = useState("");
   const sendJoin = async (note: string) => {
@@ -131,6 +133,7 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
     try {
       await requestToJoin(postId, myId, note);
       setJoinOpen(false);
+      void myRequests?.refresh();
       await load();
     } catch (e) {
       if (isProfileCompletionError(e)) {
@@ -149,6 +152,8 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
     setBusy(key);
     try {
       await fn();
+      // Withdraw / leave change what plan cards show elsewhere.
+      void myRequests?.refresh();
       await load();
     } catch (e) {
       if (key === "join" && isProfileCompletionError(e)) {

@@ -1,4 +1,5 @@
 import React, { useEffect, useRef } from "react";
+import { useMyRequests } from "../store/MyRequestsContext";
 import {
   Animated,
   Easing,
@@ -81,6 +82,7 @@ export function StartingSoon({
   distanceOf: (post: NeedPost) => number | undefined;
   onOpen: (postId: string) => void;
 }) {
+  const mine = useMyRequests()?.statuses;
   if (!posts.length) return null;
   return (
     <View style={styles.section}>
@@ -97,7 +99,13 @@ export function StartingSoon({
       >
         {posts.map((post) => {
           const startsIn = startsInLabel(post.startsAt, now);
-          const spots = spotsLeftLabel(post.spotsLeft);
+          const status = mine?.get(post.id);
+          const spots =
+            status === "pending"
+              ? "Requested"
+              : status === "approved"
+                ? "You're in"
+                : spotsLeftLabel(post.spotsLeft);
           const km = distanceOf(post);
           return (
             <MotionPressable
@@ -132,7 +140,17 @@ export function StartingSoon({
                   {post.title}
                 </Text>
                 <View style={styles.metaRow}>
-                  <Icon name="users" size={13} color={colors.amberBright} />
+                  <Icon
+                    name={
+                      status === "pending"
+                        ? "clock"
+                        : status === "approved"
+                          ? "check"
+                          : "users"
+                    }
+                    size={13}
+                    color={colors.amberBright}
+                  />
                   <Text style={styles.spots}>{spots}</Text>
                   {km != null && (
                     <Text style={styles.meta}>· {formatDistance(km)}</Text>

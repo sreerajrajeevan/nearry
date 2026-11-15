@@ -1,4 +1,5 @@
 import { LoadingState } from "../../components/LoadingState";
+import { useMyRequests } from "../../store/MyRequestsContext";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   View,
@@ -151,13 +152,16 @@ export function NearbyScreen() {
     [point, appliedArea, radiusKm],
   );
 
+  // A stable function, so it can sit in the focus effect's dependencies.
+  const refreshMyRequests = useMyRequests()?.refresh;
   useFocusEffect(
     useCallback(() => {
       void load();
+      void refreshMyRequests?.();
       return () => {
         request.current++;
       };
-    }, [load]),
+    }, [load, refreshMyRequests]),
   );
   useEffect(() => subscribeToPosts(() => void load(true)), [load]);
   useEffect(() => subscribeToOffers(() => void load(true)), [load]);

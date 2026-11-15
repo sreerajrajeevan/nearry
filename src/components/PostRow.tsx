@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useMyPlanStatus } from "../store/MyRequestsContext";
 import { StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { NeedPost } from "../services/mappers";
@@ -50,7 +51,17 @@ export function PostRow({
   const saved = useSavedPlans();
   const bookmarked = saved?.ids.includes(post.id) ?? false;
   const [saving, setSaving] = useState(false);
-  const action = cta ?? (status.accepting ? "Join" : "View");
+  // Once I've asked to join, the card says so instead of offering Join again.
+  const mine = useMyPlanStatus(post.id);
+  const action =
+    cta ??
+    (mine === "pending"
+      ? "Requested"
+      : mine === "approved"
+        ? "You're in"
+        : status.accepting
+          ? "Join"
+          : "View");
   const hostTone =
     HOST_TONES[
       [...post.authorId].reduce((hash, ch) => hash + ch.charCodeAt(0), 0) %
@@ -253,13 +264,40 @@ export function PostRow({
         )}
         <MotionPressable
           accessibilityRole="button"
-          accessibilityLabel={`${action}: ${post.title}`}
-          accessibilityHint="Review the plan and request a place; the host approves requests"
+          accessibilityLabel={`${
+            mine === "pending"
+              ? "Request pending"
+              : mine === "approved"
+                ? "You're in"
+                : action
+          }: ${post.title}`}
+          accessibilityHint={
+            mine
+              ? "Open the plan to see your request"
+              : "Review the plan and request a place; the host approves requests"
+          }
           onPress={onPress}
-          style={[styles.cta, !status.accepting && styles.ctaQuiet]}
+          style={[
+            styles.cta,
+            !status.accepting && styles.ctaQuiet,
+            !cta && mine === "pending" && styles.ctaPending,
+            !cta && mine === "approved" && styles.ctaIn,
+          ]}
         >
+          {!cta && mine && (
+            <Icon
+              name={mine === "pending" ? "clock" : "check"}
+              size={15}
+              color={mine === "pending" ? colors.textDim : colors.success}
+            />
+          )}
           <Text
-            style={[styles.ctaText, !status.accepting && styles.ctaTextQuiet]}
+            style={[
+              styles.ctaText,
+              !status.accepting && styles.ctaTextQuiet,
+              !cta && mine === "pending" && styles.ctaTextPending,
+              !cta && mine === "approved" && styles.ctaTextIn,
+            ]}
           >
             {action}
           </Text>
@@ -408,6 +446,20 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   ctaQuiet: { backgroundColor: colors.ink },
+  ctaPending: {
+    flexDirection: "row",
+    gap: 6,
+    paddingHorizontal: 14,
+    backgroundColor: colors.surfaceRaised,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  ctaIn: {
+    flexDirection: "row",
+    gap: 6,
+    paddingHorizontal: 14,
+    backgroundColor: colors.successSoft,
+  },
   ctaText: {
     ...typography.label,
     fontSize: 14,
@@ -415,4 +467,6 @@ const styles = StyleSheet.create({
     ...weight("800"),
   },
   ctaTextQuiet: { color: colors.onAccent },
+  ctaTextPending: { color: colors.textDim },
+  ctaTextIn: { color: colors.success },
 });
