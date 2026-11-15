@@ -835,7 +835,7 @@ test("a join request sends a trimmed optional note and rejects one over 280 char
   assert.equal(sent.note, "I’ll bring the football");
   handler = () => ({ ...row, note: null });
   await requests.requestToJoin("p1", "u1", "   ");
-  assert.deepEqual(rpc()?.body, { p_post_id: "p1", p_note: null });
+  assert.deepEqual(rpc()?.body, { p_post_id: "p1" });
   calls.length = 0;
   await assert.rejects(
     requests.requestToJoin("p1", "u1", "x".repeat(281)),

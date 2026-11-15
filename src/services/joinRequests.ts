@@ -85,7 +85,9 @@ export async function requestToJoin(
   const supabase = getSupabase()!;
   const { data, error } = await supabase.rpc("request_join", {
     p_post_id: postId,
-    p_note: cleanNote ?? null,
+    // Only send a note when there is one, so a plain join still works
+    // against a database that has not applied migration 00039 yet.
+    ...(cleanNote ? { p_note: cleanNote } : {}),
   });
   if (error) throw new Error(friendlyRequestError(error.message));
   const row = data as Record<string, unknown>;
