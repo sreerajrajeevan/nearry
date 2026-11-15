@@ -1,4 +1,5 @@
 import { Alert } from "../../services/appAlert";
+import { planAgeLabel, planBookingLabel } from "../../utils/planComposer";
 import { AudienceBadge, audienceLabel } from "../../components/AudienceBadge";
 import { ProfileRequired } from "../../components/ProfileRequired";
 import {
@@ -338,13 +339,18 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
                   : ""}
               </Text>
             )}
-            <Text style={styles.meta}>
-              Ages {post.planDetails.ageMin ?? 18}–
-              {post.planDetails.ageMax ?? 100}
-              {post.planDetails.venueBooked
-                ? " · Venue already booked by the host"
-                : ""}
-            </Text>
+            {(!!planAgeLabel(post.planDetails) ||
+              !!post.planDetails.venueBooked) && (
+              <Text style={styles.meta}>
+                {[
+                  planAgeLabel(post.planDetails),
+                  post.planDetails.venueBooked &&
+                    `${planBookingLabel(post.planDetails.activity) ?? "Venue already booked"} by the host`,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </Text>
+            )}
             {post.planDetails.costMode === "split" && (
               <Text style={styles.meta}>
                 Shared cost: ₹

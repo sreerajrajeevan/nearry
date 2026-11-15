@@ -36,3 +36,20 @@ test("age preferences reject impossible or underage ranges before publishing", (
     assert.ok(planPreferencesError(range));
   assert.equal(planPreferencesError({ ageMin: 18, ageMax: 100 }), null);
 });
+
+test("the plan form only asks for experience and bookings where they fit the activity", async () => {
+  const { planAsksLevel, planBookingLabel, planAgeLabel } =
+    await import("../src/utils/planComposer");
+  for (const id of ["movies", "coffee", "food", "walk", undefined] as const)
+    assert.equal(planAsksLevel(id), false, String(id));
+  for (const id of ["badminton", "football", "gym", "other"] as const)
+    assert.equal(planAsksLevel(id), true, id);
+  assert.equal(planBookingLabel("movies"), "Tickets already booked");
+  assert.equal(planBookingLabel("badminton"), "Court already booked");
+  assert.equal(planBookingLabel("coffee"), null);
+  assert.equal(planBookingLabel("walk"), null);
+  assert.equal(planAgeLabel({}), null);
+  assert.equal(planAgeLabel({ ageMin: 18, ageMax: 100 }), null);
+  assert.equal(planAgeLabel({ ageMin: 25, ageMax: 40 }), "Ages 25–40");
+  assert.equal(planAgeLabel({ ageMin: 30 }), "Ages 30+");
+});

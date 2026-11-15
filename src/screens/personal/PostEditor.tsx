@@ -10,6 +10,9 @@ import {
   samePlanDay,
   planCostCents,
   planPreferencesError,
+  planAsksLevel,
+  planBookingLabel,
+  planAgeLabel,
   PlanDetails,
 } from "../../utils/planComposer";
 import { PlanCover } from "../../components/PlanCover";
@@ -140,10 +143,14 @@ export function PostEditor({
     useState<NonNullable<PlanDetails["costMode"]>>("free");
   const [ageMin, setAgeMin] = useState("18"),
     [ageMax, setAgeMax] = useState("100");
+  const [ageOpen, setAgeOpen] = useState(false);
   const [advanced, setAdvanced] = useState(false);
   const [durationOpen, setDurationOpen] = useState(false);
   const [formError, setFormError] = useState("");
   const [publishing, setPublishing] = useState(false);
+  // Only ask what fits the activity: no skill level for a movie, no booking for a walk.
+  const asksLevel = planAsksLevel(activity);
+  const bookingLabel = planBookingLabel(activity);
 
   useEffect(() => {
     if (!postId) return;
@@ -168,6 +175,7 @@ export function PostEditor({
         );
         setAgeMin(String(post.planDetails?.ageMin ?? 18));
         setAgeMax(String(post.planDetails?.ageMax ?? 100));
+        setAgeOpen(!!planAgeLabel(post.planDetails ?? {}));
         setTitle(post.title);
         setDescription(post.description);
         setStartsAtDate(new Date(post.startsAt));
@@ -267,11 +275,11 @@ export function PostEditor({
     const preferences: PlanDetails = {
       activity,
       durationMinutes: duration,
-      level,
-      venueBooked,
+      level: asksLevel ? level : "any",
+      venueBooked: !!bookingLabel && venueBooked,
       costMode,
-      ageMin: Number(ageMin),
-      ageMax: Number(ageMax),
+      ageMin: ageOpen ? Number(ageMin) : 18,
+      ageMax: ageOpen ? Number(ageMax) : 100,
       ...(costMode === "split"
         ? { totalCostCents: Math.round(Number(cost) * 100) }
         : {}),
@@ -447,11 +455,11 @@ export function PostEditor({
   const preferences: PlanDetails = {
     activity,
     durationMinutes: duration,
-    level,
-    venueBooked,
+    level: asksLevel ? level : "any",
+    venueBooked: !!bookingLabel && venueBooked,
     costMode,
-    ageMin: Number(ageMin),
-    ageMax: Number(ageMax),
+    ageMin: ageOpen ? Number(ageMin) : 18,
+    ageMax: ageOpen ? Number(ageMax) : 100,
   };
   const preview: NeedPost = {
     id: "preview",
@@ -476,6 +484,8 @@ export function PostEditor({
     const previous = PLAN_ACTIVITIES.find((x) => x.id === activity);
     if (!title.trim() || title === previous?.title) setTitle(item.title);
     setActivity(item.id);
+    if (!planAsksLevel(item.id)) setLevel("any");
+    if (!planBookingLabel(item.id)) setVenueBooked(false);
     setTags((current) => [
       ...new Set([...current.filter((t) => t !== previous?.tag), item.tag]),
     ]);
@@ -680,30 +690,32 @@ export function PostEditor({
             onDraftChange={setUnfinishedLocation}
             disabled={publishing}
           />
-          <TouchableOpacity
-            accessibilityRole="switch"
-            accessibilityLabel="Venue already booked"
-            accessibilityState={{ checked: venueBooked }}
-            aria-checked={venueBooked}
-            onPress={() => setVenueBooked(!venueBooked)}
-            disabled={publishing}
-            style={styles.settingRow}
-          >
-            <View style={styles.flex}>
-              <Text style={styles.label}>Venue already booked</Text>
-              <Text style={styles.help}>
-                Let people know if booking is still needed.
-              </Text>
-            </View>
-            <View style={[styles.toggle, venueBooked && styles.toggleOn]}>
-              <View
-                style={[
-                  styles.toggleThumb,
-                  venueBooked && { alignSelf: "flex-end" },
-                ]}
-              />
-            </View>
-          </TouchableOpacity>
+          {bookingLabel && (
+            <TouchableOpacity
+              accessibilityRole="switch"
+              accessibilityLabel={bookingLabel}
+              accessibilityState={{ checked: venueBooked }}
+              aria-checked={venueBooked}
+              onPress={() => setVenueBooked(!venueBooked)}
+              disabled={publishing}
+              style={styles.settingRow}
+            >
+              <View style={styles.flex}>
+                <Text style={styles.label}>{bookingLabel}</Text>
+                <Text style={styles.help}>
+                  Let people know if booking is still needed.
+                </Text>
+              </View>
+              <View style={[styles.toggle, venueBooked && styles.toggleOn]}>
+                <View
+                  style={[
+                    styles.toggleThumb,
+                    venueBooked && { alignSelf: "flex-end" },
+                  ]}
+                />
+              </View>
+            </TouchableOpacity>
+          )}
         </PlanSection>
         <PlanSection number={5} title="Who can join">
           <Text style={styles.label}>People needed</Text>
@@ -751,43 +763,77 @@ export function PostEditor({
             ]}
             disabled={publishing}
           />
-          <Choices
-            label="Experience level"
-            value={level}
-            onChange={(v) => setLevel(v as typeof level)}
-            items={[
-              { value: "any", label: "Any" },
-              { value: "beginner", label: "Beginner" },
-              { value: "intermediate", label: "Intermediate" },
-              { value: "advanced", label: "Advanced" },
-            ]}
+          {asksLevel && (
+            <>
+              <Choices
+                label="Experience level"
+                value={level}
+                onChange={(v) => setLevel(v as typeof level)}
+                items={[
+                  { value: "any", label: "Any" },
+                  { value: "beginner", label: "Beginner" },
+                  { value: "intermediate", label: "Intermediate" },
+                  { value: "advanced", label: "Advanced" },
+                ]}
+                disabled={publishing}
+              />
+              <Text style={styles.help}>
+                Level is a guide for the group, not a verified skill rating.
+              </Text>
+            </>
+          )}
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel={
+              ageOpen ? "Remove age limit" : "Set an age range"
+            }
+            accessibilityState={{ expanded: ageOpen }}
             disabled={publishing}
-          />
-          <Text style={styles.help}>
-            Level is a guide for the group, not a verified skill rating.
-          </Text>
-          <View style={styles.row}>
-            <View style={styles.half}>
-              <Input
-                label="Minimum age"
-                keyboardType="number-pad"
-                value={ageMin}
-                maxLength={3}
-                onChangeText={(v) => setAgeMin(v.replace(/[^0-9]/g, ""))}
-                editable={!publishing}
-              />
+            onPress={() => {
+              if (ageOpen) {
+                setAgeMin("18");
+                setAgeMax("100");
+              }
+              setAgeOpen(!ageOpen);
+            }}
+            style={styles.settingRow}
+          >
+            <View style={styles.flex}>
+              <Text style={styles.label}>Age</Text>
+              <Text style={styles.help}>
+                {ageOpen
+                  ? "Only people in this range can request to join."
+                  : "Any adult (18+)"}
+              </Text>
             </View>
-            <View style={styles.half}>
-              <Input
-                label="Maximum age"
-                keyboardType="number-pad"
-                value={ageMax}
-                maxLength={3}
-                onChangeText={(v) => setAgeMax(v.replace(/[^0-9]/g, ""))}
-                editable={!publishing}
-              />
+            <Text style={styles.ageLink}>
+              {ageOpen ? "Remove limit" : "Set an age range"}
+            </Text>
+          </TouchableOpacity>
+          {ageOpen && (
+            <View style={styles.row}>
+              <View style={styles.half}>
+                <Input
+                  label="Minimum age"
+                  keyboardType="number-pad"
+                  value={ageMin}
+                  maxLength={3}
+                  onChangeText={(v) => setAgeMin(v.replace(/[^0-9]/g, ""))}
+                  editable={!publishing}
+                />
+              </View>
+              <View style={styles.half}>
+                <Input
+                  label="Maximum age"
+                  keyboardType="number-pad"
+                  value={ageMax}
+                  maxLength={3}
+                  onChangeText={(v) => setAgeMax(v.replace(/[^0-9]/g, ""))}
+                  editable={!publishing}
+                />
+              </View>
             </View>
-          </View>
+          )}
           {postId && (
             <Text style={styles.help}>
               Your preferences must include the people already approved.
@@ -1192,6 +1238,7 @@ const styles = StyleSheet.create({
   },
   flex: { flex: 1, minWidth: 0 },
   label: { fontSize: 13, ...weight("600"), color: colors.text },
+  ageLink: { fontSize: 13, ...weight("700"), color: colors.amberDeep },
   toggle: {
     width: 44,
     height: 26,
