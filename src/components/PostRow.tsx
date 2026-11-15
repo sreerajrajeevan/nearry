@@ -62,11 +62,14 @@ export function PostRow({
       : `${post.spotsLeft} spots left`
     : status.label;
   const where =
-    distanceKm != null
-      ? `${formatDistance(distanceKm)} away`
-      : (post.venueName ?? "");
+    distanceKm != null ? formatDistance(distanceKm) : (post.venueName ?? "");
   const when = formatWhen(post.startsAt, now);
-  const cost = post.costCents != null ? planCost(post) : "";
+  const cost =
+    post.costCents == null
+      ? ""
+      : post.costCents === 0
+        ? "Free"
+        : planCost(post);
   const restricted =
     post.genderPreference === "female" || post.genderPreference === "male";
 
@@ -138,25 +141,59 @@ export function PostRow({
             <View style={styles.coverSizer} />
             <View style={styles.coverContent}>
               <View style={styles.topRow}>
-                <View style={styles.hostPill}>
-                  {post.authorAvatarUrl ? (
-                    <Avatar
-                      name={post.authorName}
-                      uri={post.authorAvatarUrl}
-                      size={24}
-                    />
-                  ) : (
+                <View style={styles.hostColumn}>
+                  <View style={styles.hostPill}>
+                    {post.authorAvatarUrl ? (
+                      <Avatar
+                        name={post.authorName}
+                        uri={post.authorAvatarUrl}
+                        size={24}
+                      />
+                    ) : (
+                      <View
+                        style={[
+                          styles.hostAvatar,
+                          { backgroundColor: hostTone },
+                        ]}
+                      >
+                        <Text style={styles.hostInitials}>
+                          {initialsOf(post.authorName)}
+                        </Text>
+                      </View>
+                    )}
+                    <Text style={styles.hostName} numberOfLines={1}>
+                      {post.authorName}
+                    </Text>
+                  </View>
+                  {restricted && (
                     <View
-                      style={[styles.hostAvatar, { backgroundColor: hostTone }]}
+                      style={[
+                        styles.onlyTag,
+                        {
+                          backgroundColor:
+                            post.genderPreference === "female"
+                              ? "#FCE8F1"
+                              : "#E6F0FC",
+                        },
+                      ]}
                     >
-                      <Text style={styles.hostInitials}>
-                        {initialsOf(post.authorName)}
+                      <Text
+                        style={[
+                          styles.onlyText,
+                          {
+                            color:
+                              post.genderPreference === "female"
+                                ? "#8A2754"
+                                : "#205A91",
+                          },
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {post.genderPreference === "female" ? "♀ " : "♂ "}
+                        {audienceLabel(post.genderPreference)}
                       </Text>
                     </View>
                   )}
-                  <Text style={styles.hostName} numberOfLines={1}>
-                    {post.authorName}
-                  </Text>
                 </View>
                 <View
                   style={[styles.badge, !status.accepting && styles.badgeMuted]}
@@ -181,43 +218,12 @@ export function PostRow({
         <View style={styles.joinedIcon}>
           <Icon name="users" size={14} color={colors.textDim} />
         </View>
-        {/* A slim "only" tag under the count fits beside the Join button,
-            so the white footer keeps its usual height. */}
-        <View style={styles.joinedCopy}>
-          <Text style={styles.joined}>
-            <Text style={styles.joinedCount}>
-              {post.joinedCount} of {post.vacancies}
-            </Text>{" "}
-            joined
-          </Text>
-          {restricted && (
-            <View
-              style={[
-                styles.onlyTag,
-                {
-                  backgroundColor:
-                    post.genderPreference === "female" ? "#FCE8F1" : "#E6F0FC",
-                },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.onlyText,
-                  {
-                    color:
-                      post.genderPreference === "female"
-                        ? "#8A2754"
-                        : "#205A91",
-                  },
-                ]}
-                numberOfLines={1}
-              >
-                {post.genderPreference === "female" ? "♀ " : "♂ "}
-                {audienceLabel(post.genderPreference)}
-              </Text>
-            </View>
-          )}
-        </View>
+        <Text style={styles.joined}>
+          <Text style={styles.joinedCount}>
+            {post.joinedCount} of {post.vacancies}
+          </Text>{" "}
+          joined
+        </Text>
         {saved && (
           <MotionPressable
             accessibilityRole="button"
@@ -289,7 +295,7 @@ const styles = StyleSheet.create({
   },
   topRow: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     justifyContent: "space-between",
     gap: 8,
   },
@@ -323,6 +329,7 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   badge: {
+    marginTop: 4,
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 999,
@@ -372,9 +379,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  joinedCopy: { flex: 1, minWidth: 0, alignItems: "flex-start", gap: 3 },
-  joined: { ...typography.bodySmall, color: colors.textDim },
-  onlyTag: { paddingHorizontal: 6, paddingVertical: 1, borderRadius: 6 },
+  joined: { ...typography.bodySmall, color: colors.textDim, flex: 1 },
+  hostColumn: {
+    flexShrink: 1,
+    minWidth: 0,
+    alignItems: "flex-start",
+    gap: 6,
+  },
+  onlyTag: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 },
   onlyText: { fontSize: 11, lineHeight: 15, ...weight("700") },
   joinedCount: { color: colors.ink, ...weight("800") },
   save: {
