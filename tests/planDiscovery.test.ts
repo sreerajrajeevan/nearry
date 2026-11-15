@@ -449,3 +449,32 @@ test("notification times read as relative phrases, not raw timestamps", async ()
   );
   assert.equal(timeAgo("not a date", now), "");
 });
+
+test("starting soon: open plans with a spot left in the next 3 hours, soonest first", async () => {
+  const { startingSoonPlans, startsInLabel, spotsLeftLabel } =
+    await import("../src/utils/planDiscovery");
+  const now = new Date(2026, 10, 15, 17, 0);
+  const at = (mins: number) => new Date(now.getTime() + mins * 60000);
+  const posts = [
+    plan("later", at(200)),
+    plan("soon", at(45), { spotsLeft: 1, joinedCount: 1 }),
+    plan("full", at(30), { spotsLeft: 0, joinedCount: 2 }),
+    plan("closed", at(20), { status: "closed" }),
+    plan("past", at(-5)),
+    plan("soonest", at(10)),
+    plan("expired", at(60), { expiresAt: at(-1).toISOString() }),
+  ];
+  assert.deepEqual(
+    startingSoonPlans(posts, now).map((p) => p.id),
+    ["soonest", "soon"],
+  );
+  assert.equal(startsInLabel(at(0.5).toISOString(), now), "Starting now");
+  assert.equal(startsInLabel(at(45).toISOString(), now), "Starts in 45 min");
+  assert.equal(startsInLabel(at(60).toISOString(), now), "Starts in 1 hr");
+  assert.equal(
+    startsInLabel(at(80).toISOString(), now),
+    "Starts in 1 hr 20 min",
+  );
+  assert.equal(spotsLeftLabel(1), "1 spot left");
+  assert.equal(spotsLeftLabel(3), "3 spots left");
+});

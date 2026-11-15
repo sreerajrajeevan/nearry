@@ -28,6 +28,7 @@ import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
 import { PostRow } from "../../components/PostRow";
 import { FeaturedOffers } from "../../components/FeaturedOffers";
+import { StartingSoon } from "../../components/StartingSoon";
 import { VenueRow } from "../../components/VenueRow";
 import { DiscoverySearch } from "../../components/DiscoverySearch";
 import { colors, typography, spacing, weight } from "../../theme";
@@ -43,6 +44,7 @@ import { PlanFilterSheet } from "../../components/PlanFilterSheet";
 import { Icon } from "../../components/Icon";
 import {
   discoveryPlans,
+  startingSoonPlans,
   planDistance,
   DEFAULT_PLAN_OPTIONS,
   PLAN_SORT_LABELS,
@@ -208,6 +210,20 @@ export function NearbyScreen() {
       distances,
       excludeAuthorId: profile?.id ?? session?.user.id,
     },
+    now,
+  );
+  // Ignores the day filter: "soon" is always the next few hours.
+  const startingSoon = startingSoonPlans(
+    discoveryPlans(
+      posts,
+      {
+        ...options,
+        date: "all",
+        distances,
+        excludeAuthorId: profile?.id ?? session?.user.id,
+      },
+      now,
+    ),
     now,
   );
   const visibleOffers = offers.filter(
@@ -451,6 +467,14 @@ export function NearbyScreen() {
               now={now}
               onOpen={(offerId) =>
                 navigation.navigate("OfferDetails", { offerId })
+              }
+            />
+            <StartingSoon
+              posts={startingSoon}
+              now={now}
+              distanceOf={(post) => planDistance(post, distances)}
+              onOpen={(postId) =>
+                navigation.navigate("PostDetails", { postId })
               }
             />
             <View style={styles.plansHeading}>
