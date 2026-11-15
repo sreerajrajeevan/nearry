@@ -1,5 +1,10 @@
 import { Alert } from "../../services/appAlert";
 import { DateSheet, TimeSheet } from "../../components/DateTimeSheets";
+import {
+  FormSection,
+  SlotFields,
+  SpotlightToggle,
+} from "../../components/OfferFields";
 import React, { useCallback, useRef, useState } from "react";
 import {
   View,
@@ -14,7 +19,6 @@ import { PageHeading } from "../../components/PageHeading";
 import { Screen } from "../../components/Screen";
 import { Button } from "../../components/Button";
 import { Input } from "../../components/Input";
-import { Badge } from "../../components/Badge";
 import { EmptyState } from "../../components/EmptyState";
 import { colors, typography, spacing, surfaces } from "../../theme";
 import { useAuth } from "../../store/AuthContext";
@@ -87,7 +91,8 @@ export function CreateOfferScreen({ navigation }: Props) {
   } | null>(null);
   const [capacity, setCapacity] = useState("10");
   const [duration, setDuration] = useState("60");
-  const [resource, setResource] = useState("Main");
+  // One shared calendar per offer; businesses no longer name a staff member.
+  const resource = "Main";
   const [coverPhotoUrl, setCoverPhotoUrl] = useState<string | null>(null);
   const [isSpotlight, setIsSpotlight] = useState(false);
   const [uploadingCover, setUploadingCover] = useState(false);
@@ -192,7 +197,6 @@ export function CreateOfferScreen({ navigation }: Props) {
       setEndsAtDate(null);
       setCapacity("10");
       setDuration("60");
-      setResource("Main");
       navigation.navigate("Dashboard");
     } catch (e) {
       setFormError(
@@ -220,128 +224,122 @@ export function CreateOfferScreen({ navigation }: Props) {
         contentContainerStyle={styles.scroll}
         keyboardShouldPersistTaps="handled"
       >
-        <PageHeading
-          greeting="A hello from your business."
-          title={"A good offer.\nA new face."}
-        />
-        <View style={styles.statusRow}>
-          <Badge label="VERIFIED — CAN PUBLISH" tone="green" />
-        </View>
+        <PageHeading greeting="Fill a quiet slot" title="New offer" />
 
-        <Input
-          label="Title"
-          placeholder="A fresh haircut, just around the corner"
-          value={title}
-          onChangeText={setTitle}
-        />
-        <Input
-          label="Description"
-          placeholder="What's included, fine print, how to redeem"
-          value={description}
-          onChangeText={setDescription}
-          multiline
-          numberOfLines={4}
-          style={styles.multiline}
-        />
-        <Text style={styles.label}>Cover photo</Text>
-        <TouchableOpacity
-          onPress={async () => {
-            try {
-              const uri = await pickPhoto();
-              if (!uri) return;
-              setUploadingCover(true);
-              const url = await uploadPhoto(profile.id, uri, "offers");
-              setCoverPhotoUrl(url);
-            } catch (e) {
-              Alert.alert(
-                "Could not upload",
-                e instanceof Error ? e.message : "Try again.",
-              );
-            } finally {
-              setUploadingCover(false);
-            }
-          }}
-          style={styles.coverPicker}
-          disabled={uploadingCover}
-        >
-          {coverPhotoUrl ? (
-            <Image
-              source={{ uri: coverPhotoUrl }}
-              style={styles.coverPreview}
-            />
-          ) : (
-            <Text style={styles.coverPlaceholder}>
-              {uploadingCover ? "Uploading…" : "+ Add cover photo"}
-            </Text>
-          )}
-        </TouchableOpacity>
-        {coverPhotoUrl && (
-          <TouchableOpacity onPress={() => setCoverPhotoUrl(null)}>
-            <Text style={styles.removeCover}>Remove photo</Text>
-          </TouchableOpacity>
-        )}
-        <TouchableOpacity
-          onPress={() => setIsSpotlight(!isSpotlight)}
-          style={styles.spotlightRow}
-        >
-          <View style={[styles.checkbox, isSpotlight && styles.checkboxActive]}>
-            {isSpotlight && <Text style={styles.checkmark}>✓</Text>}
-          </View>
-          <Text style={styles.spotlightLabel}>
-            Feature in Spotlight on the home page
-          </Text>
-        </TouchableOpacity>
-        <View style={styles.row}>
-          <View style={styles.half}>
-            <Input
-              label="Discount (%)"
-              placeholder="20"
-              value={discount}
-              onChangeText={(t: string) =>
-                setDiscount(t.replace(/[^0-9]/g, ""))
+        <FormSection title="About the offer">
+          <Input
+            label="Title"
+            placeholder="A fresh haircut, just around the corner"
+            value={title}
+            onChangeText={setTitle}
+          />
+          <Input
+            label="Description"
+            placeholder="What's included, fine print, how to redeem"
+            value={description}
+            onChangeText={setDescription}
+            multiline
+            numberOfLines={4}
+            style={styles.multiline}
+          />
+          <Text style={styles.label}>Cover photo</Text>
+          <TouchableOpacity
+            onPress={async () => {
+              try {
+                const uri = await pickPhoto();
+                if (!uri) return;
+                setUploadingCover(true);
+                const url = await uploadPhoto(profile.id, uri, "offers");
+                setCoverPhotoUrl(url);
+              } catch (e) {
+                Alert.alert(
+                  "Could not upload",
+                  e instanceof Error ? e.message : "Try again.",
+                );
+              } finally {
+                setUploadingCover(false);
               }
-              keyboardType="number-pad"
+            }}
+            style={styles.coverPicker}
+            disabled={uploadingCover}
+          >
+            {coverPhotoUrl ? (
+              <Image
+                source={{ uri: coverPhotoUrl }}
+                style={styles.coverPreview}
+              />
+            ) : (
+              <Text style={styles.coverPlaceholder}>
+                {uploadingCover ? "Uploading…" : "+ Add cover photo"}
+              </Text>
+            )}
+          </TouchableOpacity>
+          {coverPhotoUrl && (
+            <TouchableOpacity onPress={() => setCoverPhotoUrl(null)}>
+              <Text style={styles.removeCover}>Remove photo</Text>
+            </TouchableOpacity>
+          )}
+        </FormSection>
+        <FormSection title="The deal" hint="Add a discount, a price, or both.">
+          <View style={styles.row}>
+            <View style={styles.half}>
+              <Input
+                label="Discount (%)"
+                placeholder="20"
+                value={discount}
+                onChangeText={(t: string) =>
+                  setDiscount(t.replace(/[^0-9]/g, ""))
+                }
+                keyboardType="number-pad"
+              />
+            </View>
+            <View style={styles.half}>
+              <Input
+                label="Price (₹)"
+                placeholder="499"
+                value={price}
+                onChangeText={(t: string) =>
+                  setPrice(t.replace(/[^0-9.]/g, ""))
+                }
+                keyboardType="decimal-pad"
+              />
+            </View>
+          </View>
+          <SpotlightToggle value={isSpotlight} onChange={setIsSpotlight} />
+        </FormSection>
+        <FormSection
+          title="When people can book"
+          hint="Slots are created between the start and the end."
+        >
+          <View style={styles.row}>
+            <DateTimeField
+              label="Start date"
+              value={startsAtDate ? fmtDate(startsAtDate) : null}
+              placeholder="Pick date"
+              onPress={() => setPicker({ field: "startsAt", mode: "date" })}
+            />
+            <DateTimeField
+              label="Start time"
+              value={startsAtDate ? fmtTime(startsAtDate) : null}
+              placeholder="Pick time"
+              onPress={() => setPicker({ field: "startsAt", mode: "time" })}
             />
           </View>
-          <View style={styles.half}>
-            <Input
-              label="Price (₹)"
-              placeholder="499"
-              value={price}
-              onChangeText={(t: string) => setPrice(t.replace(/[^0-9.]/g, ""))}
-              keyboardType="decimal-pad"
+          <View style={styles.row}>
+            <DateTimeField
+              label="End date"
+              value={endsAtDate ? fmtDate(endsAtDate) : null}
+              placeholder="Pick date"
+              onPress={() => setPicker({ field: "endsAt", mode: "date" })}
+            />
+            <DateTimeField
+              label="End time"
+              value={endsAtDate ? fmtTime(endsAtDate) : null}
+              placeholder="Pick time"
+              onPress={() => setPicker({ field: "endsAt", mode: "time" })}
             />
           </View>
-        </View>
-        <Text style={styles.fieldLabel}>Booking window</Text>
-        <View style={styles.row}>
-          <DateTimeField
-            label="Start date"
-            value={startsAtDate ? fmtDate(startsAtDate) : null}
-            placeholder="Pick date"
-            onPress={() => setPicker({ field: "startsAt", mode: "date" })}
-          />
-          <DateTimeField
-            label="Start time"
-            value={startsAtDate ? fmtTime(startsAtDate) : null}
-            placeholder="Pick time"
-            onPress={() => setPicker({ field: "startsAt", mode: "time" })}
-          />
-        </View>
-        <View style={styles.row}>
-          <DateTimeField
-            label="End date"
-            value={endsAtDate ? fmtDate(endsAtDate) : null}
-            placeholder="Pick date"
-            onPress={() => setPicker({ field: "endsAt", mode: "date" })}
-          />
-          <DateTimeField
-            label="End time"
-            value={endsAtDate ? fmtTime(endsAtDate) : null}
-            placeholder="Pick time"
-            onPress={() => setPicker({ field: "endsAt", mode: "time" })}
-          />
-        </View>
+        </FormSection>
         {picker?.mode === "date" && (
           <DateSheet
             visible
@@ -361,25 +359,14 @@ export function CreateOfferScreen({ navigation }: Props) {
             onClose={() => setPicker(null)}
           />
         )}
-        <Input
-          label="Places per slot"
-          placeholder="10"
-          value={capacity}
-          onChangeText={(t: string) => setCapacity(t.replace(/[^0-9]/g, ""))}
-          keyboardType="number-pad"
-        />
-
-        <Input
-          label="Slot duration (minutes)"
-          value={duration}
-          onChangeText={setDuration}
-          keyboardType="number-pad"
-        />
-        <Input
-          label="Staff member or space"
-          value={resource}
-          onChangeText={setResource}
-        />
+        <FormSection title="Slots">
+          <SlotFields
+            capacity={capacity}
+            onCapacity={setCapacity}
+            minutes={duration}
+            onMinutes={setDuration}
+          />
+        </FormSection>
         {formError ? <Text style={styles.formError}>{formError}</Text> : null}
         <Button
           title="Save draft"
