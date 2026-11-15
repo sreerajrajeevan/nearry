@@ -1,4 +1,6 @@
 import { Alert } from "../services/appAlert";
+import { timeAgo } from "../utils/format";
+import { BackButton } from "../components/BackButton";
 import { PageHeading } from "../components/PageHeading";
 import { LoadingState } from "../components/LoadingState";
 import React, { useCallback, useRef, useState } from "react";
@@ -180,15 +182,7 @@ export function NotificationCenterScreen({
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scroll}
       >
-        <TouchableOpacity
-          accessibilityRole="button"
-          onPress={() => navigation.goBack()}
-          style={{ marginBottom: spacing.md }}
-        >
-          <Text style={{ ...typography.label, color: colors.textDim }}>
-            ← Back
-          </Text>
-        </TouchableOpacity>
+        <BackButton onPress={() => navigation.goBack()} />
         <PageHeading
           compact
           title="Notifications"
@@ -249,9 +243,7 @@ export function NotificationCenterScreen({
                 <Text style={styles.body}>{n.body}</Text>
                 <View style={styles.metaRow}>
                   <Badge label={kindLabel(n.kind)} tone={kindTone(n.kind)} />
-                  <Text style={styles.time}>
-                    {new Date(n.createdAt).toLocaleString()}
-                  </Text>
+                  <Text style={styles.time}>{timeAgo(n.createdAt)}</Text>
                 </View>
               </TouchableOpacity>
               <TouchableOpacity

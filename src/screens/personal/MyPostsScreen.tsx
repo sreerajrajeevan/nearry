@@ -1,4 +1,5 @@
 import { AudienceBadge } from "../../components/AudienceBadge";
+import { BackButton } from "../../components/BackButton";
 import { LoadingState } from "../../components/LoadingState";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -118,13 +119,7 @@ export function MyPostsScreen({ navigation }: Props) {
         onRefresh={() => void load(true)}
         ListHeaderComponent={
           <>
-            <TouchableOpacity
-              accessibilityRole="button"
-              style={styles.back}
-              onPress={() => navigation.goBack()}
-            >
-              <Text style={styles.backText}>← Back</Text>
-            </TouchableOpacity>
+            <BackButton onPress={() => navigation.goBack()} />
             <PageHeading
               greeting="The hellos you started."
               title="My posts"
@@ -212,13 +207,6 @@ export function MyPostsScreen({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   content: { flexGrow: 1, paddingBottom: spacing.xl },
-  back: {
-    alignSelf: "flex-start",
-    minHeight: 44,
-    justifyContent: "center",
-    marginBottom: spacing.sm,
-  },
-  backText: { ...typography.label, color: colors.textDim },
   create: { marginBottom: spacing.md },
   loading: {
     ...typography.bodySmall,

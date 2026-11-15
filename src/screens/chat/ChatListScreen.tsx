@@ -1,4 +1,5 @@
 import { RequestNote } from "../../components/RequestNote";
+import { BackButton } from "../../components/BackButton";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   AppState,
@@ -249,15 +250,7 @@ export function ChatListScreen({ navigation }: Props) {
         contentContainerStyle={styles.scroll}
       >
         {navigation.canGoBack?.() && (
-          <TouchableOpacity
-            accessibilityRole="button"
-            accessibilityLabel="Back"
-            style={styles.back}
-            onPress={() => navigation.goBack?.()}
-          >
-            <Icon name="arrow-left" size={16} />
-            <Text style={styles.meta}>Back</Text>
-          </TouchableOpacity>
+          <BackButton onPress={() => navigation.goBack?.()} />
         )}
         <View style={styles.headerRow}>
           <Text accessibilityRole="header" style={styles.title}>
@@ -650,13 +643,6 @@ export function ChatListScreen({ navigation }: Props) {
 }
 const styles = StyleSheet.create({
   scroll: { paddingBottom: spacing.xl },
-  back: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    minHeight: 44,
-    alignSelf: "flex-start",
-  },
   headerRow: {
     flexDirection: "row",
     alignItems: "center",

@@ -1,4 +1,5 @@
 import { Alert } from "../../services/appAlert";
+import { BackButton } from "../../components/BackButton";
 import { LoadingState } from "../../components/LoadingState";
 import React, { useCallback, useEffect, useState } from "react";
 import {
@@ -148,13 +149,7 @@ export function MyOffersScreen({ navigation }: Props) {
         onRefresh={() => void load(true)}
         ListHeaderComponent={
           <>
-            <TouchableOpacity
-              accessibilityRole="button"
-              style={styles.back}
-              onPress={() => navigation.goBack()}
-            >
-              <Text style={styles.backText}>← Back</Text>
-            </TouchableOpacity>
+            <BackButton onPress={() => navigation.goBack()} />
             <PageHeading
               greeting="Your shop window."
               title="My offers"
@@ -290,13 +285,6 @@ export function MyOffersScreen({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   content: { flexGrow: 1, paddingBottom: spacing.xl },
-  back: {
-    alignSelf: "flex-start",
-    minHeight: 44,
-    justifyContent: "center",
-    marginBottom: spacing.sm,
-  },
-  backText: { ...typography.label, color: colors.textDim },
   create: { marginBottom: spacing.md },
   loading: {
     ...typography.bodySmall,

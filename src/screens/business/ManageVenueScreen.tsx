@@ -1,4 +1,5 @@
 import { Alert } from "../../services/appAlert";
+import { BackButton } from "../../components/BackButton";
 import { PageHeading } from "../../components/PageHeading";
 import { LoadingDots } from "../../components/LoadingDots";
 import React, { useCallback, useState } from "react";
@@ -123,9 +124,7 @@ export function ManageVenueScreen() {
   return (
     <Screen>
       <ScrollView showsVerticalScrollIndicator={false}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.back}>← Back</Text>
-        </TouchableOpacity>
+        <BackButton onPress={() => navigation.goBack()} />
         <PageHeading
           compact
           title="My venue"
@@ -235,11 +234,6 @@ export function ManageVenueScreen() {
 }
 
 const styles = StyleSheet.create({
-  back: {
-    ...typography.label,
-    color: colors.textDim,
-    marginBottom: spacing.md,
-  },
   title: { ...typography.title, color: colors.text, marginBottom: spacing.sm },
   venueName: {
     ...typography.heading,

@@ -50,3 +50,21 @@ export function formatDistance(km: number): string {
     ? `${Math.max(0, Math.round(km * 1000))} m`
     : `${km.toFixed(1)} km`;
 }
+
+/** "Just now", "12 min ago", "3 hr ago", "Yesterday", then a short date. */
+export function timeAgo(iso: string, now = new Date()): string {
+  const date = new Date(iso);
+  if (!Number.isFinite(date.getTime())) return "";
+  const mins = Math.max(
+    0,
+    Math.floor((now.getTime() - date.getTime()) / 60000),
+  );
+  if (mins < 1) return "Just now";
+  if (mins < 60) return `${mins} min ago`;
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  if (date >= today) return `${Math.floor(mins / 60)} hr ago`;
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+  if (date >= yesterday) return "Yesterday";
+  return date.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+}

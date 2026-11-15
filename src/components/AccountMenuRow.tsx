@@ -4,6 +4,21 @@ import { Icon, IconName } from "./Icon";
 import { MotionPressable } from "./Motion";
 import { colors, spacing, typography, weight } from "../theme";
 
+/** A white card of AccountMenuRows with hairline dividers between them. */
+export function AccountMenuGroup({ children }: { children: React.ReactNode }) {
+  const rows = React.Children.toArray(children).filter(Boolean);
+  return (
+    <View style={styles.group}>
+      {rows.map((row, index) => (
+        <React.Fragment key={index}>
+          {index > 0 && <View style={styles.divider} />}
+          {row}
+        </React.Fragment>
+      ))}
+    </View>
+  );
+}
+
 export function AccountMenuRow({
   icon,
   title,
@@ -42,6 +57,19 @@ export function AccountMenuRow({
   );
 }
 const styles = StyleSheet.create({
+  group: {
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 20,
+    overflow: "hidden",
+    marginBottom: spacing.md,
+  },
+  divider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.border,
+    marginLeft: 66,
+  },
   row: {
     flexDirection: "row",
     alignItems: "center",

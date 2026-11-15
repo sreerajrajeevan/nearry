@@ -2,6 +2,7 @@ import {
   hasPostMeetingPlace,
   requiredMeetingPlaceMessage,
 } from "../../utils/postLocation";
+import { BackButton } from "../../components/BackButton";
 import { Alert } from "../../services/appAlert";
 import React, { useEffect, useRef, useState } from "react";
 import {
@@ -510,12 +511,7 @@ export function PostEditor({
         keyboardShouldPersistTaps="handled"
       >
         {postId && (
-          <Button
-            title="Back"
-            variant="ghost"
-            disabled={publishing}
-            onPress={() => onCancel?.()}
-          />
+          <BackButton disabled={publishing} onPress={() => onCancel?.()} />
         )}
         <View style={styles.pageTop}>
           <Text style={styles.eyebrow}>

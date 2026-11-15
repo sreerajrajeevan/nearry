@@ -1,4 +1,5 @@
 import { PageHeading } from "../../components/PageHeading";
+import { BackButton } from "../../components/BackButton";
 import { LoadingState } from "../../components/LoadingState";
 import React, { useCallback, useRef, useState } from "react";
 import {
@@ -66,12 +67,7 @@ export function PlaceDetailsScreen({ route, navigation }: Props) {
   return (
     <Screen>
       <ScrollView contentContainerStyle={styles.scroll}>
-        <TouchableOpacity
-          accessibilityRole="button"
-          onPress={() => navigation.goBack()}
-        >
-          <Text style={styles.back}>← Back</Text>
-        </TouchableOpacity>
+        <BackButton onPress={() => navigation.goBack()} />
         <PageHeading compact title={place.name} subtitle={place.address} />
         <PlaceAttributions places={[place]} />
         <Text style={styles.section}>
@@ -156,11 +152,6 @@ export function PlaceDetailsScreen({ route, navigation }: Props) {
 }
 const styles = StyleSheet.create({
   scroll: { paddingVertical: spacing.md, paddingBottom: spacing.xl },
-  back: {
-    ...typography.label,
-    color: colors.textDim,
-    marginBottom: spacing.lg,
-  },
   title: { ...typography.title, color: colors.text },
   meta: { ...typography.bodySmall, color: colors.textDim, marginTop: 4 },
   section: {

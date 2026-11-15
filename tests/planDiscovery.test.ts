@@ -430,3 +430,22 @@ test("This week uses Monday–Sunday calendar boundaries, including year rollove
     );
   }
 });
+
+test("notification times read as relative phrases, not raw timestamps", async () => {
+  const { timeAgo } = await import("../src/utils/format");
+  const now = new Date(2026, 10, 15, 16, 52);
+  const at = (mins: number) =>
+    new Date(now.getTime() - mins * 60000).toISOString();
+  assert.equal(timeAgo(at(0), now), "Just now");
+  assert.equal(timeAgo(at(12), now), "12 min ago");
+  assert.equal(timeAgo(at(180), now), "3 hr ago");
+  assert.equal(
+    timeAgo(new Date(2026, 10, 14, 20, 0).toISOString(), now),
+    "Yesterday",
+  );
+  assert.equal(
+    timeAgo(new Date(2026, 10, 10, 9, 0).toISOString(), now),
+    "10 Nov",
+  );
+  assert.equal(timeAgo("not a date", now), "");
+});

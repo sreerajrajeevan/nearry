@@ -1,4 +1,5 @@
 import { Alert } from "../../services/appAlert";
+import { BackButton } from "../../components/BackButton";
 import React, { useCallback, useState } from "react";
 import {
   View,
@@ -18,7 +19,10 @@ import { Button } from "../../components/Button";
 import { Badge } from "../../components/Badge";
 import { Avatar } from "../../components/Avatar";
 import { VerifiedWelcome } from "../../components/VerifiedWelcome";
-import { Icon } from "../../components/Icon";
+import {
+  AccountMenuGroup,
+  AccountMenuRow,
+} from "../../components/AccountMenuRow";
 import { colors, typography, spacing, surfaces } from "../../theme";
 import { useAuth } from "../../store/AuthContext";
 import { useUnreadCounts } from "../../hooks/useUnreadCounts";
@@ -190,11 +194,7 @@ export function BusinessProfileScreen({
             />
           }
         >
-          <Button
-            title="Back"
-            variant="ghost"
-            onPress={() => navigation.goBack()}
-          />
+          <BackButton onPress={() => navigation.goBack()} />
           <PageHeading
             greeting={name}
             title="Business verification"
@@ -280,36 +280,20 @@ export function BusinessProfileScreen({
         <Text style={styles.sectionTitle}>Verification</Text>
         {verificationCard}
 
-        <TouchableOpacity
-          accessibilityRole="button"
-          activeOpacity={0.65}
-          style={styles.menuRow}
-          onPress={() => navigation.navigate("EditBusinessProfile")}
-        >
-          <Icon name="edit" size={18} color={colors.accent} />
-          <View style={styles.menuCopy}>
-            <Text style={styles.menuTitle}>Edit profile</Text>
-            <Text style={styles.menuHint}>
-              Business name, category and area
-            </Text>
-          </View>
-          <Icon name="arrow-up-right" size={17} color={colors.accent} />
-        </TouchableOpacity>
-        <TouchableOpacity
-          accessibilityRole="button"
-          activeOpacity={0.65}
-          style={styles.menuRow}
-          onPress={() => navigation.navigate("MyOffers")}
-        >
-          <Icon name="file-text" size={18} color={colors.accent} />
-          <View style={styles.menuCopy}>
-            <Text style={styles.menuTitle}>My offers</Text>
-            <Text style={styles.menuHint}>
-              Your live offers, drafts and past offers
-            </Text>
-          </View>
-          <Icon name="arrow-up-right" size={17} color={colors.accent} />
-        </TouchableOpacity>
+        <AccountMenuGroup>
+          <AccountMenuRow
+            icon="edit"
+            title="Edit profile"
+            hint="Business name, category and area"
+            onPress={() => navigation.navigate("EditBusinessProfile")}
+          />
+          <AccountMenuRow
+            icon="file-text"
+            title="My offers"
+            hint="Your live offers, drafts and past offers"
+            onPress={() => navigation.navigate("MyOffers")}
+          />
+        </AccountMenuGroup>
 
         <Text style={styles.sectionTitle}>My venue</Text>
         {venue ? (
@@ -334,22 +318,28 @@ export function BusinessProfileScreen({
           </Text>
         )}
 
-        <Button
-          title={`Notifications${notifications > 0 ? ` (${notifications})` : ""}`}
-          variant="secondary"
-          onPress={() => navigation.navigate("Notifications")}
-          style={styles.notifBtn}
-        />
-        <Button
-          title="Safety & privacy"
-          variant="secondary"
-          onPress={() => navigation.navigate("SafetyPrivacy")}
-        />
-        <Button
-          title="Notification preferences"
-          variant="secondary"
-          onPress={() => navigation.navigate("NotificationSettings")}
-        />
+        <Text style={styles.sectionTitle}>Settings & privacy</Text>
+        <AccountMenuGroup>
+          <AccountMenuRow
+            icon="bell"
+            title="Notifications"
+            hint="Updates about bookings and your business"
+            count={notifications}
+            onPress={() => navigation.navigate("Notifications")}
+          />
+          <AccountMenuRow
+            icon="shield"
+            title="Safety & privacy"
+            hint="Blocked people, reports and account deletion"
+            onPress={() => navigation.navigate("SafetyPrivacy")}
+          />
+          <AccountMenuRow
+            icon="sliders"
+            title="Notification preferences"
+            hint="Choose which updates you receive"
+            onPress={() => navigation.navigate("NotificationSettings")}
+          />
+        </AccountMenuGroup>
         <Button
           title="Log out"
           variant="danger"
@@ -406,18 +396,6 @@ const styles = StyleSheet.create({
   },
   verifyNote: { ...typography.body, color: colors.red, marginTop: spacing.xs },
   verifyBtn: { marginTop: spacing.md },
-  menuRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    paddingVertical: spacing.lg,
-    minHeight: 52,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-  },
-  menuCopy: { flex: 1, gap: 3 },
-  menuTitle: { ...typography.body, color: colors.text },
-  menuHint: { ...typography.caption, color: colors.textDim },
   venueHint: {
     ...typography.bodySmall,
     color: colors.textDim,
@@ -434,6 +412,5 @@ const styles = StyleSheet.create({
     color: colors.accent,
     marginTop: spacing.sm,
   },
-  notifBtn: { marginTop: spacing.xl },
   logoutBtn: { marginTop: spacing.md },
 });

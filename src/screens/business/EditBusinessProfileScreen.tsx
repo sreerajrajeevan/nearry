@@ -1,4 +1,5 @@
 import { Alert } from "../../services/appAlert";
+import { BackButton } from "../../components/BackButton";
 import { PageHeading } from "../../components/PageHeading";
 import React, { useState } from "react";
 import { Text, StyleSheet, ScrollView, TouchableOpacity } from "react-native";
@@ -107,13 +108,7 @@ export function EditBusinessProfileScreen({ navigation }: Props) {
         contentContainerStyle={styles.scroll}
         keyboardShouldPersistTaps="handled"
       >
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          activeOpacity={0.7}
-          style={styles.back}
-        >
-          <Text style={styles.backText}>← Back</Text>
-        </TouchableOpacity>
+        <BackButton onPress={() => navigation.goBack()} />
         <PageHeading compact title="Edit profile." />
 
         <TouchableOpacity
@@ -157,8 +152,6 @@ export function EditBusinessProfileScreen({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   scroll: { paddingBottom: spacing.xl },
-  back: { marginBottom: spacing.md, alignSelf: "flex-start" },
-  backText: { ...typography.label, color: colors.textDim },
   photoRow: {
     flexDirection: "row",
     alignItems: "center",

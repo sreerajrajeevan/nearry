@@ -235,20 +235,6 @@ export function VenueDetailsScreen({ route, navigation }: VenueDetailsProps) {
             </>
           )}
         </View>
-        <SafetyActions
-          target={{
-            kind: "venue",
-            id: venue.id,
-            userId: venue.businessId,
-            name: venue.name,
-          }}
-          onReport={() =>
-            navigation.navigate("Report", {
-              target: { kind: "venue", id: venue.id, name: venue.name },
-            })
-          }
-          onBlocked={() => navigation.goBack()}
-        />
         <View
           style={styles.section}
           onLayout={(e) => {
@@ -277,11 +263,11 @@ export function VenueDetailsScreen({ route, navigation }: VenueDetailsProps) {
             </Text>
           )}
         </View>
-        <View style={styles.section}>
-          <Text accessibilityRole="header" style={styles.sectionTitle}>
-            Good to know
-          </Text>
-          {venue.amenities.length ? (
+        {venue.amenities.length > 0 && (
+          <View style={styles.section}>
+            <Text accessibilityRole="header" style={styles.sectionTitle}>
+              Good to know
+            </Text>
             <View style={styles.amenityGrid}>
               {venue.amenities.map((a) => (
                 <View style={styles.amenity} key={a}>
@@ -296,12 +282,8 @@ export function VenueDetailsScreen({ route, navigation }: VenueDetailsProps) {
                 </View>
               ))}
             </View>
-          ) : (
-            <Text style={styles.meta}>
-              The business hasn’t added amenity details yet.
-            </Text>
-          )}
-        </View>
+          </View>
+        )}
         <View
           style={styles.section}
           onLayout={(e) => {
@@ -364,6 +346,20 @@ export function VenueDetailsScreen({ route, navigation }: VenueDetailsProps) {
             Venue photos are unavailable right now.
           </Text>
         )}
+        <SafetyActions
+          target={{
+            kind: "venue",
+            id: venue.id,
+            userId: venue.businessId,
+            name: venue.name,
+          }}
+          onReport={() =>
+            navigation.navigate("Report", {
+              target: { kind: "venue", id: venue.id, name: venue.name },
+            })
+          }
+          onBlocked={() => navigation.goBack()}
+        />
       </ScrollView>
       <View style={styles.footer}>
         <View style={styles.footerCopy}>

@@ -1,4 +1,5 @@
 import React, { useCallback, useState } from "react";
+import { BackButton } from "../../components/BackButton";
 import { ScrollView, Text, View } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -49,11 +50,7 @@ export function SavedPlansScreen({
   return (
     <Screen>
       <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
-        <Button
-          title="Back"
-          variant="ghost"
-          onPress={() => navigation.goBack()}
-        />
+        <BackButton onPress={() => navigation.goBack()} />
         <PageHeading compact title="Saved plans" greeting="Your shortlist" />
         <Text
           style={{

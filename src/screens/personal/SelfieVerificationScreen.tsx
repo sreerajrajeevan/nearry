@@ -1,4 +1,5 @@
 import { Alert } from "../../services/appAlert";
+import { BackButton } from "../../components/BackButton";
 import React, { useCallback, useState, useRef, useEffect } from "react";
 import {
   Image,
@@ -174,13 +175,7 @@ export function SelfieVerificationScreen({ navigation }: Props) {
         contentContainerStyle={styles.scroll}
         keyboardShouldPersistTaps="handled"
       >
-        <TouchableOpacity
-          accessibilityRole="button"
-          onPress={() => navigation.goBack()}
-          style={styles.back}
-        >
-          <Text style={styles.backText}>← Back</Text>
-        </TouchableOpacity>
+        <BackButton onPress={() => navigation.goBack()} />
         <PageHeading
           title="A face to your hello."
           greeting="OPTIONAL SELFIE CHECK"
@@ -338,8 +333,6 @@ export function SelfieVerificationScreen({ navigation }: Props) {
 }
 const styles = StyleSheet.create({
   scroll: { padding: spacing.lg, paddingBottom: spacing.xl, gap: spacing.md },
-  back: { alignSelf: "flex-start", paddingVertical: spacing.sm },
-  backText: { ...typography.label, color: colors.textDim },
   heading: { ...typography.display, color: colors.text, fontSize: 30 },
   body: { ...typography.bodySmall, color: colors.textDim, lineHeight: 21 },
   status: {

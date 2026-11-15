@@ -1,4 +1,9 @@
 import { Alert } from "../../services/appAlert";
+import {
+  AccountMenuGroup,
+  AccountMenuRow,
+} from "../../components/AccountMenuRow";
+import { BackButton } from "../../components/BackButton";
 import { LoadingState } from "../../components/LoadingState";
 import React, { useRef, useState } from "react";
 import { Linking, StyleSheet, Switch, Text, View } from "react-native";
@@ -27,9 +32,7 @@ type Nav = { goBack(): void; navigate(name: string, params?: any): void };
 const errorText = (e: unknown) =>
   e instanceof Error ? e.message : "Please try again.";
 function Back({ navigation }: { navigation: Nav }) {
-  return (
-    <Button title="Back" variant="ghost" onPress={() => navigation.goBack()} />
-  );
+  return <BackButton onPress={() => navigation.goBack()} />;
 }
 
 export function SafetyPrivacyScreen({ navigation }: { navigation: Nav }) {
@@ -41,42 +44,52 @@ export function SafetyPrivacyScreen({ navigation }: { navigation: Nav }) {
         Report something that feels wrong, manage who can contact you, and
         control your account.
       </Text>
-      {(
-        [
-          ["BlockedUsers", "Blocked people"],
-          ["MyReports", "Your reports"],
-          ["NotificationSettings", "Notification preferences"],
-          ["Legal", "Privacy policy"],
-        ] as const
-      ).map(([name, label]) => (
-        <Button
-          key={label}
-          title={label}
-          variant="secondary"
-          onPress={() =>
-            navigation.navigate(
-              name,
-              name === "Legal" ? { page: "privacy" } : undefined,
-            )
-          }
+      <AccountMenuGroup>
+        <AccountMenuRow
+          icon="slash"
+          title="Blocked people"
+          hint="People who can’t contact you or see your plans"
+          onPress={() => navigation.navigate("BlockedUsers")}
         />
-      ))}
-      <Button
-        title="Community guidelines & terms"
-        variant="secondary"
-        onPress={() => navigation.navigate("Legal", { page: "terms" })}
-      />
-      {!!legalContact.email && (
-        <Button
-          title="Contact support"
-          variant="ghost"
-          onPress={() =>
-            void Linking.openURL(`mailto:${legalContact.email}`).catch(() =>
-              Alert.alert("Support", legalContact.email),
-            )
-          }
+        <AccountMenuRow
+          icon="flag"
+          title="Your reports"
+          hint="What you’ve reported and its review status"
+          onPress={() => navigation.navigate("MyReports")}
         />
-      )}
+        <AccountMenuRow
+          icon="bell"
+          title="Notification preferences"
+          hint="Choose which updates you receive"
+          onPress={() => navigation.navigate("NotificationSettings")}
+        />
+      </AccountMenuGroup>
+      <AccountMenuGroup>
+        <AccountMenuRow
+          icon="book-open"
+          title="Privacy policy"
+          hint="How Nearry handles your information"
+          onPress={() => navigation.navigate("Legal", { page: "privacy" })}
+        />
+        <AccountMenuRow
+          icon="file-text"
+          title="Community guidelines & terms"
+          hint="How we keep Nearry welcoming"
+          onPress={() => navigation.navigate("Legal", { page: "terms" })}
+        />
+        {!!legalContact.email && (
+          <AccountMenuRow
+            icon="mail"
+            title="Contact support"
+            hint={legalContact.email}
+            onPress={() =>
+              void Linking.openURL(`mailto:${legalContact.email}`).catch(() =>
+                Alert.alert("Support", legalContact.email),
+              )
+            }
+          />
+        )}
+      </AccountMenuGroup>
       <Button
         title="Delete my account"
         variant="danger"
