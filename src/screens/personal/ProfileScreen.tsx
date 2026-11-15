@@ -12,9 +12,14 @@ import { EmptyState } from "../../components/EmptyState";
 import { AccountMenuRow } from "../../components/AccountMenuRow";
 import { MotionPressable } from "../../components/Motion";
 import { Icon } from "../../components/Icon";
-import { colors, typography, spacing, surfaces } from "../../theme";
+import { colors, typography, spacing, surfaces, weight } from "../../theme";
 import { useAuth } from "../../store/AuthContext";
-import { isPersonalSelfieChecked } from "../../services/selfieVerification";
+import {
+  getMySelfieReview,
+  isPersonalSelfieChecked,
+  SelfieReview,
+} from "../../services/selfieVerification";
+import { verifyPrompt } from "../../utils/verifyPrompt";
 import { useFocusEffect } from "@react-navigation/native";
 import { useCallback } from "react";
 import { useUnreadCounts } from "../../hooks/useUnreadCounts";
@@ -25,10 +30,12 @@ export function ProfileScreen({ navigation }: Props) {
   const { profile, session, demoMode, signOut, enterDemoMode } = useAuth();
   const { notifications, messages } = useUnreadCounts();
   const [selfieChecked, setSelfieChecked] = useState(false);
+  const [review, setReview] = useState<SelfieReview>({ status: "unverified" });
+  const [reviewLoaded, setReviewLoaded] = useState(false);
   useFocusEffect(
     useCallback(() => {
       let alive = true;
-      if (profile && !demoMode)
+      if (profile && !demoMode) {
         void isPersonalSelfieChecked(profile.id)
           .then((checked) => {
             if (alive) setSelfieChecked(checked);
@@ -36,7 +43,19 @@ export function ProfileScreen({ navigation }: Props) {
           .catch(() => {
             if (alive) setSelfieChecked(false);
           });
-      else setSelfieChecked(false);
+        void getMySelfieReview(profile.id)
+          .then((next) => {
+            if (alive) setReview(next);
+          })
+          .catch(() => {})
+          .finally(() => {
+            if (alive) setReviewLoaded(true);
+          });
+      } else {
+        setSelfieChecked(false);
+        setReview({ status: "unverified" });
+        setReviewLoaded(true);
+      }
       return () => {
         alive = false;
       };
@@ -60,6 +79,11 @@ export function ProfileScreen({ navigation }: Props) {
       setSigningOut(false);
     }
   };
+  const prompt = verifyPrompt({
+    status: review.status,
+    checked: selfieChecked,
+    note: review.note,
+  });
   if (!profile)
     return (
       <Screen>
@@ -96,12 +120,22 @@ export function ProfileScreen({ navigation }: Props) {
               tone="clay"
             />
             <View style={styles.personCopy}>
-              <Text style={styles.name}>
-                {profile.displayName || "Your profile"}
-              </Text>
-              <Text style={styles.member}>
-                Personal account{selfieChecked ? " · Selfie checked ✓" : ""}
-              </Text>
+              <View style={styles.nameRow}>
+                <Text style={styles.name} numberOfLines={1}>
+                  {profile.displayName || "Your profile"}
+                </Text>
+                {selfieChecked && (
+                  <View
+                    style={styles.verified}
+                    accessible
+                    accessibilityLabel="Verified: selfie checked by a reviewer"
+                  >
+                    <Icon name="check" size={12} color="#FFFFFF" />
+                    <Text style={styles.verifiedText}>Verified</Text>
+                  </View>
+                )}
+              </View>
+              <Text style={styles.member}>Personal account</Text>
             </View>
           </View>
           {!!profile.bio && <Text style={styles.bio}>{profile.bio}</Text>}
@@ -139,6 +173,58 @@ export function ProfileScreen({ navigation }: Props) {
             <Icon name="chevron-right" size={16} color={colors.accent} />
           </MotionPressable>
         </View>
+        {reviewLoaded && prompt && (
+          <MotionPressable
+            accessibilityRole="button"
+            accessibilityLabel={`${prompt.title}. ${prompt.body}`}
+            accessibilityHint={prompt.cta}
+            onPress={() => navigation.navigate("SelfieVerification")}
+            style={[
+              styles.verifyCard,
+              prompt.tone === "waiting" && styles.verifyWaiting,
+              prompt.tone === "retry" && styles.verifyRetry,
+            ]}
+          >
+            <View
+              style={[
+                styles.verifyIcon,
+                prompt.tone !== "invite" && styles.verifyIconLight,
+              ]}
+            >
+              <Icon
+                name={prompt.tone === "waiting" ? "clock" : "shield"}
+                size={22}
+                color={
+                  prompt.tone === "invite" ? colors.onAmber : colors.amberDeep
+                }
+              />
+            </View>
+            <View style={styles.verifyCopy}>
+              <Text
+                style={[
+                  styles.verifyTitle,
+                  prompt.tone !== "invite" && styles.verifyTitleDark,
+                ]}
+              >
+                {prompt.title}
+              </Text>
+              <Text
+                style={[
+                  styles.verifyBody,
+                  prompt.tone !== "invite" && styles.verifyBodyDark,
+                ]}
+              >
+                {prompt.body}
+              </Text>
+              {prompt.tone !== "waiting" && (
+                <View style={styles.verifyCta}>
+                  <Text style={styles.verifyCtaText}>{prompt.cta}</Text>
+                  <Icon name="arrow-right" size={14} color={colors.onAmber} />
+                </View>
+              )}
+            </View>
+          </MotionPressable>
+        )}
         <Text style={styles.section} accessibilityRole="header">
           Your space
         </Text>
@@ -273,6 +359,71 @@ const styles = StyleSheet.create({
     padding: spacing.md,
   },
   person: { flexDirection: "row", alignItems: "center", gap: 14 },
+  nameRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  verified: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+    backgroundColor: colors.success,
+  },
+  verifiedText: { fontSize: 11, color: "#FFFFFF", ...weight("800") },
+  verifyCard: {
+    flexDirection: "row",
+    gap: 14,
+    marginTop: spacing.md,
+    padding: 16,
+    borderRadius: 22,
+    backgroundColor: colors.night,
+  },
+  verifyWaiting: {
+    backgroundColor: colors.amberSoft,
+    borderWidth: 1,
+    borderColor: "#FDE68A",
+  },
+  verifyRetry: {
+    backgroundColor: colors.dangerSoft,
+    borderWidth: 1,
+    borderColor: "#FECACA",
+  },
+  verifyIcon: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.amberBright,
+  },
+  verifyIconLight: { backgroundColor: colors.surface },
+  verifyCopy: { flex: 1, minWidth: 0, gap: 4 },
+  verifyTitle: {
+    fontSize: 17,
+    lineHeight: 22,
+    color: "#FFFFFF",
+    ...weight("800"),
+  },
+  verifyTitleDark: { color: colors.text },
+  verifyBody: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: "rgba(255,255,255,0.78)",
+    ...weight("500"),
+  },
+  verifyBodyDark: { color: colors.textDim },
+  verifyCta: {
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 8,
+    height: 36,
+    paddingHorizontal: 14,
+    borderRadius: 18,
+    backgroundColor: colors.amberBright,
+  },
+  verifyCtaText: { fontSize: 13, color: colors.onAmber, ...weight("800") },
   personCopy: { flex: 1, minWidth: 0 },
   name: { ...typography.title, color: colors.text, fontSize: 22 },
   member: { ...typography.bodySmall, color: colors.textDim, marginTop: 3 },
