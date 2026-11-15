@@ -268,7 +268,7 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
         </View>
         <View style={styles.facts}>
           <View style={styles.factRow}>
-            <Icon name="calendar" size={22} color={colors.text} />
+            <Icon name="calendar" size={21} color={colors.amberDeep} />
             <View style={styles.flex}>
               <Text style={styles.factTitle}>
                 {new Date(post.startsAt).toLocaleDateString("en-IN", {
@@ -282,7 +282,7 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
             </View>
           </View>
           <View style={styles.factRow}>
-            <Icon name="map-pin" size={22} color={colors.text} />
+            <Icon name="map-pin" size={21} color={colors.amberDeep} />
             <View style={styles.flex}>
               <Text style={styles.factTitle}>
                 {locationName || "Location to be confirmed"}
@@ -310,7 +310,7 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
           </View>
           {post.location?.source === "google" && <GoogleMapsCredit />}
           <View style={[styles.factRow, styles.lastFact]}>
-            <Icon name="users" size={22} color={colors.text} />
+            <Icon name="users" size={21} color={colors.amberDeep} />
             <View style={styles.flex}>
               <Text style={styles.factTitle}>
                 {flow.accepting
@@ -558,7 +558,6 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
               myRequest.status === "declined" ||
               myRequest.status === "withdrawn" ? (
               <Button
-                variant="solid"
                 title={
                   !personalProfileReady(profile)
                     ? "Complete profile to join"
