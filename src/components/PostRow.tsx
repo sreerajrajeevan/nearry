@@ -9,7 +9,7 @@ import { colors, typography, weight } from "../theme";
 import { MotionPressable } from "./Motion";
 import { PlanCover } from "./PlanCover";
 import { Avatar } from "./Avatar";
-import { audienceLabel } from "./AudienceBadge";
+import { AudienceBadge, audienceLabel } from "./AudienceBadge";
 import { Icon } from "./Icon";
 import { useSavedPlans } from "../store/SavedPlansContext";
 import { Alert } from "../services/appAlert";
@@ -67,9 +67,17 @@ export function PostRow({
       : (post.venueName ?? "");
   const when = formatWhen(post.startsAt, now);
   const cost = post.costCents != null ? planCost(post) : "";
+  const restricted =
+    post.genderPreference === "female" || post.genderPreference === "male";
 
   const titleBlock = (
     <>
+      {restricted && (
+        <AudienceBadge
+          preference={post.genderPreference}
+          style={styles.audience}
+        />
+      )}
       <Text
         style={[
           styles.title,
@@ -288,6 +296,7 @@ const styles = StyleSheet.create({
   },
   badgeTextMuted: { color: colors.ink },
   photoCopy: { position: "absolute", left: 14, right: 14, bottom: 12, gap: 3 },
+  audience: { marginTop: 0, marginBottom: 4 },
   plainCopy: { paddingHorizontal: 16, paddingTop: 12, gap: 4 },
   title: {
     ...typography.heading,

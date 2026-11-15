@@ -63,3 +63,19 @@ test("offer carousel excludes drafts, expired offers and exhausted redemptions, 
     ["free"],
   );
 });
+
+test("offers map into the shared Home categories using business names and fitness keywords", async () => {
+  const { offerDiscoveryCategory } =
+    await import("../src/utils/offerDiscovery");
+  const cases: [Offer, string][] = [
+    [offer("bogo", "Buy one, get one", { businessName: "Luna Café" }), "Meet"],
+    [offer("gym", "Gym membership", { businessName: "Iron Den" }), "Play"],
+    [offer("court", "Book a badminton court"), "Play"],
+    [offer("spa", "Time for a massage"), "Unwind"],
+    [offer("other", "A local opening"), "Explore"],
+  ];
+  assert.deepEqual(
+    cases.map(([o]) => offerDiscoveryCategory(o)),
+    cases.map(([, expected]) => expected),
+  );
+});

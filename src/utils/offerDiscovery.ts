@@ -1,4 +1,5 @@
 import type { Offer } from "../services/mappers";
+import { DiscoveryCategory, postCategory } from "./discovery";
 export type OfferCategory = "all" | "fitness" | "sports" | "food" | "wellness";
 export const OFFER_CATEGORIES: {
   key: OfferCategory;
@@ -55,4 +56,31 @@ export function discoverOffers(
         offer.redemptions < offer.maxRedemptions) &&
       (category === "all" || offerCategory(offer) === category),
   );
+}
+
+const SHARED_CATEGORY: Record<
+  Exclude<OfferCategory, "all">,
+  DiscoveryCategory
+> = {
+  fitness: "Play",
+  sports: "Play",
+  food: "Meet",
+  wellness: "Unwind",
+};
+
+/**
+ * Places an offer in Home's shared category row (Play, Meet, Explore, Unwind).
+ * Uses the offer classifier, which also reads the business name, and only
+ * falls back to the plan classifier when the offer copy names no category.
+ */
+export function offerDiscoveryCategory(
+  offer: Pick<Offer, "title" | "description" | "businessName">,
+): DiscoveryCategory {
+  const category = offerCategory(offer);
+  return category === "all"
+    ? postCategory({
+        title: `${offer.title} ${offer.description} ${offer.businessName}`,
+        tags: [],
+      })
+    : SHARED_CATEGORY[category];
 }

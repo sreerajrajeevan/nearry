@@ -36,11 +36,7 @@ import { listLiveOffers, subscribeToOffers } from "../../services/offers";
 import { getCurrentPosition, LatLng } from "../../services/location";
 import { nearbyVenues, listVenues } from "../../services/venues";
 import { NeedPost, Venue, Offer } from "../../services/mappers";
-import {
-  DiscoveryCategory,
-  postCategory,
-  venueCategory,
-} from "../../utils/discovery";
+import { DiscoveryCategory, venueCategory } from "../../utils/discovery";
 import { useAuth } from "../../store/AuthContext";
 import { PersonalTabNav, PersonalTabParamList } from "../../navigation/types";
 import { PlanFilterSheet } from "../../components/PlanFilterSheet";
@@ -56,6 +52,7 @@ import {
 } from "../../utils/planDiscovery";
 import { useDiscoveryClock } from "../../hooks/useDiscoveryClock";
 import { MotionPressable } from "../../components/Motion";
+import { offerDiscoveryCategory } from "../../utils/offerDiscovery";
 import { onboardingPreferences } from "../../utils/onboarding";
 
 const DISCOVERY_CATEGORIES: readonly DiscoveryCategory[] = [
@@ -215,9 +212,7 @@ export function NearbyScreen() {
   );
   const visibleOffers = offers.filter(
     (o) =>
-      (!category ||
-        postCategory({ title: `${o.title} ${o.description}`, tags: [] }) ===
-          category) &&
+      (!category || offerDiscoveryCategory(o) === category) &&
       (options.maxDistanceKm == null ||
         (planDistance(o, distances) ?? Infinity) <= options.maxDistanceKm),
   );

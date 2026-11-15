@@ -1,5 +1,5 @@
 import React from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { StyleProp, StyleSheet, Text, View, ViewStyle } from "react-native";
 import { Icon } from "./Icon";
 import { colors, typography, weight } from "../theme";
 export function audienceLabel(value?: "female" | "male" | "any") {
@@ -11,8 +11,10 @@ export function audienceLabel(value?: "female" | "male" | "any") {
 }
 export function AudienceBadge({
   preference,
+  style,
 }: {
   preference?: "female" | "male" | "any";
+  style?: StyleProp<ViewStyle>;
 }) {
   const restricted = preference === "female" || preference === "male";
   const color =
@@ -33,6 +35,7 @@ export function AudienceBadge({
                 ? "#E6F0FC"
                 : colors.sageSoft,
         },
+        style,
       ]}
     >
       {restricted ? (
