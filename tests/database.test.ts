@@ -434,6 +434,31 @@ test("capacity, consistent counts, withdrawal and closure", async () => {
     "cancelled",
   );
 });
+test("join requests carry an optional note only the host and requester can read", async () => {
+  const p = await post();
+  const note = (id: string) =>
+    asUser(id, (tx) =>
+      tx.query("select note from join_requests where post_id=$1", [p]),
+    );
+  await assert.rejects(
+    asUser(b, (tx) =>
+      tx.query("select request_join($1,$2)", [p, "x".repeat(281)]),
+    ),
+    /280/,
+  );
+  await asUser(b, (tx) =>
+    tx.query("select request_join($1,$2)", [p, "  I’ll bring the football  "]),
+  );
+  assert.equal((await note(host)).rows[0].note, "I’ll bring the football");
+  assert.equal((await note(b)).rows[0].note, "I’ll bring the football");
+  assert.equal((await note(outsider)).rows.length, 0);
+  // A blank note is stored as no note.
+  await asUser(c, (tx) => tx.query("select request_join($1,$2)", [p, "   "]));
+  const rows = (
+    await db.query("select note from join_requests where requester_id=$1", [c])
+  ).rows;
+  assert.equal(rows[0].note, null);
+});
 test("no self-joining, duplicates, expired joins or direct post status edits", async () => {
   const p = await post();
   await assert.rejects(request(host, p), /own post/);

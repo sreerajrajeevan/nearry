@@ -277,6 +277,7 @@ export type DbJoinRequest = {
   status: "pending" | "approved" | "declined" | "withdrawn" | "full";
   decline_count: number;
   created_at: string;
+  note?: string | null;
   requester?: { display_name: string } | null;
 };
 
@@ -289,6 +290,8 @@ export type JoinRequest = {
   /** Times the host declined this user for this post. At 2, no more requests. */
   declineCount: number;
   createdAt: string;
+  /** Optional note from the requester, seen only by them and the host. */
+  note?: string;
 };
 
 export function toJoinRequest(row: DbJoinRequest): JoinRequest {
@@ -300,6 +303,7 @@ export function toJoinRequest(row: DbJoinRequest): JoinRequest {
     status: row.status,
     declineCount: row.decline_count ?? 0,
     createdAt: row.created_at,
+    ...(row.note ? { note: row.note } : {}),
   };
 }
 

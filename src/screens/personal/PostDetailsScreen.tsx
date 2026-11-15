@@ -1,5 +1,11 @@
 import { Alert } from "../../services/appAlert";
-import { planAgeLabel, planBookingLabel } from "../../utils/planComposer";
+import {
+  joinNoteHint,
+  planAgeLabel,
+  planBookingLabel,
+} from "../../utils/planComposer";
+import { JoinRequestSheet } from "../../components/JoinRequestSheet";
+import { RequestNote } from "../../components/RequestNote";
 import { AudienceBadge, audienceLabel } from "../../components/AudienceBadge";
 import { ProfileRequired } from "../../components/ProfileRequired";
 import {
@@ -116,6 +122,28 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
   const pending = requests.filter((r) => r.status === "pending");
   const approved = requests.filter((r) => r.status === "approved");
 
+  const [joinOpen, setJoinOpen] = useState(false);
+  const [joinError, setJoinError] = useState("");
+  const sendJoin = async (note: string) => {
+    if (!myId || busy) return;
+    setBusy("join");
+    setJoinError("");
+    try {
+      await requestToJoin(postId, myId, note);
+      setJoinOpen(false);
+      await load();
+    } catch (e) {
+      if (isProfileCompletionError(e)) {
+        setJoinOpen(false);
+        setProfilePrompt(true);
+        void refreshProfile().catch(() => {});
+        return;
+      }
+      setJoinError(e instanceof Error ? e.message : "Something went wrong.");
+    } finally {
+      setBusy(null);
+    }
+  };
   const run = async (key: string, fn: () => Promise<void>) => {
     if (busy) return;
     setBusy(key);
@@ -448,6 +476,7 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
                     </Text>
                   </TouchableOpacity>
                 </View>
+                <RequestNote note={r.note} />
                 <SafetyActions
                   target={{
                     kind: "user",
@@ -581,10 +610,10 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
                     setProfilePrompt(true);
                     return;
                   }
-                  if (myId && matchesPostAudience(post, profile?.gender))
-                    void run("join", () =>
-                      requestToJoin(postId, myId).then(() => {}),
-                    );
+                  if (myId && matchesPostAudience(post, profile?.gender)) {
+                    setJoinError("");
+                    setJoinOpen(true);
+                  }
                 }}
               />
             ) : myRequest.status === "full" ? (
@@ -592,6 +621,7 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
             ) : myRequest.status === "pending" ? (
               <>
                 <Badge label="Request pending" tone="neutral" />
+                <RequestNote note={myRequest.note} mine />
                 <View style={styles.gap} />
                 <Button
                   title="Withdraw request"
@@ -636,6 +666,16 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
           navigation.navigate("CompleteProfile");
         }}
         onBrowse={() => setProfilePrompt(false)}
+      />
+      <JoinRequestSheet
+        visible={joinOpen}
+        planTitle={post.title}
+        hostName={post.authorName.split(" ")[0] || "the host"}
+        placeholder={joinNoteHint(post.planDetails?.activity)}
+        sending={busy === "join"}
+        error={joinError}
+        onSend={(note) => void sendJoin(note)}
+        onClose={() => setJoinOpen(false)}
       />
       <Modal
         visible={optionsOpen}

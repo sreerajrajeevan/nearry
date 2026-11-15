@@ -806,3 +806,40 @@ test("demo plan groups stay absent until approval and disappear when the last pa
     );
   }
 });
+
+test("a join request sends a trimmed optional note and rejects one over 280 characters", async () => {
+  const requests = await import("../src/services/joinRequests");
+  const row = {
+    id: "r1",
+    post_id: "p1",
+    requester_id: "u1",
+    status: "pending",
+    decline_count: 0,
+    created_at: "2026-11-15T10:00:00Z",
+    note: "I’ll bring the football",
+    requester: { display_name: "Asha" },
+  };
+  handler = () => row;
+  calls.length = 0;
+  const sent = await requests.requestToJoin(
+    "p1",
+    "u1",
+    "  I’ll bring the football  ",
+  );
+  const rpc = () =>
+    calls.filter((c) => c.url.pathname.endsWith("/rpc/request_join")).at(-1);
+  assert.deepEqual(rpc()?.body, {
+    p_post_id: "p1",
+    p_note: "I’ll bring the football",
+  });
+  assert.equal(sent.note, "I’ll bring the football");
+  handler = () => ({ ...row, note: null });
+  await requests.requestToJoin("p1", "u1", "   ");
+  assert.deepEqual(rpc()?.body, { p_post_id: "p1", p_note: null });
+  calls.length = 0;
+  await assert.rejects(
+    requests.requestToJoin("p1", "u1", "x".repeat(281)),
+    /280/,
+  );
+  assert.equal(rpc(), undefined);
+});

@@ -2,6 +2,7 @@ import { Alert } from "../../services/appAlert";
 import { AudienceBadge } from "../../components/AudienceBadge";
 import { PageHeading } from "../../components/PageHeading";
 
+import { RequestNote } from "../../components/RequestNote";
 import React, { useEffect, useRef, useState } from "react";
 import {
   View,
@@ -473,6 +474,7 @@ export function ActivityScreen() {
                           </Text>
                         </View>
                       </View>
+                      <RequestNote note={request.note} />
                       <View style={styles.actions}>
                         <Button
                           title="Decline"

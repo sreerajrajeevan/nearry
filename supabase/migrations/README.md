@@ -53,3 +53,5 @@ was renumbered. Existing email review remains unchanged. Never grant ordinary
 clients access to admin tables or let users add themselves as administrators.
 
 - **00030_personal_selfie_verification.sql** — optional private camera selfie reviews, versioned admin decisions, current-avatar binding and cleanup. Requires 00029. See [selfie setup](../../docs/personal-selfie-verification.md). New camera and immutable avatar paths require a fresh phone build.
+
+`00039`: optional join request note (up to 280 characters), readable only by the requester and the host. Replaces `request_join(uuid)` with `request_join(uuid, text default null)`; apply it together with the matching app build, since older builds still call it with one argument, which keeps working.

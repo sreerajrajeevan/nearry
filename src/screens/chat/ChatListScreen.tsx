@@ -1,3 +1,4 @@
+import { RequestNote } from "../../components/RequestNote";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   AppState,
@@ -384,6 +385,7 @@ export function ChatListScreen({ navigation }: Props) {
                         <Text style={styles.requestPlan}>{r.postTitle}</Text>
                       </View>
                     </View>
+                    <RequestNote note={r.note} />
                     <Text style={styles.requestDate}>
                       {planChatTime(
                         { id: r.postId, startsAt: r.postStartsAt },

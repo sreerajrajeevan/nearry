@@ -35,10 +35,22 @@ async function requesterName(
  * Request to join a post. Guards (client-side, mirrored by RLS + RPC):
  * no self-join, no duplicates, post must be open and unexpired.
  */
+export const JOIN_NOTE_MAX = 280;
+/** Trimmed note, or undefined when the requester left it blank. */
+export function cleanJoinNote(note?: string) {
+  const value = note?.trim();
+  if (!value) return undefined;
+  if (value.length > JOIN_NOTE_MAX)
+    throw new Error(`Keep your note under ${JOIN_NOTE_MAX} characters.`);
+  return value;
+}
+
 export async function requestToJoin(
   postId: string,
   requesterId: string,
+  note?: string,
 ): Promise<JoinRequest> {
+  const cleanNote = cleanJoinNote(note);
   if (useMock()) {
     const post = mockPosts.find((p) => p.id === postId);
     if (!post) throw new Error("Post not found.");
@@ -65,6 +77,7 @@ export async function requestToJoin(
       status: "pending",
       declineCount: 0,
       createdAt: new Date().toISOString(),
+      ...(cleanNote ? { note: cleanNote } : {}),
     };
     mockRequests.unshift(req);
     return req;
@@ -72,6 +85,7 @@ export async function requestToJoin(
   const supabase = getSupabase()!;
   const { data, error } = await supabase.rpc("request_join", {
     p_post_id: postId,
+    p_note: cleanNote ?? null,
   });
   if (error) throw new Error(friendlyRequestError(error.message));
   const row = data as Record<string, unknown>;
