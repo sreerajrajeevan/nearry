@@ -384,9 +384,9 @@ export function ConversationScreen({ route, navigation }: Props) {
             disabled={!draft.trim() || sending || !peer?.canMessage}
           >
             {sending ? (
-              <ActivityIndicator color={colors.onAccent} size="small" />
+              <ActivityIndicator color={colors.night} size="small" />
             ) : (
-              <Icon name="arrow-up" size={20} color={colors.onAccent} />
+              <Icon name="arrow-up" size={20} color={colors.night} />
             )}
           </TouchableOpacity>
         </View>
@@ -454,26 +454,29 @@ const styles = StyleSheet.create({
   bubbleRowMine: { alignItems: "flex-end" },
   bubble: {
     maxWidth: "80%",
-    backgroundColor: colors.claySoft,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    borderRadius: 16,
-    borderBottomLeftRadius: 3,
+    borderRadius: 18,
+    borderBottomLeftRadius: 4,
   },
   bubbleMine: {
-    backgroundColor: colors.ink,
-    borderBottomLeftRadius: 16,
-    borderBottomRightRadius: 3,
+    backgroundColor: colors.amberBright,
+    borderColor: colors.amberBright,
+    borderBottomLeftRadius: 18,
+    borderBottomRightRadius: 4,
   },
   body: { ...typography.body, color: colors.text },
-  bodyMine: { color: colors.onAccent },
+  bodyMine: { color: colors.night },
   time: {
     ...typography.caption,
     color: colors.textFaint,
     marginTop: 4,
     fontSize: 11,
   },
-  timeMine: { color: colors.onAccent },
+  timeMine: { color: colors.gray800 },
   composer: {
     flexDirection: "row",
     alignItems: "flex-end",
@@ -505,7 +508,7 @@ const styles = StyleSheet.create({
     borderRadius: 23,
     width: 46,
     height: 46,
-    backgroundColor: colors.accent,
+    backgroundColor: colors.amber,
     alignItems: "center",
     justifyContent: "center",
   },

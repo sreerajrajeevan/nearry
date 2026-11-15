@@ -1,83 +1,105 @@
+import type { ActivityArtwork } from "./activityArtwork";
+
+/**
+ * Activities offered when creating a plan. `art` is the illustrated miniature;
+ * activities without one show a simple outline icon instead.
+ */
 export const PLAN_ACTIVITIES = [
   {
     id: "gym",
     label: "Gym",
-    emoji: "🏋️",
+    art: "fitness",
     title: "Looking for a gym partner",
     tag: "sports",
   },
   {
     id: "football",
     label: "Football",
-    emoji: "⚽",
+    art: "football",
     title: "Anyone for a game of football?",
     tag: "sports",
   },
   {
     id: "badminton",
     label: "Badminton",
-    emoji: "🏸",
+    art: "badminton",
     title: "Anyone up for badminton?",
     tag: "sports",
   },
   {
     id: "cricket",
     label: "Cricket",
-    emoji: "🏏",
+    art: "cricket",
     title: "A friendly game of cricket",
     tag: "sports",
   },
   {
     id: "running",
     label: "Running",
-    emoji: "🏃",
+    art: null,
+    icon: "activity",
     title: "A run around the neighbourhood",
     tag: "sports",
   },
   {
     id: "cycling",
     label: "Cycling",
-    emoji: "🚴",
+    art: "cycling",
     title: "Who’s up for a cycle ride?",
     tag: "outdoors",
   },
   {
     id: "tennis",
     label: "Tennis",
-    emoji: "🎾",
+    art: null,
+    icon: "target",
     title: "Looking for a tennis partner",
     tag: "sports",
   },
   {
     id: "coffee",
     label: "Coffee",
-    emoji: "☕",
+    art: "coffee",
     title: "Coffee and a good conversation",
     tag: "food",
   },
   {
     id: "food",
     label: "Food",
-    emoji: "🍜",
+    art: "food",
     title: "Let’s try somewhere new to eat",
     tag: "food",
   },
   {
     id: "movies",
     label: "Movies",
-    emoji: "🎬",
+    art: "cinema",
     title: "Anyone for a movie?",
     tag: "movies",
   },
   {
     id: "walk",
     label: "A walk",
-    emoji: "🌿",
+    art: "gathering",
     title: "An easy walk and a little hello",
     tag: "outdoors",
   },
-  { id: "other", label: "Other", emoji: "✨", title: "", tag: "social" },
-] as const;
+  {
+    id: "other",
+    label: "Other",
+    art: null,
+    icon: "plus",
+    title: "",
+    tag: "social",
+  },
+] as const satisfies readonly {
+  id: string;
+  label: string;
+  art: ActivityArtwork | null;
+  icon?: string;
+  title: string;
+  tag: string;
+}[];
 export type PlanDetails = {
   activity?: (typeof PLAN_ACTIVITIES)[number]["id"];
   durationMinutes?: 30 | 60 | 90 | 120 | 180 | 240;

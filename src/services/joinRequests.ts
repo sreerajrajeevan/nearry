@@ -204,16 +204,22 @@ export async function listRequestsForPost(
   const { data, error } = await supabase
     .from("join_requests")
     .select(
-      "*, requester:profiles!join_requests_requester_id_fkey(display_name)",
+      "*, requester:profiles!join_requests_requester_id_fkey(display_name,avatar_url)",
     )
     .eq("post_id", postId)
     .order("created_at", { ascending: true });
   if (error) throw new Error(error.message);
   return ((data ?? []) as Record<string, unknown>[]).map((row) => {
-    const req = row.requester as { display_name?: string } | null;
+    const req = row.requester as {
+      display_name?: string;
+      avatar_url?: string | null;
+    } | null;
     return toJoinRequest({
       ...(row as unknown as DbJoinRequest),
-      requester: { display_name: req?.display_name ?? "Someone" },
+      requester: {
+        display_name: req?.display_name ?? "Someone",
+        avatar_url: req?.avatar_url ?? null,
+      },
     });
   });
 }
@@ -326,7 +332,7 @@ export async function listPendingRequestsForHost(
     result = await supabase
       .from("join_requests")
       .select(
-        "*, requester:profiles!join_requests_requester_id_fkey(display_name), post:posts!join_requests_post_id_fkey!inner(title,starts_at,venue_name,author_id)",
+        "*, requester:profiles!join_requests_requester_id_fkey(display_name,avatar_url), post:posts!join_requests_post_id_fkey!inner(title,starts_at,venue_name,author_id)",
       )
       .eq("status", "pending")
       .eq("post.author_id", hostId)
@@ -344,7 +350,10 @@ export async function listPendingRequestsForHost(
   const { data, error } = result;
   if (error) throw new Error(error.message);
   return ((data ?? []) as Record<string, unknown>[]).map((row) => {
-    const req = row.requester as { display_name?: string } | null;
+    const req = row.requester as {
+      display_name?: string;
+      avatar_url?: string | null;
+    } | null;
     const post = row.post as {
       title?: string;
       starts_at?: string;
@@ -353,7 +362,10 @@ export async function listPendingRequestsForHost(
     return {
       ...toJoinRequest({
         ...(row as unknown as DbJoinRequest),
-        requester: { display_name: req?.display_name ?? "Someone" },
+        requester: {
+          display_name: req?.display_name ?? "Someone",
+          avatar_url: req?.avatar_url ?? null,
+        },
       }),
       postTitle: post?.title ?? "Post",
       postStartsAt: post?.starts_at,

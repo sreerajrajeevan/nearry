@@ -18,12 +18,16 @@ import { listPosts, subscribeToPosts } from "../../services/posts";
 import { useAuth } from "../../store/AuthContext";
 import { colors, typography, weight } from "../../theme";
 
-/** Another person's public profile: photo, name, bio and their open plans. */
+/**
+ * Another person's public profile: photo, name, bio and their open plans.
+ * Opened from a plan's host, or by a host from someone's join request, in
+ * which case their request message is shown too.
+ */
 export function HostProfileScreen({
   route,
   navigation,
 }: NativeStackScreenProps<PersonalStackParamList, "HostProfile">) {
-  const { userId, name } = route.params;
+  const { userId, name, requestNote } = route.params;
   const { profile: me } = useAuth();
   const { data, state, error, refresh } = useLiveQuery(
     `host:${userId}`,
@@ -76,6 +80,14 @@ export function HostProfileScreen({
                 </Text>
               )}
             </View>
+            {!!requestNote && (
+              <View style={styles.note}>
+                <Text style={styles.noteLabel}>
+                  {firstName}’s message with the request
+                </Text>
+                <Text style={styles.noteText}>“{requestNote}”</Text>
+              </View>
+            )}
             <Text accessibilityRole="header" style={styles.section}>
               Open plans by {firstName}
             </Text>
@@ -140,6 +152,19 @@ const styles = StyleSheet.create({
     color: colors.textDim,
     textAlign: "center",
   },
+  note: {
+    marginTop: 16,
+    padding: 14,
+    borderRadius: 14,
+    backgroundColor: colors.amberSoft,
+    gap: 4,
+  },
+  noteLabel: {
+    ...typography.caption,
+    color: colors.amberDeep,
+    ...weight("700"),
+  },
+  noteText: { ...typography.body, color: colors.ink },
   section: {
     ...typography.heading,
     color: colors.text,
