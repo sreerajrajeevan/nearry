@@ -178,7 +178,7 @@ const styles = StyleSheet.create({
     width: (112 * 36) / 256,
     height: (112 * 36) / 256,
     borderRadius: 20,
-    backgroundColor: colors.sand,
+    backgroundColor: colors.amber,
   },
   wait: { position: "absolute", top: "67%", alignItems: "center", gap: 12 },
   note: { ...typography.bodySmall, textAlign: "center", color: colors.textDim },

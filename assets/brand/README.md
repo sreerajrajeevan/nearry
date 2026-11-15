@@ -1,9 +1,9 @@
 # Nearry · Around You
 
-Approved geometry: an open location pin and a separate nearby point. The current palette displays the pin in forest green and the point in tan.
+Approved geometry: an open location pin and a separate nearby point. The current palette shows the pin in ink with an amber point on light screens, and an amber pin with a white point on the dark launcher icon.
 The wordmark is original outlined lettering. No font needs installing.
 
-- Display colours: forest `#0C3B2E`, tan `#BB8A52`, warm neutral `#F4F3EB`.
+- Display colours: ink `#111827`, amber `#F59E0B` / `#FBBF24`, night `#030712`, background `#F8FAFC`.
 - Original SVG/PNG masters keep their source ink; React and the native asset
   generator tint the alpha masks without changing the approved geometry.
 - The symbol canvas is 256 square. Its dot is centred at (216,114), radius18.
