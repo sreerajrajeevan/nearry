@@ -12,7 +12,7 @@ import {
 import { LinearGradient } from "expo-linear-gradient";
 import { NeedPost } from "../services/mappers";
 import { PlanCover } from "./PlanCover";
-import { MotionPressable } from "./Motion";
+import { EnterView, MotionPressable } from "./Motion";
 import { Icon } from "./Icon";
 import { useMotionPreference } from "../store/MotionContext";
 import { formatDistance } from "../utils/format";
@@ -97,7 +97,7 @@ export function StartingSoon({
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.row}
       >
-        {posts.map((post) => {
+        {posts.map((post, index) => {
           const startsIn = startsInLabel(post.startsAt, now);
           const status = mine?.get(post.id);
           const spots =
@@ -108,56 +108,57 @@ export function StartingSoon({
                 : spotsLeftLabel(post.spotsLeft);
           const km = distanceOf(post);
           return (
-            <MotionPressable
-              key={post.id}
-              accessibilityRole="button"
-              accessibilityLabel={[
-                post.title,
-                startsIn,
-                spots,
-                km != null && formatDistance(km),
-                "View plan",
-              ]
-                .filter(Boolean)
-                .join(". ")}
-              onPress={() => onOpen(post.id)}
-              style={styles.card}
-            >
-              <View style={StyleSheet.absoluteFill}>
-                <PlanCover post={post} fill artworkSize={70} />
-              </View>
-              <LinearGradient
-                pointerEvents="none"
-                colors={["rgba(3,7,18,0.35)", "rgba(3,7,18,0.92)"]}
-                style={StyleSheet.absoluteFill}
-              />
-              <View style={styles.live}>
-                <LiveDot />
-                <Text style={styles.liveText}>{startsIn}</Text>
-              </View>
-              <View style={styles.copy}>
-                <Text style={styles.cardTitle} numberOfLines={2}>
-                  {post.title}
-                </Text>
-                <View style={styles.metaRow}>
-                  <Icon
-                    name={
-                      status === "pending"
-                        ? "clock"
-                        : status === "approved"
-                          ? "check"
-                          : "users"
-                    }
-                    size={13}
-                    color={colors.amberBright}
-                  />
-                  <Text style={styles.spots}>{spots}</Text>
-                  {km != null && (
-                    <Text style={styles.meta}>· {formatDistance(km)}</Text>
-                  )}
+            <EnterView key={post.id} index={index}>
+              <MotionPressable
+                accessibilityRole="button"
+                accessibilityLabel={[
+                  post.title,
+                  startsIn,
+                  spots,
+                  km != null && formatDistance(km),
+                  "View plan",
+                ]
+                  .filter(Boolean)
+                  .join(". ")}
+                onPress={() => onOpen(post.id)}
+                style={styles.card}
+              >
+                <View style={StyleSheet.absoluteFill}>
+                  <PlanCover post={post} fill artworkSize={70} />
                 </View>
-              </View>
-            </MotionPressable>
+                <LinearGradient
+                  pointerEvents="none"
+                  colors={["rgba(3,7,18,0.35)", "rgba(3,7,18,0.92)"]}
+                  style={StyleSheet.absoluteFill}
+                />
+                <View style={styles.live}>
+                  <LiveDot />
+                  <Text style={styles.liveText}>{startsIn}</Text>
+                </View>
+                <View style={styles.copy}>
+                  <Text style={styles.cardTitle} numberOfLines={2}>
+                    {post.title}
+                  </Text>
+                  <View style={styles.metaRow}>
+                    <Icon
+                      name={
+                        status === "pending"
+                          ? "clock"
+                          : status === "approved"
+                            ? "check"
+                            : "users"
+                      }
+                      size={13}
+                      color={colors.amberBright}
+                    />
+                    <Text style={styles.spots}>{spots}</Text>
+                    {km != null && (
+                      <Text style={styles.meta}>· {formatDistance(km)}</Text>
+                    )}
+                  </View>
+                </View>
+              </MotionPressable>
+            </EnterView>
           );
         })}
       </ScrollView>

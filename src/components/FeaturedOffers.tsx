@@ -1,6 +1,11 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useMyOfferStatus } from "../store/MyRequestsContext";
 import {
+  AccessibilityInfo,
+  Platform,
+  Animated,
+  Easing,
+  AppState,
   View,
   Text,
   ScrollView,
@@ -15,10 +20,18 @@ import { colors, typography, weight } from "../theme";
 import { discoverOffers, spotlightOffers } from "../utils/offerDiscovery";
 import { activityArtwork } from "../utils/activityArtwork";
 import { formatDistance } from "../utils/format";
-import { MotionPressable } from "./Motion";
+import { MotionPressable, PopView } from "./Motion";
 import { LoadingImage } from "./LoadingImage";
 import { ActivityArt } from "./ActivityArt";
 import { Icon } from "./Icon";
+import { useIsFocused } from "@react-navigation/native";
+import { useReducedMotion } from "../store/MotionContext";
+import {
+  AUTOPLAY_INTERVAL_MS,
+  AUTOPLAY_RESUME_MS,
+  nextSlide,
+  shouldAutoAdvance,
+} from "../utils/carousel";
 
 function offerHeadline(offer: Offer) {
   return offer.discountPct != null && offer.discountPct > 0
@@ -112,36 +125,68 @@ function OfferSlide({
             {meta}
           </Text>
         </View>
-        <View
-          style={[
-            styles.claim,
-            mine === "requested" && styles.claimWaiting,
-            mine === "booked" && styles.claimBooked,
-          ]}
-        >
-          {mine && (
-            <Icon
-              name={mine === "booked" ? "check" : "clock"}
-              size={14}
-              color={mine === "booked" ? colors.success : colors.textDim}
-            />
-          )}
-          <Text
+        <PopView trigger={mine}>
+          <View
             style={[
-              styles.claimText,
-              mine === "requested" && styles.claimTextWaiting,
-              mine === "booked" && styles.claimTextBooked,
+              styles.claim,
+              mine === "requested" && styles.claimWaiting,
+              mine === "booked" && styles.claimBooked,
             ]}
           >
-            {mine === "booked"
-              ? "Booked"
-              : mine === "requested"
-                ? "Requested"
-                : "Claim"}
-          </Text>
-        </View>
+            {mine && (
+              <Icon
+                name={mine === "booked" ? "check" : "clock"}
+                size={14}
+                color={mine === "booked" ? colors.success : colors.textDim}
+              />
+            )}
+            <Text
+              style={[
+                styles.claimText,
+                mine === "requested" && styles.claimTextWaiting,
+                mine === "booked" && styles.claimTextBooked,
+              ]}
+            >
+              {mine === "booked"
+                ? "Booked"
+                : mine === "requested"
+                  ? "Requested"
+                  : "Claim"}
+            </Text>
+          </View>
+        </PopView>
       </View>
     </MotionPressable>
+  );
+}
+
+/** A page dot that stretches smoothly when it becomes the current slide. */
+function Dot({ active }: { active: boolean }) {
+  const reduced = useReducedMotion();
+  const grow = useRef(new Animated.Value(active ? 1 : 0)).current;
+  useEffect(() => {
+    if (reduced) grow.setValue(active ? 1 : 0);
+    else
+      Animated.timing(grow, {
+        toValue: active ? 1 : 0,
+        duration: 260,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: false,
+      }).start();
+  }, [active, reduced, grow]);
+  return (
+    <Animated.View
+      style={[
+        styles.dot,
+        {
+          width: grow.interpolate({ inputRange: [0, 1], outputRange: [6, 20] }),
+          backgroundColor: grow.interpolate({
+            inputRange: [0, 1],
+            outputRange: ["#D1D5DB", colors.ink],
+          }),
+        },
+      ]}
+    />
   );
 }
 
@@ -183,6 +228,65 @@ export function FeaturedOffers({
         Math.max(0, Math.round(event.nativeEvent.contentOffset.x / step)),
       ),
     );
+
+  // Autoplay: move to the next offer every few seconds, in a loop. A touch or
+  // swipe pauses it for a while; it stays still with reduced motion, a screen
+  // reader, or when the screen or app isn't in front.
+  const reduced = useReducedMotion();
+  const focused = useIsFocused();
+  const [screenReader, setScreenReader] = useState(false);
+  const [appActive, setAppActive] = useState(true);
+  const pausedUntil = useRef(0);
+  const pageRef = useRef(0);
+  pageRef.current = page;
+  useEffect(() => {
+    let alive = true;
+    // The web always reports a screen reader (it can't detect one), so only
+    // phones use this check; reduced motion still applies everywhere.
+    if (Platform.OS !== "web")
+      void AccessibilityInfo.isScreenReaderEnabled()
+        .then((on) => alive && setScreenReader(on))
+        .catch(() => {});
+    const reader = AccessibilityInfo.addEventListener(
+      "screenReaderChanged",
+      (on: boolean) => Platform.OS !== "web" && setScreenReader(on),
+    );
+    const app = AppState.addEventListener("change", (state) =>
+      setAppActive(state === "active"),
+    );
+    return () => {
+      alive = false;
+      reader.remove();
+      app.remove();
+    };
+  }, []);
+  const pause = () => {
+    pausedUntil.current = Date.now() + AUTOPLAY_RESUME_MS;
+  };
+  useEffect(() => {
+    const state = {
+      count: items.length,
+      reduced,
+      screenReader,
+      focused,
+      active: appActive,
+    };
+    if (!shouldAutoAdvance({ ...state, pausedUntil: 0, now: 0 })) return;
+    const timer = setInterval(() => {
+      if (
+        !shouldAutoAdvance({
+          ...state,
+          pausedUntil: pausedUntil.current,
+          now: Date.now(),
+        })
+      )
+        return;
+      const next = nextSlide(pageRef.current, items.length);
+      rail.current?.scrollTo({ x: next * step, animated: true });
+      setPage(next);
+    }, AUTOPLAY_INTERVAL_MS);
+    return () => clearInterval(timer);
+  }, [items.length, reduced, screenReader, focused, appActive, step]);
   return (
     <View style={styles.section}>
       <View style={styles.heading}>
@@ -215,6 +319,9 @@ export function FeaturedOffers({
             snapToInterval={step}
             onScroll={onScroll}
             scrollEventThrottle={32}
+            onTouchStart={pause}
+            onScrollBeginDrag={pause}
+            onScrollEndDrag={pause}
           >
             {items.map((offer) => (
               <OfferSlide
@@ -235,10 +342,7 @@ export function FeaturedOffers({
               importantForAccessibility="no-hide-descendants"
             >
               {items.map((offer, index) => (
-                <View
-                  key={offer.id}
-                  style={[styles.dot, index === page && styles.dotActive]}
-                />
+                <Dot key={offer.id} active={index === page} />
               ))}
             </View>
           )}

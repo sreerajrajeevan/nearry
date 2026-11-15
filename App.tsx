@@ -21,6 +21,7 @@ import { BRAND_ASSETS } from "./src/components/BrandLogo";
 import { StartupSplash } from "./src/components/StartupSplash";
 import { colors } from "./src/theme";
 import { MotionProvider } from "./src/store/MotionContext";
+import { ToastProvider } from "./src/store/ToastContext";
 import { AppAlertHost } from "./src/components/AppAlertHost";
 
 // Hold the native brand artwork until React has laid out its matching launch frame.
@@ -102,13 +103,15 @@ export default function App() {
     <SafeAreaProvider>
       <MotionProvider>
         <StatusBar style="dark" />
-        <AuthProvider>
-          <AppShell
-            resourcesReady={
-              !!(fontsLoaded || fontError) && !!(assets || assetError)
-            }
-          />
-        </AuthProvider>
+        <ToastProvider>
+          <AuthProvider>
+            <AppShell
+              resourcesReady={
+                !!(fontsLoaded || fontError) && !!(assets || assetError)
+              }
+            />
+          </AuthProvider>
+        </ToastProvider>
         <AppAlertHost />
       </MotionProvider>
     </SafeAreaProvider>

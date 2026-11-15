@@ -54,7 +54,7 @@ import {
   PlanOptions,
 } from "../../utils/planDiscovery";
 import { useDiscoveryClock } from "../../hooks/useDiscoveryClock";
-import { MotionPressable } from "../../components/Motion";
+import { EnterView, MotionPressable } from "../../components/Motion";
 import { offerDiscoveryCategory } from "../../utils/offerDiscovery";
 import { onboardingPreferences } from "../../utils/onboarding";
 
@@ -565,16 +565,17 @@ export function NearbyScreen() {
                 ))}
               </View>
             )}
-            {visiblePosts.map((post) => (
-              <PostRow
-                key={post.id}
-                post={post}
-                now={now}
-                distanceKm={planDistance(post, distances)}
-                onPress={() =>
-                  navigation.navigate("PostDetails", { postId: post.id })
-                }
-              />
+            {visiblePosts.map((post, index) => (
+              <EnterView key={post.id} index={index}>
+                <PostRow
+                  post={post}
+                  now={now}
+                  distanceKm={planDistance(post, distances)}
+                  onPress={() =>
+                    navigation.navigate("PostDetails", { postId: post.id })
+                  }
+                />
+              </EnterView>
             ))}
             {visiblePosts.length === 0 && (
               <>

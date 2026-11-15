@@ -1,4 +1,5 @@
 import { Alert } from "../../services/appAlert";
+import { useToast } from "../../store/ToastContext";
 import { useMyRequests } from "../../store/MyRequestsContext";
 import {
   joinNoteHint,
@@ -124,6 +125,7 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
   const approved = requests.filter((r) => r.status === "approved");
 
   const myRequests = useMyRequests();
+  const toast = useToast();
   const [joinOpen, setJoinOpen] = useState(false);
   const [joinError, setJoinError] = useState("");
   const sendJoin = async (note: string) => {
@@ -133,6 +135,10 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
     try {
       await requestToJoin(postId, myId, note);
       setJoinOpen(false);
+      toast(
+        `Request sent to ${post?.authorName.split(" ")[0] || "the host"}`,
+        "send",
+      );
       void myRequests?.refresh();
       await load();
     } catch (e) {
@@ -154,6 +160,8 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
       await fn();
       // Withdraw / leave change what plan cards show elsewhere.
       void myRequests?.refresh();
+      if (key === "wd") toast("Request withdrawn", "rotate-ccw");
+      else if (key === "lv") toast("You left this plan", "log-out");
       await load();
     } catch (e) {
       if (key === "join" && isProfileCompletionError(e)) {

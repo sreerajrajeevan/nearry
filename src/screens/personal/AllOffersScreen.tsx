@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { EnterView } from "../../components/Motion";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { PersonalStackParamList } from "../../navigation/types";
@@ -98,17 +99,18 @@ export function AllOffersScreen({
             <Button title="Try again" onPress={() => void refresh()} />
           </View>
         ) : shown.length ? (
-          shown.map((offer) => (
-            <OfferRow
-              key={offer.id}
-              offer={offer}
-              distanceKm={
-                offer.venueId ? distances.get(offer.venueId) : undefined
-              }
-              onPress={() =>
-                navigation.navigate("OfferDetails", { offerId: offer.id })
-              }
-            />
+          shown.map((offer, index) => (
+            <EnterView key={`${category}:${offer.id}`} index={index}>
+              <OfferRow
+                offer={offer}
+                distanceKm={
+                  offer.venueId ? distances.get(offer.venueId) : undefined
+                }
+                onPress={() =>
+                  navigation.navigate("OfferDetails", { offerId: offer.id })
+                }
+              />
+            </EnterView>
           ))
         ) : (
           <EmptyState

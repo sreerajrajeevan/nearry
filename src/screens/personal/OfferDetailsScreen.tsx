@@ -1,4 +1,5 @@
 import { LoadingState } from "../../components/LoadingState";
+import { useToast } from "../../store/ToastContext";
 import { SafetyActions } from "../../components/SafetyActions";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -55,6 +56,7 @@ export function OfferDetailsScreen({ route, navigation }: Props) {
   const [booking, setBooking] = useState(false);
   const [cancelling, setCancelling] = useState<string | null>(null);
   const refreshMine = useMyRequests()?.refresh;
+  const toast = useToast();
   const [photoFailed, setPhotoFailed] = useState(false);
   const {
     data,
@@ -169,6 +171,10 @@ export function OfferDetailsScreen({ route, navigation }: Props) {
     try {
       await bookOffer(offerId, slot.id, partySize);
       void refreshMine?.();
+      toast(
+        `Booking requested · ${offer?.businessName ?? "The business"} will confirm`,
+        "clock",
+      );
       await load(true);
     } catch (e) {
       setFormError(
@@ -191,6 +197,7 @@ export function OfferDetailsScreen({ route, navigation }: Props) {
           void cancelBooking(bookingId)
             .then(() => {
               void refreshMine?.();
+              toast("Booking cancelled", "x");
               return load(true);
             })
             .catch((e) =>

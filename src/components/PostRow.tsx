@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useToast } from "../store/ToastContext";
 import { useMyPlanStatus } from "../store/MyRequestsContext";
 import { StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
@@ -7,7 +8,7 @@ import { formatWhen, formatDistance } from "../utils/format";
 import { postState } from "../utils/flowState";
 import { planCost } from "../utils/planDiscovery";
 import { colors, typography, weight } from "../theme";
-import { MotionPressable } from "./Motion";
+import { MotionPressable, PopView } from "./Motion";
 import { PlanCover } from "./PlanCover";
 import { Avatar } from "./Avatar";
 import { audienceLabel } from "./AudienceBadge";
@@ -51,6 +52,7 @@ export function PostRow({
   const saved = useSavedPlans();
   const bookmarked = saved?.ids.includes(post.id) ?? false;
   const [saving, setSaving] = useState(false);
+  const toast = useToast();
   // Once I've asked to join, the card says so instead of offering Join again.
   const mine = useMyPlanStatus(post.id);
   const action =
@@ -247,61 +249,74 @@ export function PostRow({
             style={[styles.save, bookmarked && styles.saved]}
             onPress={() => {
               setSaving(true);
+              const wasSaved = bookmarked;
               void saved
                 .toggle(post.id)
+                .then(() =>
+                  toast(
+                    wasSaved
+                      ? "Removed from saved plans"
+                      : "Saved to your plans",
+                    "bookmark",
+                  ),
+                )
                 .catch((error) =>
                   Alert.alert("Couldn’t save plan", error.message),
                 )
                 .finally(() => setSaving(false));
             }}
           >
-            <Icon
-              name="bookmark"
-              size={18}
-              color={bookmarked ? colors.onAccent : colors.ink}
-            />
+            <PopView trigger={bookmarked}>
+              <Icon
+                name="bookmark"
+                size={18}
+                color={bookmarked ? colors.onAccent : colors.ink}
+              />
+            </PopView>
           </MotionPressable>
         )}
-        <MotionPressable
-          accessibilityRole="button"
-          accessibilityLabel={`${
-            mine === "pending"
-              ? "Request pending"
-              : mine === "approved"
-                ? "You're in"
-                : action
-          }: ${post.title}`}
-          accessibilityHint={
-            mine
-              ? "Open the plan to see your request"
-              : "Review the plan and request a place; the host approves requests"
-          }
-          onPress={onPress}
-          style={[
-            styles.cta,
-            !status.accepting && styles.ctaQuiet,
-            !cta && mine === "pending" && styles.ctaPending,
-            !cta && mine === "approved" && styles.ctaIn,
-          ]}
-        >
-          {!cta && mine && (
-            <Icon
-              name={mine === "pending" ? "clock" : "check"}
-              size={15}
-              color={mine === "pending" ? colors.textDim : colors.success}
-            />
-          )}
-          <Text
+        <PopView trigger={action}>
+          <MotionPressable
+            accessibilityRole="button"
+            accessibilityLabel={`${
+              mine === "pending"
+                ? "Request pending"
+                : mine === "approved"
+                  ? "You're in"
+                  : action
+            }: ${post.title}`}
+            accessibilityHint={
+              mine
+                ? "Open the plan to see your request"
+                : "Review the plan and request a place; the host approves requests"
+            }
+            onPress={onPress}
             style={[
-              styles.ctaText,
-              !status.accepting && styles.ctaTextQuiet,
-              !cta && mine === "pending" && styles.ctaTextPending,
-              !cta && mine === "approved" && styles.ctaTextIn,
+              styles.cta,
+              !status.accepting && styles.ctaQuiet,
+              !cta && mine === "pending" && styles.ctaPending,
+              !cta && mine === "approved" && styles.ctaIn,
             ]}
           >
-            {action}
-          </Text>
-        </MotionPressable>
+            {!cta && mine && (
+              <Icon
+                name={mine === "pending" ? "clock" : "check"}
+                size={15}
+                color={mine === "pending" ? colors.textDim : colors.success}
+              />
+            )}
+            <Text
+              style={[
+                styles.ctaText,
+                !status.accepting && styles.ctaTextQuiet,
+                !cta && mine === "pending" && styles.ctaTextPending,
+                !cta && mine === "approved" && styles.ctaTextIn,
+              ]}
+            >
+              {action}
+            </Text>
+          </MotionPressable>
+        </PopView>
       </View>
     </View>
   );
