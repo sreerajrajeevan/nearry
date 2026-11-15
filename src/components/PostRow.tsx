@@ -123,7 +123,9 @@ export function PostRow({
         onPress={onPress}
       >
         <View style={styles.cover}>
-          <PlanCover post={post} aspectRatio={1.9} artworkSize={96} />
+          <View style={StyleSheet.absoluteFill}>
+            <PlanCover post={post} fill artworkSize={96} />
+          </View>
           <LinearGradient
             pointerEvents="none"
             colors={
@@ -134,41 +136,50 @@ export function PostRow({
             locations={[0, 0.4, 1]}
             style={StyleSheet.absoluteFill}
           />
-          <View style={styles.topRow}>
-            <View style={styles.hostPill}>
-              {post.authorAvatarUrl ? (
-                <Avatar
-                  name={post.authorName}
-                  uri={post.authorAvatarUrl}
-                  size={24}
-                />
-              ) : (
-                <View
-                  style={[styles.hostAvatar, { backgroundColor: hostTone }]}
-                >
-                  <Text style={styles.hostInitials}>
-                    {initialsOf(post.authorName)}
+          {/* The sizer keeps the usual 1.9 photo shape; the content beside it
+              can make the cover taller when the host, badge, title and details
+              need more room (narrow screens, two-line titles), so they never
+              overlap. */}
+          <View style={styles.coverRow}>
+            <View style={styles.coverSizer} />
+            <View style={styles.coverContent}>
+              <View style={styles.topRow}>
+                <View style={styles.hostPill}>
+                  {post.authorAvatarUrl ? (
+                    <Avatar
+                      name={post.authorName}
+                      uri={post.authorAvatarUrl}
+                      size={24}
+                    />
+                  ) : (
+                    <View
+                      style={[styles.hostAvatar, { backgroundColor: hostTone }]}
+                    >
+                      <Text style={styles.hostInitials}>
+                        {initialsOf(post.authorName)}
+                      </Text>
+                    </View>
+                  )}
+                  <Text style={styles.hostName} numberOfLines={1}>
+                    {post.authorName}
                   </Text>
                 </View>
-              )}
-              <Text style={styles.hostName} numberOfLines={1}>
-                {post.authorName}
-              </Text>
-            </View>
-            <View
-              style={[styles.badge, !status.accepting && styles.badgeMuted]}
-            >
-              <Text
-                style={[
-                  styles.badgeText,
-                  !status.accepting && styles.badgeTextMuted,
-                ]}
-              >
-                {badge}
-              </Text>
+                <View
+                  style={[styles.badge, !status.accepting && styles.badgeMuted]}
+                >
+                  <Text
+                    style={[
+                      styles.badgeText,
+                      !status.accepting && styles.badgeTextMuted,
+                    ]}
+                  >
+                    {badge}
+                  </Text>
+                </View>
+              </View>
+              {overlay && <View style={styles.photoCopy}>{titleBlock}</View>}
             </View>
           </View>
-          {overlay && <View style={styles.photoCopy}>{titleBlock}</View>}
         </View>
         {!overlay && <View style={styles.plainCopy}>{titleBlock}</View>}
       </MotionPressable>
@@ -241,12 +252,17 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     elevation: 2,
   },
-  cover: { position: "relative" },
+  cover: { position: "relative", overflow: "hidden" },
+  coverRow: { flexDirection: "row" },
+  coverSizer: { width: "100%", aspectRatio: 1.9 },
+  coverContent: {
+    width: "100%",
+    marginLeft: "-100%",
+    padding: 12,
+    justifyContent: "space-between",
+    gap: 12,
+  },
   topRow: {
-    position: "absolute",
-    top: 12,
-    left: 12,
-    right: 12,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
@@ -295,7 +311,7 @@ const styles = StyleSheet.create({
     ...weight("800"),
   },
   badgeTextMuted: { color: colors.ink },
-  photoCopy: { position: "absolute", left: 14, right: 14, bottom: 12, gap: 3 },
+  photoCopy: { paddingHorizontal: 2, gap: 3 },
   audience: { marginTop: 0, marginBottom: 4 },
   plainCopy: { paddingHorizontal: 16, paddingTop: 12, gap: 4 },
   title: {
