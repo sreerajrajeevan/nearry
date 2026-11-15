@@ -287,14 +287,29 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
         <Text accessibilityRole="header" style={styles.title}>
           {post.title}
         </Text>
-        <View style={styles.authorRow}>
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel={`Hosted by ${post.authorName}. View profile`}
+          activeOpacity={0.7}
+          disabled={isHost}
+          onPress={() =>
+            navigation.navigate("HostProfile", {
+              userId: post.authorId,
+              name: post.authorName,
+            })
+          }
+          style={styles.authorRow}
+        >
           <Avatar name={post.authorName} uri={data?.authorAvatar} size={40} />
           <View style={styles.flex}>
             <Text style={styles.hostLabel}>Hosted by</Text>
             <Text style={styles.authorName}>{post.authorName}</Text>
           </View>
           {data?.selfieChecked && <Badge label="Selfie checked" tone="green" />}
-        </View>
+          {!isHost && (
+            <Icon name="chevron-right" size={18} color={colors.textDim} />
+          )}
+        </TouchableOpacity>
         <View style={styles.facts}>
           <View style={styles.factRow}>
             <Icon name="calendar" size={21} color={colors.amberDeep} />

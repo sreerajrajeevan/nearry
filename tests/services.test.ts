@@ -843,3 +843,29 @@ test("a join request sends a trimmed optional note and rejects one over 280 char
   );
   assert.equal(rpc(), undefined);
 });
+
+test("a host's public profile reads only public columns", async () => {
+  const profile = await import("../src/services/profile");
+  handler = () => [
+    {
+      id: "h1",
+      display_name: "Meera Iyer",
+      avatar_url: "https://example.invalid/a.jpg",
+      bio: "Morning runs and filter coffee.",
+    },
+  ];
+  calls.length = 0;
+  const host = await profile.getPublicProfile("h1");
+  const read = calls.find((c) => c.url.pathname.endsWith("/profiles"));
+  assert.equal(
+    read?.url.searchParams.get("select"),
+    "id,display_name,avatar_url,bio",
+  );
+  assert.equal(read?.url.searchParams.get("id"), "eq.h1");
+  assert.deepEqual(host, {
+    id: "h1",
+    displayName: "Meera Iyer",
+    avatarUrl: "https://example.invalid/a.jpg",
+    bio: "Morning runs and filter coffee.",
+  });
+});
