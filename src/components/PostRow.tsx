@@ -9,7 +9,7 @@ import { colors, typography, weight } from "../theme";
 import { MotionPressable } from "./Motion";
 import { PlanCover } from "./PlanCover";
 import { Avatar } from "./Avatar";
-import { AudienceBadge, audienceLabel } from "./AudienceBadge";
+import { audienceLabel } from "./AudienceBadge";
 import { Icon } from "./Icon";
 import { useSavedPlans } from "../store/SavedPlansContext";
 import { Alert } from "../services/appAlert";
@@ -176,24 +176,48 @@ export function PostRow({
           </View>
         </View>
         {!overlay && <View style={styles.plainCopy}>{titleBlock}</View>}
-        {/* Who can join sits in the white area, above the joined count. */}
-        {restricted && (
-          <AudienceBadge
-            preference={post.genderPreference}
-            style={styles.audience}
-          />
-        )}
       </MotionPressable>
       <View style={styles.footer}>
         <View style={styles.joinedIcon}>
           <Icon name="users" size={14} color={colors.textDim} />
         </View>
-        <Text style={styles.joined}>
-          <Text style={styles.joinedCount}>
-            {post.joinedCount} of {post.vacancies}
-          </Text>{" "}
-          joined
-        </Text>
+        {/* A slim "only" tag under the count fits beside the Join button,
+            so the white footer keeps its usual height. */}
+        <View style={styles.joinedCopy}>
+          <Text style={styles.joined}>
+            <Text style={styles.joinedCount}>
+              {post.joinedCount} of {post.vacancies}
+            </Text>{" "}
+            joined
+          </Text>
+          {restricted && (
+            <View
+              style={[
+                styles.onlyTag,
+                {
+                  backgroundColor:
+                    post.genderPreference === "female" ? "#FCE8F1" : "#E6F0FC",
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.onlyText,
+                  {
+                    color:
+                      post.genderPreference === "female"
+                        ? "#8A2754"
+                        : "#205A91",
+                  },
+                ]}
+                numberOfLines={1}
+              >
+                {post.genderPreference === "female" ? "♀ " : "♂ "}
+                {audienceLabel(post.genderPreference)}
+              </Text>
+            </View>
+          )}
+        </View>
         {saved && (
           <MotionPressable
             accessibilityRole="button"
@@ -313,7 +337,6 @@ const styles = StyleSheet.create({
   },
   badgeTextMuted: { color: colors.ink },
   photoCopy: { paddingHorizontal: 2, gap: 3 },
-  audience: { marginTop: 12, marginHorizontal: 16, marginBottom: 0 },
   plainCopy: { paddingHorizontal: 16, paddingTop: 12, gap: 4 },
   title: {
     ...typography.heading,
@@ -349,7 +372,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  joined: { ...typography.bodySmall, color: colors.textDim, flex: 1 },
+  joinedCopy: { flex: 1, minWidth: 0, alignItems: "flex-start", gap: 3 },
+  joined: { ...typography.bodySmall, color: colors.textDim },
+  onlyTag: { paddingHorizontal: 6, paddingVertical: 1, borderRadius: 6 },
+  onlyText: { fontSize: 11, lineHeight: 15, ...weight("700") },
   joinedCount: { color: colors.ink, ...weight("800") },
   save: {
     width: 44,
