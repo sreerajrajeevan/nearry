@@ -78,25 +78,33 @@ function Choices<T extends string | number | null>({
   );
 }
 
-/** Draft changes are committed only by Show plans; dismiss/back discards them. */
+const countLabel = (count: number) =>
+  count === 0
+    ? "No plans match"
+    : `Show ${count} plan${count === 1 ? "" : "s"}`;
+
+/**
+ * Sort, cost and audience only: category sits on Home's rail and distance in
+ * the location sheet. Draft changes are committed only by the Show button.
+ */
 export function PlanFilterSheet({
   value,
   hasLocation,
-  demo,
+  countFor,
   onApply,
   onClose,
-  onChooseArea,
 }: {
   value: PlanOptions;
   hasLocation: boolean;
-  demo: boolean;
+  /** How many plans Home would show with these options. */
+  countFor: (options: PlanOptions) => number;
   onApply: (options: PlanOptions) => void;
   onClose: () => void;
-  onChooseArea: () => void;
 }) {
   const [draft, setDraft] = useState(value);
   const insets = useSafeAreaInsets();
   const reduced = useReducedMotion();
+  const count = countFor(draft);
   return (
     <Modal
       visible
@@ -148,47 +156,6 @@ export function PlanFilterSheet({
                 onChange={(sort) => setDraft((d) => ({ ...d, sort }))}
               />
               <Choices
-                label="Category"
-                value={draft.category}
-                options={[
-                  { value: null, label: "All categories" },
-                  ...(["Play", "Meet", "Explore", "Unwind"] as const).map(
-                    (value) => ({ value, label: value }),
-                  ),
-                ]}
-                onChange={(category) => setDraft((d) => ({ ...d, category }))}
-              />
-              <Choices
-                label="Distance"
-                value={draft.maxDistanceKm}
-                options={[
-                  { value: null, label: "Default area" },
-                  ...([2, 5, 10, 25] as const).map((value) => ({
-                    value,
-                    label: `Within ${value} km`,
-                    disabled: !hasLocation,
-                  })),
-                ]}
-                onChange={(maxDistanceKm) =>
-                  setDraft((d) => ({ ...d, maxDistanceKm }))
-                }
-              />
-              <Text style={styles.hint}>
-                {demo
-                  ? "Distances use sample data in demo mode."
-                  : hasLocation
-                    ? "Distances are measured from your selected location. Default area is within 5 km."
-                    : "Choose an area or use your location to filter by distance and sort nearest first."}
-              </Text>
-              {!hasLocation && (
-                <Button
-                  title="Choose an area"
-                  variant="secondary"
-                  onPress={onChooseArea}
-                  style={styles.areaButton}
-                />
-              )}
-              <Choices
                 label="Cost"
                 value={draft.freeOnly ? "free" : "all"}
                 options={[
@@ -220,10 +187,16 @@ export function PlanFilterSheet({
               <Button
                 title="Reset"
                 variant="ghost"
-                onPress={() => setDraft({ ...DEFAULT_PLAN_OPTIONS })}
+                onPress={() =>
+                  setDraft((d) => ({
+                    ...DEFAULT_PLAN_OPTIONS,
+                    category: d.category,
+                    maxDistanceKm: d.maxDistanceKm,
+                  }))
+                }
               />
               <Button
-                title="Show plans"
+                title={countLabel(count)}
                 variant="solid"
                 onPress={() => onApply(draft)}
                 style={styles.apply}
@@ -297,7 +270,6 @@ const styles = StyleSheet.create({
     marginTop: -10,
     marginBottom: 20,
   },
-  areaButton: { marginTop: -8, marginBottom: 20 },
   footer: {
     flexDirection: "row",
     alignItems: "center",

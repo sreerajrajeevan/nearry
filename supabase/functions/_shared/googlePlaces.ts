@@ -1,13 +1,41 @@
 import type {
   Place,
   PlaceBias,
+  PlaceKind,
   PlaceSuggestion,
   PlaceSuggestionProvider,
 } from "./placeTypes.ts";
-import { validPoint } from "./placeTypes.ts";
+import { validPlaceKind, validPoint } from "./placeTypes.ts";
 export const googleAttribution = [
   { label: "Google Maps", url: "https://maps.google.com/" },
 ];
+
+const CITY_TYPES = new Set([
+  "locality",
+  "postal_town",
+  "colloquial_area",
+  "administrative_area_level_1",
+  "administrative_area_level_2",
+  "administrative_area_level_3",
+  "country",
+]);
+const AREA_TYPES = new Set([
+  "sublocality",
+  "sublocality_level_1",
+  "sublocality_level_2",
+  "sublocality_level_3",
+  "neighborhood",
+  "postal_code",
+  "route",
+]);
+/** City, area or a specific spot, from a prediction's Google place types. */
+export function googlePlaceKind(types: unknown): PlaceKind | undefined {
+  if (!Array.isArray(types) || !types.length) return undefined;
+  const list = types.filter((t): t is string => typeof t === "string");
+  if (list.some((t) => CITY_TYPES.has(t))) return "city";
+  if (list.some((t) => AREA_TYPES.has(t))) return "area";
+  return list.length ? "spot" : undefined;
+}
 
 export function mapGooglePredictions(payload: unknown): PlaceSuggestion[] {
   const suggestions = (payload as { suggestions?: unknown[] } | null)
@@ -33,6 +61,7 @@ export function mapGooglePredictions(payload: unknown): PlaceSuggestion[] {
     if (typeof name !== "string" || !name.trim()) continue;
     const address =
       p.structuredFormat?.secondaryText?.text ?? p.text?.text ?? name;
+    const kind = googlePlaceKind(p.types);
     places.set(p.placeId, {
       provider: "google",
       id: p.placeId,
@@ -42,6 +71,7 @@ export function mapGooglePredictions(payload: unknown): PlaceSuggestion[] {
           ? address.slice(0, 500)
           : name.slice(0, 500),
       attributions: googleAttribution,
+      ...(kind ? { kind } : {}),
     });
   }
   return [...places.values()].slice(0, 5);
@@ -90,7 +120,7 @@ export function createGooglePlacesProvider(
         await call(
           "https://places.googleapis.com/v1/places:autocomplete",
           { method: "POST", body: JSON.stringify(body) },
-          "suggestions.placePrediction.placeId,suggestions.placePrediction.text,suggestions.placePrediction.structuredFormat",
+          "suggestions.placePrediction.placeId,suggestions.placePrediction.text,suggestions.placePrediction.structuredFormat,suggestions.placePrediction.types",
         ),
       );
     },
@@ -125,6 +155,7 @@ export function createGooglePlacesProvider(
         name: suggestion.name,
         address: payload.formattedAddress.slice(0, 500),
         ...payload.location,
+        ...(validPlaceKind(suggestion.kind) ? { kind: suggestion.kind } : {}),
         attributions: [
           ...googleAttribution,
           ...(Array.isArray(payload.attributions)

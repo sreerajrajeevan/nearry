@@ -9,6 +9,7 @@ import {
   StyleSheet,
   Keyboard,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
   useFocusEffect,
   useNavigation,
@@ -16,15 +17,12 @@ import {
   RouteProp,
 } from "@react-navigation/native";
 import {
-  PlaceSuggestions,
   PlaceAttributions,
   GoogleMapsCredit,
 } from "../../components/PlaceSuggestions";
-import { usePlaceSuggestions } from "../../hooks/usePlaceSuggestions";
 import { Place, validPlace } from "../../services/places";
 import { Screen } from "../../components/Screen";
 import { PersonalHeader } from "../../components/PersonalHeader";
-import { Input } from "../../components/Input";
 import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
 import { PostRow } from "../../components/PostRow";
@@ -32,10 +30,15 @@ import { FeaturedOffers } from "../../components/FeaturedOffers";
 import { StartingSoon } from "../../components/StartingSoon";
 import { VenueRow } from "../../components/VenueRow";
 import { DiscoverySearch } from "../../components/DiscoverySearch";
+import { LocationSheet } from "../../components/LocationSheet";
 import { colors, typography, spacing, weight } from "../../theme";
 import { listPosts, subscribeToPosts } from "../../services/posts";
 import { listLiveOffers, subscribeToOffers } from "../../services/offers";
-import { getCurrentPosition, LatLng } from "../../services/location";
+import {
+  getCurrentPosition,
+  getPositionIfAllowed,
+  LatLng,
+} from "../../services/location";
 import { nearbyVenues, listVenues } from "../../services/venues";
 import { NeedPost, Venue, Offer } from "../../services/mappers";
 import { DiscoveryCategory, venueCategory } from "../../utils/discovery";
@@ -53,6 +56,18 @@ import {
   PlanDateFilter,
   PlanOptions,
 } from "../../utils/planDiscovery";
+import {
+  HomeLocation,
+  MAX_HOME_DISTANCE,
+  RecentPlace,
+  defaultDistance,
+  homeLocationKey,
+  isHomeDistance,
+  parseHomeLocation,
+  placeKind,
+  rememberPlace,
+  widenDistance,
+} from "../../utils/homeLocation";
 import { useDiscoveryClock } from "../../hooks/useDiscoveryClock";
 import { EnterView, MotionPressable } from "../../components/Motion";
 import { offerDiscoveryCategory } from "../../utils/offerDiscovery";
@@ -70,6 +85,7 @@ const DATE_LABELS: Record<PlanDateFilter, string> = {
   week: "This week",
   weekend: "This weekend",
 };
+const NEAR_YOU = "Near you";
 
 export function NearbyScreen() {
   const navigation = useNavigation<PersonalTabNav>();
@@ -77,40 +93,106 @@ export function NearbyScreen() {
   const { demoMode, profile, session } = useAuth();
   const now = useDiscoveryClock();
   const setup = onboardingPreferences(profile?.onboardingPreferences);
+  const accountId = profile?.id ?? session?.user.id ?? null;
   const [posts, setPosts] = useState<NeedPost[]>([]);
   const [venues, setVenues] = useState<Venue[]>([]);
   const [offers, setOffers] = useState<Offer[]>([]);
   const [state, setState] = useState<"loading" | "error" | "ready">("loading");
   const [refreshing, setRefreshing] = useState(false);
+  // Where Home searches from, and what to call it.
   const [point, setPoint] = useState<LatLng | null>(() => setup.area ?? null);
-  const [selectedPlace, setSelectedPlace] = useState<Place | null>(null);
-  const [setupAreaLabel, setSetupAreaLabel] = useState(setup.area?.label ?? "");
-  const [area, setArea] = useState("");
-  const [appliedArea, setAppliedArea] = useState("");
-  const [editingLocation, setEditingLocation] = useState(false);
+  const [place, setPlace] = useState<RecentPlace | null>(null);
+  const [pointLabel, setPointLabel] = useState(setup.area?.label ?? "");
+  // The distance asked for. Home may look further when nothing is that close.
+  const [chosenKm, setChosenKm] = useState<number | null>(
+    setup.area ? setup.radiusKm : null,
+  );
+  const [recents, setRecents] = useState<RecentPlace[]>([]);
+  const [locationOpen, setLocationOpen] = useState(false);
   const [locating, setLocating] = useState(false);
   const [locationError, setLocationError] = useState("");
   const [options, setOptions] = useState<PlanOptions>({
     ...DEFAULT_PLAN_OPTIONS,
-    maxDistanceKm: setup.area ? setup.radiusKm : null,
   });
   const { category, freeOnly } = options;
   const [dateFilter, setDateFilter] = useState<PlanDateFilter>("all");
   const [dateMenuOpen, setDateMenuOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const hasLocation = demoMode || point !== null;
-  const radiusKm = options.maxDistanceKm ?? 5;
   const request = useRef(0);
   const scroll = useRef<ScrollView>(null);
-  const suggestions = usePlaceSuggestions(area, point, editingLocation);
-  const choosePlace = (place: Place) => {
-    setSetupAreaLabel("");
-    setSelectedPlace(place);
-    setPoint({ latitude: place.latitude, longitude: place.longitude });
-    setArea("");
-    setAppliedArea("");
+  const picked = useRef(false);
+
+  const persist = (next: HomeLocation) => {
+    if (demoMode || !accountId) return;
+    void AsyncStorage.setItem(
+      homeLocationKey(accountId),
+      JSON.stringify(next),
+    ).catch(() => {});
+  };
+  const savedCurrent = (): HomeLocation["current"] =>
+    place
+      ? { type: "place", place }
+      : point && pointLabel === NEAR_YOU
+        ? { type: "me", ...point, savedAt: new Date().toISOString() }
+        : null;
+
+  // Reopen with the last place and distance on this device.
+  useEffect(() => {
+    if (demoMode || !accountId) return;
+    let active = true;
+    AsyncStorage.getItem(homeLocationKey(accountId))
+      .then((raw) => {
+        if (!active) return;
+        const saved = parseHomeLocation(raw);
+        setRecents(saved.recents);
+        if (picked.current || !saved.current) return;
+        const current = saved.current;
+        if (current.type === "place") {
+          setPlace(current.place);
+          setPoint({
+            latitude: current.place.latitude,
+            longitude: current.place.longitude,
+          });
+          setPointLabel("");
+          setChosenKm(saved.distanceKm ?? defaultDistance(current.place.kind));
+        } else {
+          setPlace(null);
+          setPoint({
+            latitude: current.latitude,
+            longitude: current.longitude,
+          });
+          setPointLabel(NEAR_YOU);
+          setChosenKm(saved.distanceKm ?? defaultDistance("me"));
+          // Quietly move to where they are now, without a permission prompt.
+          void getPositionIfAllowed().then((position) => {
+            if (active && position && !picked.current) setPoint(position);
+          });
+        }
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [demoMode, accountId]);
+
+  const choosePlace = (chosen: Place) => {
+    picked.current = true;
+    const kind = placeKind(chosen);
+    const km = defaultDistance(kind);
+    const nextRecents = rememberPlace(recents, chosen);
+    setPlace(nextRecents[0]);
+    setPoint({ latitude: chosen.latitude, longitude: chosen.longitude });
+    setPointLabel("");
+    setChosenKm(km);
+    setRecents(nextRecents);
     setLocationError("");
-    setEditingLocation(false);
+    setLocationOpen(false);
+    persist({
+      current: { type: "place", place: nextRecents[0] },
+      distanceKm: km,
+      recents: nextRecents,
+    });
   };
   useEffect(() => {
     if (route.params?.place) {
@@ -119,25 +201,60 @@ export function NearbyScreen() {
     }
   }, [route.params?.place, navigation]);
 
+  const locate = async () => {
+    setLocating(true);
+    setLocationError("");
+    try {
+      const position = await getCurrentPosition();
+      if (position) {
+        picked.current = true;
+        const km = defaultDistance("me");
+        setPlace(null);
+        setPoint(position);
+        setPointLabel(NEAR_YOU);
+        setChosenKm(km);
+        setLocationOpen(false);
+        persist({
+          current: {
+            type: "me",
+            ...position,
+            savedAt: new Date().toISOString(),
+          },
+          distanceKm: km,
+          recents,
+        });
+      } else
+        setLocationError(
+          "Location is off for Nearry. Search for your area instead.",
+        );
+    } finally {
+      setLocating(false);
+    }
+  };
+  const changeDistance = (km: number) => {
+    setChosenKm(km);
+    setLocationOpen(false);
+    persist({
+      current: savedCurrent(),
+      distanceKm: isHomeDistance(km) ? km : null,
+      recents,
+    });
+  };
+
   const load = useCallback(
     async (silent = false) => {
       const version = ++request.current;
       if (!silent) setState("loading");
       try {
-        let places = point
-          ? await nearbyVenues(point.latitude, point.longitude, radiusKm * 1000)
+        // Fetch the widest area once; distance is applied on the phone so
+        // changing it, or widening when nothing is close, needs no reload.
+        const radiusM = MAX_HOME_DISTANCE * 1000;
+        const places = point
+          ? await nearbyVenues(point.latitude, point.longitude, radiusM)
           : await listVenues();
-        if (appliedArea)
-          places = places.filter((v) =>
-            v.area.toLowerCase().includes(appliedArea.toLowerCase()),
-          );
-        const ids = point || appliedArea ? places.map((v) => v.id) : undefined;
+        const ids = point ? places.map((v) => v.id) : undefined;
         const [plans, openings] = await Promise.all([
-          listPosts(
-            point
-              ? { nearby: { ...point, radiusM: radiusKm * 1000 } }
-              : { venueIds: ids },
-          ),
+          listPosts(point ? { nearby: { ...point, radiusM } } : {}),
           listLiveOffers(ids),
         ]);
         if (request.current !== version) return;
@@ -149,7 +266,7 @@ export function NearbyScreen() {
         if (request.current === version) setState("error");
       }
     },
-    [point, appliedArea, radiusKm],
+    [point],
   );
 
   // A stable function, so it can sit in the focus effect's dependencies.
@@ -170,105 +287,62 @@ export function NearbyScreen() {
     await load(true);
     setRefreshing(false);
   };
-  const applyArea = () => {
-    setSetupAreaLabel("");
-    if (!demoMode)
-      setOptions((current) => ({
-        ...current,
-        maxDistanceKm: null,
-        sort: current.sort === "nearest" ? "soonest" : current.sort,
-      }));
-    setPoint(null);
-    setSelectedPlace(null);
-    setAppliedArea(area.trim());
-    setEditingLocation(false);
-    setLocationError("");
-  };
-  const locate = async () => {
-    setLocating(true);
-    setLocationError("");
-    try {
-      const position = await getCurrentPosition();
-      if (position) {
-        setSetupAreaLabel("");
-        setSelectedPlace(null);
-        setPoint(position);
-        setAppliedArea("");
-        setArea("");
-        setEditingLocation(false);
-      } else
-        setLocationError(
-          "Location unavailable. You can enter an area instead.",
-        );
-    } finally {
-      setLocating(false);
-    }
-  };
 
   const distances = new Map(venues.map((v) => [v.id, v.distanceKm]));
-  const visiblePosts = discoveryPlans(
-    posts,
-    {
-      ...options,
-      date: dateFilter,
-      distances,
-      excludeAuthorId: profile?.id ?? session?.user.id,
-    },
-    now,
-  );
-  // Ignores the day filter: "soon" is always the next few hours.
-  const startingSoon = startingSoonPlans(
+  const excludeAuthorId = profile?.id ?? session?.user.id;
+  const plansWithin = (
+    opts: PlanOptions,
+    km: number | null,
+    date: PlanDateFilter = dateFilter,
+  ) =>
     discoveryPlans(
       posts,
-      {
-        ...options,
-        date: "all",
-        distances,
-        excludeAuthorId: profile?.id ?? session?.user.id,
-      },
+      { ...opts, date, distances, excludeAuthorId, maxDistanceKm: km },
       now,
-    ),
+    );
+  const reachFor = (opts: PlanOptions) =>
+    chosenKm == null
+      ? { distanceKm: null, widened: false }
+      : widenDistance(chosenKm, (km) => plansWithin(opts, km).length);
+  const reach = reachFor(options);
+  const shownKm = reach.distanceKm;
+  const withinShown = (distance: number | undefined) =>
+    shownKm == null || (distance ?? Infinity) <= shownKm;
+  const visiblePosts = plansWithin(options, shownKm);
+  // Ignores the day filter: "soon" is always the next few hours.
+  const startingSoon = startingSoonPlans(
+    plansWithin(options, shownKm, "all"),
     now,
   );
   const visibleOffers = offers.filter(
     (o) =>
       (!category || offerDiscoveryCategory(o) === category) &&
-      (options.maxDistanceKm == null ||
-        (planDistance(o, distances) ?? Infinity) <= options.maxDistanceKm),
+      withinShown(planDistance(o, distances)),
   );
-  const visibleVenues = venues.filter(
-    (v) =>
-      (!category || venueCategory(v) === category) &&
-      (options.maxDistanceKm == null ||
-        (planDistance({ venueId: v.id }, distances) ?? Infinity) <=
-          options.maxDistanceKm),
+  const areaVenues = venues.filter((v) =>
+    withinShown(planDistance({ venueId: v.id }, distances)),
   );
-  const areaLabel =
-    selectedPlace?.name ||
-    appliedArea ||
-    setupAreaLabel ||
-    (demoMode ? "Demo places" : point ? "Near you" : "Choose area");
-  const scope = demoMode
-    ? "Sample plans"
-    : point
-      ? `Within ${radiusKm} km`
-      : "";
-  const filterSummary = [
-    scope,
-    options.sort === "soonest" ? PLAN_SORT_LABELS.soonest : "",
-  ]
-    .filter(Boolean)
-    .join(" · ");
-  const hasFilters =
-    !!category ||
-    dateFilter !== "all" ||
-    freeOnly ||
-    options.audience !== "all" ||
-    options.maxDistanceKm !== null ||
-    options.sort !== "soonest";
+  const visibleVenues = areaVenues.filter(
+    (v) => !category || venueCategory(v) === category,
+  );
+  const placeName =
+    place?.name ||
+    pointLabel ||
+    (demoMode ? "Demo places" : point ? NEAR_YOU : "Choose location");
+  const nearWhat = placeName === NEAR_YOU || !point ? "you" : placeName;
+  const headerLabel =
+    shownKm != null ? `${placeName} · ${shownKm} km` : placeName;
+  const sheetFilters =
+    freeOnly || options.audience !== "all" || options.sort !== "soonest";
+  const hasFilters = !!category || dateFilter !== "all" || sheetFilters;
   const clearFilters = () => {
     setOptions({ ...DEFAULT_PLAN_OPTIONS });
     setDateFilter("all");
+  };
+  const openLocation = () => {
+    Keyboard.dismiss();
+    setLocationError("");
+    setLocationOpen(true);
   };
   const chips = [
     ...(category
@@ -277,15 +351,6 @@ export function NearbyScreen() {
             key: "category",
             label: category,
             remove: () => setOptions((o) => ({ ...o, category: null })),
-          },
-        ]
-      : []),
-    ...(options.maxDistanceKm !== null
-      ? [
-          {
-            key: "distance",
-            label: `Within ${options.maxDistanceKm} km`,
-            remove: () => setOptions((o) => ({ ...o, maxDistanceKm: null })),
           },
         ]
       : []),
@@ -336,55 +401,16 @@ export function NearbyScreen() {
       >
         <PersonalHeader
           compact
-          context={areaLabel}
+          context={headerLabel}
           location
-          onContextPress={() => setEditingLocation((v) => !v)}
+          onContextPress={openLocation}
         />
-        {editingLocation && (
-          <View style={styles.locationEditor}>
-            <Input
-              clearable
-              label="Your area or city"
-              value={area}
-              onChangeText={setArea}
-              placeholder="Try Infopark or Kakkanad"
-              maxLength={120}
-              returnKeyType="search"
-              onSubmitEditing={applyArea}
-            />
-            {area.trim().length >= 3 && (
-              <PlaceSuggestions
-                {...suggestions}
-                onRetry={suggestions.retry}
-                onSelect={choosePlace}
-              />
-            )}
-            <View style={styles.locationActions}>
-              <Button
-                title={area.trim() ? "Apply area" : "All locations"}
-                variant="secondary"
-                onPress={applyArea}
-              />
-              {!demoMode && (
-                <Button
-                  title="Use my location"
-                  variant="ghost"
-                  onPress={() => void locate()}
-                  loading={locating}
-                />
-              )}
-            </View>
-            {!!locationError && (
-              <Text accessibilityRole="alert" style={styles.error}>
-                {locationError}
-              </Text>
-            )}
-          </View>
-        )}
-        {selectedPlace ? (
-          <PlaceAttributions places={[selectedPlace]} />
+        {place ? (
+          <PlaceAttributions places={[place]} />
         ) : (
-          ((!!setupAreaLabel && setup.area?.source === "google") ||
+          ((!!pointLabel &&
+            pointLabel === setup.area?.label &&
+            setup.area?.source === "google") ||
             posts.some((p) => p.location?.source === "google")) && (
             <GoogleMapsCredit />
           )
@@ -398,7 +424,7 @@ export function NearbyScreen() {
             setFiltersOpen(true);
           }}
           filtersOpen={filtersOpen}
-          filtersActive={hasFilters}
+          filtersActive={sheetFilters}
         />
         <ScrollView
           horizontal
@@ -475,9 +501,8 @@ export function NearbyScreen() {
               onViewAll={() =>
                 navigation.navigate("AllOffers", {
                   // Same area as Home: only the venues it is showing.
-                  venueIds:
-                    point || appliedArea ? venues.map((v) => v.id) : undefined,
-                  distances: venues.flatMap((v) =>
+                  venueIds: point ? areaVenues.map((v) => v.id) : undefined,
+                  distances: areaVenues.flatMap((v) =>
                     v.distanceKm == null
                       ? []
                       : [[v.id, v.distanceKm] as [string, number]],
@@ -541,8 +566,20 @@ export function NearbyScreen() {
                 ))}
               </View>
             )}
-            {demoMode && !!filterSummary && (
-              <Text style={styles.sectionMeta}>{filterSummary}</Text>
+            {reach.widened && chosenKm != null && (
+              <MotionPressable
+                accessibilityRole="button"
+                accessibilityHint="Change location or distance"
+                onPress={openLocation}
+                style={styles.widened}
+              >
+                <Icon name="compass" size={16} color={colors.amberDeep} />
+                <Text style={styles.widenedText}>
+                  Nothing within {chosenKm} km of {nearWhat}, so we’re showing
+                  plans within {shownKm} km.{" "}
+                  <Text style={styles.widenedLink}>Change</Text>
+                </Text>
+              </MotionPressable>
             )}
             {state === "loading" && posts.length > 0 && (
               <Text accessibilityLiveRegion="polite" style={styles.sectionMeta}>
@@ -577,29 +614,46 @@ export function NearbyScreen() {
                 />
               </EnterView>
             ))}
-            {visiblePosts.length === 0 && (
+            {visiblePosts.length === 0 && state !== "loading" && (
               <>
                 <EmptyState
                   title={
                     hasFilters
                       ? "No plans for these filters"
-                      : "No plans here yet"
+                      : point
+                        ? `No plans near ${nearWhat} yet`
+                        : "No plans here yet"
                   }
                   hint={
                     hasFilters
-                      ? "Try another day, widen the distance, or remove a filter."
-                      : "Start a plan and invite someone nearby."
+                      ? `Nothing within ${MAX_HOME_DISTANCE} km matches. Try another day or remove a filter.`
+                      : point
+                        ? `Nothing within ${MAX_HOME_DISTANCE} km right now. Be the first to post one here.`
+                        : "Start a plan and invite someone nearby."
                   }
                 />
-                <Button
-                  title={hasFilters ? "Clear filters" : "Start a plan"}
-                  variant="ghost"
-                  onPress={
-                    hasFilters
-                      ? clearFilters
-                      : () => navigation.navigate("CreatePost")
-                  }
-                />
+                <View style={styles.emptyActions}>
+                  {hasFilters ? (
+                    <Button
+                      title="Clear filters"
+                      variant="secondary"
+                      onPress={clearFilters}
+                    />
+                  ) : (
+                    <Button
+                      title={
+                        point ? "Post the first plan here" : "Start a plan"
+                      }
+                      variant="secondary"
+                      onPress={() => navigation.navigate("CreatePost")}
+                    />
+                  )}
+                  <Button
+                    title={point ? "Change location" : "Choose location"}
+                    variant="ghost"
+                    onPress={openLocation}
+                  />
+                </View>
               </>
             )}
             {visibleVenues.length > 0 && (
@@ -625,17 +679,29 @@ export function NearbyScreen() {
         <PlanFilterSheet
           value={options}
           hasLocation={hasLocation}
-          demo={demoMode}
+          countFor={(draft) =>
+            plansWithin(draft, reachFor(draft).distanceKm).length
+          }
           onClose={() => setFiltersOpen(false)}
           onApply={(next) => {
             setOptions(next);
             setFiltersOpen(false);
           }}
-          onChooseArea={() => {
-            setFiltersOpen(false);
-            setEditingLocation(true);
-            scroll.current?.scrollTo({ y: 0, animated: false });
-          }}
+        />
+      )}
+      {locationOpen && (
+        <LocationSheet
+          demo={demoMode}
+          bias={point}
+          distanceKm={chosenKm}
+          showDistance={hasLocation}
+          recents={recents}
+          locating={locating}
+          error={locationError}
+          onPickPlace={choosePlace}
+          onUseMyLocation={() => void locate()}
+          onDistance={changeDistance}
+          onClose={() => setLocationOpen(false)}
         />
       )}
     </Screen>
@@ -644,8 +710,23 @@ export function NearbyScreen() {
 const styles = StyleSheet.create({
   page: { paddingHorizontal: 16 },
   scroll: { paddingBottom: spacing.xl },
-  locationEditor: { paddingBottom: spacing.md },
-  locationActions: { flexDirection: "row", gap: spacing.sm, flexWrap: "wrap" },
+  emptyActions: { gap: 4 },
+  widened: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 12,
+    borderRadius: 12,
+    backgroundColor: colors.amberSoft,
+  },
+  widenedText: {
+    ...typography.bodySmall,
+    color: colors.ink,
+    flex: 1,
+  },
+  widenedLink: { color: colors.amberDeep, ...weight("800") },
   error: {
     ...typography.bodySmall,
     color: colors.clayDeep,

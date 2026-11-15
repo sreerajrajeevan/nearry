@@ -33,6 +33,10 @@ This feature does not add a map, import Google businesses into the database, ver
 - Autocomplete predicts place names/addresses; it is not full categorical Google Maps search. A live `turf Kakkanad` query returned no suggestions. Specific venue names and areas are the intended input; broader category discovery requires a separate search feature.
 - Remaining rollout: merge PR #35, republish legal pages, install a new Android build, and perform the signed-in phone checks above. Live adapter checks do not prove a phone-to-Edge authenticated round trip. Older APKs continue using Geoapify.
 
+## Place size for Home's distance (November 2026)
+
+Autocomplete now also asks Google for each prediction's `types` (same Autocomplete request, no extra call) and returns an optional `kind`: `city`, `area` or `spot`. Home uses it to start at a sensible distance: 25 km for a city, 5 km for an area or your current location, 2 km for a specific place. If nothing is within that distance, Home widens step by step (5 → 10 → 25 → 50 km) and tells the person. Redeploy `place-autocomplete` to send `kind`; until then, and for older stored places, the app guesses the size from the address.
+
 ## Compatibility and rollback
 
 The new endpoint chooses `PLACES_AUTOCOMPLETE_PROVIDER` if set; otherwise it selects Google when the Google secret exists, and Geoapify if only the legacy key exists. Google errors do not silently switch providers or return mock places. Set `PLACES_AUTOCOMPLETE_PROVIDER=geoapify` to roll a new build back to the existing provider. No app rebuild is required for that provider switch. Leave `GEOAPIFY_API_KEY` and the old `place-search` function in place while older phone builds remain installed. Do not change the legacy `PLACES_PROVIDER` setting as part of this rollout.
