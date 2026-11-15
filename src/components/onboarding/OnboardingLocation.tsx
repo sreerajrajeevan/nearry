@@ -20,6 +20,7 @@ import {
   ONBOARDING_RADII,
   OnboardingPreferences,
 } from "../../utils/onboarding";
+import { weight } from "../../theme";
 
 export function OnboardingLocation({
   value,
@@ -173,7 +174,7 @@ export function OnboardingLocation({
       )}
       {value.area && (
         <View style={[ob.card, { marginTop: 16 }]}>
-          <Text style={{ fontWeight: "600", color: c.ink }}>
+          <Text style={{ ...weight("600"), color: c.ink }}>
             {value.area.label}
           </Text>
           <Text style={ob.help}>Location selected</Text>
@@ -288,7 +289,7 @@ export function OnboardingLocation({
                     ob.help,
                     value.radiusKm === r && {
                       color: c.orange,
-                      fontWeight: "700",
+                      ...weight("700"),
                     },
                   ]}
                 >

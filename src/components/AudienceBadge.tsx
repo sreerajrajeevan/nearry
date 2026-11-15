@@ -1,7 +1,7 @@
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { Icon } from "./Icon";
-import { colors, typography } from "../theme";
+import { colors, typography, weight } from "../theme";
 export function audienceLabel(value?: "female" | "male" | "any") {
   return value === "female"
     ? "Females only"
@@ -57,6 +57,6 @@ const styles = StyleSheet.create({
     alignSelf: "flex-start",
     marginTop: 6,
   },
-  symbol: { fontSize: 16, fontWeight: "700" },
-  label: { ...typography.caption, fontWeight: "600" },
+  symbol: { fontSize: 16, ...weight("700") },
+  label: { ...typography.caption, ...weight("600") },
 });

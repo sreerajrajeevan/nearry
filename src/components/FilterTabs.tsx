@@ -1,6 +1,6 @@
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
-import { colors, typography, spacing } from "../theme";
+import { colors, typography, spacing, weight } from "../theme";
 import { Icon, IconName } from "./Icon";
 
 type Option<T extends string> = { key: T; label: string; icon?: IconName };
@@ -73,5 +73,5 @@ const styles = StyleSheet.create({
   },
   active: { backgroundColor: colors.goldSoft, borderColor: colors.goldDeep },
   label: { ...typography.bodySmall, color: colors.textDim },
-  activeLabel: { color: colors.onGold, fontWeight: "500" },
+  activeLabel: { color: colors.onGold, ...weight("500") },
 });

@@ -15,7 +15,7 @@ import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Screen } from "../../components/Screen";
 import { Button } from "../../components/Button";
 import { LoadingState } from "../../components/LoadingState";
-import { colors, typography, spacing } from "../../theme";
+import { colors, typography, spacing, weight } from "../../theme";
 import { useAuth } from "../../store/AuthContext";
 import { PersonalStackParamList } from "../../navigation/types";
 import {
@@ -371,7 +371,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   checked: { backgroundColor: colors.accent, borderColor: colors.accent },
-  tick: { color: colors.white, fontWeight: "bold" },
+  tick: { color: colors.white, ...weight("bold") },
   consentText: { flex: 1 },
   footnote: {
     ...typography.caption,

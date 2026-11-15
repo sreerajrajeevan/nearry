@@ -21,21 +21,23 @@ type Props = (
 export function DiscoverySearch(props: Props) {
   if ("onPress" in props)
     return (
-      <View style={[styles.field, props.compact && styles.compact]}>
-        <TouchableOpacity
-          accessibilityRole="button"
-          accessibilityLabel="Search places, plans and offers"
-          onPress={props.onPress}
-          activeOpacity={0.7}
-          style={styles.searchAction}
-        >
-          <Icon name="search" size={18} />
-          <Text style={styles.placeholder} numberOfLines={1}>
-            {props.compact
-              ? "Search plans, sports, offers…"
-              : "Search places or plans"}
-          </Text>
-        </TouchableOpacity>
+      <View style={[styles.row, props.compact && styles.compactRow]}>
+        <View style={[styles.field, props.compact && styles.compact]}>
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Search places, plans and offers"
+            onPress={props.onPress}
+            activeOpacity={0.7}
+            style={styles.searchAction}
+          >
+            <Icon name="search" size={18} color={colors.faint} />
+            <Text style={styles.placeholder} numberOfLines={1}>
+              {props.compact
+                ? "Find plans, coffee, activities"
+                : "Search places or plans"}
+            </Text>
+          </TouchableOpacity>
+        </View>
         {props.onFilterPress && (
           <TouchableOpacity
             accessibilityRole="button"
@@ -49,7 +51,7 @@ export function DiscoverySearch(props: Props) {
             activeOpacity={0.7}
             style={styles.filterAction}
           >
-            <Icon name="sliders" size={18} color={colors.onAccent} />
+            <Icon name="sliders" size={19} color={colors.onAmber} />
             {props.filtersActive && <View style={styles.filterDot} />}
           </TouchableOpacity>
         )}
@@ -85,13 +87,17 @@ export function DiscoverySearch(props: Props) {
   );
 }
 const styles = StyleSheet.create({
+  row: { flexDirection: "row", alignItems: "center", gap: 10 },
+  compactRow: { marginBottom: 12 },
   compact: {
-    minHeight: 58,
-    backgroundColor: colors.surface,
+    flex: 1,
+    minWidth: 0,
+    minHeight: 50,
+    backgroundColor: colors.surfaceRaised,
     borderColor: colors.border,
-    borderRadius: 18,
-    marginBottom: 4,
-    paddingHorizontal: 12,
+    borderRadius: 16,
+    marginBottom: 0,
+    paddingHorizontal: 14,
     gap: 0,
   },
   searchAction: {
@@ -103,22 +109,23 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   filterAction: {
-    minWidth: 44,
-    minHeight: 44,
+    width: 50,
+    height: 50,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: colors.ink,
-    borderRadius: 13,
-    marginRight: -5,
+    backgroundColor: colors.amberBright,
+    borderRadius: 16,
   },
   filterDot: {
     position: "absolute",
-    top: 8,
-    right: 8,
-    width: 5,
-    height: 5,
-    borderRadius: 3,
-    backgroundColor: colors.coral,
+    top: 10,
+    right: 10,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    borderWidth: 1.5,
+    borderColor: colors.amberBright,
+    backgroundColor: colors.night,
   },
   clear: {
     minWidth: 44,

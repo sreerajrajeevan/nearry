@@ -29,7 +29,7 @@ import { isPersonalSelfieChecked } from "../../services/selfieVerification";
 import { EmptyState } from "../../components/EmptyState";
 import { Avatar } from "../../components/Avatar";
 import { PostPhotoGallery } from "../../components/PostPhotoGallery";
-import { colors, typography, spacing } from "../../theme";
+import { colors, typography, spacing, weight } from "../../theme";
 import { PostDetailsProps } from "../../navigation/types";
 import { useAuth } from "../../store/AuthContext";
 import {
@@ -747,7 +747,7 @@ const styles = StyleSheet.create({
   category: {
     ...typography.caption,
     color: colors.sageDeep,
-    fontWeight: "700",
+    ...weight("700"),
     textTransform: "uppercase",
     letterSpacing: 1,
   },
@@ -765,7 +765,7 @@ const styles = StyleSheet.create({
     marginVertical: 20,
   },
   hostLabel: { ...typography.caption, color: colors.textDim },
-  authorName: { ...typography.body, color: colors.text, fontWeight: "600" },
+  authorName: { ...typography.body, color: colors.text, ...weight("600") },
   facts: {
     borderTopWidth: 1,
     borderBottomWidth: 1,
@@ -780,13 +780,13 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   lastFact: { borderBottomWidth: 0 },
-  factTitle: { ...typography.body, fontWeight: "600", color: colors.text },
+  factTitle: { ...typography.body, ...weight("600"), color: colors.text },
   meta: { ...typography.bodySmall, color: colors.textDim, marginTop: 3 },
   directions: { minHeight: 44, justifyContent: "center", paddingLeft: 4 },
   directionsText: {
     ...typography.bodySmall,
     color: colors.forest,
-    fontWeight: "600",
+    ...weight("600"),
     textDecorationLine: "underline",
   },
   sectionHeading: {
@@ -810,7 +810,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     gap: 10,
   },
-  cost: { ...typography.bodySmall, color: colors.text, fontWeight: "600" },
+  cost: { ...typography.bodySmall, color: colors.text, ...weight("600") },
   participantActions: { gap: 4 },
   footerStatus: { ...typography.body, color: colors.textDim },
   section: { marginTop: 26 },
@@ -835,7 +835,7 @@ const styles = StyleSheet.create({
   approveText: {
     ...typography.bodySmall,
     color: colors.onAccent,
-    fontWeight: "600",
+    ...weight("600"),
   },
   approvedRow: {
     flexDirection: "row",
@@ -848,7 +848,7 @@ const styles = StyleSheet.create({
   messageLink: {
     ...typography.bodySmall,
     color: colors.forest,
-    fontWeight: "600",
+    ...weight("600"),
   },
   hostActions: { marginTop: 20, gap: 8 },
   gap: { height: spacing.sm },

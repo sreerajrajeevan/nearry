@@ -18,7 +18,7 @@ import { Button } from "../../components/Button";
 import { Badge } from "../../components/Badge";
 import { Avatar } from "../../components/Avatar";
 import { EmptyState } from "../../components/EmptyState";
-import { colors, typography, spacing, surfaces } from "../../theme";
+import { colors, typography, spacing, surfaces, weight } from "../../theme";
 import { useAuth } from "../../store/AuthContext";
 import {
   listBookingsForBusiness,
@@ -306,7 +306,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
   },
   actionLink: { ...typography.bodySmall, color: colors.textDim },
-  confirmLink: { color: colors.accent, fontWeight: "600" },
+  confirmLink: { color: colors.accent, ...weight("600") },
   gap: { width: spacing.sm },
   expiredNote: {
     ...typography.caption,

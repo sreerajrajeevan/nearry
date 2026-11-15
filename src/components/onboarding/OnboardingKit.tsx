@@ -14,6 +14,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Icon } from "../Icon";
 import { MotionPressable, ScreenReveal } from "../Motion";
+import { weight } from "../../theme";
 
 export const onboardingColors = {
   paper: "#FAFAF7",
@@ -34,7 +35,7 @@ export const ob = StyleSheet.create({
     fontSize: 30,
     lineHeight: 35,
     letterSpacing: -0.9,
-    fontWeight: "700",
+    ...weight("700"),
     color: c.ink,
   },
   kicker: {
@@ -42,7 +43,7 @@ export const ob = StyleSheet.create({
     lineHeight: 17,
     letterSpacing: 1.1,
     textTransform: "uppercase",
-    fontWeight: "700",
+    ...weight("700"),
     color: c.orange,
     marginBottom: 9,
   },
@@ -57,7 +58,7 @@ export const ob = StyleSheet.create({
   label: {
     fontSize: 13,
     lineHeight: 19,
-    fontWeight: "700",
+    ...weight("700"),
     color: c.ink,
     marginBottom: 9,
     marginTop: 22,
@@ -83,7 +84,7 @@ export const ob = StyleSheet.create({
     fontSize: 12,
     lineHeight: 18,
     color: c.ink,
-    fontWeight: "600",
+    ...weight("600"),
     textAlign: "center",
   },
   emoji: { fontSize: 30, lineHeight: 38 },
@@ -99,7 +100,7 @@ export const ob = StyleSheet.create({
     justifyContent: "center",
     padding: 9,
   },
-  segmentText: { fontSize: 13, fontWeight: "600", color: c.ink },
+  segmentText: { fontSize: 13, ...weight("600"), color: c.ink },
   card: {
     backgroundColor: c.white,
     borderRadius: 18,
@@ -475,7 +476,7 @@ export function OnboardingRules() {
         <View key={title} style={[ob.row, { alignItems: "flex-start" }]}>
           <Text>{emoji}</Text>
           <Text style={styles.ruleText}>
-            <Text style={{ fontWeight: "700" }}>{title} </Text>
+            <Text style={{ ...weight("700") }}>{title} </Text>
             {copy}
           </Text>
         </View>
@@ -511,7 +512,7 @@ const styles = StyleSheet.create({
   },
   wordmark: {
     fontSize: 28,
-    fontWeight: "700",
+    ...weight("700"),
     letterSpacing: -1.1,
     color: c.ink,
   },
@@ -545,7 +546,7 @@ const styles = StyleSheet.create({
   buttonText: {
     fontSize: 15,
     lineHeight: 22,
-    fontWeight: "700",
+    ...weight("700"),
     color: c.white,
     flexShrink: 1,
     textAlign: "center",
@@ -562,7 +563,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 19,
     color: c.orange,
-    fontWeight: "600",
+    ...weight("600"),
     textAlign: "center",
   },
   input: {
@@ -616,7 +617,7 @@ const styles = StyleSheet.create({
   },
   floatTop: { top: 38, left: 18, transform: [{ rotate: "-5deg" }] },
   floatBottom: { bottom: 35, right: 16, transform: [{ rotate: "4deg" }] },
-  floatText: { fontSize: 12, lineHeight: 18, fontWeight: "600", color: c.ink },
+  floatText: { fontSize: 12, lineHeight: 18, ...weight("600"), color: c.ink },
   emojiRow: { flexDirection: "row", alignItems: "center", gap: 7 },
   compactEmoji: { fontSize: 58, lineHeight: 80 },
   role: {
@@ -629,7 +630,7 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
     gap: 13,
   },
-  roleTitle: { fontSize: 17, lineHeight: 24, fontWeight: "700", color: c.ink },
+  roleTitle: { fontSize: 17, lineHeight: 24, ...weight("700"), color: c.ink },
   roleSub: { fontSize: 12, lineHeight: 18, color: c.muted, marginTop: 4 },
   radio: {
     borderWidth: 1,

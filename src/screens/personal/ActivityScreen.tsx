@@ -23,7 +23,7 @@ import { Avatar } from "../../components/Avatar";
 import { Icon, IconName } from "../../components/Icon";
 import { MotionPressable, ScreenReveal } from "../../components/Motion";
 import { LoadingState } from "../../components/LoadingState";
-import { colors, typography, spacing, surfaces } from "../../theme";
+import { colors, typography, spacing, surfaces, weight } from "../../theme";
 import { useAuth } from "../../store/AuthContext";
 import { PersonalTabNav } from "../../navigation/types";
 import { listPosts, subscribeToPosts } from "../../services/posts";
@@ -688,7 +688,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  cardTitle: { ...typography.body, color: colors.text, fontWeight: "600" },
+  cardTitle: { ...typography.body, color: colors.text, ...weight("600") },
   copy: { ...typography.bodySmall, color: colors.textDim, marginTop: 3 },
   attention: {
     flexDirection: "row",

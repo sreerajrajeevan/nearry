@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from "react";
 import { Animated, View, Text, StyleSheet, Platform } from "react-native";
-import { colors, typography, spacing } from "../theme";
+import { colors, typography, spacing, weight } from "../theme";
 import { useReducedMotion } from "../store/MotionContext";
 
 /** Celebratory card shown when a business becomes verified. */
@@ -68,7 +68,7 @@ const styles = StyleSheet.create({
   check: {
     color: colors.onAccent,
     fontSize: 28,
-    fontWeight: "700",
+    ...weight("700"),
   },
   title: {
     ...typography.title,

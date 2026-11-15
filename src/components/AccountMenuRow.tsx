@@ -2,7 +2,7 @@ import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { Icon, IconName } from "./Icon";
 import { MotionPressable } from "./Motion";
-import { colors, spacing, typography } from "../theme";
+import { colors, spacing, typography, weight } from "../theme";
 
 export function AccountMenuRow({
   icon,
@@ -59,7 +59,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   copy: { flex: 1, gap: 3 },
-  title: { ...typography.body, color: colors.text, fontWeight: "600" },
+  title: { ...typography.body, color: colors.text, ...weight("600") },
   hint: { ...typography.bodySmall, color: colors.textDim },
   count: {
     backgroundColor: colors.goldSoft,
@@ -70,6 +70,6 @@ const styles = StyleSheet.create({
   countText: {
     ...typography.caption,
     color: colors.onGold,
-    fontWeight: "700",
+    ...weight("700"),
   },
 });

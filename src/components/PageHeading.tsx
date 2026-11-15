@@ -1,6 +1,6 @@
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
-import { colors, typography, spacing, surfaces } from "../theme";
+import { colors, typography, spacing, surfaces, weight } from "../theme";
 
 type Props = {
   title: string;
@@ -68,7 +68,7 @@ const styles = StyleSheet.create({
     fontSize: 25,
     lineHeight: 31,
     letterSpacing: -1,
-    fontWeight: "600",
+    ...weight("600"),
   },
   subtitle: {
     ...typography.body,

@@ -1,5 +1,5 @@
 import { colors } from "./colors";
-import { typography, fontFamily } from "./typography";
+import { typography, fontFamily, fonts, weight } from "./typography";
 import { spacing, radius, borderWidth } from "./spacing";
 
 export const theme = {
@@ -14,6 +14,15 @@ export const theme = {
 
 export type Theme = typeof theme;
 
-export { colors, typography, fontFamily, spacing, radius, borderWidth };
+export {
+  colors,
+  typography,
+  fontFamily,
+  fonts,
+  weight,
+  spacing,
+  radius,
+  borderWidth,
+};
 
 export { surfaces } from "./surfaces";

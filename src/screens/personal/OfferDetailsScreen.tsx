@@ -15,7 +15,7 @@ import { Button } from "../../components/Button";
 import { Badge } from "../../components/Badge";
 import { Input } from "../../components/Input";
 import { EmptyState } from "../../components/EmptyState";
-import { colors, typography, spacing, surfaces } from "../../theme";
+import { colors, typography, spacing, surfaces, weight } from "../../theme";
 import { PersonalStackParamList } from "../../navigation/types";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useAuth } from "../../store/AuthContext";
@@ -492,7 +492,7 @@ const styles = StyleSheet.create({
   },
   slotChipSel: { backgroundColor: colors.clay, borderColor: colors.clay },
   slotChipOut: { opacity: 0.45 },
-  slotTime: { ...typography.body, fontWeight: "600", color: colors.text },
+  slotTime: { ...typography.body, ...weight("600"), color: colors.text },
   slotSeats: { ...typography.caption, color: colors.textDim },
   slotTextSel: { color: colors.onAccent },
   slotTextOut: { color: colors.textFaint },

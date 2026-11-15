@@ -12,6 +12,7 @@ import {
 import { MotionPressable } from "../../components/Motion";
 import { normalizeEmailCode } from "../../utils/emailSignIn";
 import { isValidEmail, isValidOtp } from "../../utils/validation";
+import { weight } from "../../theme";
 type Props = {
   kicker: string;
   isLogin: boolean;
@@ -227,8 +228,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 11,
   },
-  g: { fontSize: 23, color: "#4285F4", fontWeight: "700" },
-  googleText: { fontSize: 14, fontWeight: "600", color: c.ink },
+  g: { fontSize: 23, color: "#4285F4", ...weight("700") },
+  googleText: { fontSize: 14, ...weight("600"), color: c.ink },
   divider: {
     flexDirection: "row",
     alignItems: "center",

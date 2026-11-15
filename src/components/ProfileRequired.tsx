@@ -14,7 +14,7 @@ import {
 import { Button } from "./Button";
 import { Icon } from "./Icon";
 import { useReducedMotion } from "../store/MotionContext";
-import { colors, typography } from "../theme";
+import { colors, typography, weight } from "../theme";
 
 export function ProfileRequired({
   visible,
@@ -142,7 +142,7 @@ const styles = StyleSheet.create({
     ...typography.caption,
     color: colors.goldDeep,
     fontSize: 10,
-    fontWeight: "700",
+    ...weight("700"),
     letterSpacing: 1.4,
     marginTop: 6,
   },

@@ -16,7 +16,7 @@ import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
 import { LoadingState } from "../../components/LoadingState";
 import { ConversationActions } from "../../components/ConversationActions";
-import { colors, typography, spacing, radius } from "../../theme";
+import { colors, typography, spacing, radius, weight } from "../../theme";
 import { useAuth } from "../../store/AuthContext";
 import { Alert } from "../../services/appAlert";
 import { subscribeToNotifications } from "../../services/notifications";
@@ -709,7 +709,7 @@ const styles = StyleSheet.create({
   activeTab: { backgroundColor: colors.ink, borderColor: colors.ink },
   tabText: {
     ...typography.bodySmall,
-    fontWeight: "600",
+    ...weight("600"),
     color: colors.textDim,
   },
   activeText: { color: colors.onAccent },
@@ -722,7 +722,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: colors.coralDeep,
   },
-  badgeText: { ...typography.caption, fontWeight: "700", color: colors.white },
+  badgeText: { ...typography.caption, ...weight("700"), color: colors.white },
   requestSummary: {
     flexDirection: "row",
     alignItems: "center",
@@ -733,7 +733,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     minHeight: 48,
   },
-  link: { ...typography.bodySmall, fontWeight: "600", color: colors.coralDeep },
+  link: { ...typography.bodySmall, ...weight("600"), color: colors.coralDeep },
   sectionRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -772,7 +772,7 @@ const styles = StyleSheet.create({
   name: { ...typography.heading, color: colors.text, flexShrink: 1 },
   planDate: {
     ...typography.bodySmall,
-    fontWeight: "600",
+    ...weight("600"),
     color: colors.text,
     marginTop: 3,
   },
@@ -784,7 +784,7 @@ const styles = StyleSheet.create({
     gap: 5,
     marginTop: 2,
   },
-  reminder: { ...typography.bodySmall, fontWeight: "700", color: colors.red },
+  reminder: { ...typography.bodySmall, ...weight("700"), color: colors.red },
   requestCard: {
     backgroundColor: colors.card,
     borderWidth: StyleSheet.hairlineWidth,
@@ -797,13 +797,13 @@ const styles = StyleSheet.create({
   requestTop: { flexDirection: "row", gap: 10, alignItems: "flex-start" },
   requestPlan: {
     ...typography.body,
-    fontWeight: "600",
+    ...weight("600"),
     color: colors.text,
     marginTop: 4,
   },
   requestDate: {
     ...typography.bodySmall,
-    fontWeight: "600",
+    ...weight("600"),
     color: colors.text,
   },
   requestActions: {

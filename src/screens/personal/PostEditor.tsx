@@ -30,7 +30,7 @@ import { Screen } from "../../components/Screen";
 import { Input } from "../../components/Input";
 import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
-import { colors } from "../../theme";
+import { colors, weight } from "../../theme";
 import { useAuth } from "../../store/AuthContext";
 import { createPost, getPost, updatePost } from "../../services/posts";
 import {
@@ -1070,13 +1070,13 @@ const styles = StyleSheet.create({
   eyebrow: {
     fontSize: 10,
     letterSpacing: 1.5,
-    fontWeight: "700",
+    ...weight("700"),
     color: colors.coralDeep,
   },
   pageTitle: {
     fontSize: 30,
     lineHeight: 37,
-    fontWeight: "700",
+    ...weight("700"),
     color: colors.ink,
     marginTop: 7,
   },
@@ -1113,11 +1113,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.sageSoft,
     color: colors.text,
     fontSize: 12,
-    fontWeight: "700",
+    ...weight("700"),
     textAlign: "center",
     lineHeight: 25,
   },
-  sectionTitle: { fontSize: 17, fontWeight: "700", color: colors.ink, flex: 1 },
+  sectionTitle: { fontSize: 17, ...weight("700"), color: colors.ink, flex: 1 },
   activities: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   activity: {
     width: "23%",
@@ -1136,7 +1136,7 @@ const styles = StyleSheet.create({
   activityEmoji: { fontSize: 27, marginBottom: 6 },
   activityText: {
     fontSize: 11,
-    fontWeight: "600",
+    ...weight("600"),
     color: colors.text,
     textAlign: "center",
   },
@@ -1165,12 +1165,12 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   daySelected: { backgroundColor: colors.ink },
-  dayTitle: { fontSize: 12, fontWeight: "700", color: colors.text },
+  dayTitle: { fontSize: 12, ...weight("700"), color: colors.text },
   dayDate: { fontSize: 10, color: colors.textDim, marginTop: 3 },
   light: { color: colors.onAccent },
   fieldLabel: {
     fontSize: 12,
-    fontWeight: "600",
+    ...weight("600"),
     color: colors.textDim,
     marginBottom: 8,
   },
@@ -1182,7 +1182,7 @@ const styles = StyleSheet.create({
     padding: 10,
     justifyContent: "center",
   },
-  pickerText: { fontSize: 13, color: colors.text, fontWeight: "600" },
+  pickerText: { fontSize: 13, color: colors.text, ...weight("600") },
   pickerPlaceholder: { color: colors.textDim },
   settingRow: {
     flexDirection: "row",
@@ -1191,7 +1191,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   flex: { flex: 1, minWidth: 0 },
-  label: { fontSize: 13, fontWeight: "600", color: colors.text },
+  label: { fontSize: 13, ...weight("600"), color: colors.text },
   toggle: {
     width: 44,
     height: 26,
@@ -1226,7 +1226,7 @@ const styles = StyleSheet.create({
   stepText: { fontSize: 24, color: colors.text },
   stepValue: {
     fontSize: 26,
-    fontWeight: "700",
+    ...weight("700"),
     color: colors.ink,
     textAlign: "center",
   },
@@ -1239,7 +1239,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   chipSelected: { backgroundColor: colors.accent },
-  chipText: { fontSize: 12, fontWeight: "600", color: colors.text },
+  chipText: { fontSize: 12, ...weight("600"), color: colors.text },
   previewAuthor: { fontSize: 12, color: colors.textDim, marginBottom: 12 },
   previewRow: { flexDirection: "row", gap: 12 },
   previewCover: {
@@ -1250,13 +1250,13 @@ const styles = StyleSheet.create({
   },
   previewTitle: {
     fontSize: 16,
-    fontWeight: "700",
+    ...weight("700"),
     color: colors.text,
     marginBottom: 5,
   },
   previewMeta: {
     fontSize: 12,
-    fontWeight: "600",
+    ...weight("600"),
     color: colors.text,
     marginTop: 5,
   },

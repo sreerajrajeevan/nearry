@@ -37,6 +37,7 @@ import {
 import { validatePersonalDetails } from "../../utils/profileReadiness";
 import { isValidBusinessName } from "../../utils/validation";
 import { POLICY_VERSION } from "../../utils/legal";
+import { weight } from "../../theme";
 
 const INTERESTS = [
   ["🏋️", "Gym"],
@@ -715,7 +716,7 @@ const styles = StyleSheet.create({
   summaryTitle: {
     fontSize: 14,
     lineHeight: 21,
-    fontWeight: "600",
+    ...weight("600"),
     color: c.ink,
   },
   tick: {
@@ -738,7 +739,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  dayText: { fontSize: 12, color: c.ink, fontWeight: "600" },
+  dayText: { fontSize: 12, color: c.ink, ...weight("600") },
   darkSelected: { backgroundColor: c.ink },
   lightText: { color: c.white },
   time: {
@@ -749,7 +750,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     backgroundColor: c.white,
   },
-  timeTitle: { fontSize: 13, lineHeight: 21, color: c.ink, fontWeight: "600" },
+  timeTitle: { fontSize: 13, lineHeight: 21, color: c.ink, ...weight("600") },
   timeHint: { fontSize: 11, lineHeight: 18, color: c.muted, marginTop: 2 },
   done: { paddingTop: 25 },
   party: {

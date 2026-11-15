@@ -8,6 +8,13 @@ import { useFonts } from "expo-font";
 import { useAssets } from "expo-asset";
 import * as SplashScreen from "expo-splash-screen";
 import Feather from "@expo/vector-icons/Feather";
+import {
+  PlusJakartaSans_400Regular,
+  PlusJakartaSans_500Medium,
+  PlusJakartaSans_600SemiBold,
+  PlusJakartaSans_700Bold,
+  PlusJakartaSans_800ExtraBold,
+} from "@expo-google-fonts/plus-jakarta-sans";
 import { AuthProvider, useAuth } from "./src/store/AuthContext";
 import { RootNavigator } from "./src/navigation/RootNavigator";
 import { BRAND_ASSETS } from "./src/components/BrandLogo";
@@ -82,7 +89,14 @@ function AppShell({ resourcesReady }: { resourcesReady: boolean }) {
 }
 
 export default function App() {
-  const [fontsLoaded, fontError] = useFonts(Feather.font);
+  const [fontsLoaded, fontError] = useFonts({
+    ...Feather.font,
+    PlusJakartaSans_400Regular,
+    PlusJakartaSans_500Medium,
+    PlusJakartaSans_600SemiBold,
+    PlusJakartaSans_700Bold,
+    PlusJakartaSans_800ExtraBold,
+  });
   const [assets, assetError] = useAssets(BRAND_ASSETS);
   return (
     <SafeAreaProvider>

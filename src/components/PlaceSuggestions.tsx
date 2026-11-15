@@ -16,7 +16,7 @@ import {
 } from "../services/places";
 import { Icon } from "./Icon";
 import { Button } from "./Button";
-import { colors, typography, spacing } from "../theme";
+import { colors, typography, spacing, weight } from "../theme";
 
 export function PlaceAttributions({ places }: { places: PlaceSuggestion[] }) {
   const unique = new Map<string, PlaceAttribution>();
@@ -208,7 +208,7 @@ const styles = StyleSheet.create({
   },
   googleAttribution: {
     fontSize: 14,
-    fontWeight: "400",
+    ...weight("400"),
     fontStyle: "normal",
     letterSpacing: 0,
     color: "#1F1F1F",

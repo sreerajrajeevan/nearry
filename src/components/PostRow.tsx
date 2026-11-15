@@ -1,11 +1,11 @@
 import React, { useState } from "react";
 import { StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { NeedPost } from "../services/mappers";
-import { formatWhen, formatTime, formatDistance } from "../utils/format";
+import { formatWhen, formatDistance } from "../utils/format";
 import { postState } from "../utils/flowState";
 import { planCost } from "../utils/planDiscovery";
-import { postCategory } from "../utils/discovery";
-import { colors, typography } from "../theme";
+import { colors, typography, weight } from "../theme";
 import { MotionPressable } from "./Motion";
 import { PlanCover } from "./PlanCover";
 import { Avatar } from "./Avatar";
@@ -13,15 +13,24 @@ import { audienceLabel } from "./AudienceBadge";
 import { Icon } from "./Icon";
 import { useSavedPlans } from "../store/SavedPlansContext";
 import { Alert } from "../services/appAlert";
-function postedLabel(createdAt: string, now: Date) {
-  const minutes = (now.getTime() - Date.parse(createdAt)) / 60_000;
-  if (!Number.isFinite(minutes) || minutes < 1) return "Just posted";
-  return minutes < 60
-    ? `${Math.floor(minutes)} min ago`
-    : minutes < 1440
-      ? `${Math.floor(minutes / 60)} hr ago`
-      : `${Math.floor(minutes / 1440)}d ago`;
+
+const HOST_TONES = ["#1E293B", "#047857", "#4338CA", "#9D174D"];
+
+function initialsOf(name: string) {
+  return name
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
 }
+
+/**
+ * A plan as a photo card: host and availability on the photo, title and time
+ * over a dark fade, then who has joined with Save and the main action below.
+ * With large text the title moves under the photo so nothing is clipped.
+ */
 export function PostRow({
   post,
   distanceKm,
@@ -36,41 +45,56 @@ export function PostRow({
   now?: Date;
 }) {
   const status = postState(post, now.getTime());
-  const { width, fontScale } = useWindowDimensions();
-  const stacked = width < 330 || fontScale > 1.4;
+  const { fontScale } = useWindowDimensions();
+  const overlay = fontScale <= 1.3;
   const saved = useSavedPlans();
   const bookmarked = saved?.ids.includes(post.id) ?? false;
   const [saving, setSaving] = useState(false);
-  const progress = Math.min(
-    1,
-    Math.max(0, post.joinedCount / Math.max(1, post.vacancies)),
-  );
   const action = cta ?? (status.accepting ? "Join" : "View");
-  const skills = ["beginner", "intermediate", "advanced"];
-  const skill = post.tags.find((tag) => skills.includes(tag.toLowerCase()));
-  const gym = /\b(gym|fitness|workout|strength)\b/i.test(
-    `${post.title} ${post.tags.join(" ")}`,
+  const hostTone =
+    HOST_TONES[
+      [...post.authorId].reduce((hash, ch) => hash + ch.charCodeAt(0), 0) %
+        HOST_TONES.length
+    ];
+  const badge = status.accepting
+    ? post.spotsLeft === 1
+      ? "Last spot"
+      : `${post.spotsLeft} spots left`
+    : status.label;
+  const where =
+    distanceKm != null
+      ? `${formatDistance(distanceKm)} away`
+      : (post.venueName ?? "");
+  const when = formatWhen(post.startsAt, now);
+  const cost = post.costCents != null ? planCost(post) : "";
+
+  const titleBlock = (
+    <>
+      <Text
+        style={[
+          styles.title,
+          overlay ? styles.titleOnPhoto : styles.titlePlain,
+        ]}
+        numberOfLines={overlay ? 2 : undefined}
+      >
+        {post.title}
+      </Text>
+      <View style={styles.metaRow}>
+        <Icon
+          name="clock"
+          size={13}
+          color={overlay ? colors.amberBright : colors.amberDeep}
+        />
+        <Text
+          style={[styles.meta, overlay ? styles.metaOnPhoto : styles.metaPlain]}
+          numberOfLines={overlay ? 1 : undefined}
+        >
+          {[when, where, cost].filter(Boolean).join(" · ")}
+        </Text>
+      </View>
+    </>
   );
-  const category = gym ? "Gym" : postCategory(post);
-  const audience =
-    post.genderPreference === "male"
-      ? "Male only"
-      : post.genderPreference === "female"
-        ? "Female only"
-        : "Anyone";
-  const avatarTone = ["#6D2AAB", "#B22749", "#205B87", "#387358"][
-    [...post.authorId].reduce(
-      (hash, character) => hash + character.charCodeAt(0),
-      0,
-    ) % 4
-  ];
-  const initials = post.authorName
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((name) => name[0])
-    .join("");
-  const spots = status.accepting ? `${post.spotsLeft} left` : status.label;
+
   return (
     <View style={styles.card}>
       <MotionPressable
@@ -78,11 +102,11 @@ export function PostRow({
         accessibilityLabel={[
           post.title,
           `Hosted by ${post.authorName}`,
-          formatWhen(post.startsAt, now),
+          when,
           post.venueName,
           distanceKm != null && formatDistance(distanceKm),
-          spots,
-          planCost(post),
+          badge,
+          cost,
           audienceLabel(post.genderPreference),
           "View plan",
         ]
@@ -90,144 +114,66 @@ export function PostRow({
           .join(". ")}
         onPress={onPress}
       >
-        <View style={styles.hostRow}>
-          {post.authorAvatarUrl ? (
-            <Avatar
-              name={post.authorName}
-              uri={post.authorAvatarUrl}
-              size={33}
-            />
-          ) : (
-            <View style={[styles.avatar, { backgroundColor: avatarTone }]}>
-              <Text style={styles.initials}>{initials}</Text>
-            </View>
-          )}
-          <View style={styles.hostCopy}>
-            <Text style={styles.author} numberOfLines={1}>
-              {post.authorName}
-            </Text>
-            <Text style={styles.posted}>
-              {postedLabel(post.createdAt, now)}
-            </Text>
-          </View>
-          {distanceKm != null && (
-            <View style={styles.distance}>
-              <Text accessible={false} style={styles.pin}>
-                📍
+        <View style={styles.cover}>
+          <PlanCover post={post} aspectRatio={1.9} artworkSize={96} />
+          <LinearGradient
+            pointerEvents="none"
+            colors={
+              overlay
+                ? ["rgba(0,0,0,0.25)", "rgba(0,0,0,0.05)", "rgba(0,0,0,0.82)"]
+                : ["rgba(0,0,0,0.25)", "rgba(0,0,0,0)", "rgba(0,0,0,0)"]
+            }
+            locations={[0, 0.4, 1]}
+            style={StyleSheet.absoluteFill}
+          />
+          <View style={styles.topRow}>
+            <View style={styles.hostPill}>
+              {post.authorAvatarUrl ? (
+                <Avatar
+                  name={post.authorName}
+                  uri={post.authorAvatarUrl}
+                  size={24}
+                />
+              ) : (
+                <View
+                  style={[styles.hostAvatar, { backgroundColor: hostTone }]}
+                >
+                  <Text style={styles.hostInitials}>
+                    {initialsOf(post.authorName)}
+                  </Text>
+                </View>
+              )}
+              <Text style={styles.hostName} numberOfLines={1}>
+                {post.authorName}
               </Text>
-              <Text style={styles.distanceText}>
-                {formatDistance(distanceKm)}
-              </Text>
             </View>
-          )}
-        </View>
-        <View style={[styles.body, stacked && styles.stacked]}>
-          <View style={[styles.cover, stacked && styles.stackedCover]}>
-            <PlanCover
-              post={post}
-              fill={!stacked}
-              aspectRatio={2}
-              artworkSize={76}
-            />
-            {status.accepting && post.spotsLeft === 1 && (
-              <View style={styles.lastSpot}>
-                <Text style={styles.lastSpotText}>Last spot</Text>
-              </View>
-            )}
-            <View style={styles.coverLabel}>
-              <Text style={styles.coverLabelText}>{category}</Text>
-            </View>
-          </View>
-          <View style={styles.content}>
-            <Text style={styles.title} numberOfLines={stacked ? undefined : 2}>
-              {post.title}
-            </Text>
-            <Text style={styles.description} numberOfLines={1}>
-              {post.description}
-            </Text>
-            <Text style={styles.meta}>
-              <Text accessible={false}>🗓️ </Text>
-              {formatWhen(post.startsAt, now).split(",")[0]} ·{" "}
-              <Text accessible={false}>⏰ </Text>
-              {formatTime(post.startsAt)}
-            </Text>
-            {!!post.venueName && (
-              <Text style={styles.venue} numberOfLines={2}>
-                <Text accessible={false}>📍 </Text>
-                {post.venueName}
-              </Text>
-            )}
-          </View>
-        </View>
-        <View style={styles.tags}>
-          <View
-            style={[
-              styles.audience,
-              post.genderPreference === "male"
-                ? styles.male
-                : post.genderPreference === "female"
-                  ? styles.female
-                  : styles.any,
-            ]}
-          >
-            <Text
-              style={[
-                styles.tagText,
-                post.genderPreference === "male"
-                  ? styles.maleText
-                  : post.genderPreference === "female"
-                    ? styles.femaleText
-                    : styles.anyText,
-              ]}
+            <View
+              style={[styles.badge, !status.accepting && styles.badgeMuted]}
             >
-              <Text accessible={false}>
-                {post.genderPreference === "female"
-                  ? "♀ "
-                  : post.genderPreference === "male"
-                    ? "♂ "
-                    : "👥 "}
+              <Text
+                style={[
+                  styles.badgeText,
+                  !status.accepting && styles.badgeTextMuted,
+                ]}
+              >
+                {badge}
               </Text>
-              {audience}
-            </Text>
+            </View>
           </View>
-          {skill && (
-            <Text style={styles.tagText}>
-              <Text accessible={false}>🎯 </Text>
-              {skill[0].toUpperCase() + skill.slice(1).toLowerCase()}
-            </Text>
-          )}
-          {post.costCents != null && (
-            <Text style={styles.tagText}>
-              <Text accessible={false}>
-                {post.costCents === 0 ? "💸 " : "🏷️ "}
-              </Text>
-              {post.costCents === 0 ? "Free" : planCost(post)}
-            </Text>
-          )}
+          {overlay && <View style={styles.photoCopy}>{titleBlock}</View>}
         </View>
+        {!overlay && <View style={styles.plainCopy}>{titleBlock}</View>}
       </MotionPressable>
       <View style={styles.footer}>
-        <View style={styles.members}>
-          <View style={styles.memberCircle}>
-            <Icon name="users" size={13} color={colors.textDim} />
-          </View>
-          <View style={styles.memberGhost} />
+        <View style={styles.joinedIcon}>
+          <Icon name="users" size={14} color={colors.textDim} />
         </View>
-        <View style={styles.availability}>
-          <Text style={styles.spots}>
-            <Text style={styles.joined}>
-              {post.joinedCount}/{post.vacancies}
-            </Text>{" "}
-            joined · {spots}
-          </Text>
-          {status.accepting && (
-            <View style={styles.track}>
-              <View
-                style={[styles.progress, { width: `${progress * 100}%` }]}
-              />
-            </View>
-          )}
-        </View>
+        <Text style={styles.joined}>
+          <Text style={styles.joinedCount}>
+            {post.joinedCount} of {post.vacancies}
+          </Text>{" "}
+          joined
+        </Text>
         {saved && (
           <MotionPressable
             accessibilityRole="button"
@@ -237,7 +183,7 @@ export function PostRow({
               disabled: saving || saved.status === "loading",
             }}
             disabled={saving || saved.status === "loading"}
-            style={styles.bookmark}
+            style={[styles.save, bookmarked && styles.saved]}
             onPress={() => {
               setSaving(true);
               void saved
@@ -248,13 +194,11 @@ export function PostRow({
                 .finally(() => setSaving(false));
             }}
           >
-            <View style={bookmarked ? styles.bookmarked : undefined}>
-              <Icon
-                name="bookmark"
-                size={20}
-                color={bookmarked ? colors.onAccent : colors.ink}
-              />
-            </View>
+            <Icon
+              name="bookmark"
+              size={18}
+              color={bookmarked ? colors.onAccent : colors.ink}
+            />
           </MotionPressable>
         )}
         <MotionPressable
@@ -262,203 +206,149 @@ export function PostRow({
           accessibilityLabel={`${action}: ${post.title}`}
           accessibilityHint="Review the plan and request a place; the host approves requests"
           onPress={onPress}
-          style={styles.cta}
+          style={[styles.cta, !status.accepting && styles.ctaQuiet]}
         >
-          <Text style={styles.ctaText}>{action}</Text>
+          <Text
+            style={[styles.ctaText, !status.accepting && styles.ctaTextQuiet]}
+          >
+            {action}
+          </Text>
         </MotionPressable>
       </View>
     </View>
   );
 }
+
 const styles = StyleSheet.create({
   card: {
-    padding: 13,
-    borderRadius: 24,
     backgroundColor: colors.surface,
-    marginBottom: 13,
+    borderRadius: 24,
     borderWidth: 1,
-    borderColor: "#F0F0F1",
-    shadowColor: "#20232B",
-    shadowOpacity: 0.04,
-    shadowRadius: 10,
+    borderColor: colors.border,
+    overflow: "hidden",
+    marginBottom: 14,
+    shadowColor: colors.ink,
+    shadowOpacity: 0.06,
+    shadowRadius: 16,
     shadowOffset: { width: 0, height: 4 },
-    elevation: 1,
+    elevation: 2,
   },
-  hostRow: {
+  cover: { position: "relative" },
+  topRow: {
+    position: "absolute",
+    top: 12,
+    left: 12,
+    right: 12,
     flexDirection: "row",
     alignItems: "center",
-    gap: 9,
-    marginBottom: 10,
+    justifyContent: "space-between",
+    gap: 8,
   },
-  avatar: {
-    width: 33,
-    height: 33,
-    borderRadius: 17,
+  hostPill: {
+    flexShrink: 1,
+    minWidth: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    paddingLeft: 4,
+    paddingRight: 12,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.2)",
+  },
+  hostAvatar: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     alignItems: "center",
     justifyContent: "center",
   },
-  initials: { ...typography.label, color: colors.onAccent, fontWeight: "700" },
-  hostCopy: { flex: 1, minWidth: 0 },
-  author: { ...typography.bodySmall, fontWeight: "700", color: colors.ink },
-  posted: { ...typography.caption, color: colors.textDim, marginTop: 2 },
-  distance: { flexDirection: "row", alignItems: "center", gap: 1 },
-  pin: { fontSize: 13 },
-  distanceText: {
-    ...typography.bodySmall,
+  hostInitials: { fontSize: 10, color: colors.white, ...weight("800") },
+  hostName: {
+    ...typography.caption,
     fontSize: 12,
-    color: colors.textDim,
-    fontWeight: "600",
+    color: colors.white,
+    ...weight("700"),
+    flexShrink: 1,
   },
-  body: { flexDirection: "row", gap: 11, alignItems: "stretch" },
-  stacked: { flexDirection: "column" },
-  cover: {
-    width: "30%",
-    maxWidth: 150,
-    minHeight: 99,
-    overflow: "hidden",
-    borderRadius: 15,
+  badge: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+    backgroundColor: colors.amberBright,
   },
-  stackedCover: { width: "100%", maxWidth: "100%", minHeight: 0 },
-  lastSpot: {
-    position: "absolute",
-    left: 6,
-    top: 6,
-    backgroundColor: "#A81F4C",
-    borderRadius: 8,
-    paddingHorizontal: 6,
-    paddingVertical: 3,
+  badgeMuted: { backgroundColor: "rgba(255,255,255,0.92)" },
+  badgeText: {
+    fontSize: 12,
+    lineHeight: 16,
+    color: colors.onAmber,
+    ...weight("800"),
   },
-  lastSpotText: {
-    ...typography.caption,
-    color: "#FFFFFF",
-    fontWeight: "700",
-    fontSize: 9,
-    lineHeight: 12,
-  },
-  coverLabel: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    alignItems: "center",
-    paddingVertical: 4,
-    backgroundColor: "rgba(0,0,0,0.55)",
-  },
-  coverLabelText: {
-    ...typography.caption,
-    color: "#FFFFFF",
-    fontWeight: "700",
-    fontSize: 10,
-  },
-  content: { flex: 1, minWidth: 0, paddingVertical: 2 },
+  badgeTextMuted: { color: colors.ink },
+  photoCopy: { position: "absolute", left: 14, right: 14, bottom: 12, gap: 3 },
+  plainCopy: { paddingHorizontal: 16, paddingTop: 12, gap: 4 },
   title: {
     ...typography.heading,
-    fontSize: 16,
-    lineHeight: 21,
-    fontWeight: "700",
-    color: colors.ink,
-    marginBottom: 5,
+    fontSize: 18,
+    lineHeight: 23,
+    ...weight("800"),
   },
-  description: {
-    ...typography.caption,
-    fontSize: 12,
-    lineHeight: 17,
-    color: colors.textDim,
-    marginBottom: 5,
-  },
+  titleOnPhoto: { color: colors.white },
+  titlePlain: { color: colors.ink },
+  metaRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   meta: {
     ...typography.caption,
     fontSize: 12,
-    lineHeight: 19,
-    color: colors.textDim,
-  },
-  venue: {
-    ...typography.caption,
-    fontSize: 12,
     lineHeight: 17,
-    fontWeight: "500",
-    color: colors.ink,
-    marginTop: 3,
+    flexShrink: 1,
+    ...weight("500"),
   },
-  tags: {
+  metaOnPhoto: { color: "#E5E7EB" },
+  metaPlain: { color: colors.textDim },
+  footer: {
     flexDirection: "row",
-    flexWrap: "wrap",
     alignItems: "center",
-    gap: 12,
-    marginVertical: 9,
-    minHeight: 24,
+    gap: 10,
+    paddingLeft: 16,
+    paddingRight: 12,
+    paddingVertical: 10,
   },
-  audience: { paddingHorizontal: 6, paddingVertical: 4, borderRadius: 8 },
-  male: { backgroundColor: "#EDF5FE" },
-  female: { backgroundColor: "#FCEAF0" },
-  any: { backgroundColor: "#F1F3F2" },
-  maleText: { color: "#205A91" },
-  femaleText: { color: "#8A2754" },
-  anyText: { color: colors.textDim },
-  tagText: {
-    ...typography.caption,
-    fontSize: 11,
-    lineHeight: 15,
-    color: colors.textDim,
-    fontWeight: "500",
-  },
-  footer: { flexDirection: "row", alignItems: "center", gap: 7 },
-  members: { width: 30, height: 27, justifyContent: "center" },
-  memberCircle: {
-    width: 22,
-    height: 22,
-    borderRadius: 12,
-    backgroundColor: "#E9ECEF",
+  joinedIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: colors.surfaceRaised,
     alignItems: "center",
     justifyContent: "center",
   },
-  memberGhost: {
-    position: "absolute",
-    right: 0,
-    width: 19,
-    height: 19,
-    borderRadius: 11,
+  joined: { ...typography.bodySmall, color: colors.textDim, flex: 1 },
+  joinedCount: { color: colors.ink, ...weight("800") },
+  save: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     borderWidth: 1,
-    borderStyle: "dashed",
-    borderColor: "#B5BAC2",
-    backgroundColor: colors.surface,
-  },
-  availability: { flex: 1, minWidth: 0 },
-  joined: { fontWeight: "700", color: colors.ink },
-  spots: {
-    ...typography.caption,
-    fontSize: 10,
-    lineHeight: 15,
-    color: colors.textDim,
-  },
-  track: {
-    height: 3,
-    marginTop: 4,
-    backgroundColor: "#ECEEEF",
-    borderRadius: 3,
-    overflow: "hidden",
-  },
-  progress: { height: "100%", backgroundColor: "#33815B", borderRadius: 3 },
-  bookmark: {
-    minWidth: 36,
-    minHeight: 44,
+    borderColor: colors.border,
     alignItems: "center",
     justifyContent: "center",
   },
-  bookmarked: { backgroundColor: colors.ink, padding: 4, borderRadius: 6 },
+  saved: { backgroundColor: colors.ink, borderColor: colors.ink },
   cta: {
-    minWidth: 61,
-    minHeight: 36,
-    paddingVertical: 8,
-    paddingHorizontal: 13,
-    borderRadius: 11,
+    minHeight: 44,
+    paddingHorizontal: 20,
+    borderRadius: 14,
+    backgroundColor: colors.amber,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#161B25",
   },
+  ctaQuiet: { backgroundColor: colors.ink },
   ctaText: {
-    ...typography.bodySmall,
-    color: colors.onAccent,
-    fontWeight: "700",
+    ...typography.label,
+    fontSize: 14,
+    color: colors.onAmber,
+    ...weight("800"),
   },
+  ctaTextQuiet: { color: colors.onAccent },
 });

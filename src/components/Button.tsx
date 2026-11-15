@@ -7,7 +7,7 @@ import {
   StyleProp,
   TextStyle,
 } from "react-native";
-import { colors, typography, spacing, radius } from "../theme";
+import { colors, typography, spacing, radius, weight } from "../theme";
 import { MotionPressable } from "./Motion";
 import { LoadingDots } from "./LoadingDots";
 
@@ -107,7 +107,7 @@ const styles = StyleSheet.create({
   disabled: { opacity: 0.4 },
   text: {
     ...typography.body,
-    fontWeight: "600",
+    ...weight("600"),
     color: colors.text,
     flexShrink: 1,
     textAlign: "center",

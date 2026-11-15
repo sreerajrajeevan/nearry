@@ -1,25 +1,35 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   View,
   Text,
   ScrollView,
   StyleSheet,
   useWindowDimensions,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
 } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { Offer } from "../services/mappers";
-import { colors, typography } from "../theme";
-import {
-  OFFER_CATEGORIES,
-  OfferCategory,
-  discoverOffers,
-  offerCategory,
-} from "../utils/offerDiscovery";
+import { colors, typography, weight } from "../theme";
+import { discoverOffers } from "../utils/offerDiscovery";
+import { activityArtwork } from "../utils/activityArtwork";
 import { formatDistance } from "../utils/format";
 import { MotionPressable } from "./Motion";
 import { LoadingImage } from "./LoadingImage";
+import { ActivityArt } from "./ActivityArt";
 import { Icon } from "./Icon";
 
-function OfferTile({
+function offerHeadline(offer: Offer) {
+  return offer.discountPct != null && offer.discountPct > 0
+    ? `${offer.discountPct}% OFF`
+    : offer.priceCents === 0
+      ? "FREE"
+      : offer.priceCents != null
+        ? `₹${(offer.priceCents / 100).toLocaleString("en-IN")}`
+        : null;
+}
+
+function OfferSlide({
   offer,
   width,
   distanceKm,
@@ -32,46 +42,15 @@ function OfferTile({
 }) {
   const [failed, setFailed] = useState(false);
   useEffect(() => setFailed(false), [offer.coverPhotoUrl]);
-  const category = offerCategory(offer);
-  const theme = {
-    all: { backgroundColor: "#F3EBDD", emoji: "🎟️" },
-    fitness: {
-      backgroundColor: offer.priceCents === 0 ? "#A17BF0" : "#F2A847",
-      emoji: offer.priceCents === 0 ? "💪" : "🏋️",
-    },
-    sports: { backgroundColor: "#E7EEDA", emoji: "🏸" },
-    food: { backgroundColor: "#FFECDB", emoji: "🍜" },
-    wellness: { backgroundColor: "#ECE5FA", emoji: "🧘" },
-  }[category];
-  const subject = `${offer.title} ${offer.description}`.toLowerCase();
-  const emoji =
-    category === "sports"
-      ? /badminton|shuttle/.test(subject)
-        ? "🏸"
-        : /cricket/.test(subject)
-          ? "🏏"
-          : /tennis/.test(subject)
-            ? "🎾"
-            : "⚽"
-      : category === "food"
-        ? /coffee|caf[eé]|tea/.test(subject)
-          ? "☕"
-          : "🍜"
-        : category === "wellness"
-          ? /hair|salon/.test(subject)
-            ? "💇"
-            : /spa|massage/.test(subject)
-              ? "💆"
-              : "🧘"
-          : theme.emoji;
-  const headline =
-    offer.discountPct != null && offer.discountPct > 0
-      ? `${offer.discountPct}% OFF`
-      : offer.priceCents === 0
-        ? "Free"
-        : offer.priceCents != null
-          ? `₹${(offer.priceCents / 100).toLocaleString("en-IN")}`
-          : null;
+  const headline = offerHeadline(offer);
+  const ends = new Date(offer.endsAt).toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "short",
+  });
+  const meta = [
+    offer.title,
+    distanceKm != null ? formatDistance(distanceKm) : `till ${ends}`,
+  ].join(" · ");
   return (
     <MotionPressable
       onPress={onPress}
@@ -80,52 +59,61 @@ function OfferTile({
         headline,
         offer.title,
         offer.businessName,
+        distanceKm != null && formatDistance(distanceKm),
+        `Till ${ends}`,
         "View offer",
       ]
         .filter(Boolean)
         .join(". ")}
-      style={[styles.card, { width }]}
+      style={[styles.slide, { width, height: Math.round(width * 0.6) }]}
     >
-      <View style={[styles.art, { backgroundColor: theme.backgroundColor }]}>
-        {offer.coverPhotoUrl && !failed ? (
-          <LoadingImage
-            source={{ uri: offer.coverPhotoUrl }}
-            style={StyleSheet.absoluteFillObject}
-            resizeMode="cover"
-            onError={() => setFailed(true)}
+      {offer.coverPhotoUrl && !failed ? (
+        <LoadingImage
+          source={{ uri: offer.coverPhotoUrl }}
+          style={StyleSheet.absoluteFillObject}
+          resizeMode="cover"
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        <View style={styles.fallback}>
+          <ActivityArt
+            artwork={activityArtwork({
+              title: offer.title,
+              description: `${offer.description} ${offer.businessName}`,
+            })}
+            size={Math.round(width * 0.3)}
           />
-        ) : (
-          <Text accessible={false} style={styles.emoji}>
-            {emoji}
+        </View>
+      )}
+      <LinearGradient
+        pointerEvents="none"
+        colors={["rgba(0,0,0,0)", "rgba(0,0,0,0.15)", "rgba(0,0,0,0.7)"]}
+        locations={[0, 0.5, 1]}
+        style={StyleSheet.absoluteFill}
+      />
+      {headline && (
+        <View style={styles.badge}>
+          <Text style={styles.badgeText}>{headline}</Text>
+        </View>
+      )}
+      <View style={styles.panel}>
+        <View style={styles.panelCopy}>
+          <Text style={styles.business} numberOfLines={1}>
+            {offer.businessName}
           </Text>
-        )}
-      </View>
-      <View style={styles.copy}>
-        {headline && (
-          <Text style={styles.highlight} numberOfLines={1}>
-            {headline}
+          <Text style={styles.meta} numberOfLines={1}>
+            {meta}
           </Text>
-        )}
-        <Text style={styles.offerTitle} numberOfLines={2}>
-          {offer.title}
-        </Text>
-        <Text style={styles.business} numberOfLines={1}>
-          {offer.businessName}
-        </Text>
-        <Text style={styles.meta} numberOfLines={1}>
-          {distanceKm != null ? `${formatDistance(distanceKm)} · ` : ""}Till{" "}
-          {new Date(offer.endsAt).toLocaleDateString("en-IN", {
-            day: "numeric",
-            month: "short",
-          })}
-        </Text>
-        <View style={styles.action}>
-          <Text style={styles.actionText}>Claim</Text>
+        </View>
+        <View style={styles.claim}>
+          <Text style={styles.claimText}>Claim</Text>
         </View>
       </View>
     </MotionPressable>
   );
 }
+
+/** Live offers as a swipeable photo carousel. Category filtering happens on Home. */
 export function FeaturedOffers({
   offers,
   distances,
@@ -138,102 +126,92 @@ export function FeaturedOffers({
   now?: Date;
 }) {
   const { width, fontScale } = useWindowDimensions();
-  const [category, setCategory] = useState<OfferCategory>(() =>
-    discoverOffers(offers, "fitness", now).length ? "fitness" : "all",
-  );
   const [expanded, setExpanded] = useState(false);
-  const available = discoverOffers(offers, "all", now);
-  const matches = discoverOffers(offers, category, now);
+  const [page, setPage] = useState(0);
+  const rail = useRef<ScrollView>(null);
+  const matches = discoverOffers(offers, "all", now);
   const items = expanded ? matches : matches.slice(0, 6);
-  const cardWidth =
-    Math.max(172, Math.min(250, (width - 44) / 2)) * Math.min(fontScale, 1.5);
+  const slideWidth = Math.round(
+    Math.min(340, Math.max(260, (width - 32) * 0.86)) *
+      Math.min(Math.max(fontScale, 1), 1.2),
+  );
+  const step = slideWidth + 14;
+  useEffect(() => {
+    setPage(0);
+    rail.current?.scrollTo({ x: 0, animated: false });
+  }, [matches.length]);
+  const onScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) =>
+    setPage(
+      Math.min(
+        items.length - 1,
+        Math.max(0, Math.round(event.nativeEvent.contentOffset.x / step)),
+      ),
+    );
   return (
     <View style={styles.section}>
       <View style={styles.heading}>
         <Text accessibilityRole="header" style={styles.title}>
-          Offers near you
+          Perks nearby
         </Text>
-        {available.length > 0 && (
+        {matches.length > 6 && (
           <MotionPressable
             accessibilityRole="button"
             accessibilityLabel={
               expanded ? "Show fewer offers" : "See all nearby offers"
             }
-            onPress={() => {
-              setCategory("all");
-              setExpanded(!expanded);
-            }}
+            onPress={() => setExpanded(!expanded)}
             style={styles.seeAll}
           >
             <Text style={styles.seeAllText}>
               {expanded ? "Show less" : "See all"}
             </Text>
-            <Icon
-              name={expanded ? "chevron-up" : "arrow-right"}
-              size={14}
-              color={colors.coralDeep}
-            />
           </MotionPressable>
         )}
       </View>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.categories}
-      >
-        {OFFER_CATEGORIES.filter(
-          (item) => item.key !== "all" || category === "all" || expanded,
-        ).map((item) => (
-          <MotionPressable
-            key={item.key}
-            accessibilityRole="button"
-            accessibilityLabel={`${item.label} offers`}
-            accessibilityState={{ selected: category === item.key }}
-            onPress={() => setCategory(item.key)}
-            style={[
-              styles.category,
-              category === item.key && styles.categorySelected,
-            ]}
-          >
-            <Text accessible={false} style={styles.categoryEmoji}>
-              {item.emoji}
-            </Text>
-            <Text
-              style={[
-                styles.categoryText,
-                category === item.key && styles.categoryTextSelected,
-              ]}
-            >
-              {item.label}
-            </Text>
-          </MotionPressable>
-        ))}
-      </ScrollView>
       {items.length ? (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.rail}
-          decelerationRate="fast"
-          snapToInterval={cardWidth + 8}
-        >
-          {items.map((offer) => (
-            <OfferTile
-              key={offer.id}
-              offer={offer}
-              width={cardWidth}
-              distanceKm={
-                offer.venueId ? distances?.get(offer.venueId) : undefined
-              }
-              onPress={() => onOpen(offer.id)}
-            />
-          ))}
-        </ScrollView>
+        <>
+          <ScrollView
+            ref={rail}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.rail}
+            decelerationRate="fast"
+            snapToInterval={step}
+            onScroll={onScroll}
+            scrollEventThrottle={32}
+          >
+            {items.map((offer) => (
+              <OfferSlide
+                key={offer.id}
+                offer={offer}
+                width={slideWidth}
+                distanceKm={
+                  offer.venueId ? distances?.get(offer.venueId) : undefined
+                }
+                onPress={() => onOpen(offer.id)}
+              />
+            ))}
+          </ScrollView>
+          {items.length > 1 && (
+            <View
+              style={styles.dots}
+              accessible={false}
+              importantForAccessibility="no-hide-descendants"
+            >
+              {items.map((offer, index) => (
+                <View
+                  key={offer.id}
+                  style={[styles.dot, index === page && styles.dotActive]}
+                />
+              ))}
+            </View>
+          )}
+        </>
       ) : (
         <View style={styles.empty}>
           <Icon name="tag" size={18} />
           <Text style={styles.emptyText}>
-            {available.length
+            {offers.length
               ? "No offers in this category yet."
               : "No local offers right now. Check back soon."}
           </Text>
@@ -243,114 +221,104 @@ export function FeaturedOffers({
   );
 }
 const styles = StyleSheet.create({
-  section: { marginTop: 19, marginBottom: 18 },
+  section: { marginTop: 18, marginBottom: 20 },
   heading: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     gap: 10,
-    marginBottom: 8,
+    marginBottom: 10,
   },
   title: {
     ...typography.heading,
     fontSize: 20,
     lineHeight: 26,
-    fontWeight: "700",
+    ...weight("800"),
     color: colors.ink,
     flexShrink: 1,
   },
-  seeAll: { minHeight: 44, flexDirection: "row", alignItems: "center", gap: 4 },
+  seeAll: { minHeight: 44, justifyContent: "center" },
   seeAllText: {
     ...typography.bodySmall,
     fontSize: 14,
-    fontWeight: "600",
-    color: colors.coralDeep,
+    ...weight("700"),
+    color: colors.ink,
+    textDecorationLine: "underline",
+    textDecorationColor: colors.amber,
   },
-  categories: { gap: 8, paddingBottom: 14, paddingRight: 8 },
-  category: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 7,
-    paddingHorizontal: 9,
-    paddingVertical: 9,
-    minHeight: 44,
-    borderRadius: 26,
-    backgroundColor: colors.surface,
+  rail: { gap: 14, paddingRight: 16 },
+  slide: {
+    borderRadius: 24,
+    overflow: "hidden",
+    backgroundColor: colors.ink,
   },
-  categorySelected: { backgroundColor: "#293341" },
-  categoryEmoji: { fontSize: 15 },
-  categoryText: {
-    ...typography.bodySmall,
-    color: colors.textDim,
-    fontWeight: "500",
-  },
-  categoryTextSelected: { color: colors.onAccent, fontWeight: "700" },
-  rail: { gap: 8, paddingBottom: 4, paddingRight: 8 },
-  card: {
-    backgroundColor: colors.surface,
-    borderRadius: 18,
-    paddingHorizontal: 8,
-    paddingVertical: 11,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 9,
-    minHeight: 138,
-  },
-  art: {
-    width: 50,
-    height: 56,
-    borderRadius: 15,
+  fallback: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "#1F2937",
     alignItems: "center",
     justifyContent: "center",
-    overflow: "hidden",
+    paddingBottom: 40,
   },
-  emoji: { fontSize: 29 },
-  copy: { flex: 1, minWidth: 0 },
-  highlight: {
-    ...typography.heading,
-    fontSize: 15,
-    lineHeight: 20,
-    color: colors.coralDeep,
-    fontWeight: "700",
+  badge: {
+    position: "absolute",
+    top: 12,
+    left: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+    backgroundColor: colors.amberBright,
   },
-  offerTitle: {
-    ...typography.bodySmall,
-    fontSize: 13,
-    lineHeight: 17,
-    fontWeight: "700",
-    color: colors.ink,
-    marginTop: 2,
+  badgeText: {
+    fontSize: 12,
+    lineHeight: 16,
+    letterSpacing: 0.4,
+    color: colors.onAmber,
+    ...weight("800"),
   },
-  business: {
-    ...typography.caption,
-    fontSize: 11,
-    lineHeight: 15,
-    color: colors.textDim,
-    marginTop: 3,
-  },
-  meta: {
-    ...typography.caption,
-    fontSize: 10,
-    lineHeight: 14,
-    color: colors.textDim,
-    marginTop: 4,
-  },
-  action: {
+  panel: {
+    position: "absolute",
+    left: 10,
+    right: 10,
+    bottom: 10,
     flexDirection: "row",
     alignItems: "center",
-    alignSelf: "flex-start",
-    backgroundColor: "#253342",
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    marginTop: 6,
+    gap: 8,
+    paddingLeft: 13,
+    paddingRight: 9,
+    paddingVertical: 9,
+    borderRadius: 16,
+    backgroundColor: "rgba(255,255,255,0.96)",
   },
-  actionText: {
-    ...typography.caption,
-    fontSize: 11,
-    fontWeight: "700",
+  panelCopy: { flex: 1, minWidth: 0 },
+  business: {
+    ...typography.label,
+    fontSize: 15,
+    lineHeight: 20,
+    color: colors.night,
+    ...weight("800"),
+  },
+  meta: { ...typography.caption, fontSize: 12, color: colors.textDim },
+  claim: {
+    minHeight: 36,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    backgroundColor: colors.night,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  claimText: {
+    ...typography.label,
     color: colors.onAccent,
+    ...weight("700"),
   },
+  dots: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 6,
+    marginTop: 12,
+  },
+  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#D1D5DB" },
+  dotActive: { width: 20, backgroundColor: colors.ink },
   empty: {
     flexDirection: "row",
     gap: 9,

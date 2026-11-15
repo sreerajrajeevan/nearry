@@ -14,7 +14,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { appAlerts } from "../services/appAlert";
 import { useReducedMotion } from "../store/MotionContext";
-import { colors, typography } from "../theme";
+import { colors, typography, weight } from "../theme";
 import { Icon } from "./Icon";
 import { MotionPressable } from "./Motion";
 
@@ -175,7 +175,7 @@ const styles = StyleSheet.create({
   eyebrow: {
     ...typography.caption,
     fontSize: 10,
-    fontWeight: "700",
+    ...weight("700"),
     letterSpacing: 2,
     color: colors.textDim,
   },
@@ -195,7 +195,7 @@ const styles = StyleSheet.create({
   cancel: { backgroundColor: colors.sageSoft },
   buttonText: {
     ...typography.body,
-    fontWeight: "600",
+    ...weight("600"),
     color: colors.onAccent,
     textAlign: "center",
     flexShrink: 1,

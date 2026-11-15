@@ -11,7 +11,7 @@ import {
   SafeAreaView,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
-import { colors, typography } from "../theme";
+import { colors, typography, weight } from "../theme";
 import { useReducedMotion } from "../store/MotionContext";
 import {
   DEFAULT_PLAN_OPTIONS,
@@ -289,7 +289,7 @@ const styles = StyleSheet.create({
   },
   choiceText: { ...typography.bodySmall, color: colors.textDim, flexShrink: 1 },
   selected: { backgroundColor: colors.sageSoft, borderColor: colors.forest },
-  selectedText: { color: colors.forest, fontWeight: "600" },
+  selectedText: { color: colors.forest, ...weight("600") },
   disabled: { opacity: 0.4 },
   hint: {
     ...typography.caption,
