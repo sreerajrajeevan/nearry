@@ -78,6 +78,10 @@ export function WelcomeScreen({
         }}
       >
         <OnboardingLink
+          title="Child safety standards"
+          onPress={() => navigation.navigate("Legal", { page: "child-safety" })}
+        />
+        <OnboardingLink
           title="Privacy Policy"
           onPress={() => navigation.navigate("Legal", { page: "privacy" })}
         />

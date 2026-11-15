@@ -1,4 +1,8 @@
 import React from "react";
+import {
+  emailOtpEnabled,
+  reviewerLoginEnabled,
+} from "../../utils/authAvailability";
 import { StyleSheet, Text, View } from "react-native";
 import {
   OnboardingLayout,
@@ -15,6 +19,11 @@ import { normalizeEmailCode } from "../../utils/emailSignIn";
 import { isValidEmail, isValidOtp } from "../../utils/validation";
 import { weight } from "../../theme";
 type Props = {
+  reviewerMode: boolean;
+  password: string;
+  setPassword: (value: string) => void;
+  reviewer: () => Promise<void>;
+  toggleReviewer: () => void;
   kicker: string;
   isLogin: boolean;
   step: "email" | "code";
@@ -22,9 +31,9 @@ type Props = {
   code: string;
   sentTo: string | null;
   error: string | null;
-  errorFor: "email" | "google";
+  errorFor: "email" | "google" | "reviewer";
   busy: boolean;
-  pendingAction: "send" | "verify" | "google" | null;
+  pendingAction: "send" | "verify" | "google" | "reviewer" | null;
   resendSeconds: number;
   configured: boolean;
   setEmail: (value: string) => void;
@@ -39,7 +48,8 @@ type Props = {
   onPrivacy: () => void;
 };
 export function AuthPresentation(p: Props) {
-  const code = p.step === "code";
+  const code = emailOtpEnabled && p.step === "code";
+  const googleOnly = !emailOtpEnabled && !p.reviewerMode;
   return (
     <OnboardingLayout
       onBack={p.onBack}
@@ -49,20 +59,45 @@ export function AuthPresentation(p: Props) {
         <>
           <OnboardingButton
             title={
-              code
-                ? "Verify & continue"
-                : p.resendSeconds > 0
-                  ? `Send code in ${p.resendSeconds}s`
-                  : "Send email code"
+              p.reviewerMode
+                ? "Sign in for review"
+                : googleOnly
+                  ? "Continue with Google"
+                  : code
+                    ? "Verify & continue"
+                    : p.resendSeconds > 0
+                      ? `Send code in ${p.resendSeconds}s`
+                      : "Send email code"
             }
-            onPress={() => void (code ? p.confirmCode() : p.sendCode())}
-            loading={p.pendingAction === (code ? "verify" : "send")}
+            onPress={() =>
+              void (p.reviewerMode
+                ? p.reviewer()
+                : googleOnly
+                  ? p.google()
+                  : code
+                    ? p.confirmCode()
+                    : p.sendCode())
+            }
+            loading={
+              p.pendingAction ===
+              (p.reviewerMode
+                ? "reviewer"
+                : googleOnly
+                  ? "google"
+                  : code
+                    ? "verify"
+                    : "send")
+            }
             disabled={
               p.busy ||
               !p.configured ||
-              (code
-                ? !isValidOtp(p.code)
-                : !isValidEmail(p.email) || p.resendSeconds > 0)
+              (p.reviewerMode
+                ? !isValidEmail(p.email) || !p.password
+                : googleOnly
+                  ? false
+                  : code
+                    ? !isValidOtp(p.code)
+                    : !isValidEmail(p.email) || p.resendSeconds > 0)
             }
           />
           <OnboardingLink
@@ -83,16 +118,22 @@ export function AuthPresentation(p: Props) {
       <OnboardingHeading
         kicker={`${p.kicker} account`}
         title={
-          code
-            ? "Check your inbox."
-            : p.isLogin
-              ? "Good to see you again."
-              : "Let’s make it official."
+          p.reviewerMode
+            ? "Review Nearry."
+            : code
+              ? "Check your inbox."
+              : p.isLogin
+                ? "Good to see you again."
+                : "Let’s make it official."
         }
         subtitle={
-          code
-            ? `Code requested for ${p.sentTo}. Check your inbox and spam folder.`
-            : "Your next hello starts here. Continue with Google or email."
+          p.reviewerMode
+            ? "Use the credentials provided in Play Console. This opens the real app with the account’s saved role."
+            : googleOnly
+              ? "Join this test with Google. Email sign-in is not available in this build yet."
+              : code
+                ? `Code requested for ${p.sentTo}. Check your inbox and spam folder.`
+                : "Your next hello starts here. Continue with Google or email."
         }
       />
       {!p.configured && (
@@ -103,7 +144,7 @@ export function AuthPresentation(p: Props) {
           </Text>
         </View>
       )}
-      {!code && (
+      {!code && !p.reviewerMode && !googleOnly && (
         <>
           <MotionPressable
             accessibilityRole="button"
@@ -138,7 +179,35 @@ export function AuthPresentation(p: Props) {
           </View>
         </>
       )}
-      {code ? (
+      {p.reviewerMode ? (
+        <>
+          <OnboardingInput
+            label="Review account email"
+            value={p.email}
+            onChangeText={p.setEmail}
+            editable={!p.busy}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoCorrect={false}
+            autoComplete="username"
+          />
+          <OnboardingInput
+            label="Review account password"
+            value={p.password}
+            onChangeText={p.setPassword}
+            editable={!p.busy}
+            secureTextEntry
+            autoComplete="current-password"
+            returnKeyType="go"
+            onSubmitEditing={() => void p.reviewer()}
+          />
+          {p.error && p.errorFor === "reviewer" && (
+            <Text accessibilityRole="alert" style={ob.error}>
+              {p.error}
+            </Text>
+          )}
+        </>
+      ) : googleOnly ? null : code ? (
         <>
           <OnboardingInput
             label="Email code"
@@ -198,6 +267,15 @@ export function AuthPresentation(p: Props) {
         >
           {p.error}
         </Text>
+      )}
+      {reviewerLoginEnabled && (
+        <OnboardingLink
+          title={
+            p.reviewerMode ? "Back to Google sign-in" : "App review access"
+          }
+          disabled={p.busy}
+          onPress={p.toggleReviewer}
+        />
       )}
       <View style={styles.legal}>
         <OnboardingLink title="Privacy Policy" onPress={p.onPrivacy} />
