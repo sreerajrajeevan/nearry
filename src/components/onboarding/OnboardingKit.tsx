@@ -94,6 +94,14 @@ export const ob = StyleSheet.create({
     textAlign: "center",
   },
   emoji: { fontSize: 30, lineHeight: 38 },
+  iconArt: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FEF3C7",
+  },
   segment: {
     flex: 1,
     minWidth: 76,

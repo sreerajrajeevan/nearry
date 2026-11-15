@@ -33,7 +33,7 @@ export function verifyPrompt({
       title: "Try your selfie again",
       body: note
         ? `Reviewer note: ${note}`
-        : "Your last selfie couldn’t be checked. Copy the new pose in good light.",
+        : "Your last selfie couldn’t be checked. Try again with a clear face in good light.",
       cta: "Try again",
       tone: "retry",
     };
@@ -46,7 +46,7 @@ export function verifyPrompt({
     };
   return {
     title: "Verify your profile",
-    body: "Get a verified badge so people know you’re real. Copy a pose in a quick selfie.",
+    body: "Get a verified badge so people know you’re real. It takes one quick selfie.",
     cta: "Get verified",
     tone: "invite",
   };
