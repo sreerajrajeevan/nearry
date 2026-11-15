@@ -351,12 +351,11 @@ function renderTable(rows, view) {
       table(headers, rendered);
     return;
   } else if (view === "selfies") {
-    headers = ["Member", "Submitted", "Pose", "Review"];
+    headers = ["Member", "Submitted", "Review"];
     rendered = rows.map((r) =>
       row(
         textCell(r.display_name || "Nearry member") +
           textCell(date(r.submitted_at)) +
-          textCell(r.pose_label || "No pose (older app)") +
           "<td>" +
           action("Compare photos", r, "selfie") +
           "</td>",
@@ -656,22 +655,11 @@ function openReview(id, kind) {
   $("avatar-image").hidden = true;
   $("avatar-comparison").hidden = true;
   $("comparison-note").hidden = kind !== "selfie";
-  // The pose the member was asked to copy (null: submitted from an older app).
-  $("selfie-pose").hidden = kind !== "selfie";
-  if (kind === "selfie") {
-    $("selfie-pose").textContent = item.pose_label
-      ? "Requested pose: " + item.pose_label
-      : "No pose requested: this selfie came from an older app version.";
-    $("selfie-pose").className =
-      "pose-banner" + (item.pose_label ? "" : " missing");
-  }
   $("selfie-label").hidden = kind !== "selfie";
   $("comparison").classList.toggle("photo-comparison", kind === "selfie");
   $("proof-check-label").textContent =
     kind === "selfie"
-      ? item.pose_label
-        ? "I compared both photos: they appear to show the same person, and the selfie shows the requested pose."
-        : "I compared both photos and they appear to show the same person."
+      ? "I compared both photos and they appear to show the same person."
       : "I reviewed this business and its supporting document.";
   $("view-proof").textContent =
     kind === "selfie" ? "Load comparison photos" : "Load private proof";

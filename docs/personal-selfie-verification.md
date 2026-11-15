@@ -1,13 +1,13 @@
-# Optional personal selfie check (migrations 00030 and 00040)
+# Optional personal selfie check (migration 00030)
 
 A trusted person compares a private selfie with the submitted public profile
-photo. Since 00040, the app first asks the server for a random pose (for
-example "Peace sign next to your face"). The member copies it in a
-front-camera selfie within ten minutes, and the reviewer checks that the pose
-matches. This shows the selfie was taken just now rather than reused. Each
-pose is used once; asking for a new one replaces the old one. The badge says **Selfie checked**. It does not establish legal identity,
+photo. The badge says **Selfie checked**. It does not establish legal identity,
 age, uniqueness or live-person presence. No face recognition or face templates
 are used. Browsing, posting and joining remain available without this check.
+
+The person takes one clear front-camera selfie; there is no pose step. (A
+random-pose step from migration 00040 was tried and removed from the app in
+November 2026. Its database functions remain but are not used.)
 
 ## Setup
 
@@ -34,12 +34,8 @@ are used. Browsing, posting and joining remain available without this check.
 
 Open **Selfie reviews → Compare photos → Load comparison photos**. The left image
 is the public profile photo bound to the submission; the right is the private
-selfie. Both must load. The **Requested pose** banner shows the pose the member
-was asked to copy. Compare the faces and check the pose, then confirm the
-checkbox and choose **Mark selfie checked**. If the pose is wrong or missing,
-choose **Ask for another selfie** (for example "The pose didn't match").
-Submissions marked **No pose** came from an older app version; judge them as
-before, or ask for another selfie from the updated app. If unclear or inconsistent, choose **Ask for
+selfie. Both must load. Compare them yourself, then confirm the checkbox and
+choose **Mark selfie checked**. If unclear or inconsistent, choose **Ask for
 another selfie** and give a short, useful reason. Do not put private image links,
 identifying facial descriptions or credentials in notes. Do not treat this as
 certified liveness or an ID check.
