@@ -6,7 +6,7 @@ const NAV = [
   [
     "business",
     "Business reviews",
-    "Check the business and its proof before deciding",
+    "Review the business, its address and map pin together",
   ],
   [
     "selfies",
@@ -294,10 +294,15 @@ function renderTable(rows, view) {
     headers = ["Business", "Email", "Category / area", "Submitted", "Review"];
     rendered = rows.map((r) =>
       row(
-        textCell(r.business_name || r.display_name) +
+        textCell(
+          r.venue_submission?.name || r.business_name || r.display_name,
+        ) +
           textCell(r.email || "—") +
           textCell(
-            [r.business_details?.category, r.business_details?.area]
+            [
+              r.venue_submission?.category || r.business_details?.category,
+              r.venue_submission?.area || r.business_details?.area,
+            ]
               .filter(Boolean)
               .join(" · "),
           ) +
@@ -629,6 +634,27 @@ function closeDialog(force = false) {
   $("dialog-message").textContent = "";
   $("report-evidence").textContent = "";
   $("review-details").textContent = "";
+  $("venue-review").hidden = kind !== "business";
+  $("venue-check").checked = false;
+  const venue = item.venue_submission;
+  const hasVenue =
+    venue &&
+    Number.isFinite(venue.latitude) &&
+    Number.isFinite(venue.longitude);
+  $("venue-details").textContent = hasVenue
+    ? [
+        venue.name,
+        venue.category,
+        venue.address,
+        venue.area,
+        `${venue.latitude}, ${venue.longitude}`,
+      ].join("\n")
+    : "No venue was submitted. Ask the business to update Nearry and resubmit with its address and location. This request cannot be approved.";
+  $("venue-map").hidden = !hasVenue;
+  $("venue-map").removeAttribute("href");
+  if (hasVenue)
+    $("venue-map").href =
+      `https://www.google.com/maps/search/?api=1&query=${venue.latitude},${venue.longitude}`;
   $("review-note").value = "";
 }
 function openReview(id, kind) {
@@ -642,6 +668,27 @@ function openReview(id, kind) {
       : kind === "selfie"
         ? "Selfie check · " + (item.display_name || "Nearry member")
         : "Safety report";
+  $("venue-review").hidden = kind !== "business";
+  $("venue-check").checked = false;
+  const venue = item.venue_submission;
+  const hasVenue =
+    venue &&
+    Number.isFinite(venue.latitude) &&
+    Number.isFinite(venue.longitude);
+  $("venue-details").textContent = hasVenue
+    ? [
+        venue.name,
+        venue.category,
+        venue.address,
+        venue.area,
+        `${venue.latitude}, ${venue.longitude}`,
+      ].join("\n")
+    : "No venue was submitted. Ask the business to update Nearry and resubmit with its address and location. This request cannot be approved.";
+  $("venue-map").hidden = !hasVenue;
+  $("venue-map").removeAttribute("href");
+  if (hasVenue)
+    $("venue-map").href =
+      `https://www.google.com/maps/search/?api=1&query=${venue.latitude},${venue.longitude}`;
   $("review-note").value = "";
   $("proof-check").checked = false;
   $("business-review").hidden = !["business", "selfie"].includes(kind);
@@ -782,6 +829,15 @@ async function decide(decision) {
       "Load the photos or document and confirm that you reviewed them.";
     return;
   }
+  if (
+    item.kind === "business" &&
+    decision === "approved" &&
+    (!item.venue_submission || !$("venue-check").checked)
+  ) {
+    $("dialog-message").textContent =
+      "Check the submitted address and map pin before approving. Requests without a venue must be resubmitted.";
+    return;
+  }
   const labels = {
     approved: "Approve this business?",
     verified: "Mark these photos as checked?",
@@ -806,6 +862,7 @@ async function decide(decision) {
       id: item.id,
       decision,
       note,
+      locationConfirmed: item.kind === "business" && $("venue-check").checked,
     });
     actionBusy = false;
     closeDialog();

@@ -1,3 +1,6 @@
+import { LoadingState } from "../../components/LoadingState";
+import { getMyBusinessVenue } from "../../services/verification";
+import { BusinessVenueState } from "../../utils/businessVenue";
 import { Alert } from "../../services/appAlert";
 import { DateSheet, TimeSheet } from "../../components/DateTimeSheets";
 import {
@@ -102,16 +105,37 @@ export function CreateOfferScreen({ navigation }: Props) {
   const draftId = useRef<string | undefined>(undefined);
   const savingLock = useRef(false);
 
+  const [venueState, setVenueState] = useState<BusinessVenueState | null>(null);
+  const [venueError, setVenueError] = useState("");
   const verified = profile?.verificationStatus === "verified";
+  const loadVenue = useCallback(async () => {
+    setVenueState(null);
+    setVenueError("");
+    try {
+      setVenueState(await getMyBusinessVenue());
+    } catch (e) {
+      setVenueError(
+        e instanceof Error ? e.message : "Could not load your venue.",
+      );
+    }
+  }, [profile?.id]);
   useFocusEffect(
     useCallback(() => {
-      if (profile && !verified) {
+      void loadVenue();
+    }, [loadVenue]),
+  );
+  useFocusEffect(
+    useCallback(() => {
+      if (
+        profile &&
+        (!verified || (venueState !== null && !venueState.venue))
+      ) {
         // Programmatic/deep-link entry must respect the same gate as a tab tap.
         // Leave Dashboard underneath so Back never re-enters a redirect loop.
         navigation.navigate("Dashboard");
         navigation.navigate("BusinessVerification");
       }
-    }, [profile?.id, verified, navigation]),
+    }, [profile?.id, verified, venueState, navigation]),
   );
 
   if (!profile) {
@@ -125,12 +149,25 @@ export function CreateOfferScreen({ navigation }: Props) {
     );
   }
 
-  if (!verified) {
+  if (verified && !venueState && !venueError)
+    return (
+      <Screen>
+        <LoadingState label="Loading your approved venue…" layout="compact" />
+      </Screen>
+    );
+  if (venueError)
+    return (
+      <Screen>
+        <EmptyState title="Could not load your venue" hint={venueError} />
+        <Button title="Try again" onPress={() => void loadVenue()} />
+      </Screen>
+    );
+  if (!verified || !venueState?.venue) {
     return (
       <Screen>
         <EmptyState
           title="Verify your business first"
-          hint="Complete verification before creating an offer."
+          hint="Submit your business and venue location for review before creating an offer."
         />
         <Button
           title="Business verification"
@@ -226,6 +263,15 @@ export function CreateOfferScreen({ navigation }: Props) {
       >
         <PageHeading greeting="Fill a quiet slot" title="New offer" />
 
+        <FormSection
+          title="Venue"
+          hint="Filled automatically from your approved business location."
+        >
+          <Text style={styles.header}>{venueState.venue.name}</Text>
+          <Text style={styles.fieldLabel}>
+            {venueState.venue.address || venueState.venue.area}
+          </Text>
+        </FormSection>
         <FormSection title="About the offer">
           <Input
             label="Title"

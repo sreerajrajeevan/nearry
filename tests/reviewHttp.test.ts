@@ -8,7 +8,7 @@ const proof = {
   document_path: "00000000-0000-0000-0000-000000000001/proof.jpg",
   exp: Date.now() + 60000,
 };
-function backend({ stale = false, fail = false } = {}) {
+function backend({ stale = false, fail = false, venue = null as any } = {}) {
   const calls: any[] = [];
   return {
     calls,
@@ -30,6 +30,7 @@ function backend({ stale = false, fail = false } = {}) {
                     display_name: "Test Business",
                   }
                 : {
+                    venue_submission: venue,
                     id: proof.review_id,
                     user_id: proof.user_id,
                     document_path: proof.document_path,
@@ -98,6 +99,7 @@ test("an explicit POST reviews the bound submission and a failed transaction is 
           p_review_id: proof.review_id,
           p_decision: "rejected",
           p_reason: "Clearer image needed",
+          p_location_confirmed: false,
         },
       },
     ]);
@@ -119,4 +121,54 @@ test("invalid, stale and already-reviewed links perform no writes", async () => 
     assert.ok([403, 409].includes(response.status));
   }
   assert.equal(db.calls.length, 0);
+});
+
+test("business review shows escaped submitted location and requires explicit map confirmation", async () => {
+  const venue = {
+    name: "Park <Café>",
+    category: "Café",
+    address: "12 Park Road <script>bad()</script>",
+    area: "Kakkanad",
+    latitude: 10.01,
+    longitude: 76.35,
+  };
+  const token = await signReviewToken(proof, "secret");
+  const db = backend({ venue });
+  const handler = createReviewHandler(db, "secret");
+  const html = await (
+    await handler(new Request(`https://test.invalid/review?token=${token}`))
+  ).text();
+  assert.match(html, /Park &lt;Café&gt;/);
+  assert.match(html, /maps\/search/);
+  assert.doesNotMatch(html, /<script>bad/);
+  for (const locationConfirmed of ["", "yes"]) {
+    const response = await handler(
+      new Request("https://test.invalid/review", {
+        method: "POST",
+        body: new URLSearchParams({
+          token,
+          decision: "approved",
+          locationConfirmed,
+        }),
+      }),
+    );
+    assert.equal(response.status, locationConfirmed ? 200 : 400);
+  }
+  assert.equal(db.calls.length, 1);
+  const legacy = backend();
+  const response = await createReviewHandler(
+    legacy,
+    "secret",
+  )(
+    new Request("https://test.invalid/review", {
+      method: "POST",
+      body: new URLSearchParams({
+        token,
+        decision: "approved",
+        locationConfirmed: "yes",
+      }),
+    }),
+  );
+  assert.equal(response.status, 400);
+  assert.equal(legacy.calls.length, 0);
 });
