@@ -53,7 +53,13 @@ const useMock = () => {
 };
 
 export type PostFilter = {
-  nearby?: { latitude: number; longitude: number; radiusM: number };
+  nearby?: {
+    latitude: number;
+    longitude: number;
+    radiusM: number;
+    /** Premium. Ignored in mock and demo mode. */
+    hostGender?: "female" | "male" | "other";
+  };
   search?: string;
   tag?: string;
   /** Defaults to open posts only. */
@@ -116,7 +122,7 @@ export async function listPosts(filter: PostFilter = {}): Promise<NeedPost[]> {
   }
   const supabase = getSupabase()!;
   if (filter.nearby) {
-    const { latitude, longitude, radiusM } = filter.nearby;
+    const { latitude, longitude, radiusM, hostGender } = filter.nearby;
     if (
       !validPostLocation({ latitude, longitude, source: "manual" }) ||
       !Number.isFinite(radiusM) ||
@@ -128,6 +134,7 @@ export async function listPosts(filter: PostFilter = {}): Promise<NeedPost[]> {
       p_lat: latitude,
       p_lng: longitude,
       p_radius_m: radiusM,
+      ...(hostGender ? { p_host_gender: hostGender } : {}),
     });
     if (error) throw new Error(error.message);
     return withPhotoCovers(

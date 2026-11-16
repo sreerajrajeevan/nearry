@@ -6,14 +6,16 @@ Apply migrations through `00018` before deploying these functions. These are ser
 
 Hosted Supabase provides `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` to functions. Set these additional secrets in the Supabase dashboard or CLI:
 
-| Secret                         | Used by                     | Value                                                                                |
-| ------------------------------ | --------------------------- | ------------------------------------------------------------------------------------ |
-| `PUSH_DISPATCH_SECRET`         | send-push                   | Random server-only dispatch secret                                                   |
-| `VERIFICATION_DISPATCH_SECRET` | notify-verification         | A separate random dispatch secret                                                    |
-| `REVIEW_SECRET`                | both verification functions | Strong random signing secret (at least 32 bytes)                                     |
-| `RESEND_API_KEY`               | notify-verification         | Resend email API key                                                                 |
-| `ADMIN_EMAIL`                  | notify-verification         | The reviewer recipient                                                               |
-| `VERIFICATION_FROM_EMAIL`      | notify-verification         | A sender allowed by your Resend account, e.g. `Nearry <review@your-verified-domain>` |
+| Secret                         | Used by                     | Value                                                                                   |
+| ------------------------------ | --------------------------- | --------------------------------------------------------------------------------------- |
+| `PUSH_DISPATCH_SECRET`         | send-push                   | Random server-only dispatch secret                                                      |
+| `VERIFICATION_DISPATCH_SECRET` | notify-verification         | A separate random dispatch secret                                                       |
+| `REVIEW_SECRET`                | both verification functions | Strong random signing secret (at least 32 bytes)                                        |
+| `RESEND_API_KEY`               | notify-verification         | Resend email API key                                                                    |
+| `ADMIN_EMAIL`                  | notify-verification         | The reviewer recipient                                                                  |
+| `VERIFICATION_FROM_EMAIL`      | notify-verification         | A sender allowed by your Resend account, e.g. `Nearry <review@your-verified-domain>`    |
+| `REVENUECAT_WEBHOOK_SECRET`    | revenuecat-webhook          | Random secret; configure RevenueCat's webhook Authorization header as `Bearer <secret>` |
+| `REVENUECAT_API_KEY`           | revenuecat-webhook          | RevenueCat secret (server-side) REST API key                                            |
 
 Deploy from the project root:
 
@@ -21,6 +23,7 @@ Deploy from the project root:
 supabase functions deploy send-push --no-verify-jwt
 supabase functions deploy notify-verification --no-verify-jwt
 supabase functions deploy review-verification --no-verify-jwt
+supabase functions deploy revenuecat-webhook --no-verify-jwt
 ```
 
 JWT verification is disabled because schedulers and emailed links do not carry a user's JWT. The two workers require their exact `x-dispatch-secret` header. The review endpoint requires a signed, expiring token tied to a private review job and document. Do not disable these application checks.
