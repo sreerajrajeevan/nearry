@@ -80,7 +80,7 @@ export function createGooglePlacesProvider(
   apiKey: string,
   request: typeof fetch = fetch,
 ): PlaceSuggestionProvider {
-  async function call(url: string, init: RequestInit, fields: string) {
+  async function attempt(url: string, init: RequestInit, fields: string) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 8000);
     try {
@@ -93,10 +93,35 @@ export function createGooglePlacesProvider(
           "X-Goog-FieldMask": fields,
         },
       });
-      if (!response.ok) throw new Error("Google place search unavailable");
+      if (!response.ok) {
+        // Logged for the function logs: status and Google's reason only,
+        // never the key or what the person typed.
+        const reason = await response
+          .json()
+          .then((b: any) => b?.error?.status ?? b?.error?.message)
+          .catch(() => undefined);
+        console.error("Google Places error", response.status, reason ?? "");
+        throw Object.assign(new Error("Google place search unavailable"), {
+          retryable: response.status >= 500,
+        });
+      }
       return await response.json();
+    } catch (error) {
+      // A timeout or dropped connection is worth one more try.
+      if ((error as { retryable?: boolean }).retryable === undefined)
+        Object.assign(error as object, { retryable: true });
+      throw error;
     } finally {
       clearTimeout(timer);
+    }
+  }
+  async function call(url: string, init: RequestInit, fields: string) {
+    try {
+      return await attempt(url, init, fields);
+    } catch (error) {
+      if (!(error as { retryable?: boolean }).retryable) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      return attempt(url, init, fields);
     }
   }
   return {
@@ -111,7 +136,10 @@ export function createGooglePlacesProvider(
         // A fixed India bias avoids geolocating the Supabase worker's IP.
         locationBias: {
           circle: {
-            center: bias ?? { latitude: 10.007, longitude: 76.363 },
+            // Only the coordinates: Google rejects any other field.
+            center: bias
+              ? { latitude: bias.latitude, longitude: bias.longitude }
+              : { latitude: 10.007, longitude: 76.363 },
             radius: 50000,
           },
         },

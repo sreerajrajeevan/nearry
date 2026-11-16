@@ -100,7 +100,11 @@ export function NearbyScreen() {
   const [state, setState] = useState<"loading" | "error" | "ready">("loading");
   const [refreshing, setRefreshing] = useState(false);
   // Where Home searches from, and what to call it.
-  const [point, setPoint] = useState<LatLng | null>(() => setup.area ?? null);
+  const [point, setPoint] = useState<LatLng | null>(() =>
+    setup.area
+      ? { latitude: setup.area.latitude, longitude: setup.area.longitude }
+      : null,
+  );
   const [place, setPlace] = useState<RecentPlace | null>(null);
   const [pointLabel, setPointLabel] = useState(setup.area?.label ?? "");
   // The distance asked for. Home may look further when nothing is that close.

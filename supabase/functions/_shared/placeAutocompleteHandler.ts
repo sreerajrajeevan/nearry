@@ -98,7 +98,11 @@ export function createPlaceAutocompleteHandler(deps: {
           body.sessionToken,
         ),
       });
-    } catch {
+    } catch (error) {
+      console.error(
+        "place-autocomplete failed",
+        error instanceof Error ? error.message : "unknown",
+      );
       return json({ error: "Could not search places. Please try again." }, 502);
     }
   };
