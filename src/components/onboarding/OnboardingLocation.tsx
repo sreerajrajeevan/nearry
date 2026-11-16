@@ -1,3 +1,4 @@
+import { ActivityArt } from "../ActivityArt";
 import React, { useState } from "react";
 import { Text, View, StyleSheet } from "react-native";
 import Slider from "@react-native-community/slider";
@@ -137,23 +138,30 @@ export function OnboardingLocation({
         <View style={styles.center}>
           <Icon name="map-pin" color={c.white} size={20} />
         </View>
-        <Text
+        <View
+          pointerEvents="none"
           style={[
             styles.item,
             { left: 28, top: 20, transform: [{ rotate: "-8deg" }] },
           ]}
         >
-          🏸
-        </Text>
-        <Text
+          <ActivityArt artwork="badminton" size={40} />
+        </View>
+        <View
+          pointerEvents="none"
           style={[
             styles.item,
             { right: 24, top: 48, transform: [{ rotate: "8deg" }] },
           ]}
         >
-          ☕
-        </Text>
-        <Text style={[styles.item, { left: 64, bottom: 26 }]}>🌿</Text>
+          <ActivityArt artwork="coffee" size={40} />
+        </View>
+        <View
+          pointerEvents="none"
+          style={[styles.item, { left: 56, bottom: 22 }]}
+        >
+          <ActivityArt artwork="wellness" size={40} />
+        </View>
         <Text style={styles.caption}>Your nearby possibilities</Text>
       </View>
       <OnboardingButton

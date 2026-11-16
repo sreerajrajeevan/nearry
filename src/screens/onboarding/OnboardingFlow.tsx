@@ -15,7 +15,9 @@ import { pickAvatar, uploadAvatar } from "../../services/avatars";
 import { updateProfile } from "../../services/profile";
 import { TermsAgreement } from "../../components/TermsAgreement";
 import { MotionPressable } from "../../components/Motion";
-import { Icon } from "../../components/Icon";
+import { Icon, IconName } from "../../components/Icon";
+import { ActivityArt } from "../../components/ActivityArt";
+import type { ActivityArtwork } from "../../utils/activityArtwork";
 import { OnboardingLocation } from "../../components/onboarding/OnboardingLocation";
 import { BirthdayField } from "../../components/onboarding/BirthdayField";
 import {
@@ -39,26 +41,28 @@ import { isValidBusinessName } from "../../utils/validation";
 import { POLICY_VERSION } from "../../utils/legal";
 import { weight } from "../../theme";
 
-const INTERESTS = [
-  ["🏋️", "Gym"],
-  ["⚽", "Football"],
-  ["🏸", "Badminton"],
-  ["☕", "Cafés"],
-  ["🥾", "Outdoors"],
-  ["🎲", "Board games"],
-  ["🎵", "Music"],
-  ["🍜", "Food"],
-  ["🧘", "Wellness"],
+// Illustrated miniatures, the same ones used on plan cards.
+const INTERESTS: [ActivityArtwork, string][] = [
+  ["fitness", "Gym"],
+  ["football", "Football"],
+  ["badminton", "Badminton"],
+  ["coffee", "Cafés"],
+  ["kayak", "Outdoors"],
+  ["games", "Board games"],
+  ["music", "Music"],
+  ["food", "Food"],
+  ["wellness", "Wellness"],
 ];
-const CATEGORIES = [
-  ["☕", "Café"],
-  ["🍽️", "Restaurant"],
-  ["🏟️", "Games"],
-  ["🏋️", "Fitness"],
-  ["🎨", "Culture"],
-  ["🛍️", "Retail"],
+// Retail has no miniature; it uses an outline icon.
+const CATEGORIES: [ActivityArtwork | null, string][] = [
+  ["coffee", "Café"],
+  ["food", "Restaurant"],
+  ["football", "Games"],
+  ["fitness", "Fitness"],
+  ["music", "Culture"],
+  [null, "Retail"],
 ];
-const TIME_ART = ["🌅", "☀️", "🌇", "🌙"],
+const TIME_ICONS: IconName[] = ["sunrise", "sun", "sunset", "moon"],
   TIME_HINT = ["6–10 AM", "12–4 PM", "5–8 PM", "8–11 PM"];
 
 export function OnboardingFlow({
@@ -414,7 +418,7 @@ export function OnboardingFlow({
                     accessibilityRole="radiogroup"
                     accessibilityLabel="Business category"
                   >
-                    {CATEGORIES.map(([emoji, label]) => (
+                    {CATEGORIES.map(([art, label]) => (
                       <MotionPressable
                         key={label}
                         disabled={busy}
@@ -427,7 +431,13 @@ export function OnboardingFlow({
                         onPress={() => setCategory(label)}
                         style={[ob.tile, category === label && ob.selected]}
                       >
-                        <Text style={ob.emoji}>{emoji}</Text>
+                        {art ? (
+                          <ActivityArt artwork={art} size={48} />
+                        ) : (
+                          <View style={ob.iconArt}>
+                            <Icon name="shopping-bag" size={22} color={c.ink} />
+                          </View>
+                        )}
                         <Text style={ob.tileText}>
                           {label === "Games" ? "Sports & games" : label}
                         </Text>
@@ -488,7 +498,7 @@ export function OnboardingFlow({
                 subtitle="Pick what you love. A game, good food, fresh air — there’s room for all of it."
               />
               <View style={ob.grid}>
-                {INTERESTS.map(([emoji, label]) => (
+                {INTERESTS.map(([art, label]) => (
                   <MotionPressable
                     key={label}
                     accessibilityRole="checkbox"
@@ -499,7 +509,7 @@ export function OnboardingFlow({
                     onPress={() => toggleInterest(label)}
                     style={[ob.tile, interests.includes(label) && ob.selected]}
                   >
-                    <Text style={ob.emoji}>{emoji}</Text>
+                    <ActivityArt artwork={art} size={48} />
                     <Text style={ob.tileText}>{label}</Text>
                     {interests.includes(label) && (
                       <View style={styles.tick}>
@@ -570,14 +580,25 @@ export function OnboardingFlow({
                       preferences.times.includes(time) && styles.darkSelected,
                     ]}
                   >
-                    <Text
-                      style={[
-                        styles.timeTitle,
-                        preferences.times.includes(time) && styles.lightText,
-                      ]}
-                    >
-                      {TIME_ART[i]} {time}
-                    </Text>
+                    <View style={styles.timeTop}>
+                      <Icon
+                        name={TIME_ICONS[i]}
+                        size={16}
+                        color={
+                          preferences.times.includes(time)
+                            ? "#FBBF24"
+                            : "#B45309"
+                        }
+                      />
+                      <Text
+                        style={[
+                          styles.timeTitle,
+                          preferences.times.includes(time) && styles.lightText,
+                        ]}
+                      >
+                        {time}
+                      </Text>
+                    </View>
                     <Text
                       style={[
                         styles.timeHint,
@@ -750,6 +771,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     backgroundColor: c.white,
   },
+  timeTop: { flexDirection: "row", alignItems: "center", gap: 6 },
   timeTitle: { fontSize: 13, lineHeight: 21, color: c.ink, ...weight("600") },
   timeHint: { fontSize: 11, lineHeight: 18, color: c.muted, marginTop: 2 },
   done: { paddingTop: 25 },

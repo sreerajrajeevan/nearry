@@ -4,13 +4,12 @@ export type OfferCategory = "all" | "fitness" | "sports" | "food" | "wellness";
 export const OFFER_CATEGORIES: {
   key: OfferCategory;
   label: string;
-  emoji: string;
 }[] = [
-  { key: "all", label: "All", emoji: "✨" },
-  { key: "fitness", label: "Fitness", emoji: "🏋️" },
-  { key: "sports", label: "Sports", emoji: "⚽" },
-  { key: "food", label: "Food", emoji: "🥗" },
-  { key: "wellness", label: "Wellness", emoji: "🧘" },
+  { key: "all", label: "All" },
+  { key: "fitness", label: "Fitness" },
+  { key: "sports", label: "Sports" },
+  { key: "food", label: "Food" },
+  { key: "wellness", label: "Wellness" },
 ];
 /** Derived from published copy; these tabs never invent a business classification. */
 export function offerCategory(

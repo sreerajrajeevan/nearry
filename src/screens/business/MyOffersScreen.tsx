@@ -8,6 +8,7 @@ import {
   Text,
   TouchableOpacity,
   View,
+  Image,
 } from "react-native";
 import { useLiveQuery } from "../../hooks/useLiveQuery";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -28,7 +29,7 @@ import {
 } from "../../services/offers";
 import { Offer } from "../../services/mappers";
 import { formatWhen } from "../../utils/format";
-import { colors, typography, spacing, surfaces } from "../../theme";
+import { colors, typography, spacing, weight } from "../../theme";
 
 type Props = NativeStackScreenProps<BusinessStackParamList, "MyOffers">;
 type Filter = "all" | "live" | "drafts" | "ended";
@@ -157,7 +158,7 @@ export function MyOffersScreen({ navigation }: Props) {
             />
             <Button
               title="Create an offer"
-              variant="secondary"
+              variant="solid"
               onPress={() => {
                 if (profile?.verificationStatus !== "verified")
                   navigation.navigate("BusinessVerification");
@@ -200,84 +201,100 @@ export function MyOffersScreen({ navigation }: Props) {
             />
           )
         }
-        renderItem={({ item: offer }) => (
-          <View style={styles.row}>
-            <View style={styles.rowTop}>
-              <Text style={styles.title}>{offer.title}</Text>
-              <Badge
-                label={statusLabel(offer)}
-                tone={offer.status === "live" ? "green" : "neutral"}
-              />
-            </View>
-            <Text style={styles.meta}>
-              {formatWhen(offer.startsAt)} → {formatWhen(offer.endsAt)}
-            </Text>
-            {offer.priceCents != null && (
-              <Text style={styles.meta}>
-                ₹{(offer.priceCents / 100).toFixed(2).replace(/\.00$/, "")}
-                {typeof offer.discountPct === "number"
-                  ? ` · ${offer.discountPct}% off`
-                  : ""}
-              </Text>
-            )}
-            <View style={styles.rowBottom}>
-              <Text style={styles.meta}>
-                {offer.redemptions} booking
-                {offer.redemptions === 1 ? "" : "s"}
-              </Text>
-              <View style={styles.actions}>
-                {(offer.status === "live" || offer.status === "draft") && (
-                  <TouchableOpacity
-                    accessibilityRole="button"
-                    activeOpacity={0.7}
-                    onPress={() =>
-                      navigation.navigate("EditOffer", { offerId: offer.id })
-                    }
-                    style={styles.link}
-                  >
-                    <Text style={styles.actionText}>Edit</Text>
-                    <Icon
-                      name="arrow-up-right"
-                      size={15}
-                      color={colors.accent}
+        renderItem={({ item: offer }) => {
+          const deal = [
+            typeof offer.discountPct === "number"
+              ? `${offer.discountPct}% off`
+              : "",
+            offer.priceCents != null
+              ? `₹${(offer.priceCents / 100).toFixed(2).replace(/\.00$/, "")}`
+              : "",
+          ]
+            .filter(Boolean)
+            .join(" · ");
+          return (
+            <View style={styles.row}>
+              <View style={styles.rowTop}>
+                <View style={styles.thumb}>
+                  {offer.coverPhotoUrl ? (
+                    <Image
+                      source={{ uri: offer.coverPhotoUrl }}
+                      style={styles.thumbImage}
                     />
-                  </TouchableOpacity>
-                )}
-                {offer.status === "live" ? (
-                  <TouchableOpacity
-                    accessibilityRole="button"
-                    activeOpacity={0.7}
-                    disabled={busy === offer.id}
-                    onPress={() => onCancel(offer)}
-                    style={styles.link}
-                  >
-                    <Text style={styles.actionText}>
-                      {busy === offer.id ? "Cancelling…" : "Cancel offer"}
+                  ) : (
+                    <Icon name="tag" size={22} color={colors.amberDeep} />
+                  )}
+                </View>
+                <View style={styles.rowCopy}>
+                  <View style={styles.titleRow}>
+                    <Text style={styles.title} numberOfLines={2}>
+                      {offer.title}
                     </Text>
-                    <Icon
-                      name="arrow-up-right"
-                      size={15}
-                      color={colors.accent}
+                    <Badge
+                      label={statusLabel(offer)}
+                      tone={offer.status === "live" ? "green" : "neutral"}
                     />
-                  </TouchableOpacity>
-                ) : null}
-                {offer.status === "draft" ? (
-                  <TouchableOpacity
-                    accessibilityRole="button"
-                    activeOpacity={0.7}
-                    disabled={busy === offer.id}
-                    onPress={() => onDelete(offer)}
-                    style={styles.link}
-                  >
-                    <Text style={[styles.actionText, styles.deleteText]}>
-                      {busy === offer.id ? "Deleting…" : "Delete"}
-                    </Text>
-                  </TouchableOpacity>
-                ) : null}
+                  </View>
+                  {!!deal && <Text style={styles.deal}>{deal}</Text>}
+                  <Text style={styles.meta}>
+                    {formatWhen(offer.startsAt)} → {formatWhen(offer.endsAt)}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.rowBottom}>
+                <View style={styles.count}>
+                  <Icon name="calendar" size={13} color={colors.ink} />
+                  <Text style={styles.countText}>
+                    {offer.redemptions} booking
+                    {offer.redemptions === 1 ? "" : "s"}
+                  </Text>
+                </View>
+                <View style={styles.actions}>
+                  {offer.status === "live" && (
+                    <TouchableOpacity
+                      accessibilityRole="button"
+                      activeOpacity={0.7}
+                      disabled={busy === offer.id}
+                      onPress={() => onCancel(offer)}
+                      style={styles.textAction}
+                    >
+                      <Text style={styles.dangerText}>
+                        {busy === offer.id ? "Cancelling…" : "Cancel offer"}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                  {offer.status === "draft" && (
+                    <TouchableOpacity
+                      accessibilityRole="button"
+                      activeOpacity={0.7}
+                      disabled={busy === offer.id}
+                      onPress={() => onDelete(offer)}
+                      style={styles.textAction}
+                    >
+                      <Text style={styles.dangerText}>
+                        {busy === offer.id ? "Deleting…" : "Delete"}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                  {(offer.status === "live" || offer.status === "draft") && (
+                    <TouchableOpacity
+                      accessibilityRole="button"
+                      accessibilityLabel={`Edit ${offer.title}`}
+                      activeOpacity={0.7}
+                      onPress={() =>
+                        navigation.navigate("EditOffer", { offerId: offer.id })
+                      }
+                      style={styles.editPill}
+                    >
+                      <Icon name="edit-2" size={13} color={colors.ink} />
+                      <Text style={styles.editText}>Edit</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
               </View>
             </View>
-          </View>
-        )}
+          );
+        }}
       />
     </Screen>
   );
@@ -292,35 +309,71 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.lg,
   },
   row: {
-    ...surfaces.card,
-    paddingVertical: spacing.lg,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
+    padding: 14,
+    marginBottom: 12,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
   },
-  rowTop: {
-    flexDirection: "row",
-    flexWrap: "wrap",
+  rowTop: { flexDirection: "row", gap: 12 },
+  thumb: {
+    width: 64,
+    height: 64,
+    borderRadius: 14,
+    overflow: "hidden",
     alignItems: "center",
-    gap: spacing.sm,
-    marginBottom: spacing.sm,
+    justifyContent: "center",
+    backgroundColor: colors.amberSoft,
+  },
+  thumbImage: { width: "100%", height: "100%" },
+  rowCopy: { flex: 1, minWidth: 0, gap: 3 },
+  titleRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
   },
   title: {
-    ...typography.heading,
-    color: colors.text,
-    flexGrow: 1,
-    flexShrink: 1,
+    ...typography.body,
+    ...weight("800"),
+    color: colors.ink,
+    flex: 1,
   },
-  meta: { ...typography.bodySmall, color: colors.textDim },
+  deal: { ...typography.bodySmall, color: colors.amberDeep, ...weight("800") },
+  meta: { ...typography.caption, color: colors.textDim },
   rowBottom: {
     flexDirection: "row",
     flexWrap: "wrap",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: spacing.sm,
-    marginTop: spacing.md,
+    gap: 8,
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.border,
   },
-  link: { flexDirection: "row", alignItems: "center", gap: 4 },
-  actions: { flexDirection: "row", alignItems: "center", gap: spacing.md },
-  actionText: { ...typography.bodySmall, color: colors.accent },
-  deleteText: { color: colors.red },
+  count: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    backgroundColor: colors.surfaceRaised,
+  },
+  countText: { ...typography.caption, color: colors.ink, ...weight("700") },
+  actions: { flexDirection: "row", alignItems: "center", gap: 6 },
+  textAction: { minHeight: 36, justifyContent: "center", paddingHorizontal: 8 },
+  dangerText: { ...typography.caption, color: colors.red, ...weight("700") },
+  editPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    minHeight: 36,
+    paddingHorizontal: 14,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+  },
+  editText: { ...typography.caption, color: colors.ink, ...weight("800") },
 });

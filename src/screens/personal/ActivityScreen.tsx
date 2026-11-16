@@ -4,6 +4,7 @@ import { AudienceBadge } from "../../components/AudienceBadge";
 import { PageHeading } from "../../components/PageHeading";
 
 import { RequestNote } from "../../components/RequestNote";
+import { PersonLink } from "../../components/PersonLink";
 import React, { useEffect, useRef, useState } from "react";
 import {
   View,
@@ -464,19 +465,18 @@ export function ActivityScreen() {
                   {requests.map((request) => (
                     <View key={request.id} style={styles.personRequest}>
                       <View style={styles.personRow}>
-                        <Avatar
+                        <PersonLink
                           name={request.requesterName}
-                          size={40}
-                          tone="clay"
+                          avatarUrl={request.requesterAvatar}
+                          subtitle="Wants to join"
+                          onPress={() =>
+                            navigation.navigate("HostProfile", {
+                              userId: request.requesterId,
+                              name: request.requesterName,
+                              requestNote: request.note,
+                            })
+                          }
                         />
-                        <View style={styles.flex}>
-                          <Text style={styles.cardTitle}>
-                            {request.requesterName}
-                          </Text>
-                          <Text style={styles.copy}>
-                            Wants to join your plan
-                          </Text>
-                        </View>
                       </View>
                       <RequestNote note={request.note} />
                       <View style={styles.actions}>

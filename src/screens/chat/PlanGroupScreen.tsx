@@ -530,9 +530,9 @@ export function PlanGroupScreen({ route, navigation }: Props) {
             onPress={() => void send()}
           >
             {sending ? (
-              <ActivityIndicator color={colors.onAccent} />
+              <ActivityIndicator color={colors.night} />
             ) : (
-              <Icon name="arrow-up" size={22} color={colors.onAccent} />
+              <Icon name="arrow-up" size={22} color={colors.night} />
             )}
           </TouchableOpacity>
         </View>
@@ -739,7 +739,7 @@ const styles = StyleSheet.create({
     padding: 12,
     fontSize: 12,
     color: colors.textDim,
-    backgroundColor: colors.sageSoft,
+    backgroundColor: colors.amberSoft,
   },
   transcript: { flex: 1, minHeight: 0 },
   list: { padding: 15, gap: 10, flexGrow: 1 },
@@ -749,14 +749,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 13,
     paddingVertical: 10,
   },
-  mine: { alignSelf: "flex-end", backgroundColor: colors.accent },
-  theirs: { alignSelf: "flex-start", backgroundColor: colors.surface },
+  mine: {
+    alignSelf: "flex-end",
+    backgroundColor: colors.amberBright,
+    borderBottomRightRadius: 4,
+  },
+  theirs: {
+    alignSelf: "flex-start",
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderBottomLeftRadius: 4,
+  },
   body: { fontSize: 14, lineHeight: 21, color: colors.text },
-  mineText: { color: colors.onAccent },
+  mineText: { color: colors.night },
   sender: {
     fontSize: 11,
     ...weight("700"),
-    color: colors.coralDeep,
+    color: colors.amberDeep,
     marginBottom: 4,
   },
   time: {
@@ -792,7 +802,7 @@ const styles = StyleSheet.create({
     width: 46,
     height: 46,
     borderRadius: 23,
-    backgroundColor: colors.accent,
+    backgroundColor: colors.amber,
     alignItems: "center",
     justifyContent: "center",
   },

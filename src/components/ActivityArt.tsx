@@ -1,5 +1,5 @@
 import React from "react";
-import { Image, View, Text } from "react-native";
+import { Image, View } from "react-native";
 import { ActivityArtwork } from "../utils/activityArtwork";
 
 const atlas = require("../../assets/discovery/activity-miniatures.png");
@@ -65,16 +65,6 @@ export function ActivityArt({
             }}
           />
         ))}
-        <Text
-          style={{
-            position: "absolute",
-            fontSize: size * 0.28,
-            bottom: 0,
-            right: 0,
-          }}
-        >
-          🏋️
-        </Text>
       </View>
     );
   const [column, row] = positions[artwork];

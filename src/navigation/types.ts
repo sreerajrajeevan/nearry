@@ -46,7 +46,8 @@ export type PersonalStackParamList = SafetyStackParamList & {
   PersonalTabs: NavigatorScreenParams<PersonalTabParamList> | undefined;
   PlaceDetails: { place: Place };
   PostDetails: { postId: string };
-  HostProfile: { userId: string; name?: string };
+  /** Anyone's public profile: a host, or someone asking to join your plan. */
+  HostProfile: { userId: string; name?: string; requestNote?: string };
   VenueDetails: { venueId: string };
   EditPost: { postId: string };
   MyPosts: undefined;

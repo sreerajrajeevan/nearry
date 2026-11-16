@@ -16,7 +16,8 @@ import { PageHeading } from "../../components/PageHeading";
 import { Icon } from "../../components/Icon";
 import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
-import { colors, typography, spacing } from "../../theme";
+import { colors, typography, spacing, weight } from "../../theme";
+import { MotionPressable } from "../../components/Motion";
 import { BusinessTabNav } from "../../navigation/types";
 import { useLiveQuery } from "../../hooks/useLiveQuery";
 import { useAuth } from "../../store/AuthContext";
@@ -63,6 +64,9 @@ export function DashboardScreen({ navigation }: Props) {
   const { today, liveOffers, drafts } = businessDay(bookings, offers);
   const name = profile?.businessName || profile?.displayName || "your business";
   const verified = profile?.verificationStatus === "verified";
+  const waiting = today.filter(
+    (b) => b.status !== "confirmed" && !isBookingStale(b),
+  ).length;
   const onConfirm = async (id: string) => {
     if (confirming) return;
     setConfirming(id);
@@ -98,7 +102,7 @@ export function DashboardScreen({ navigation }: Props) {
         <PageHeading
           tone="plain"
           greeting={`Hello, ${name}.`}
-          title={"Make room\nfor a new face."}
+          title="Today at a glance"
         />
         {state === "loading" ? (
           <LoadingState label="Getting your day ready…" layout="list" />
@@ -117,59 +121,99 @@ export function DashboardScreen({ navigation }: Props) {
         ) : (
           <>
             <View style={styles.statsRow}>
-              <View style={styles.stat}>
-                <Text style={styles.value}>
-                  {String(today.length).padStart(2, "0")}
-                </Text>
-                <Text style={styles.statLabel}>Bookings today</Text>
-              </View>
-              <View style={styles.stat}>
-                <Text style={styles.value}>
-                  {String(liveOffers.length).padStart(2, "0")}
-                </Text>
-                <Text style={styles.statLabel}>Live offers</Text>
-              </View>
+              {[
+                { value: today.length, label: "Bookings today" },
+                { value: waiting, label: "To confirm" },
+                { value: liveOffers.length, label: "Live offers" },
+              ].map((stat) => (
+                <View key={stat.label} style={styles.stat}>
+                  <Text style={styles.value}>{stat.value}</Text>
+                  <Text style={styles.statLabel}>{stat.label}</Text>
+                </View>
+              ))}
             </View>
-            <View style={styles.nudge}>
-              <Text style={styles.nudgeTitle}>
-                {verified
-                  ? drafts.length
-                    ? "Your next hello is almost ready."
-                    : "Someone nearby could use that slot."
-                  : "Let’s introduce your business."}
-              </Text>
-              <Text style={styles.nudgeDescription}>
-                {verified
-                  ? drafts.length
-                    ? `You have ${drafts.length} draft offer${drafts.length === 1 ? "" : "s"}. Finish an invitation for your neighbourhood.`
-                    : "Invite your neighbourhood in with a last-minute offer."
-                  : "Verify your business first, then create an offer for your neighbourhood."}
-              </Text>
-              <TouchableOpacity
+            {!verified ? (
+              <MotionPressable
                 accessibilityRole="button"
-                style={styles.textButton}
-                activeOpacity={0.65}
-                onPress={() =>
-                  navigation.navigate(
-                    verified ? "CreateOffer" : "BusinessVerification",
-                  )
-                }
+                accessibilityLabel="Verify your business to publish offers"
+                onPress={() => navigation.navigate("BusinessVerification")}
+                style={styles.nudge}
               >
-                <Text style={styles.link}>
-                  {verified
-                    ? "Say hello with an offer"
-                    : "View business verification"}
-                </Text>
-                <Icon name="arrow-up-right" size={15} color={colors.accent} />
-              </TouchableOpacity>
-              <Button
-                title="My offers"
-                variant="secondary"
-                onPress={() => navigation.navigate("MyOffers")}
-              />
+                <View style={styles.nudgeIcon}>
+                  <Icon name="shield" size={20} color={colors.night} />
+                </View>
+                <View style={styles.flex}>
+                  <Text style={styles.nudgeTitle}>Verify your business</Text>
+                  <Text style={styles.nudgeDescription}>
+                    Upload one document. Once approved you can publish offers.
+                  </Text>
+                </View>
+                <Icon name="chevron-right" size={18} color={colors.ink} />
+              </MotionPressable>
+            ) : (
+              drafts.length > 0 && (
+                <MotionPressable
+                  accessibilityRole="button"
+                  onPress={() => navigation.navigate("MyOffers")}
+                  style={styles.nudge}
+                >
+                  <View style={styles.nudgeIcon}>
+                    <Icon name="edit-3" size={20} color={colors.night} />
+                  </View>
+                  <View style={styles.flex}>
+                    <Text style={styles.nudgeTitle}>
+                      {drafts.length} draft offer
+                      {drafts.length === 1 ? "" : "s"}
+                    </Text>
+                    <Text style={styles.nudgeDescription}>
+                      Finish and publish to fill your quiet slots.
+                    </Text>
+                  </View>
+                  <Icon name="chevron-right" size={18} color={colors.ink} />
+                </MotionPressable>
+              )
+            )}
+            <View style={styles.actions}>
+              {(
+                [
+                  {
+                    icon: "plus",
+                    label: "New offer",
+                    go: () =>
+                      navigation.navigate(
+                        verified ? "CreateOffer" : "BusinessVerification",
+                      ),
+                  },
+                  {
+                    icon: "tag",
+                    label: "My offers",
+                    go: () => navigation.navigate("MyOffers"),
+                  },
+                  {
+                    icon: "calendar",
+                    label: "Bookings",
+                    go: () => navigation.navigate("Bookings"),
+                  },
+                ] as const
+              ).map((action) => (
+                <MotionPressable
+                  key={action.label}
+                  accessibilityRole="button"
+                  accessibilityLabel={action.label}
+                  onPress={action.go}
+                  style={styles.action}
+                >
+                  <View style={styles.actionIcon}>
+                    <Icon name={action.icon} size={20} color={colors.ink} />
+                  </View>
+                  <Text style={styles.actionText}>{action.label}</Text>
+                </MotionPressable>
+              ))}
             </View>
             <View style={styles.sectionRow}>
-              <Text style={styles.sectionTitle}>Coming through your door</Text>
+              <Text accessibilityRole="header" style={styles.sectionTitle}>
+                Coming in today
+              </Text>
               <Text style={styles.sectionMeta}>Today</Text>
             </View>
             {today.length === 0 ? (
@@ -180,7 +224,9 @@ export function DashboardScreen({ navigation }: Props) {
             ) : (
               today.slice(0, 8).map((booking) => (
                 <View key={booking.id} style={styles.appointment}>
-                  <Text style={styles.time}>{formatTime(booking.slot)}</Text>
+                  <View style={styles.timeChip}>
+                    <Text style={styles.time}>{formatTime(booking.slot)}</Text>
+                  </View>
                   <View style={styles.customer}>
                     <Text style={styles.name}>{booking.customerName}</Text>
                     <Text style={styles.detail}>
@@ -208,7 +254,7 @@ export function DashboardScreen({ navigation }: Props) {
                       onPress={() => void onConfirm(booking.id)}
                       style={styles.confirmButton}
                     >
-                      <Text style={styles.link}>
+                      <Text style={styles.confirmText}>
                         {confirming === booking.id ? "Confirming…" : "Confirm"}
                       </Text>
                     </TouchableOpacity>
@@ -238,54 +284,79 @@ const styles = StyleSheet.create({
     color: colors.textDim,
     marginTop: spacing.lg,
   },
+  flex: { flex: 1, minWidth: 0 },
   statsRow: {
     flexDirection: "row",
-    gap: spacing.lg,
+    gap: 8,
     padding: 18,
-    borderRadius: 18,
-    backgroundColor: colors.forest,
+    borderRadius: 22,
+    backgroundColor: colors.night,
   },
   stat: { flex: 1 },
   value: {
     ...typography.display,
-    fontSize: 32,
-    lineHeight: 38,
-    color: colors.onAccent,
+    fontSize: 30,
+    lineHeight: 36,
+    color: colors.amberBright,
   },
-  statLabel: { ...typography.bodySmall, color: colors.goldSoft, marginTop: 3 },
+  statLabel: {
+    ...typography.caption,
+    color: "rgba(255,255,255,0.75)",
+    marginTop: 2,
+  },
   nudge: {
-    paddingVertical: spacing.lg,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-    marginBottom: spacing.lg,
-  },
-  nudgeTitle: {
-    ...typography.title,
-    fontSize: 21,
-    lineHeight: 27,
-    color: colors.text,
-  },
-  nudgeDescription: {
-    ...typography.bodySmall,
-    color: colors.textDim,
-    marginTop: spacing.sm,
-  },
-  textButton: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
-    minHeight: 44,
-    alignSelf: "flex-start",
-    paddingTop: 8,
+    gap: 12,
+    marginTop: 12,
+    padding: 14,
+    borderRadius: 18,
+    backgroundColor: colors.amberSoft,
+    borderWidth: 1,
+    borderColor: "#FDE68A",
   },
-  link: { ...typography.bodySmall, color: colors.accent },
+  nudgeIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.amberBright,
+  },
+  nudgeTitle: { ...typography.body, color: colors.ink, ...weight("800") },
+  nudgeDescription: {
+    ...typography.caption,
+    color: colors.textDim,
+    marginTop: 2,
+  },
+  actions: { flexDirection: "row", gap: 10, marginTop: 12, marginBottom: 22 },
+  action: {
+    flex: 1,
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+  },
+  actionIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.amberSoft,
+  },
+  actionText: { ...typography.caption, color: colors.ink, ...weight("700") },
+  link: { ...typography.bodySmall, color: colors.amberDeep, ...weight("700") },
   sectionRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     gap: spacing.sm,
   },
-  sectionTitle: { ...typography.bodySmall, color: colors.text, flex: 1 },
+  sectionTitle: { ...typography.heading, color: colors.ink, flex: 1 },
   sectionMeta: { ...typography.caption, color: colors.textDim },
   appointment: {
     flexDirection: "row",
@@ -295,18 +366,38 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
   },
-  time: { ...typography.bodySmall, color: colors.textDim, width: 57 },
+  timeChip: {
+    minWidth: 70,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderRadius: 10,
+    backgroundColor: colors.surfaceRaised,
+    alignItems: "center",
+  },
+  time: { ...typography.caption, color: colors.ink, ...weight("700") },
   customer: { flex: 1 },
-  name: { ...typography.bodySmall, color: colors.text },
+  name: { ...typography.body, color: colors.ink, ...weight("700") },
   detail: { ...typography.caption, color: colors.textDim, marginTop: 3 },
-  confirmed: { ...typography.caption, color: colors.textDim, flexShrink: 1 },
+  confirmed: {
+    ...typography.caption,
+    color: colors.success,
+    ...weight("700"),
+    flexShrink: 1,
+  },
   stale: {
     ...typography.caption,
     color: colors.textFaint,
     fontStyle: "italic",
     flexShrink: 1,
   },
-  confirmButton: { minHeight: 44, justifyContent: "center", paddingLeft: 4 },
+  confirmText: { ...typography.caption, color: colors.night, ...weight("800") },
+  confirmButton: {
+    minHeight: 36,
+    justifyContent: "center",
+    paddingHorizontal: 14,
+    borderRadius: 18,
+    backgroundColor: colors.amberBright,
+  },
   allBookings: {
     flexDirection: "row",
     alignItems: "center",

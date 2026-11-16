@@ -22,14 +22,20 @@ export function PostPhotoGallery({
   postId,
   onReportPhoto,
   fallback,
+  bleed = false,
 }: {
   postId: string;
   onReportPhoto?: (id: string) => void;
   fallback?: React.ReactNode;
+  /** Edge to edge, square corners and taller: the hero of a details page. */
+  bleed?: boolean;
 }) {
   const { width } = useWindowDimensions();
   const reduced = useReducedMotion();
-  const [galleryWidth, setGalleryWidth] = useState(Math.min(672, width - 40));
+  const [galleryWidth, setGalleryWidth] = useState(
+    bleed ? width : Math.min(672, width - 40),
+  );
+  const ratio = bleed ? 1.3 : 1.55;
   const [selected, setSelected] = useState<string | null>(null);
   const [failed, setFailed] = useState<string[]>([]);
   const {
@@ -43,7 +49,12 @@ export function PostPhotoGallery({
   };
   if (state === "loading" && !photos)
     return (
-      <View style={styles.loadingCover}>
+      <View
+        style={[
+          styles.loadingCover,
+          bleed && { borderRadius: 0, aspectRatio: ratio },
+        ]}
+      >
         <LoadingState label="Loading photos…" layout="compact" />
       </View>
     );
@@ -63,10 +74,10 @@ export function PostPhotoGallery({
     >
       <ScrollView
         horizontal
-        snapToInterval={galleryWidth + 12}
+        snapToInterval={galleryWidth + (bleed ? 0 : 12)}
         decelerationRate="fast"
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.rail}
+        contentContainerStyle={[styles.rail, bleed && { gap: 0 }]}
       >
         {photos.map((photo, index) => (
           <MotionPressable
@@ -76,7 +87,8 @@ export function PostPhotoGallery({
             onPress={() => setSelected(photo.photo_url)}
             style={[
               styles.tile,
-              { width: galleryWidth, height: galleryWidth / 1.55 },
+              { width: galleryWidth, height: galleryWidth / ratio },
+              bleed && { borderRadius: 0 },
             ]}
           >
             {failed.includes(photo.photo_url) ? (
@@ -92,9 +104,11 @@ export function PostPhotoGallery({
           </MotionPressable>
         ))}
       </ScrollView>
-      <Text style={styles.note}>
-        {photos.length} photo{photos.length === 1 ? "" : "s"} · Tap to view
-      </Text>
+      {!bleed && (
+        <Text style={styles.note}>
+          {photos.length} photo{photos.length === 1 ? "" : "s"} · Tap to view
+        </Text>
+      )}
       {!!failed.length && (
         <Button title="Retry photos" variant="ghost" onPress={retry} />
       )}

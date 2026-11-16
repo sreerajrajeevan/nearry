@@ -278,7 +278,7 @@ export type DbJoinRequest = {
   decline_count: number;
   created_at: string;
   note?: string | null;
-  requester?: { display_name: string } | null;
+  requester?: { display_name: string; avatar_url?: string | null } | null;
 };
 
 export type JoinRequest = {
@@ -286,6 +286,8 @@ export type JoinRequest = {
   postId: string;
   requesterId: string;
   requesterName: string;
+  /** Public profile photo, when the requester has one. */
+  requesterAvatar?: string;
   status: "pending" | "approved" | "declined" | "withdrawn" | "full";
   /** Times the host declined this user for this post. At 2, no more requests. */
   declineCount: number;
@@ -300,6 +302,9 @@ export function toJoinRequest(row: DbJoinRequest): JoinRequest {
     postId: row.post_id,
     requesterId: row.requester_id,
     requesterName: row.requester?.display_name ?? "Someone",
+    ...(row.requester?.avatar_url
+      ? { requesterAvatar: row.requester.avatar_url }
+      : {}),
     status: row.status,
     declineCount: row.decline_count ?? 0,
     createdAt: row.created_at,

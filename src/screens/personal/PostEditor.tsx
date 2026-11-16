@@ -4,6 +4,7 @@ import {
 } from "../../utils/postLocation";
 import { BackButton } from "../../components/BackButton";
 import { Alert } from "../../services/appAlert";
+import { ActivityArt } from "../../components/ActivityArt";
 import React, { useEffect, useRef, useState } from "react";
 import {
   PLAN_ACTIVITIES,
@@ -17,7 +18,7 @@ import {
   PlanDetails,
 } from "../../utils/planComposer";
 import { PlanCover } from "../../components/PlanCover";
-import { Icon } from "../../components/Icon";
+import { Icon, IconName } from "../../components/Icon";
 import { DateSheet, TimeSheet } from "../../components/DateTimeSheets";
 import {
   View,
@@ -556,8 +557,28 @@ export function PostEditor({
                   activity === item.id && styles.activitySelected,
                 ]}
               >
-                <Text style={styles.activityEmoji}>{item.emoji}</Text>
-                <Text style={styles.activityText}>{item.label}</Text>
+                <View style={styles.activityArt}>
+                  {item.art ? (
+                    <ActivityArt artwork={item.art} size={50} />
+                  ) : (
+                    <View style={styles.activityIcon}>
+                      <Icon
+                        name={("icon" in item ? item.icon : "plus") as IconName}
+                        size={22}
+                        color={colors.amberDeep}
+                      />
+                    </View>
+                  )}
+                </View>
+                <Text
+                  style={[
+                    styles.activityText,
+                    activity === item.id && styles.activityTextOn,
+                  ]}
+                  numberOfLines={1}
+                >
+                  {item.label}
+                </Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -1113,7 +1134,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     letterSpacing: 1.5,
     ...weight("700"),
-    color: colors.coralDeep,
+    color: colors.amberDeep,
   },
   pageTitle: {
     fontSize: 30,
@@ -1135,12 +1156,14 @@ const styles = StyleSheet.create({
     marginTop: 18,
     overflow: "hidden",
   },
-  progressFill: { height: 4, backgroundColor: colors.coralDeep },
+  progressFill: { height: 4, backgroundColor: colors.amber },
   section: {
     backgroundColor: colors.surface,
-    borderRadius: 22,
-    padding: 17,
-    marginBottom: 14,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: colors.border,
+    padding: 16,
+    marginBottom: 12,
   },
   sectionTop: {
     flexDirection: "row",
@@ -1151,37 +1174,56 @@ const styles = StyleSheet.create({
   sectionNumber: {
     width: 25,
     height: 25,
-    borderRadius: 8,
-    backgroundColor: colors.sageSoft,
-    color: colors.text,
+    borderRadius: 13,
+    overflow: "hidden",
+    backgroundColor: colors.amberBright,
+    color: colors.night,
     fontSize: 12,
     ...weight("700"),
     textAlign: "center",
     lineHeight: 25,
   },
   sectionTitle: { fontSize: 17, ...weight("700"), color: colors.ink, flex: 1 },
-  activities: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  activities: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   activity: {
-    width: "23%",
-    minHeight: 76,
+    width: "31%",
+    flexGrow: 1,
+    minHeight: 96,
     alignItems: "center",
     justifyContent: "center",
+    gap: 6,
     borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "transparent",
-    padding: 4,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    backgroundColor: colors.background,
+    paddingVertical: 10,
+    paddingHorizontal: 4,
   },
   activitySelected: {
-    backgroundColor: colors.sageSoft,
-    borderColor: colors.accent,
+    backgroundColor: colors.amberSoft,
+    borderColor: colors.amber,
   },
-  activityEmoji: { fontSize: 27, marginBottom: 6 },
+  activityArt: {
+    width: 52,
+    height: 52,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  activityIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.amberSoft,
+  },
   activityText: {
-    fontSize: 11,
-    ...weight("600"),
-    color: colors.text,
+    fontSize: 12,
+    ...weight("700"),
+    color: colors.gray800,
     textAlign: "center",
   },
+  activityTextOn: { color: colors.ink },
   counter: {
     textAlign: "right",
     fontSize: 11,

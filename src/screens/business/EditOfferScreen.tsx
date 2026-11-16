@@ -3,6 +3,11 @@ import { BackButton } from "../../components/BackButton";
 import { PageHeading } from "../../components/PageHeading";
 import { LoadingState } from "../../components/LoadingState";
 import { DateSheet, TimeSheet } from "../../components/DateTimeSheets";
+import {
+  FormSection,
+  SlotFields,
+  SpotlightToggle,
+} from "../../components/OfferFields";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   View,
@@ -289,136 +294,123 @@ export function EditOfferScreen({ route, navigation }: Props) {
           </Text>
         )}
 
-        <Input label="Title" value={title} onChangeText={setTitle} />
-        <Input
-          label="Description"
-          value={description}
-          onChangeText={setDescription}
-          multiline
-          numberOfLines={4}
-          style={styles.multiline}
-        />
-        <Text style={styles.label}>Cover photo</Text>
-        <TouchableOpacity
-          onPress={async () => {
-            try {
-              const uri = await pickPhoto();
-              if (!uri || !profile) return;
-              setUploadingCover(true);
-              const url = await uploadPhoto(profile.id, uri, "offers");
-              setCoverPhotoUrl(url);
-            } catch (e) {
-              Alert.alert(
-                "Could not upload",
-                e instanceof Error ? e.message : "Try again.",
-              );
-            } finally {
-              setUploadingCover(false);
-            }
-          }}
-          style={styles.coverPicker}
-          disabled={uploadingCover}
-        >
-          {coverPhotoUrl ? (
-            <Image
-              source={{ uri: coverPhotoUrl }}
-              style={styles.coverPreview}
-            />
-          ) : (
-            <Text style={styles.coverPlaceholder}>
-              {uploadingCover ? "Uploading…" : "+ Add cover photo"}
-            </Text>
-          )}
-        </TouchableOpacity>
-        {coverPhotoUrl && (
-          <TouchableOpacity onPress={() => setCoverPhotoUrl(null)}>
-            <Text style={styles.removeCover}>Remove photo</Text>
-          </TouchableOpacity>
-        )}
-        <TouchableOpacity
-          onPress={() => setIsSpotlight(!isSpotlight)}
-          style={styles.spotlightRow}
-        >
-          <View style={[styles.checkbox, isSpotlight && styles.checkboxActive]}>
-            {isSpotlight && <Text style={styles.checkmark}>✓</Text>}
-          </View>
-          <Text style={styles.spotlightLabel}>
-            Feature in Spotlight on the home page
-          </Text>
-        </TouchableOpacity>
-        <View style={styles.row}>
-          <View style={styles.half}>
-            <Input
-              label="Discount (%)"
-              value={discount}
-              onChangeText={(t: string) =>
-                setDiscount(t.replace(/[^0-9]/g, ""))
+        <FormSection title="About the offer">
+          <Input label="Title" value={title} onChangeText={setTitle} />
+          <Input
+            label="Description"
+            value={description}
+            onChangeText={setDescription}
+            multiline
+            numberOfLines={4}
+            style={styles.multiline}
+          />
+          <Text style={styles.label}>Cover photo</Text>
+          <TouchableOpacity
+            onPress={async () => {
+              try {
+                const uri = await pickPhoto();
+                if (!uri || !profile) return;
+                setUploadingCover(true);
+                const url = await uploadPhoto(profile.id, uri, "offers");
+                setCoverPhotoUrl(url);
+              } catch (e) {
+                Alert.alert(
+                  "Could not upload",
+                  e instanceof Error ? e.message : "Try again.",
+                );
+              } finally {
+                setUploadingCover(false);
               }
-              keyboardType="number-pad"
-            />
+            }}
+            style={styles.coverPicker}
+            disabled={uploadingCover}
+          >
+            {coverPhotoUrl ? (
+              <Image
+                source={{ uri: coverPhotoUrl }}
+                style={styles.coverPreview}
+              />
+            ) : (
+              <Text style={styles.coverPlaceholder}>
+                {uploadingCover ? "Uploading…" : "+ Add cover photo"}
+              </Text>
+            )}
+          </TouchableOpacity>
+          {coverPhotoUrl && (
+            <TouchableOpacity onPress={() => setCoverPhotoUrl(null)}>
+              <Text style={styles.removeCover}>Remove photo</Text>
+            </TouchableOpacity>
+          )}
+        </FormSection>
+        <FormSection title="The deal" hint="Add a discount, a price, or both.">
+          <View style={styles.row}>
+            <View style={styles.half}>
+              <Input
+                label="Discount (%)"
+                value={discount}
+                onChangeText={(t: string) =>
+                  setDiscount(t.replace(/[^0-9]/g, ""))
+                }
+                keyboardType="number-pad"
+              />
+            </View>
+            <View style={styles.half}>
+              <Input
+                label="Price (₹)"
+                value={price}
+                onChangeText={(t: string) =>
+                  setPrice(t.replace(/[^0-9.]/g, ""))
+                }
+                keyboardType="decimal-pad"
+              />
+            </View>
           </View>
-          <View style={styles.half}>
-            <Input
-              label="Price (₹)"
-              value={price}
-              onChangeText={(t: string) => setPrice(t.replace(/[^0-9.]/g, ""))}
-              keyboardType="decimal-pad"
-            />
-          </View>
-        </View>
 
+          <SpotlightToggle value={isSpotlight} onChange={setIsSpotlight} />
+        </FormSection>
         {!isLive && (
           <>
-            <Text style={styles.fieldLabel}>Booking window</Text>
-            <View style={styles.row}>
-              <DateTimeField
-                label="Start date"
-                value={startsAtDate ? fmtDate(startsAtDate) : null}
-                placeholder="Pick date"
-                onPress={() => setPicker({ field: "startsAt", mode: "date" })}
+            <FormSection
+              title="When people can book"
+              hint="Slots are created between the start and the end."
+            >
+              <View style={styles.row}>
+                <DateTimeField
+                  label="Start date"
+                  value={startsAtDate ? fmtDate(startsAtDate) : null}
+                  placeholder="Pick date"
+                  onPress={() => setPicker({ field: "startsAt", mode: "date" })}
+                />
+                <DateTimeField
+                  label="Start time"
+                  value={startsAtDate ? fmtTime(startsAtDate) : null}
+                  placeholder="Pick time"
+                  onPress={() => setPicker({ field: "startsAt", mode: "time" })}
+                />
+              </View>
+              <View style={styles.row}>
+                <DateTimeField
+                  label="End date"
+                  value={endsAtDate ? fmtDate(endsAtDate) : null}
+                  placeholder="Pick date"
+                  onPress={() => setPicker({ field: "endsAt", mode: "date" })}
+                />
+                <DateTimeField
+                  label="End time"
+                  value={endsAtDate ? fmtTime(endsAtDate) : null}
+                  placeholder="Pick time"
+                  onPress={() => setPicker({ field: "endsAt", mode: "time" })}
+                />
+              </View>
+            </FormSection>
+            <FormSection title="Slots">
+              <SlotFields
+                capacity={capacity}
+                onCapacity={setCapacity}
+                minutes={duration}
+                onMinutes={setDuration}
               />
-              <DateTimeField
-                label="Start time"
-                value={startsAtDate ? fmtTime(startsAtDate) : null}
-                placeholder="Pick time"
-                onPress={() => setPicker({ field: "startsAt", mode: "time" })}
-              />
-            </View>
-            <View style={styles.row}>
-              <DateTimeField
-                label="End date"
-                value={endsAtDate ? fmtDate(endsAtDate) : null}
-                placeholder="Pick date"
-                onPress={() => setPicker({ field: "endsAt", mode: "date" })}
-              />
-              <DateTimeField
-                label="End time"
-                value={endsAtDate ? fmtTime(endsAtDate) : null}
-                placeholder="Pick time"
-                onPress={() => setPicker({ field: "endsAt", mode: "time" })}
-              />
-            </View>
-            <Input
-              label="Places per slot"
-              value={capacity}
-              onChangeText={(t: string) =>
-                setCapacity(t.replace(/[^0-9]/g, ""))
-              }
-              keyboardType="number-pad"
-            />
-            <Input
-              label="Slot duration (minutes)"
-              value={duration}
-              onChangeText={(t: string) =>
-                setDuration(t.replace(/[^0-9]/g, ""))
-              }
-              keyboardType="number-pad"
-            />
-            <Input
-              label="Staff member or space"
-              value={resource}
-              onChangeText={setResource}
-            />
+            </FormSection>
           </>
         )}
 

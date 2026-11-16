@@ -1,4 +1,7 @@
 import { RequestNote } from "../../components/RequestNote";
+import { ActivityArt } from "../../components/ActivityArt";
+import { activityArtwork } from "../../utils/activityArtwork";
+import { PersonLink } from "../../components/PersonLink";
 import { BackButton } from "../../components/BackButton";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -335,7 +338,7 @@ export function ChatListScreen({ navigation }: Props) {
                   style={styles.requestSummary}
                   onPress={() => setTab("requests")}
                 >
-                  <Icon name="user-plus" size={19} color={colors.coralDeep} />
+                  <Icon name="user-plus" size={19} color={colors.amberDeep} />
                   <Text style={[styles.name, { fontSize: 14 }]}>
                     {requestError
                       ? "Couldn’t refresh join requests"
@@ -369,15 +372,20 @@ export function ChatListScreen({ navigation }: Props) {
                 {visibleRequests.map((r) => (
                   <View key={r.id} style={styles.requestCard}>
                     <View style={styles.requestTop}>
-                      <Avatar name={r.requesterName} size={40} tone="clay" />
-                      <View style={styles.copy}>
-                        <Text style={styles.preview}>
-                          <Text style={styles.name}>{r.requesterName}</Text>{" "}
-                          wants to join
-                        </Text>
-                        <Text style={styles.requestPlan}>{r.postTitle}</Text>
-                      </View>
+                      <PersonLink
+                        name={r.requesterName}
+                        avatarUrl={r.requesterAvatar}
+                        subtitle="Wants to join"
+                        onPress={() =>
+                          navigation.navigate("HostProfile", {
+                            userId: r.requesterId,
+                            name: r.requesterName,
+                            requestNote: r.note,
+                          })
+                        }
+                      />
                     </View>
+                    <Text style={styles.requestPlan}>{r.postTitle}</Text>
                     <RequestNote note={r.note} />
                     <Text style={styles.requestDate}>
                       {planChatTime(
@@ -424,16 +432,21 @@ export function ChatListScreen({ navigation }: Props) {
                     />
                   </View>
                 )}
-                {!groupError && visibleGroups.length === 0 && (
-                  <EmptyState
-                    title={q ? "No matching plans" : "No plan chats yet"}
-                    hint={
-                      q
-                        ? "Try another plan or place."
-                        : "A plan chat opens after the first member is approved to join."
-                    }
-                  />
-                )}
+                {!groupError &&
+                  visibleGroups.length === 0 &&
+                  (tab === "plans" ||
+                    (!bookings.length &&
+                      !olderChats.length &&
+                      !visibleRequests.length)) && (
+                    <EmptyState
+                      title={q ? "No matching plans" : "No plan chats yet"}
+                      hint={
+                        q
+                          ? "Try another plan or place."
+                          : "A plan chat opens after the first member is approved to join."
+                      }
+                    />
+                  )}
                 {(["today", "upcoming", "past", "cancelled"] as const).map(
                   (section) => {
                     const items = visibleGroups.filter(
@@ -446,7 +459,7 @@ export function ChatListScreen({ navigation }: Props) {
                             <Icon
                               name="bookmark"
                               size={13}
-                              color={colors.coralDeep}
+                              color={colors.amberDeep}
                             />
                           )}
                           <Text
@@ -480,19 +493,12 @@ export function ChatListScreen({ navigation }: Props) {
                             >
                               <View style={styles.planTop}>
                                 <View style={styles.planAvatar}>
-                                  <Icon
-                                    name={
-                                      g.activity === "movies"
-                                        ? "film"
-                                        : g.activity === "coffee" ||
-                                            g.activity === "food"
-                                          ? "coffee"
-                                          : g.activity === "walk" ||
-                                              g.activity === "running"
-                                            ? "sun"
-                                            : "users"
-                                    }
-                                    size={23}
+                                  <ActivityArt
+                                    artwork={activityArtwork({
+                                      title: g.planTitle,
+                                      tags: g.activity ? [g.activity] : [],
+                                    })}
+                                    size={40}
                                   />
                                 </View>
                                 <View style={styles.copy}>
@@ -708,20 +714,20 @@ const styles = StyleSheet.create({
     borderRadius: 11,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: colors.coralDeep,
+    backgroundColor: colors.amber,
   },
-  badgeText: { ...typography.caption, ...weight("700"), color: colors.white },
+  badgeText: { ...typography.caption, ...weight("800"), color: colors.night },
   requestSummary: {
     flexDirection: "row",
     alignItems: "center",
     gap: 9,
-    backgroundColor: colors.coralSoft,
+    backgroundColor: colors.amberSoft,
     borderRadius: 14,
     padding: 12,
     marginBottom: 16,
     minHeight: 48,
   },
-  link: { ...typography.bodySmall, ...weight("600"), color: colors.coralDeep },
+  link: { ...typography.bodySmall, ...weight("700"), color: colors.amberDeep },
   sectionRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -739,20 +745,20 @@ const styles = StyleSheet.create({
   },
   planCard: {
     backgroundColor: colors.card,
-    borderWidth: StyleSheet.hairlineWidth,
+    borderWidth: 1,
     borderColor: colors.border,
     borderRadius: 18,
     padding: 14,
     marginBottom: 10,
     gap: 6,
   },
-  todayCard: { borderColor: colors.coral, borderWidth: 1 },
+  todayCard: { borderColor: colors.amber, borderWidth: 1.5 },
   planTop: { flexDirection: "row", alignItems: "center", gap: 10 },
   planAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: colors.sageSoft,
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    backgroundColor: colors.amberSoft,
     alignItems: "center",
     justifyContent: "center",
   },
