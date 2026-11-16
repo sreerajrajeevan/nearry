@@ -1,4 +1,5 @@
 import { LoadingState } from "../../components/LoadingState";
+import { haptic } from "../../services/haptics";
 import { useToast } from "../../store/ToastContext";
 import { SafetyActions } from "../../components/SafetyActions";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
@@ -170,6 +171,7 @@ export function OfferDetailsScreen({ route, navigation }: Props) {
     setBooking(true);
     try {
       await bookOffer(offerId, slot.id, partySize);
+      haptic("success");
       void refreshMine?.();
       toast(
         `Booking requested · ${offer?.businessName ?? "The business"} will confirm`,

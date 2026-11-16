@@ -9,6 +9,7 @@ import React, {
 import { listMyRequests } from "../services/joinRequests";
 import { listMyBookings } from "../services/bookings";
 import {
+  withMarks,
   MyOfferStatus,
   MyPlanStatus,
   myOfferStatuses,
@@ -20,6 +21,8 @@ const Context = createContext<{
   statuses: ReadonlyMap<string, MyPlanStatus>;
   offerStatuses: ReadonlyMap<string, MyOfferStatus>;
   refresh: () => Promise<void>;
+  /** Show a status straight away, before the server confirms it. */
+  markPlan: (postId: string, status: MyPlanStatus | null) => void;
 } | null>(null);
 
 /** My join requests, so every plan card can show Requested / You're in. */
@@ -36,6 +39,15 @@ export function MyRequestsProvider({
   const [offerStatuses, setOfferStatuses] = useState<
     ReadonlyMap<string, MyOfferStatus>
   >(() => new Map());
+  // Instant statuses from this phone; the next refresh replaces them.
+  const [marks, setMarks] = useState<ReadonlyMap<string, MyPlanStatus | null>>(
+    () => new Map(),
+  );
+  const markPlan = useCallback(
+    (postId: string, status: MyPlanStatus | null) =>
+      setMarks((current) => new Map(current).set(postId, status)),
+    [],
+  );
   const version = useRef(0);
   const refresh = useCallback(async () => {
     const ticket = ++version.current;
@@ -48,8 +60,10 @@ export function MyRequestsProvider({
     await Promise.all([
       listMyRequests(userId)
         .then((requests) => {
-          if (ticket === version.current)
+          if (ticket === version.current) {
             setStatuses(myRequestStatuses(requests));
+            setMarks(new Map());
+          }
         })
         .catch(() => {}),
       listMyBookings(userId)
@@ -64,7 +78,14 @@ export function MyRequestsProvider({
     void refresh();
   }, [refresh]);
   return (
-    <Context.Provider value={{ statuses, offerStatuses, refresh }}>
+    <Context.Provider
+      value={{
+        statuses: withMarks(statuses, marks),
+        offerStatuses,
+        refresh,
+        markPlan,
+      }}
+    >
       {children}
     </Context.Provider>
   );

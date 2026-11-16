@@ -1,3 +1,4 @@
+import { PlanListSkeleton } from "../../components/Skeletons";
 import React, { useCallback, useState } from "react";
 import { BackButton } from "../../components/BackButton";
 import { ScrollView, Text, View } from "react-native";
@@ -8,7 +9,6 @@ import { Screen } from "../../components/Screen";
 import { PageHeading } from "../../components/PageHeading";
 import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
-import { LoadingState } from "../../components/LoadingState";
 import { PostRow } from "../../components/PostRow";
 import { getPost } from "../../services/posts";
 import { NeedPost } from "../../services/mappers";
@@ -76,7 +76,7 @@ export function SavedPlansScreen({
             />
           </View>
         ) : saved?.status !== "ready" || state === "loading" ? (
-          <LoadingState label="Loading saved plans…" layout="list" />
+          <PlanListSkeleton label="Loading saved plans" />
         ) : posts.length === 0 ? (
           <EmptyState
             title="Your shortlist starts here"

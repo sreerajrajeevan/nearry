@@ -1,3 +1,4 @@
+import { haptic } from "../../services/haptics";
 import {
   hasPostMeetingPlace,
   requiredMeetingPlaceMessage,
@@ -269,6 +270,7 @@ export function PostEditor({
       setSavedPostId(null);
       setFormError("");
     }
+    haptic("success");
     onSaved(id);
   };
 
@@ -1406,7 +1408,7 @@ const styles = StyleSheet.create({
   },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   chip: {
-    minHeight: 42,
+    minHeight: 44,
     paddingHorizontal: 13,
     paddingVertical: 11,
     borderRadius: 13,

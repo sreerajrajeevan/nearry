@@ -1,3 +1,4 @@
+import { RowListSkeleton } from "../../components/Skeletons";
 import React, { useState } from "react";
 import { EnterView } from "../../components/Motion";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
@@ -8,7 +9,6 @@ import { BackButton } from "../../components/BackButton";
 import { PageHeading } from "../../components/PageHeading";
 import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
-import { LoadingState } from "../../components/LoadingState";
 import { MotionPressable } from "../../components/Motion";
 import { OfferRow } from "../../components/OfferRow";
 import { useLiveQuery } from "../../hooks/useLiveQuery";
@@ -89,7 +89,7 @@ export function AllOffersScreen({
           })}
         </ScrollView>
         {state === "loading" && !data ? (
-          <LoadingState label="Finding offers…" />
+          <RowListSkeleton label="Finding offers" square />
         ) : state === "error" && !data ? (
           <View style={styles.gap}>
             <EmptyState
@@ -132,7 +132,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    height: 40,
+    height: 44,
     paddingHorizontal: 16,
     borderRadius: 20,
     borderWidth: 1,

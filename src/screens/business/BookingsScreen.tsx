@@ -1,6 +1,7 @@
+import { RowListSkeleton } from "../../components/Skeletons";
 import { Alert } from "../../services/appAlert";
+import { haptic } from "../../services/haptics";
 import { PageHeading } from "../../components/PageHeading";
-import { LoadingState } from "../../components/LoadingState";
 import { formatWhen } from "../../utils/format";
 import React, { useCallback, useEffect, useState } from "react";
 import {
@@ -147,7 +148,7 @@ export function BookingsScreen({ navigation }: Props) {
         </View>
 
         {state === "loading" ? (
-          <LoadingState label="Loading bookings…" layout="list" />
+          <RowListSkeleton label="Loading bookings" />
         ) : state === "error" ? (
           <View>
             <EmptyState
@@ -218,7 +219,9 @@ export function BookingsScreen({ navigation }: Props) {
                         activeOpacity={0.7}
                         disabled={busy === `c${b.id}`}
                         onPress={() =>
-                          run(`c${b.id}`, () => confirmBooking(b.id))
+                          run(`c${b.id}`, () =>
+                            confirmBooking(b.id).then(() => haptic("success")),
+                          )
                         }
                         style={styles.confirmPill}
                       >
@@ -310,7 +313,7 @@ const styles = StyleSheet.create({
   actionLink: { ...typography.bodySmall, color: colors.textDim },
   confirmPill: {
     marginLeft: "auto",
-    height: 38,
+    height: 44,
     paddingHorizontal: 18,
     borderRadius: 19,
     alignItems: "center",

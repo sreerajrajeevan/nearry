@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useRef } from "react";
+import React, { useContext, useEffect, useRef, useState } from "react";
 import {
   Animated,
   Easing,
@@ -25,6 +25,9 @@ export function MotionPressable({
 }: PressProps) {
   const reduced = useReducedMotion();
   const scale = useRef(new Animated.Value(1)).current;
+  // With reduced motion there is no shrink, so dim instead: every press
+  // still shows the moment a finger lands.
+  const [down, setDown] = useState(false);
   useEffect(() => {
     if (reduced) {
       scale.stopAnimation();
@@ -46,12 +49,18 @@ export function MotionPressable({
   return (
     <AnimatedPressable
       {...props}
-      style={[style, { transform: [{ scale }] }]}
+      style={[
+        style,
+        { transform: [{ scale }] },
+        reduced && down && { opacity: 0.6 },
+      ]}
       onPressIn={(event) => {
+        if (reduced) setDown(true);
         animate(0.97);
         onPressIn?.(event);
       }}
       onPressOut={(event) => {
+        setDown(false);
         animate(1);
         onPressOut?.(event);
       }}

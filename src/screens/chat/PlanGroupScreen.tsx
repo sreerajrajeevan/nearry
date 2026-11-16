@@ -722,7 +722,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   iconButton: {
-    width: 42,
+    width: 44,
     height: 44,
     alignItems: "center",
     justifyContent: "center",

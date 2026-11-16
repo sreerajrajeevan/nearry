@@ -1,4 +1,6 @@
 import { RequestNote } from "../../components/RequestNote";
+import { RowListSkeleton } from "../../components/Skeletons";
+import { haptic } from "../../services/haptics";
 import { ActivityArt } from "../../components/ActivityArt";
 import { activityArtwork } from "../../utils/activityArtwork";
 import { PersonLink } from "../../components/PersonLink";
@@ -19,7 +21,6 @@ import { Avatar } from "../../components/Avatar";
 import { Icon } from "../../components/Icon";
 import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
-import { LoadingState } from "../../components/LoadingState";
 import { ConversationActions } from "../../components/ConversationActions";
 import { colors, typography, spacing, radius, weight } from "../../theme";
 import { useAuth } from "../../store/AuthContext";
@@ -160,6 +161,7 @@ export function ChatListScreen({ navigation }: Props) {
     setBusyKey(r.id);
     try {
       await (accept ? approveRequest(r.id) : declineRequest(r.id));
+      if (accept) haptic("success");
       // The database's approved roster is the group roster; no separate chat write.
       await load(true);
     } catch (e) {
@@ -327,7 +329,7 @@ export function ChatListScreen({ navigation }: Props) {
           ))}
         </ScrollView>
         {loading ? (
-          <LoadingState label="Loading your plan chats…" layout="list" />
+          <RowListSkeleton label="Loading your chats" square />
         ) : (
           <>
             {personal &&
@@ -841,7 +843,7 @@ const styles = StyleSheet.create({
   time: { ...typography.caption, color: colors.textDim },
   more: {
     minHeight: 56,
-    width: 40,
+    width: 44,
     alignItems: "center",
     justifyContent: "center",
   },

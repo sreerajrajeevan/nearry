@@ -1,6 +1,6 @@
+import { RowListSkeleton } from "../../components/Skeletons";
 import { Alert } from "../../services/appAlert";
 import { BackButton } from "../../components/BackButton";
-import { LoadingState } from "../../components/LoadingState";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   FlatList,
@@ -8,8 +8,8 @@ import {
   Text,
   TouchableOpacity,
   View,
-  Image,
 } from "react-native";
+import { Image } from "expo-image";
 import { useLiveQuery } from "../../hooks/useLiveQuery";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { BusinessStackParamList } from "../../navigation/types";
@@ -179,7 +179,7 @@ export function MyOffersScreen({ navigation }: Props) {
         }
         ListEmptyComponent={
           state === "loading" ? (
-            <LoadingState label="Loading your offers…" layout="list" />
+            <RowListSkeleton label="Loading your offers" square count={3} />
           ) : state === "error" ? (
             <>
               <EmptyState
@@ -218,6 +218,8 @@ export function MyOffersScreen({ navigation }: Props) {
                 <View style={styles.thumb}>
                   {offer.coverPhotoUrl ? (
                     <Image
+                      cachePolicy="memory-disk"
+                      transition={150}
                       source={{ uri: offer.coverPhotoUrl }}
                       style={styles.thumbImage}
                     />
@@ -363,15 +365,15 @@ const styles = StyleSheet.create({
   },
   countText: { ...typography.caption, color: colors.ink, ...weight("700") },
   actions: { flexDirection: "row", alignItems: "center", gap: 6 },
-  textAction: { minHeight: 36, justifyContent: "center", paddingHorizontal: 8 },
+  textAction: { minHeight: 44, justifyContent: "center", paddingHorizontal: 8 },
   dangerText: { ...typography.caption, color: colors.red, ...weight("700") },
   editPill: {
     flexDirection: "row",
     alignItems: "center",
     gap: 5,
-    minHeight: 36,
+    minHeight: 44,
     paddingHorizontal: 14,
-    borderRadius: 18,
+    borderRadius: 22,
     borderWidth: 1,
     borderColor: colors.borderStrong,
   },

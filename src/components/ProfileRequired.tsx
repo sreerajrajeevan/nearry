@@ -1,3 +1,4 @@
+import { SheetGrabber, useSheetDrag } from "./SheetDrag";
 import React from "react";
 import {
   Modal,
@@ -6,6 +7,7 @@ import {
   StyleSheet,
   Text,
   View,
+  Animated,
 } from "react-native";
 import {
   SafeAreaView,
@@ -27,6 +29,7 @@ export function ProfileRequired({
   onComplete: () => void;
   onBrowse: () => void;
 }) {
+  const drag = useSheetDrag(onBrowse);
   const insets = useSafeAreaInsets();
   const reducedMotion = useReducedMotion();
   return (
@@ -47,7 +50,10 @@ export function ProfileRequired({
           onPress={onBrowse}
         />
         <SafeAreaView style={styles.position} edges={["top", "left", "right"]}>
-          <View style={styles.sheet} accessibilityViewIsModal>
+          <Animated.View
+            style={[styles.sheet, drag.style, drag.style]}
+            accessibilityViewIsModal
+          >
             <ScrollView
               bounces={false}
               showsVerticalScrollIndicator={false}
@@ -56,7 +62,7 @@ export function ProfileRequired({
                 { paddingBottom: Math.max(insets.bottom, 20) },
               ]}
             >
-              <View style={styles.handle} accessible={false} />
+              <SheetGrabber handlers={drag.handlers} />
               <View style={styles.topRow}>
                 <View style={styles.symbol}>
                   <Icon name="user" size={27} color={colors.forest} />
@@ -66,7 +72,10 @@ export function ProfileRequired({
                   accessibilityLabel="Close profile prompt"
                   hitSlop={4}
                   onPress={onBrowse}
-                  style={styles.close}
+                  style={({ pressed }) => [
+                    styles.close,
+                    pressed && pressedStyle,
+                  ]}
                 >
                   <Icon name="x" size={22} color={colors.textDim} />
                 </Pressable>
@@ -91,12 +100,14 @@ export function ProfileRequired({
                 onPress={onBrowse}
               />
             </ScrollView>
-          </View>
+          </Animated.View>
         </SafeAreaView>
       </View>
     </Modal>
   );
 }
+/** Shown the moment a finger lands on a control. */
+const pressedStyle = { opacity: 0.6 };
 const styles = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: "rgba(8,37,27,0.38)" },
   position: { flex: 1, justifyContent: "flex-end", paddingTop: 24 },

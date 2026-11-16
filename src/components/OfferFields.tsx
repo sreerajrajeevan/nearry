@@ -55,7 +55,11 @@ export function SlotFields({
             accessibilityLabel="Fewer people per slot"
             disabled={places <= 1}
             onPress={() => step(-1)}
-            style={[styles.stepButton, places <= 1 && styles.disabled]}
+            style={({ pressed }) => [
+              styles.stepButton,
+              places <= 1 && styles.disabled,
+              pressed && pressedStyle,
+            ]}
           >
             <Icon name="minus" size={18} color={colors.ink} />
           </Pressable>
@@ -71,7 +75,11 @@ export function SlotFields({
             accessibilityLabel="More people per slot"
             disabled={places >= MAX_PLACES}
             onPress={() => step(1)}
-            style={[styles.stepButton, places >= MAX_PLACES && styles.disabled]}
+            style={({ pressed }) => [
+              styles.stepButton,
+              places >= MAX_PLACES && styles.disabled,
+              pressed && pressedStyle,
+            ]}
           >
             <Icon name="plus" size={18} color={colors.ink} />
           </Pressable>
@@ -93,7 +101,11 @@ export function SlotFields({
               aria-checked={on}
               accessibilityLabel={`${value} minutes`}
               onPress={() => onMinutes(String(value))}
-              style={[styles.chip, on && styles.chipOn]}
+              style={({ pressed }) => [
+                styles.chip,
+                on && styles.chipOn,
+                pressed && pressedStyle,
+              ]}
             >
               <Text style={[styles.chipText, on && styles.chipTextOn]}>
                 {value < 60 ? `${value} min` : `${value / 60} hr`}
@@ -134,6 +146,8 @@ export function SpotlightToggle({
   );
 }
 
+/** Shown the moment a finger lands on a control. */
+const pressedStyle = { opacity: 0.6 };
 const styles = StyleSheet.create({
   flex: { flex: 1, minWidth: 0 },
   section: {
@@ -162,9 +176,9 @@ const styles = StyleSheet.create({
   stepperRow: { flexDirection: "row", alignItems: "center", gap: 12 },
   stepper: { flexDirection: "row", alignItems: "center", gap: 6 },
   stepButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: "center",
     justifyContent: "center",
     borderWidth: 1,

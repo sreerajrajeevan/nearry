@@ -45,3 +45,16 @@ export function myOfferStatuses(
   }
   return result;
 }
+
+/** Server statuses with this phone's instant ones on top (null removes). */
+export function withMarks(
+  statuses: ReadonlyMap<string, MyPlanStatus>,
+  marks: ReadonlyMap<string, MyPlanStatus | null>,
+): ReadonlyMap<string, MyPlanStatus> {
+  if (!marks.size) return statuses;
+  const next = new Map(statuses);
+  for (const [id, status] of marks)
+    if (status) next.set(id, status);
+    else next.delete(id);
+  return next;
+}

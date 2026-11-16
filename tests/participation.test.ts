@@ -164,3 +164,14 @@ test("offer cards know my upcoming booking per offer: requested while waiting, b
     both: "booked",
   });
 });
+
+test("a just-sent request shows as Requested at once and can be undone", async () => {
+  const { withMarks } = await import("../src/utils/myRequests");
+  const server = new Map([["p1", "approved" as const]]);
+  const shown = withMarks(server, new Map([["p2", "pending" as const]]));
+  assert.equal(shown.get("p2"), "pending");
+  assert.equal(shown.get("p1"), "approved");
+  const undone = withMarks(server, new Map([["p2", null]]));
+  assert.equal(undone.has("p2"), false);
+  assert.equal(withMarks(server, new Map()), server);
+});

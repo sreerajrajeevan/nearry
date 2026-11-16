@@ -1,4 +1,4 @@
-import { LoadingState } from "../../components/LoadingState";
+import { PlanListSkeleton } from "../../components/Skeletons";
 import { useMyRequests } from "../../store/MyRequestsContext";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -465,10 +465,7 @@ export function NearbyScreen() {
           })}
         </ScrollView>
         {state === "loading" && posts.length === 0 && offers.length === 0 ? (
-          <LoadingState
-            label="Finding nearby places and plans…"
-            layout="list"
-          />
+          <PlanListSkeleton label="Finding nearby plans" />
         ) : state === "error" && posts.length === 0 && offers.length === 0 ? (
           <>
             <EmptyState
@@ -794,7 +791,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 5,
-    minHeight: 40,
+    minHeight: 44,
     paddingHorizontal: 14,
     borderRadius: 20,
     borderWidth: 1,

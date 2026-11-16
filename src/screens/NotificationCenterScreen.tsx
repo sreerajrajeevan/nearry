@@ -1,8 +1,8 @@
+import { RowListSkeleton } from "../components/Skeletons";
 import { Alert } from "../services/appAlert";
 import { timeAgo } from "../utils/format";
 import { BackButton } from "../components/BackButton";
 import { PageHeading } from "../components/PageHeading";
-import { LoadingState } from "../components/LoadingState";
 import React, { useCallback, useRef, useState } from "react";
 import {
   AppState,
@@ -204,7 +204,7 @@ export function NotificationCenterScreen({
         </View>
 
         {state === "loading" ? (
-          <LoadingState label="Loading notifications…" layout="list" />
+          <RowListSkeleton label="Loading notifications" />
         ) : state === "error" ? (
           <View>
             <EmptyState

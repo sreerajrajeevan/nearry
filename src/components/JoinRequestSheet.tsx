@@ -1,3 +1,4 @@
+import { SheetGrabber, useSheetDrag } from "./SheetDrag";
 import React, { useEffect, useState } from "react";
 import {
   KeyboardAvoidingView,
@@ -8,6 +9,7 @@ import {
   Text,
   TextInput,
   View,
+  Animated,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Button } from "./Button";
@@ -23,6 +25,7 @@ export function JoinRequestSheet({
   placeholder = "Anything the host should know? e.g. I’ll bring the football",
   sending = false,
   error = "",
+  initialNote = "",
   onSend,
   onClose,
 }: {
@@ -32,13 +35,16 @@ export function JoinRequestSheet({
   placeholder?: string;
   sending?: boolean;
   error?: string;
+  initialNote?: string;
   onSend: (note: string) => void;
   onClose: () => void;
 }) {
-  const [note, setNote] = useState("");
+  const drag = useSheetDrag(onClose);
+  const [note, setNote] = useState(initialNote);
+  // A failed send reopens with what they wrote.
   useEffect(() => {
-    if (visible) setNote("");
-  }, [visible]);
+    if (visible) setNote(initialNote);
+  }, [visible, initialNote]);
   return (
     <Modal
       visible={visible}
@@ -56,55 +62,57 @@ export function JoinRequestSheet({
           accessibilityLabel="Close"
           onPress={sending ? undefined : onClose}
         />
-        <SafeAreaView
-          edges={["bottom", "left", "right"]}
-          style={styles.sheet}
-          accessibilityViewIsModal
-        >
-          <View style={styles.handle} />
-          <Text style={styles.title}>Ask to join</Text>
-          <Text style={styles.plan} numberOfLines={2}>
-            {planTitle}
-          </Text>
-          <Text style={styles.label}>Message to {hostName} (optional)</Text>
-          <TextInput
-            accessibilityLabel={`Message to ${hostName}, optional`}
-            value={note}
-            onChangeText={setNote}
-            placeholder={placeholder}
-            placeholderTextColor={colors.textFaint}
-            maxLength={JOIN_NOTE_MAX}
-            multiline
-            editable={!sending}
-            style={styles.input}
-            textAlignVertical="top"
-          />
-          <View style={styles.metaRow}>
-            <Icon name="lock" size={13} color={colors.textDim} />
-            <Text style={styles.meta}>
-              Only the host sees this, with your request.
+        <Animated.View style={drag.style}>
+          <SafeAreaView
+            edges={["bottom", "left", "right"]}
+            style={styles.sheet}
+            accessibilityViewIsModal
+          >
+            <SheetGrabber handlers={drag.handlers} />
+            <Text style={styles.title}>Ask to join</Text>
+            <Text style={styles.plan} numberOfLines={2}>
+              {planTitle}
             </Text>
-            <Text style={styles.count}>
-              {note.length}/{JOIN_NOTE_MAX}
-            </Text>
-          </View>
-          {!!error && (
-            <Text accessibilityRole="alert" style={styles.error}>
-              {error}
-            </Text>
-          )}
-          <Button
-            title="Send request"
-            loading={sending}
-            onPress={() => onSend(note)}
-          />
-          <Button
-            title="Cancel"
-            variant="ghost"
-            disabled={sending}
-            onPress={onClose}
-          />
-        </SafeAreaView>
+            <Text style={styles.label}>Message to {hostName} (optional)</Text>
+            <TextInput
+              accessibilityLabel={`Message to ${hostName}, optional`}
+              value={note}
+              onChangeText={setNote}
+              placeholder={placeholder}
+              placeholderTextColor={colors.textFaint}
+              maxLength={JOIN_NOTE_MAX}
+              multiline
+              editable={!sending}
+              style={styles.input}
+              textAlignVertical="top"
+            />
+            <View style={styles.metaRow}>
+              <Icon name="lock" size={13} color={colors.textDim} />
+              <Text style={styles.meta}>
+                Only the host sees this, with your request.
+              </Text>
+              <Text style={styles.count}>
+                {note.length}/{JOIN_NOTE_MAX}
+              </Text>
+            </View>
+            {!!error && (
+              <Text accessibilityRole="alert" style={styles.error}>
+                {error}
+              </Text>
+            )}
+            <Button
+              title="Send request"
+              loading={sending}
+              onPress={() => onSend(note)}
+            />
+            <Button
+              title="Cancel"
+              variant="ghost"
+              disabled={sending}
+              onPress={onClose}
+            />
+          </SafeAreaView>
+        </Animated.View>
       </KeyboardAvoidingView>
     </Modal>
   );

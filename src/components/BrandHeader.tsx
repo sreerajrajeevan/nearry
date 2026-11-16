@@ -47,7 +47,7 @@ export function BrandHeader({
             <TouchableOpacity
               accessibilityRole="button"
               accessibilityLabel={`Change location, ${context}`}
-              hitSlop={4}
+              hitSlop={6} // 36 tall + 6 + 6 = 48 to touch
               onPress={onContextPress}
               style={[styles.contextButton, compact && styles.compactContext]}
               activeOpacity={0.65}

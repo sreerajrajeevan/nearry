@@ -72,7 +72,10 @@ function Sheet({
               accessibilityRole="button"
               accessibilityLabel="Done"
               onPress={onClose}
-              style={styles.doneTouch}
+              style={({ pressed }) => [
+                styles.doneTouch,
+                pressed && pressedStyle,
+              ]}
             >
               <Text style={styles.doneBtn}>Done</Text>
             </Pressable>
@@ -305,6 +308,8 @@ export function TimeSheet({
   );
 }
 
+/** Shown the moment a finger lands on a control. */
+const pressedStyle = { opacity: 0.6 };
 const styles = StyleSheet.create({
   backdrop: {
     flex: 1,

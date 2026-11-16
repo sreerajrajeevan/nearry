@@ -1,3 +1,4 @@
+import { SheetGrabber, useSheetDrag } from "./SheetDrag";
 import React, { useRef, useState } from "react";
 import {
   Modal,
@@ -6,6 +7,7 @@ import {
   StyleSheet,
   Text,
   View,
+  Animated,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Button } from "./Button";
@@ -32,6 +34,7 @@ export function ConversationActions({
   onReport,
   onChanged,
 }: Props) {
+  const drag = useSheetDrag(onClose);
   const [confirm, setConfirm] = useState<"delete" | "block" | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -95,76 +98,78 @@ export function ConversationActions({
           accessibilityLabel="Close conversation options"
           onPress={close}
         />
-        <SafeAreaView
-          edges={["bottom", "left", "right"]}
-          style={styles.sheet}
-          accessibilityViewIsModal
-        >
-          <ScrollView
-            keyboardShouldPersistTaps="handled"
-            contentContainerStyle={styles.content}
+        <Animated.View style={drag.style}>
+          <SafeAreaView
+            edges={["bottom", "left", "right"]}
+            style={styles.sheet}
+            accessibilityViewIsModal
           >
-            <View style={styles.handle} />
-            <Text accessibilityRole="header" style={styles.title}>
-              {confirm === "delete"
-                ? "Delete conversation?"
-                : confirm === "block"
-                  ? `Block ${name}?`
-                  : name}
-            </Text>
-            {confirm ? (
-              <>
-                <Text style={styles.copy}>
-                  {confirm === "delete"
-                    ? "This removes the conversation and its current messages only for you. The other person keeps their history. New messages will bring the chat back."
-                    : "Their plans and chats will be hidden. New messages, requests and bookings between you will stop. Existing commitments remain in Activity or Bookings. You can unblock them in Safety & privacy."}
-                </Text>
-                {!!error && (
-                  <Text accessibilityRole="alert" style={styles.error}>
-                    {error}
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={styles.content}
+            >
+              <SheetGrabber handlers={drag.handlers} />
+              <Text accessibilityRole="header" style={styles.title}>
+                {confirm === "delete"
+                  ? "Delete conversation?"
+                  : confirm === "block"
+                    ? `Block ${name}?`
+                    : name}
+              </Text>
+              {confirm ? (
+                <>
+                  <Text style={styles.copy}>
+                    {confirm === "delete"
+                      ? "This removes the conversation and its current messages only for you. The other person keeps their history. New messages will bring the chat back."
+                      : "Their plans and chats will be hidden. New messages, requests and bookings between you will stop. Existing commitments remain in Activity or Bookings. You can unblock them in Safety & privacy."}
                   </Text>
-                )}
-                <Button
-                  title={
-                    confirm === "delete" ? "Delete for me" : "Confirm block"
-                  }
-                  variant="danger"
-                  loading={busy}
-                  onPress={() => void perform()}
-                />
-                <Button
-                  title="Cancel"
-                  variant="ghost"
-                  disabled={busy}
-                  onPress={close}
-                />
-              </>
-            ) : (
-              <>
-                {option(
-                  "Report conversation",
-                  "Tell us about a concern in this chat",
-                  "flag",
-                  onReport,
-                )}
-                {!!otherUserId &&
-                  option(
-                    "Block person",
-                    "Stop new contact from this person",
-                    "slash",
-                    () => setConfirm("block"),
+                  {!!error && (
+                    <Text accessibilityRole="alert" style={styles.error}>
+                      {error}
+                    </Text>
                   )}
-                {option(
-                  "Delete conversation",
-                  "Clear this chat only for you",
-                  "trash-2",
-                  () => setConfirm("delete"),
-                )}
-                <Button title="Cancel" variant="ghost" onPress={close} />
-              </>
-            )}
-          </ScrollView>
-        </SafeAreaView>
+                  <Button
+                    title={
+                      confirm === "delete" ? "Delete for me" : "Confirm block"
+                    }
+                    variant="danger"
+                    loading={busy}
+                    onPress={() => void perform()}
+                  />
+                  <Button
+                    title="Cancel"
+                    variant="ghost"
+                    disabled={busy}
+                    onPress={close}
+                  />
+                </>
+              ) : (
+                <>
+                  {option(
+                    "Report conversation",
+                    "Tell us about a concern in this chat",
+                    "flag",
+                    onReport,
+                  )}
+                  {!!otherUserId &&
+                    option(
+                      "Block person",
+                      "Stop new contact from this person",
+                      "slash",
+                      () => setConfirm("block"),
+                    )}
+                  {option(
+                    "Delete conversation",
+                    "Clear this chat only for you",
+                    "trash-2",
+                    () => setConfirm("delete"),
+                  )}
+                  <Button title="Cancel" variant="ghost" onPress={close} />
+                </>
+              )}
+            </ScrollView>
+          </SafeAreaView>
+        </Animated.View>
       </View>
     </Modal>
   );

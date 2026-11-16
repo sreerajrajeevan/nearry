@@ -1,4 +1,5 @@
 import { Alert } from "../../services/appAlert";
+import { haptic } from "../../services/haptics";
 import { LoadingState } from "../../components/LoadingState";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -72,6 +73,7 @@ export function DashboardScreen({ navigation }: Props) {
     setConfirming(id);
     try {
       await confirmBooking(id);
+      haptic("success");
       await load();
     } catch (error) {
       Alert.alert(
@@ -392,10 +394,10 @@ const styles = StyleSheet.create({
   },
   confirmText: { ...typography.caption, color: colors.night, ...weight("800") },
   confirmButton: {
-    minHeight: 36,
+    minHeight: 44,
     justifyContent: "center",
     paddingHorizontal: 14,
-    borderRadius: 18,
+    borderRadius: 22,
     backgroundColor: colors.amberBright,
   },
   allBookings: {
