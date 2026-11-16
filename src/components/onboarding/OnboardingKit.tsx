@@ -14,6 +14,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Icon, IconName } from "../Icon";
 import { DemoPhoto, DemoScene } from "../DemoPhoto";
+import { BrandMark, BrandWordmark } from "../BrandLogo";
 import { MotionPressable, ScreenReveal } from "../Motion";
 import { weight } from "../../theme";
 
@@ -171,9 +172,9 @@ export function OnboardingLayout({
           {brand && (
             <View style={styles.brand}>
               <View style={styles.mark}>
-                <Icon name="map-pin" size={22} color={c.amber} />
+                <BrandMark size={26} color={c.amber} dotColor={c.white} />
               </View>
-              <Text style={styles.wordmark}>nearry</Text>
+              <BrandWordmark width={96} color={c.ink} />
             </View>
           )}
           {total != null && (
@@ -542,18 +543,12 @@ const styles = StyleSheet.create({
   footer: { paddingTop: 28, marginTop: "auto", gap: 6 },
   brand: { flexDirection: "row", alignItems: "center", gap: 7 },
   mark: {
-    width: 30,
-    height: 34,
+    width: 36,
+    height: 36,
     borderRadius: 11,
     backgroundColor: c.night,
     alignItems: "center",
     justifyContent: "center",
-  },
-  wordmark: {
-    fontSize: 28,
-    ...weight("700"),
-    letterSpacing: -1.1,
-    color: c.ink,
   },
   back: {
     minWidth: 44,
