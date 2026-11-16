@@ -1,6 +1,6 @@
 import { demoUserBlocked } from "./safety";
 import { getSupabase, isSupabaseConfigured, isDemoMode } from "./supabase";
-import { multiplexSubscribe } from "./realtime";
+import { LIVE_FEED_CALM, multiplexSubscribe } from "./realtime";
 import { mockBookings, mockOffers } from "../data/mock";
 import { DbOffer, Offer, toOffer } from "./mappers";
 import { OfferDraft, validateOfferInput } from "../utils/validation";
@@ -303,5 +303,7 @@ export function subscribeToOffers(onChange: () => void): () => void {
         () => fire(),
       ),
     onChange,
+    // Every plan/offer change in every city arrives here: refresh calmly.
+    LIVE_FEED_CALM,
   );
 }

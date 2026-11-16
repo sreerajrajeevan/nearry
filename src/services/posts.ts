@@ -8,7 +8,7 @@ import {
 import { distanceKm } from "./locationDistance";
 import { demoUserBlocked } from "./safety";
 import { getSupabase, isSupabaseConfigured, isDemoMode } from "./supabase";
-import { multiplexSubscribe } from "./realtime";
+import { LIVE_FEED_CALM, multiplexSubscribe } from "./realtime";
 import { mockPosts, mockVenues } from "../data/mock";
 import {
   DbPost,
@@ -388,5 +388,7 @@ export function subscribeToPosts(onChange: () => void): () => void {
           () => fire(),
         ),
     onChange,
+    // Every plan/offer change in every city arrives here: refresh calmly.
+    LIVE_FEED_CALM,
   );
 }
