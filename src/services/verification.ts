@@ -1,4 +1,9 @@
 import { assertLive } from "./demoGuard";
+import {
+  BusinessVenueSubmission,
+  BusinessVenueState,
+  businessVenueError,
+} from "../utils/businessVenue";
 import { Platform } from "react-native";
 import { proofImageType } from "../utils/proofImage";
 import * as ImagePicker from "expo-image-picker";
@@ -40,9 +45,12 @@ function base64ToBytes(b64: string): Uint8Array {
  */
 export async function submitVerificationDoc(
   businessId: string,
+  venue: BusinessVenueSubmission,
 ): Promise<string> {
   assertLive("submit verification");
   if (useMock()) throw new Error("Verification needs the backend configured.");
+  const validation = businessVenueError(venue);
+  if (validation) throw new Error(validation);
 
   const picked = await ImagePicker.launchImageLibraryAsync({
     mediaTypes: ["images"],
@@ -79,9 +87,13 @@ export async function submitVerificationDoc(
   if (upError) throw new Error(upError.message);
 
   // Record the path and move to pending review (trigger allows this transition).
-  const { error: dbError } = await supabase.rpc("submit_verification", {
-    p_path: path,
-  });
+  const { error: dbError } = await supabase.rpc(
+    "submit_business_verification",
+    {
+      p_path: path,
+      p_venue: venue,
+    },
+  );
   if (dbError) {
     // A failed submission must not leave an unused private upload behind.
     await supabase.storage
@@ -120,4 +132,21 @@ export async function claimVenue(venueId: string): Promise<void> {
   const supabase = getSupabase()!;
   const { error } = await supabase.rpc("claim_venue", { p_venue_id: venueId });
   if (error) throw new Error(error.message);
+}
+
+/** Private canonical venue and the owner's last immutable review submission. */
+export async function getMyBusinessVenue(): Promise<BusinessVenueState> {
+  if (useMock())
+    return {
+      venue: {
+        id: "demo",
+        name: "Your venue",
+        category: "Café",
+        area: "Kochi",
+      },
+      submission: null,
+    };
+  const { data, error } = await getSupabase()!.rpc("get_my_business_venue");
+  if (error) throw new Error(error.message);
+  return data ?? { venue: null, submission: null };
 }

@@ -142,6 +142,17 @@
         </button>
       </div>
       <p id="review-details" class="muted"></p>
+      <section id="venue-review" hidden>
+        <h3>Venue and public location</h3>
+        <p id="venue-details" class="venue-details"></p>
+        <a id="venue-map" target="_blank" rel="noopener noreferrer" hidden
+          >Check the submitted map pin ↗</a
+        >
+        <label
+          ><input id="venue-check" type="checkbox" /> I checked the address and
+          map pin against this business’s proof.</label
+        >
+      </section>
       <div id="business-review" hidden>
         <button id="view-proof" class="secondary">Load private proof</button>
         <p id="proof-message" class="footnote"></p>
@@ -224,11 +235,7 @@
           <p class="eyebrow">ACCOUNT</p>
           <h2 id="account-title">Account</h2>
         </div>
-        <button
-          id="account-close"
-          class="secondary"
-          aria-label="Close account"
-        >
+        <button id="account-close" class="secondary" aria-label="Close account">
           ✕
         </button>
       </div>
