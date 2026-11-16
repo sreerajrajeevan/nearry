@@ -3,6 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { createGooglePlacesProvider } from "../_shared/googlePlaces.ts";
 import { createGeoapifyProvider } from "../_shared/geoapifyPlaces.ts";
 import { createPlaceAutocompleteHandler } from "../_shared/placeAutocompleteHandler.ts";
+import { withSearchFallback } from "../_shared/placeFallback.ts";
 import { validPlace } from "../_shared/placeTypes.ts";
 import type { PlaceSuggestionProvider } from "../_shared/placeTypes.ts";
 const url = Deno.env.get("SUPABASE_URL"),
@@ -18,9 +19,15 @@ const providerName =
   Deno.env.get("PLACES_AUTOCOMPLETE_PROVIDER") ??
   (googleKey ? "google" : "geoapify");
 let provider: PlaceSuggestionProvider | null = null;
-if (providerName === "google" && googleKey)
+if (providerName === "google" && googleKey) {
   provider = createGooglePlacesProvider(googleKey);
-else if (providerName === "geoapify" && geoKey) {
+  // Optional: PLACES_AUTOCOMPLETE_FALLBACK=geoapify keeps search working when
+  // Google's daily quota is used up or Google is down.
+  if (Deno.env.get("PLACES_AUTOCOMPLETE_FALLBACK") === "geoapify" && geoKey) {
+    const geo = createGeoapifyProvider(geoKey);
+    provider = withSearchFallback(provider, (q, b) => geo.search(q, b));
+  }
+} else if (providerName === "geoapify" && geoKey) {
   const geo = createGeoapifyProvider(geoKey);
   provider = {
     id: geo.id,

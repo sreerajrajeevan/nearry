@@ -64,3 +64,32 @@ As checked on 8 November 2026, eligible India billing accounts have 70,000 Autoc
 ## Verification
 
 Tests use fake Google HTTP responses and Supabase boundaries, never live credentials. They cover one Autocomplete request without prefetching Details; India/location bias; shared session token; exact Essentials field mask; empty and malformed responses; identity/coordinate checks; preserved attribution; authentication and quotas before upstream access; no response caching; failure redaction; client selection resolution; and compatibility with coordinate-complete Geoapify results.
+
+## When search says "Could not search places" for everyone (November 2026)
+
+The Google project allows **1,000 Autocomplete requests a day** (Cloud Console),
+but the app's own cap is 2,800. Every pause in typing is one request, so a few
+active testers can use up Google's 1,000 in a day. Google then refuses all
+searches until its quota resets at midnight Pacific time (13:30 IST).
+
+What changed in the app and function:
+
+- A used-up Google quota now shows "Place search has reached its limit for
+  now. Try again later, or use your current location." (HTTP 429) instead of
+  "Could not search places", and neither the phone nor the function retries
+  it.
+- The phone waits for a longer pause in typing (700 ms) before searching.
+- Optional backup: set the function secret
+  `PLACES_AUTOCOMPLETE_FALLBACK=geoapify` (with the existing
+  `GEOAPIFY_API_KEY`). When Google is out of quota or down, suggestions come
+  from Geoapify with OpenStreetMap attribution. Choosing one needs no further
+  Google call. Rejected requests are not sent to the backup.
+
+What to decide in Google Cloud Console (APIs & Services → Places API (New) →
+Quotas):
+
+- Check "Autocomplete requests per day" usage to confirm the quota was hit.
+- Either raise it (for example to 2,800, to match the app cap) with billing
+  alerts set, or keep it and turn on the Geoapify backup.
+- Supabase → Edge Functions → place-autocomplete → Logs shows
+  `Google Places error 429 RESOURCE_EXHAUSTED` when this happens.

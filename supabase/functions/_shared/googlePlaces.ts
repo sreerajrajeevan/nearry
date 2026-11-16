@@ -103,6 +103,9 @@ export function createGooglePlacesProvider(
         console.error("Google Places error", response.status, reason ?? "");
         throw Object.assign(new Error("Google place search unavailable"), {
           retryable: response.status >= 500,
+          // 429 = the project's Google quota is used up. Retrying only
+          // burns more of it.
+          quota: response.status === 429,
         });
       }
       return await response.json();
