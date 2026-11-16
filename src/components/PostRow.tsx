@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { samePost } from "../utils/samePost";
 import { useToast } from "../store/ToastContext";
 import { useMyPlanStatus } from "../store/MyRequestsContext";
 import { StyleSheet, Text, View, useWindowDimensions } from "react-native";
@@ -33,7 +34,7 @@ function initialsOf(name: string) {
  * over a dark fade, then who has joined with Save and the main action below.
  * With large text the title moves under the photo so nothing is clipped.
  */
-export function PostRow({
+function PostRowView({
   post,
   distanceKm,
   cta,
@@ -485,3 +486,19 @@ const styles = StyleSheet.create({
   ctaTextPending: { color: colors.textDim },
   ctaTextIn: { color: colors.success },
 });
+
+/**
+ * A card only redraws when its plan, the minute or its distance changes;
+ * a new tap handler for the same plan doesn't count.
+ */
+export const PostRow = React.memo(
+  PostRowView,
+  (prev, next) =>
+    prev.cta === next.cta &&
+    prev.distanceKm === next.distanceKm &&
+    // Without a shared clock the card reads the time itself: always redraw.
+    !!prev.now &&
+    !!next.now &&
+    prev.now.getTime() === next.now.getTime() &&
+    samePost(prev.post, next.post),
+);
