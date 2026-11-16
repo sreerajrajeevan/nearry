@@ -1,5 +1,6 @@
 import { notificationPreferences, setPushEnabled } from "./safety";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import Constants from "expo-constants";
 import * as Device from "expo-device";
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
@@ -49,7 +50,11 @@ export function registerPushToken(
       const { status } = await Notifications.getPermissionsAsync();
       // Ask from an explicit user action; startup only registers an existing permission.
       if (status !== "granted") return;
-      const projectId = process.env.EXPO_PUBLIC_EAS_PROJECT_ID?.trim();
+      // The build variable wins; app.json's EAS project is the fallback, so
+      // CI builds without the variable can still get a push token.
+      const projectId =
+        process.env.EXPO_PUBLIC_EAS_PROJECT_ID?.trim() ||
+        (Constants.expoConfig?.extra?.eas?.projectId as string | undefined);
       if (!projectId)
         throw new Error("Notifications are not configured for this build.");
       const token = (await Notifications.getExpoPushTokenAsync({ projectId }))

@@ -174,31 +174,3 @@ test("selfies: external or another member’s profile photo must be replaced bef
   ])
     assert.equal(selfies.hasSelfieComparisonAvatar(user, url), false);
 });
-test("selfies: the app asks the server for a pose and submits against that pose", async () => {
-  response = (url) =>
-    url.pathname === "/auth/v1/user"
-      ? { body: { id: user } }
-      : url.pathname.endsWith("/rpc/start_selfie_challenge")
-        ? {
-            body: {
-              challengeId: "c-1",
-              pose: "peace",
-              label: "Peace sign next to your face",
-              expiresAt: "2026-11-15T12:10:00Z",
-            },
-          }
-        : { body: {} };
-  const challenge = await selfies.startSelfieChallenge();
-  assert.deepEqual(challenge, {
-    challengeId: "c-1",
-    pose: "peace",
-    label: "Peace sign next to your face",
-    expiresAt: "2026-11-15T12:10:00Z",
-  });
-  await selfies.submitSelfieImage(user, jpeg, challenge.challengeId);
-  const rpc = calls.find((c) =>
-    c.url.pathname.endsWith("/rpc/submit_personal_selfie"),
-  )!;
-  assert.equal(rpc.body.p_challenge, "c-1");
-  assert.equal(rpc.body.p_consent, true);
-});

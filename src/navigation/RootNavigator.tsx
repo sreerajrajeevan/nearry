@@ -15,6 +15,7 @@ import { useAuth } from "../store/AuthContext";
 import { usePushSetup } from "../hooks/useUnreadCounts";
 import { LoadingState } from "../components/LoadingState";
 import { WelcomeScreen } from "../screens/WelcomeScreen";
+import { NotificationPrompt } from "../components/NotificationPrompt";
 import { IntroductionScreen } from "../screens/onboarding/IntroductionScreen";
 import { PersonalOnboardingScreen } from "../screens/onboarding/PersonalOnboardingScreen";
 import { onboardingLane } from "../utils/onboarding";
@@ -109,49 +110,52 @@ export function RootNavigator() {
     return <AccountTypeScreen />;
 
   return (
-    <Stack.Navigator
-      screenOptions={{
-        headerShown: false,
-        contentStyle: { backgroundColor: colors.background },
-        animation: reduced ? "none" : "fade",
-      }}
-    >
-      {demoMode || (session && accountType) ? (
-        onboardingLane(
-          accountType,
-          needsOnboarding,
-          onboardingDeferred,
-          onboardingCelebration,
-        ) === "business" ? (
-          <Stack.Screen
-            name="BusinessOnboarding"
-            component={BusinessOnboardingScreen}
-          />
-        ) : onboardingLane(
+    <>
+      <Stack.Navigator
+        screenOptions={{
+          headerShown: false,
+          contentStyle: { backgroundColor: colors.background },
+          animation: reduced ? "none" : "fade",
+        }}
+      >
+        {demoMode || (session && accountType) ? (
+          onboardingLane(
             accountType,
             needsOnboarding,
             onboardingDeferred,
             onboardingCelebration,
-          ) === "personal" ? (
-          <Stack.Screen
-            name="PersonalOnboarding"
-            component={PersonalOnboardingScreen}
-          />
-        ) : accountType === "business" ? (
-          <Stack.Screen name="BusinessApp" component={BusinessStack} />
+          ) === "business" ? (
+            <Stack.Screen
+              name="BusinessOnboarding"
+              component={BusinessOnboardingScreen}
+            />
+          ) : onboardingLane(
+              accountType,
+              needsOnboarding,
+              onboardingDeferred,
+              onboardingCelebration,
+            ) === "personal" ? (
+            <Stack.Screen
+              name="PersonalOnboarding"
+              component={PersonalOnboardingScreen}
+            />
+          ) : accountType === "business" ? (
+            <Stack.Screen name="BusinessApp" component={BusinessStack} />
+          ) : (
+            <Stack.Screen name="PersonalApp" component={PersonalStack} />
+          )
         ) : (
-          <Stack.Screen name="PersonalApp" component={PersonalStack} />
-        )
-      ) : (
-        <>
-          <Stack.Screen name="Welcome" component={WelcomeScreen} />
-          <Stack.Screen name="Introduction" component={IntroductionScreen} />
-          <Stack.Screen name="PersonalAuth" component={PersonalAuthScreen} />
-          <Stack.Screen name="BusinessAuth" component={BusinessAuthScreen} />
-        </>
-      )}
-      <Stack.Screen name="Legal" component={LegalScreen} />
-    </Stack.Navigator>
+          <>
+            <Stack.Screen name="Welcome" component={WelcomeScreen} />
+            <Stack.Screen name="Introduction" component={IntroductionScreen} />
+            <Stack.Screen name="PersonalAuth" component={PersonalAuthScreen} />
+            <Stack.Screen name="BusinessAuth" component={BusinessAuthScreen} />
+          </>
+        )}
+        <Stack.Screen name="Legal" component={LegalScreen} />
+      </Stack.Navigator>
+      <NotificationPrompt />
+    </>
   );
 }
 
