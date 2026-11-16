@@ -200,3 +200,19 @@ export function planCostCents(
   const cents = Math.round(Number(amount) * 100);
   return mode === "split" ? Math.ceil(cents / (vacancies + 1)) : cents;
 }
+
+/**
+ * Which create-plan section a validation message belongs to, so the editor
+ * can scroll to it: 1 activity, 2 title, 3 when, 4 where, 5 who, 6 cost.
+ */
+export function planErrorSection(message: string): number {
+  const m = message.toLowerCase();
+  // Title first: "Give your activity a title" belongs to the title.
+  if (/title|details|description/.test(m)) return 2;
+  if (/planning|activity/.test(m)) return 1;
+  if (/start|date|time|expir/.test(m)) return 3;
+  if (/meeting place|coordinates|location/.test(m)) return 4;
+  if (/age|vacanc|spots|participants/.test(m)) return 5;
+  if (/cost|amount/.test(m)) return 6;
+  return 8;
+}

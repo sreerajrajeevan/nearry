@@ -1,4 +1,7 @@
 -- Sends queued push notifications every minute.
+-- ONLY for a fresh project with no push scheduler. The current Nearry project
+-- already has one (docs/play-test-release.md); running this too would
+-- duplicate it.
 -- Run ONCE in the Supabase SQL editor. This is not a migration: it needs the
 -- hosted pg_cron, pg_net and Vault features, and your own secret.
 --

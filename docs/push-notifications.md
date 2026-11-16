@@ -30,12 +30,11 @@ For a notification to actually reach a phone, five pieces must be in place.
 
 ## 3. Supabase: the sender
 
-1. Edge Functions → Secrets: set `PUSH_DISPATCH_SECRET` to a long random value.
-   If Expo "enhanced push security" is on, also set `EXPO_ACCESS_TOKEN`.
-2. Deploy: `supabase functions deploy send-push --no-verify-jwt`.
-3. Run `supabase/ops/schedule-send-push.sql` once in the SQL editor (it
-   explains the Vault step). It calls `send-push` every minute, so a
-   notification arrives within about a minute.
+Already done for this project (see play-test-release.md, "Backend repair"):
+`send-push` is deployed with its dispatch secret and a scheduler calls it.
+Do **not** also run `supabase/ops/schedule-send-push.sql` here, or it would
+call the sender twice. That file is only for a fresh project with no
+scheduler.
 
 ## 4. New APK
 
