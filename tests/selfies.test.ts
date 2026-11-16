@@ -151,11 +151,13 @@ test("selfies: a rejected submission removes the unused private object; status a
     { p_user: user },
   );
 });
-test("selfies: notification taps open the review status screen", () => {
-  assert.equal(
-    notificationTarget({ kind: "selfie_review" } as any, "personal").screen,
-    "SelfieVerification",
+test("selfies: notification taps open the profile, where the tick or retry card shows", () => {
+  const target = notificationTarget(
+    { kind: "selfie_review" } as any,
+    "personal",
   );
+  assert.equal(target.screen, "PersonalTabs");
+  assert.equal((target.params as any).screen, "Profile");
 });
 
 test("selfies: external or another member’s profile photo must be replaced before opening the camera", () => {

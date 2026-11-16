@@ -54,6 +54,16 @@ def tile(size: int, transparent: bool = False, mono: bool = False) -> Image.Imag
     return canvas.resize((size, size), Image.Resampling.LANCZOS)
 
 
+def notification_icon(size: int = 96) -> Image.Image:
+    # Android status-bar icon: white pin and point on transparent. Android tints it;
+    # the app sets amber as the accent colour.
+    white = ink_mask('pin.png', '#FFFFFF')
+    mark = symbol(round(size * 0.86), white, '#FFFFFF')
+    canvas = Image.new('RGBA', (size, size), (0, 0, 0, 0))
+    canvas.alpha_composite(mark, ((size-mark.width)//2, (size-mark.height)//2))
+    return canvas
+
+
 def splash(mark_only: bool = False) -> Image.Image:
     # Same 200-point composition as StartupSplash: 112 mark, 16 gap, 164 wordmark.
     canvas = Image.new('RGBA', (1024, 1024))
@@ -76,4 +86,5 @@ if __name__ == '__main__':
     splash(True).save(ROOT/'splash-android.png')
     # A background tile keeps the icon visible on light and dark browser chrome.
     tile(48).save(ROOT/'favicon.png')
+    notification_icon().save(ROOT/'notification-icon.png')
     print('Nearry launcher, splash and favicon assets generated')

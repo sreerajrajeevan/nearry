@@ -29,6 +29,8 @@ import {
 import { submitPersonalSelfie } from "../../services/selfiePhoto";
 import { personalProfileReady } from "../../utils/profileReadiness";
 import { PageHeading } from "../../components/PageHeading";
+import { Icon, IconName } from "../../components/Icon";
+import { VerifiedAvatar } from "../../components/VerifiedAvatar";
 import * as FileSystem from "expo-file-system/legacy";
 
 type Props = NativeStackScreenProps<
@@ -161,14 +163,6 @@ export function SelfieVerificationScreen({ navigation }: Props) {
 
   const canApply =
     review.status === "unverified" || review.status === "rejected";
-  const title =
-    review.status === "verified"
-      ? "Selfie checked"
-      : review.status === "pending"
-        ? "Awaiting review"
-        : review.status === "rejected"
-          ? "Another photo, please"
-          : "Check your profile photo";
   return (
     <Screen padded={false}>
       <ScrollView
@@ -177,29 +171,21 @@ export function SelfieVerificationScreen({ navigation }: Props) {
       >
         <BackButton onPress={() => navigation.goBack()} />
         <PageHeading
-          title="A face to your hello."
-          greeting="OPTIONAL SELFIE CHECK"
+          title={
+            review.status === "verified" && !loading
+              ? "You’re verified."
+              : "A face to your hello."
+          }
+          greeting="SELFIE CHECK"
         />
-        <Text style={styles.body}>
-          Help other Nearry members recognise the person behind an account. A
-          reviewer compares your private selfie with your current public profile
-          picture.
-        </Text>
         {loading ? (
           <LoadingState label="Checking verification status…" layout="detail" />
         ) : (
-          <View style={styles.status}>
-            <Text style={styles.statusTitle}>{title}</Text>
-            <Text style={styles.body}>
-              {review.status === "verified"
-                ? "A reviewer checked your selfie against your profile photo. This does not verify legal identity, age or guarantee safety."
-                : review.status === "pending"
-                  ? "Your selfie is private while it is reviewed. You cannot submit another one yet."
-                  : review.status === "rejected"
-                    ? review.note || "Please take a new, clear selfie."
-                    : "The Selfie checked badge appears only after a human reviewer approves your submission."}
-            </Text>
-          </View>
+          <StatusHero
+            review={review}
+            name={profile?.displayName || "You"}
+            avatarUrl={profile?.avatarUrl}
+          />
         )}
         {!!error && (
           <Text accessibilityRole="alert" style={styles.error}>
@@ -278,6 +264,16 @@ export function SelfieVerificationScreen({ navigation }: Props) {
             )}
           </View>
         )}
+        {demoMode && (
+          <Text style={styles.body}>
+            Verification is disabled in demo mode.
+          </Text>
+        )}
+        <Text style={styles.footnote}>
+          A photo comparison by a person, not an ID or age check. Your selfie is
+          private and deleted after review. Unreviewed selfies expire after
+          seven days.
+        </Text>
         {!loading &&
           !demoMode &&
           ["pending", "verified"].includes(review.status) && (
@@ -288,6 +284,7 @@ export function SelfieVerificationScreen({ navigation }: Props) {
                   : "Remove selfie check"
               }
               variant="ghost"
+              style={styles.remove}
               disabled={busy}
               onPress={() =>
                 Alert.alert(
@@ -316,34 +313,165 @@ export function SelfieVerificationScreen({ navigation }: Props) {
               }
             />
           )}
-        {demoMode && (
-          <Text style={styles.body}>
-            Verification is disabled in demo mode.
-          </Text>
-        )}
-        <Text style={styles.footnote}>
-          This is a photo comparison, not an ID check or certified liveness
-          test. Your selfie is not publicly displayed. You can report suspicious
-          accounts even if they have this badge. The badge is optional.
-          Unreviewed selfies expire after seven days.
-        </Text>
       </ScrollView>
     </Screen>
   );
 }
+function formatDay(iso?: string) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime())
+    ? ""
+    : d.toLocaleDateString(undefined, {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      });
+}
+
+function Point({ icon, text }: { icon: IconName; text: string }) {
+  return (
+    <View style={styles.point}>
+      <View style={styles.pointIcon}>
+        <Icon name={icon} size={15} color={colors.success} />
+      </View>
+      <Text style={styles.pointText}>{text}</Text>
+    </View>
+  );
+}
+
+/** One clear card for where the selfie check stands. */
+function StatusHero({
+  review,
+  name,
+  avatarUrl,
+}: {
+  review: SelfieReview;
+  name: string;
+  avatarUrl?: string;
+}) {
+  if (review.status === "verified") {
+    const day = formatDay(review.reviewedAt);
+    return (
+      <View style={[styles.hero, styles.heroVerified]}>
+        <VerifiedAvatar name={name} uri={avatarUrl} verified />
+        <Text style={styles.heroTitle}>Green tick is on</Text>
+        <Text style={styles.heroBody}>
+          A reviewer matched your selfie to your profile photo
+          {day ? ` on ${day}` : ""}.
+        </Text>
+        <View style={styles.points}>
+          <Point icon="user-check" text="Shows on your profile" />
+          <Point icon="map-pin" text="Shows on the plans you host" />
+          <Point icon="lock" text="Your selfie stays private" />
+        </View>
+      </View>
+    );
+  }
+  const card: Record<
+    Exclude<SelfieReview["status"], "verified">,
+    { icon: IconName; title: string; body: string }
+  > = {
+    pending: {
+      icon: "clock",
+      title: "We’re checking your selfie",
+      body: "A reviewer will compare it with your profile photo. We’ll send you a notification when it’s done.",
+    },
+    rejected: {
+      icon: "refresh-cw",
+      title: "Let’s try another photo",
+      body: review.note || "Please take a new, clear selfie.",
+    },
+    unverified: {
+      icon: "shield",
+      title: "Get your green tick",
+      body: "Take a quick selfie. A reviewer checks it matches your profile photo, then a green tick appears on your profile.",
+    },
+  };
+  const c = card[review.status];
+  return (
+    <View style={styles.hero}>
+      <View style={styles.heroIcon}>
+        <Icon name={c.icon} size={26} color={colors.amberDeep} />
+      </View>
+      <Text style={styles.heroTitle}>{c.title}</Text>
+      {review.status === "rejected" ? (
+        <View style={styles.note}>
+          <Text style={styles.noteLabel}>Reviewer’s note</Text>
+          <Text style={styles.noteText}>{c.body}</Text>
+        </View>
+      ) : (
+        <Text style={styles.heroBody}>{c.body}</Text>
+      )}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  scroll: { padding: spacing.lg, paddingBottom: spacing.xl, gap: spacing.md },
-  heading: { ...typography.display, color: colors.text, fontSize: 30 },
-  body: { ...typography.bodySmall, color: colors.textDim, lineHeight: 21 },
-  status: {
-    padding: spacing.md,
-    borderRadius: 18,
+  hero: {
+    padding: spacing.lg,
+    borderRadius: 24,
     backgroundColor: colors.white,
-    gap: spacing.sm,
     borderWidth: 1,
     borderColor: colors.border,
+    alignItems: "center",
+    gap: 10,
   },
-  statusTitle: { ...typography.title, color: colors.text, fontSize: 19 },
+  heroVerified: {
+    backgroundColor: colors.successSoft,
+    borderColor: "#A7F3D0",
+    paddingTop: spacing.xl,
+  },
+  heroIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: colors.amberSoft,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  heroTitle: {
+    ...typography.title,
+    fontSize: 21,
+    lineHeight: 27,
+    color: colors.ink,
+    textAlign: "center",
+    ...weight("800"),
+    marginTop: 4,
+  },
+  heroBody: {
+    ...typography.bodySmall,
+    color: colors.textDim,
+    lineHeight: 21,
+    textAlign: "center",
+  },
+  points: { alignSelf: "stretch", gap: 10, marginTop: 6 },
+  point: { flexDirection: "row", alignItems: "center", gap: 10 },
+  pointIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: colors.white,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  pointText: { ...typography.bodySmall, color: colors.ink, flex: 1 },
+  note: {
+    alignSelf: "stretch",
+    padding: 14,
+    borderRadius: 14,
+    backgroundColor: colors.amberSoft,
+    gap: 4,
+  },
+  noteLabel: {
+    fontSize: 12,
+    color: colors.amberDeep,
+    ...weight("800"),
+  },
+  noteText: { ...typography.bodySmall, color: colors.ink, lineHeight: 21 },
+  remove: { alignSelf: "center" },
+  scroll: { padding: spacing.lg, paddingBottom: spacing.xl, gap: spacing.md },
+  body: { ...typography.bodySmall, color: colors.textDim, lineHeight: 21 },
   error: { ...typography.bodySmall, color: colors.red },
   form: { gap: spacing.md },
   instructions: { ...typography.body, color: colors.text },

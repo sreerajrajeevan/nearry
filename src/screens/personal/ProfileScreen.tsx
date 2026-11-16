@@ -2,11 +2,17 @@ import { Alert } from "../../services/appAlert";
 import { personalProfileReady } from "../../utils/profileReadiness";
 import { PageHeading } from "../../components/PageHeading";
 
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { View, Text, ScrollView, StyleSheet } from "react-native";
 import { Screen } from "../../components/Screen";
 import { PersonalHeader } from "../../components/PersonalHeader";
-import { Avatar } from "../../components/Avatar";
+import { VerifiedAvatar } from "../../components/VerifiedAvatar";
+import { EnterView } from "../../components/Motion";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import {
+  shouldCelebrateVerified,
+  verifiedSeenKey,
+} from "../../utils/verifiedCelebration";
 import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
 import { AccountMenuRow } from "../../components/AccountMenuRow";
@@ -20,10 +26,10 @@ import {
   SelfieReview,
 } from "../../services/selfieVerification";
 import { verifyPrompt } from "../../utils/verifyPrompt";
-import { useFocusEffect } from "@react-navigation/native";
+import { RouteProp, useFocusEffect, useRoute } from "@react-navigation/native";
 import { useCallback } from "react";
 import { useUnreadCounts } from "../../hooks/useUnreadCounts";
-import { PersonalTabNav } from "../../navigation/types";
+import { PersonalTabNav, PersonalTabParamList } from "../../navigation/types";
 
 type Props = { navigation: PersonalTabNav };
 export function ProfileScreen({ navigation }: Props) {
@@ -32,6 +38,11 @@ export function ProfileScreen({ navigation }: Props) {
   const [selfieChecked, setSelfieChecked] = useState(false);
   const [review, setReview] = useState<SelfieReview>({ status: "unverified" });
   const [reviewLoaded, setReviewLoaded] = useState(false);
+  const route = useRoute<RouteProp<PersonalTabParamList, "Profile">>();
+  const celebrateParam = route.params?.celebrate;
+  const [celebrate, setCelebrate] = useState(false);
+  const [justVerified, setJustVerified] = useState(false);
+  const celebratedFor = useRef<string | undefined>(undefined);
   useFocusEffect(
     useCallback(() => {
       let alive = true;
@@ -60,6 +71,60 @@ export function ProfileScreen({ navigation }: Props) {
         alive = false;
       };
     }, [profile?.id, demoMode]),
+  );
+  useEffect(() => {
+    if (!profile || !reviewLoaded) return;
+    let alive = true;
+    const key = verifiedSeenKey(profile.id);
+    const verified = selfieChecked && review.status === "verified";
+    void AsyncStorage.getItem(key)
+      .catch(() => null)
+      .then((seen) => {
+        if (!alive) return;
+        if (!verified) {
+          // A removed check can be celebrated again after a new approval.
+          if (seen && review.status !== "verified")
+            void AsyncStorage.removeItem(key).catch(() => {});
+          return;
+        }
+        const fromNotification =
+          !!celebrateParam && celebratedFor.current !== celebrateParam;
+        if (
+          !shouldCelebrateVerified({
+            verified,
+            reviewedAt: review.reviewedAt,
+            seen,
+            fromNotification,
+          })
+        )
+          return;
+        celebratedFor.current = celebrateParam;
+        if (celebrateParam) navigation.setParams({ celebrate: undefined });
+        setJustVerified(false);
+        setCelebrate(true);
+        if (review.reviewedAt)
+          void AsyncStorage.setItem(key, review.reviewedAt).catch(() => {});
+      });
+    return () => {
+      alive = false;
+    };
+  }, [
+    profile?.id,
+    reviewLoaded,
+    selfieChecked,
+    review.status,
+    review.reviewedAt,
+    celebrateParam,
+  ]);
+  useFocusEffect(
+    useCallback(
+      () => () => {
+        // Leaving the profile ends the moment; the green tick stays.
+        setCelebrate(false);
+        setJustVerified(false);
+      },
+      [],
+    ),
   );
   const [signingOut, setSigningOut] = useState(false);
   const signOutLock = useRef(false);
@@ -112,29 +177,38 @@ export function ProfileScreen({ navigation }: Props) {
           </View>
         )}
         <View style={styles.identity}>
-          <View style={styles.avatarRing}>
-            <Avatar
-              name={profile.displayName || "Neighbour"}
-              size={92}
-              uri={profile.avatarUrl}
-              tone="clay"
-            />
-            {selfieChecked && (
-              <View
-                style={styles.verifiedDot}
-                accessible
-                accessibilityLabel="Verified: selfie checked by a reviewer"
-              >
-                <Icon name="check" size={14} color="#FFFFFF" />
-              </View>
-            )}
-          </View>
+          <VerifiedAvatar
+            name={profile.displayName || "Neighbour"}
+            uri={profile.avatarUrl}
+            verified={selfieChecked}
+            celebrate={celebrate}
+            onCelebrated={() => setJustVerified(true)}
+          />
           <Text style={styles.name} numberOfLines={1}>
             {profile.displayName || "Your profile"}
           </Text>
-          <Text style={styles.member}>
-            {selfieChecked ? "Verified · Personal account" : "Personal account"}
-          </Text>
+          {selfieChecked && (!celebrate || justVerified) ? (
+            <View style={styles.verifiedRow}>
+              <View style={styles.verifiedPill}>
+                <Icon name="check-circle" size={13} color={colors.success} />
+                <Text style={styles.verifiedPillText}>Verified</Text>
+              </View>
+              <Text style={styles.member}>Personal account</Text>
+            </View>
+          ) : (
+            <Text style={styles.member}>Personal account</Text>
+          )}
+          {justVerified && (
+            <EnterView style={styles.cheer}>
+              <Text style={styles.cheerTitle} accessibilityRole="alert">
+                You’re verified! 🎉
+              </Text>
+              <Text style={styles.cheerBody}>
+                Your green tick now shows on your profile and the plans you
+                host.
+              </Text>
+            </EnterView>
+          )}
           {!!profile.bio && <Text style={styles.bio}>{profile.bio}</Text>}
           {profile.interests.length > 0 && (
             <View style={styles.interests}>
@@ -373,24 +447,50 @@ const styles = StyleSheet.create({
     padding: 20,
     alignItems: "center",
   },
-  avatarRing: {
-    padding: 4,
-    borderRadius: 52,
-    borderWidth: 2,
-    borderColor: colors.amberBright,
-  },
-  verifiedDot: {
-    position: "absolute",
-    right: 2,
-    bottom: 2,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    borderWidth: 3,
-    borderColor: colors.white,
+  verifiedRow: {
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: colors.success,
+    gap: 8,
+    marginTop: 6,
+  },
+  verifiedPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    borderRadius: 999,
+    backgroundColor: colors.successSoft,
+  },
+  verifiedPillText: {
+    fontSize: 12,
+    lineHeight: 16,
+    color: colors.success,
+    ...weight("800"),
+  },
+  cheer: {
+    marginTop: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+    backgroundColor: colors.successSoft,
+    alignSelf: "stretch",
+    alignItems: "center",
+  },
+  cheerTitle: {
+    ...typography.title,
+    fontSize: 18,
+    lineHeight: 24,
+    color: colors.success,
+    ...weight("800"),
+    textAlign: "center",
+  },
+  cheerBody: {
+    ...typography.bodySmall,
+    color: colors.success,
+    marginTop: 2,
+    textAlign: "center",
   },
   quick: {
     flexDirection: "row",

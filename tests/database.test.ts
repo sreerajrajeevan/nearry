@@ -3245,6 +3245,18 @@ test("selfies: audited approval is atomic, one-time, submission-specific and inv
     ).rows[0].n,
     1,
   );
+  assert.deepEqual(
+    (
+      await db.query(
+        "select title,body from notifications where user_id=$1 and kind='selfie_review'",
+        [p.id],
+      )
+    ).rows[0],
+    {
+      title: "Congrats, you're verified! ✅",
+      body: "Your selfie matched your profile photo. Tap to see your green tick.",
+    },
+  );
   assert.equal(
     (
       await db.query(

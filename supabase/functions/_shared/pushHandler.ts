@@ -37,6 +37,29 @@ async function removeStaleToken(
       .lte("updated_at", registeredAt),
   );
 }
+const clip = (value: unknown, max: number) => {
+  const text =
+    typeof value === "string" ? value.replace(/\s+/g, " ").trim() : "";
+  return text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text;
+};
+/**
+ * The phone shows the same title and text as the in-app notification list.
+ * Android's own "hide sensitive content" setting still applies on the lock screen.
+ */
+export function pushContent(job: {
+  kind?: string;
+  title?: unknown;
+  body?: unknown;
+}) {
+  const fallback =
+    job.kind === "message" || job.kind === "plan_group_message"
+      ? "You have a new message."
+      : "You have an update in Nearry.";
+  return {
+    title: clip(job.title, 80) || "Nearry",
+    body: clip(job.body, 180) || fallback,
+  };
+}
 export async function processPush(
   db: Database,
   send: typeof fetch = fetch,
@@ -145,20 +168,14 @@ export async function processPush(
         const pending = tokens.filter((t: any) => !accepted.has(t.token));
         for (let start = 0; start < pending.length; start += 100) {
           const batch = pending.slice(start, start + 100);
-          // Notification text remains inside the authenticated app; no private chat
-          // body is included on a phone lock screen or sent to push intermediaries.
           const tickets = await expo(
             "send",
             batch.map((t: any) => ({
               to: t.token,
-              title: "Nearry",
-              body:
-                job.kind === "message" || job.kind === "plan_group_message"
-                  ? "You have a new message."
-                  : "You have an update in Nearry.",
+              ...pushContent(job),
               sound: "default",
               channelId: "default",
-              data: { notificationId: job.notification_id },
+              data: { notificationId: job.notification_id, kind: job.kind },
             })),
             send,
             accessToken,
