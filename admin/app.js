@@ -573,6 +573,8 @@ async function openAccount(id) {
       !isOwner || !a.suspended_at;
     document.querySelector('[data-account-decision="cancel-deletion"]').hidden =
       !isOwner || !a.deletion_requested_at || !a.deletionJob || deletionStarted;
+    document.querySelector('[data-account-decision="delete"]').hidden =
+      !isOwner || !!a.deletion_requested_at || a.id === session?.user?.id;
   } catch (error) {
     if (requestRevision === accountRevision && $("account-dialog").open)
       $("account-message").textContent = error.message;
@@ -591,8 +593,17 @@ async function decideAccount(decision) {
     suspend: "Suspend this account?",
     unsuspend: "Restore this account?",
     "cancel-deletion": "Cancel this deletion request?",
+    delete:
+      "Permanently delete this account? Their profile, plans, messages and photos are erased within about 5 minutes and cannot be recovered.",
   };
   if (!confirm(labels[decision] + " This action will be recorded.")) return;
+  if (
+    decision === "delete" &&
+    prompt("Type DELETE to permanently delete this account.") !== "DELETE"
+  ) {
+    $("account-message").textContent = "Deletion not confirmed.";
+    return;
+  }
   actionBusy = true;
   $("account-dialog")
     .querySelectorAll("button")
@@ -609,7 +620,11 @@ async function decideAccount(decision) {
     actionBusy = false;
     closeAccount();
     await load();
-    feedback("Account updated.");
+    feedback(
+      decision === "delete"
+        ? "Deletion started. The account is locked now and erased within about 5 minutes."
+        : "Account updated.",
+    );
   } catch (error) {
     $("account-message").textContent = error.message;
   } finally {
