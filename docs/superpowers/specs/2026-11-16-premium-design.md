@@ -10,8 +10,8 @@ Ads (switchable from the server) and Boost come later and build on this.
 
 ## Goals
 
-- **Nearry Premium** subscription through Google Play: ₹79 / week,
-  ₹179 / month, ₹399 / 3 months, auto-renewing.
+- **Nearry Premium** subscription through Google Play: ₹49 / week,
+  ₹149 / month, ₹349 / 3 months, auto-renewing.
 - **Free daily limits, same for every user:** 3 new plans and 10 join
   requests per day (India day, midnight IST). Premium: unlimited.
 - **"Hosted by" filter (Premium):** Women / Men / Non-binary / Everyone. Shows
@@ -106,8 +106,8 @@ Sree picked 1.
 ## What Sree sets up (I'll write step-by-step docs)
 
 1. Play Console: a payments (merchant) profile, then one subscription
-   `nearry_premium` with three base plans: weekly ₹79, monthly ₹179,
-   3-monthly ₹399. Requires the app on at least the internal testing track.
+   `nearry_premium` with three base plans: weekly ₹49, monthly ₹149,
+   3-monthly ₹349. Requires the app on at least the internal testing track.
 2. RevenueCat (free): project, Android app linked to Play with a Google
    service-account key, entitlement `premium`, offering with the three plans.
 3. Webhook: URL of `revenuecat-webhook` + secret → RevenueCat; secret and
