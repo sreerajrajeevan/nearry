@@ -17,6 +17,7 @@ that assessment. Do not simply answer “No data collected” or “No data shar
 | Other user-generated content | Posts, offers, reports, business details and associated content | Used when creating content or submitting reports; functionality and safety |
 | App interactions / other actions | Join requests, bookings, blocks, notification preferences and read states | Collected when those features are used; functionality and abuse prevention |
 | Crash logs / Diagnostics (App info and performance) | Sentry crash reports when EXPO_PUBLIC_SENTRY_DSN is set: error, stack, app version, device model/OS, recent screen names. No user ID, IP, typed text, messages or location; emails/phone numbers/coordinates masked on device | Collected automatically on crashes; analytics of app stability. Not linked to the user's identity. Set Sentry data retention to 90 days to match the policy |
+| Purchase history (Financial info) | Nearry Premium subscription purchases made through Google Play; RevenueCat receives the Nearry account id and purchase history to manage the subscription. No card or bank details reach Nearry | Collected when a user subscribes; linked to the account; used for app functionality; shared with RevenueCat as a service provider (not for advertising) |
 | Device or other IDs | Expo/FCM push registration token associated with an account | Optional notifications; functionality. This is not an advertising identifier |
 
 Check whether bookings/reservations with prices fall under **Purchase history**
@@ -43,7 +44,7 @@ confirm their actual collection/retention rather than declaring them absent.
 
 ## Providers to verify
 
-Supabase (Auth/database/storage/server functions), Sentry (crash reports), Resend (auth and review mail),
+Supabase (Auth/database/storage/server functions), Sentry (crash reports), RevenueCat (subscriptions), Resend (auth and review mail),
 Geoapify (place search), Expo and Google/Apple push services, and Google OAuth.
 Firebase Analytics was not enabled during the recorded Firebase setup. Check the
 actual release configuration again before claiming analytics collection is absent.
