@@ -9,9 +9,9 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Image,
   TextInput,
 } from "react-native";
+import { Image } from "expo-image";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { Screen } from "../../components/Screen";
 import { Button } from "../../components/Button";
@@ -142,11 +142,16 @@ export function ManageVenueScreen() {
             <View style={styles.photoGrid}>
               {photos.map((p) => (
                 <View key={p.id} style={styles.photoWrap}>
-                  <Image source={{ uri: p.photo_url }} style={styles.photo} />
+                  <Image
+                    cachePolicy="memory-disk"
+                    transition={150}
+                    source={{ uri: p.photo_url }}
+                    style={styles.photo}
+                  />
                   <TouchableOpacity
                     onPress={() => onDeletePhoto(p.id)}
                     style={styles.photoDelete}
-                    hitSlop={8}
+                    hitSlop={8} // 32 + 8 + 8 = 48 to touch
                   >
                     <Text style={styles.photoDeleteText}>×</Text>
                   </TouchableOpacity>
@@ -253,9 +258,9 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: 4,
     right: 4,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: colors.scrim,
     alignItems: "center",
     justifyContent: "center",

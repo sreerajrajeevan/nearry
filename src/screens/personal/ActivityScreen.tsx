@@ -1,4 +1,6 @@
 import { Alert } from "../../services/appAlert";
+import { PlanListSkeleton } from "../../components/Skeletons";
+import { haptic } from "../../services/haptics";
 import { useMyRequests } from "../../store/MyRequestsContext";
 import { AudienceBadge } from "../../components/AudienceBadge";
 import { PageHeading } from "../../components/PageHeading";
@@ -25,7 +27,6 @@ import { Button } from "../../components/Button";
 import { Avatar } from "../../components/Avatar";
 import { Icon, IconName } from "../../components/Icon";
 import { MotionPressable, ScreenReveal } from "../../components/Motion";
-import { LoadingState } from "../../components/LoadingState";
 import { colors, typography, spacing, surfaces, weight } from "../../theme";
 import { useAuth } from "../../store/AuthContext";
 import { PersonalTabNav } from "../../navigation/types";
@@ -410,7 +411,7 @@ export function ActivityScreen() {
             </View>
           )}
           {state === "loading" ? (
-            <LoadingState label="Loading your activity…" />
+            <PlanListSkeleton label="Loading your activity" />
           ) : state === "error" ? (
             <View style={styles.error}>
               <Text style={styles.cardTitle}>
@@ -505,6 +506,7 @@ export function ActivityScreen() {
                               `approve:${request.id}`,
                               async () => {
                                 await approveRequest(request.id);
+                                haptic("success");
                               },
                               "Request approved. They’re now on your guest list.",
                             )
@@ -865,7 +867,7 @@ const styles = StyleSheet.create({
   noticeText: { ...typography.bodySmall, color: colors.text, flex: 1 },
   dismiss: {
     minHeight: 44,
-    minWidth: 36,
+    minWidth: 44,
     alignItems: "center",
     justifyContent: "center",
   },

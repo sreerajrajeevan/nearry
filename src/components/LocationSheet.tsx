@@ -1,3 +1,4 @@
+import { SheetGrabber, useSheetDrag } from "./SheetDrag";
 import React, { useEffect, useState } from "react";
 import {
   Keyboard,
@@ -7,6 +8,7 @@ import {
   StyleSheet,
   Text,
   View,
+  Animated,
 } from "react-native";
 import {
   SafeAreaView,
@@ -85,6 +87,7 @@ export function LocationSheet({
   onDistance: (km: number) => void;
   onClose: () => void;
 }) {
+  const drag = useSheetDrag(onClose);
   const [query, setQuery] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [opening, setOpening] = useState(false);
@@ -155,9 +158,12 @@ export function LocationSheet({
           onPress={onClose}
         />
         <SafeAreaView edges={["top", "left", "right"]} style={styles.position}>
-          <View style={styles.sheet} accessibilityViewIsModal>
-            <View style={styles.handle} accessible={false} />
-            <View style={styles.header}>
+          <Animated.View
+            style={[styles.sheet, drag.style, drag.style]}
+            accessibilityViewIsModal
+          >
+            <SheetGrabber handlers={drag.handlers} />
+            <View {...drag.handlers} style={styles.header}>
               <Text accessibilityRole="header" style={styles.title}>
                 Location
               </Text>
@@ -165,7 +171,7 @@ export function LocationSheet({
                 accessibilityRole="button"
                 accessibilityLabel="Close location"
                 onPress={onClose}
-                style={styles.close}
+                style={({ pressed }) => [styles.close, pressed && pressedStyle]}
               >
                 <Icon name="x" size={22} />
               </Pressable>
@@ -257,7 +263,11 @@ export function LocationSheet({
                           accessibilityState={{ checked: on }}
                           aria-checked={on}
                           onPress={() => onDistance(km)}
-                          style={[styles.chip, on && styles.chipOn]}
+                          style={({ pressed }) => [
+                            styles.chip,
+                            on && styles.chipOn,
+                            pressed && pressedStyle,
+                          ]}
                         >
                           <Text
                             style={[styles.chipText, on && styles.chipTextOn]}
@@ -275,13 +285,15 @@ export function LocationSheet({
                 </View>
               )}
             </ScrollView>
-          </View>
+          </Animated.View>
         </SafeAreaView>
       </View>
     </Modal>
   );
 }
 
+/** Shown the moment a finger lands on a control. */
+const pressedStyle = { opacity: 0.6 };
 const styles = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: "rgba(3,7,18,0.42)" },
   position: { flex: 1, justifyContent: "flex-end", paddingTop: 20 },

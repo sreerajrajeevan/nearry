@@ -1,4 +1,5 @@
 import { Alert } from "../../services/appAlert";
+import { PlanDetailsSkeleton } from "../../components/Skeletons";
 import { useToast } from "../../store/ToastContext";
 import { useMyRequests } from "../../store/MyRequestsContext";
 import {
@@ -9,6 +10,7 @@ import {
 import { JoinRequestSheet } from "../../components/JoinRequestSheet";
 import { RequestNote } from "../../components/RequestNote";
 import { PersonLink } from "../../components/PersonLink";
+import { haptic } from "../../services/haptics";
 import { planShareMessage } from "../../utils/shareLink";
 import { AudienceBadge, audienceLabel } from "../../components/AudienceBadge";
 import { ProfileRequired } from "../../components/ProfileRequired";
@@ -17,7 +19,6 @@ import {
   matchesPostAudience,
   isProfileCompletionError,
 } from "../../utils/profileReadiness";
-import { LoadingState } from "../../components/LoadingState";
 import { SafetyActions } from "../../components/SafetyActions";
 import React, { useRef, useState } from "react";
 import {
@@ -120,7 +121,22 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
   );
   const post = data?.post;
   const requests = data?.requests ?? [];
-  const myRequest = data?.myRequest;
+  // A request just sent shows as pending at once, before the server replies.
+  const [sentNote, setSentNote] = useState<string | null>(null);
+  const loadedRequest = data?.myRequest;
+  const myRequest =
+    sentNote !== null &&
+    (!loadedRequest ||
+      loadedRequest.status === "declined" ||
+      loadedRequest.status === "withdrawn")
+      ? {
+          ...(loadedRequest ?? {}),
+          id: "",
+          status: "pending" as const,
+          note: sentNote || undefined,
+          declineCount: loadedRequest?.declineCount ?? 0,
+        }
+      : loadedRequest;
 
   const isHost = !!myId && post?.authorId === myId;
   const pending = requests.filter((r) => r.status === "pending");
@@ -130,28 +146,36 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
   const toast = useToast();
   const [joinOpen, setJoinOpen] = useState(false);
   const [joinError, setJoinError] = useState("");
+  const [retryNote, setRetryNote] = useState("");
   const sendJoin = async (note: string) => {
     if (!myId || busy) return;
     setBusy("join");
     setJoinError("");
+    // Instant: close the sheet and show "Requested" now; undo if it fails.
+    setJoinOpen(false);
+    setSentNote(note.trim());
+    myRequests?.markPlan(postId, "pending");
+    toast(
+      `Request sent to ${post?.authorName.split(" ")[0] || "the host"}`,
+      "send",
+    );
     try {
       await requestToJoin(postId, myId, note);
-      setJoinOpen(false);
-      toast(
-        `Request sent to ${post?.authorName.split(" ")[0] || "the host"}`,
-        "send",
-      );
+      haptic("success");
       void myRequests?.refresh();
       await load();
     } catch (e) {
+      myRequests?.markPlan(postId, null);
       if (isProfileCompletionError(e)) {
-        setJoinOpen(false);
         setProfilePrompt(true);
         void refreshProfile().catch(() => {});
         return;
       }
+      setRetryNote(note);
       setJoinError(e instanceof Error ? e.message : "Something went wrong.");
+      setJoinOpen(true);
     } finally {
+      setSentNote(null);
       setBusy(null);
     }
   };
@@ -199,8 +223,8 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
 
   if (state === "loading") {
     return (
-      <Screen padded>
-        <LoadingState label="Loading this plan…" layout="detail" />
+      <Screen padded={false}>
+        <PlanDetailsSkeleton />
       </Screen>
     );
   }
@@ -508,7 +532,9 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
                     activeOpacity={0.7}
                     disabled={busy !== null || !flow.accepting}
                     onPress={() =>
-                      run(`a${r.id}`, () => approveRequest(r.id).then(() => {}))
+                      run(`a${r.id}`, () =>
+                        approveRequest(r.id).then(() => haptic("success")),
+                      )
                     }
                     style={styles.approvePill}
                   >
@@ -674,9 +700,10 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
                 <RequestNote note={myRequest.note} mine />
                 <View style={styles.gap} />
                 <Button
-                  title="Withdraw request"
+                  title={myRequest.id ? "Withdraw request" : "Sending…"}
                   variant="ghost"
                   loading={busy === "wd"}
+                  disabled={!myRequest.id}
                   onPress={() => run("wd", () => withdrawRequest(myRequest.id))}
                 />
               </>
@@ -724,6 +751,7 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
         placeholder={joinNoteHint(post.planDetails?.activity)}
         sending={busy === "join"}
         error={joinError}
+        initialNote={retryNote}
         onSend={(note) => void sendJoin(note)}
         onClose={() => setJoinOpen(false)}
       />
@@ -822,9 +850,9 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   iconButton: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "rgba(255,255,255,0.94)",

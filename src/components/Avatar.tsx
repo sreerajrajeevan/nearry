@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, Image, StyleSheet } from "react-native";
+import { View, Text, StyleSheet } from "react-native";
+import { Image } from "expo-image";
 import { colors, typography, radius, weight } from "../theme";
 
 type Props = {
@@ -24,6 +25,8 @@ export function Avatar({ name, size = 44, tone = "neutral", uri }: Props) {
   if (uri && !failed) {
     return (
       <Image
+        cachePolicy="memory-disk"
+        transition={150}
         source={{ uri }}
         style={[styles.photo, round]}
         onError={() => setFailed(true)}

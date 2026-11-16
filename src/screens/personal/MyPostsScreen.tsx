@@ -1,6 +1,6 @@
+import { PlanListSkeleton } from "../../components/Skeletons";
 import { AudienceBadge } from "../../components/AudienceBadge";
 import { BackButton } from "../../components/BackButton";
-import { LoadingState } from "../../components/LoadingState";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   FlatList,
@@ -143,7 +143,7 @@ export function MyPostsScreen({ navigation }: Props) {
         }
         ListEmptyComponent={
           state === "loading" ? (
-            <LoadingState label="Loading your posts…" layout="list" />
+            <PlanListSkeleton label="Loading your posts" />
           ) : state === "error" ? (
             <>
               <EmptyState

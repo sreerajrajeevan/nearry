@@ -1,3 +1,4 @@
+import { SheetGrabber, useSheetDrag } from "./SheetDrag";
 import React, { useState } from "react";
 import {
   Modal,
@@ -6,6 +7,7 @@ import {
   StyleSheet,
   Text,
   View,
+  Animated,
 } from "react-native";
 import {
   SafeAreaView,
@@ -57,10 +59,12 @@ function Choices<T extends string | number | null>({
             aria-checked={value === option.value}
             disabled={option.disabled}
             onPress={() => onChange(option.value)}
-            style={[
+            style={({ pressed }) => [
               styles.choice,
               value === option.value && styles.selected,
               option.disabled && styles.disabled,
+              ,
+              pressed && pressedStyle,
             ]}
           >
             <Text
@@ -101,6 +105,7 @@ export function PlanFilterSheet({
   onApply: (options: PlanOptions) => void;
   onClose: () => void;
 }) {
+  const drag = useSheetDrag(onClose);
   const [draft, setDraft] = useState(value);
   const insets = useSafeAreaInsets();
   const reduced = useReducedMotion();
@@ -123,9 +128,12 @@ export function PlanFilterSheet({
           onPress={onClose}
         />
         <SafeAreaView edges={["top", "left", "right"]} style={styles.position}>
-          <View style={styles.sheet} accessibilityViewIsModal>
-            <View style={styles.handle} accessible={false} />
-            <View style={styles.header}>
+          <Animated.View
+            style={[styles.sheet, drag.style, drag.style]}
+            accessibilityViewIsModal
+          >
+            <SheetGrabber handlers={drag.handlers} />
+            <View {...drag.handlers} style={styles.header}>
               <Text accessibilityRole="header" style={styles.title}>
                 Filter & sort
               </Text>
@@ -133,7 +141,7 @@ export function PlanFilterSheet({
                 accessibilityRole="button"
                 accessibilityLabel="Close filters"
                 onPress={onClose}
-                style={styles.close}
+                style={({ pressed }) => [styles.close, pressed && pressedStyle]}
               >
                 <Icon name="x" size={22} />
               </Pressable>
@@ -202,13 +210,15 @@ export function PlanFilterSheet({
                 style={styles.apply}
               />
             </View>
-          </View>
+          </Animated.View>
         </SafeAreaView>
       </View>
     </Modal>
   );
 }
 
+/** Shown the moment a finger lands on a control. */
+const pressedStyle = { opacity: 0.6 };
 const styles = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: "rgba(8,37,27,0.38)" },
   position: { flex: 1, justifyContent: "flex-end", paddingTop: 20 },
