@@ -478,7 +478,9 @@ export function createAdminConsoleHandler(
             (kind === "report" &&
               ["dismiss", "remove", "suspend"].includes(decision)) ||
             (kind === "account" &&
-              ["suspend", "unsuspend", "cancel-deletion"].includes(decision))
+              ["suspend", "unsuspend", "cancel-deletion", "delete"].includes(
+                decision,
+              ))
           ) ||
           typeof payload.note !== "string" ||
           payload.note.length > 200
@@ -491,6 +493,7 @@ export function createAdminConsoleHandler(
             "suspend",
             "unsuspend",
             "cancel-deletion",
+            "delete",
           ].includes(decision) &&
           !payload.note.trim()
         )

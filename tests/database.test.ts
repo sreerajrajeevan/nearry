@@ -3841,6 +3841,58 @@ test("admin account controls require owner authorization and reasons, protect ad
   );
 });
 
+test("an owner can delete an account from the console; it is queued like the in-app delete", async () => {
+  const owner = await corePersonal();
+  const moderator = await corePersonal();
+  await db.query(
+    "insert into admin_console_members(user_id,role) values($1,'owner'),($2,'moderator')",
+    [owner, moderator],
+  );
+  const del = (actor: string, id: string, note = "Owner asked by email") =>
+    asUser(
+      null,
+      (tx) =>
+        tx.query("select admin_console_decide($1,'account',$2,'delete',$3)", [
+          actor,
+          id,
+          note,
+        ]),
+      "service_role",
+    );
+  const target = await corePersonal();
+  await assert.rejects(del(moderator, target), /only owner/);
+  await assert.rejects(del(owner, target, " "), /reason required/);
+  await assert.rejects(del(owner, moderator), /Cannot delete an administrator/);
+  await assert.rejects(del(owner, owner), /delete your own account/);
+  await del(owner, target);
+  assert.ok(
+    (
+      await db.query("select deletion_requested_at from profiles where id=$1", [
+        target,
+      ])
+    ).rows[0].deletion_requested_at,
+  );
+  assert.equal(
+    (
+      await db.query(
+        "select count(*)::int n from account_deletion_jobs where user_id=$1",
+        [target],
+      )
+    ).rows[0].n,
+    1,
+  );
+  await assert.rejects(del(owner, target), /already requested/);
+  assert.deepEqual(
+    (
+      await db.query(
+        "select action,note from admin_console_audit where target_id=$1",
+        [target],
+      )
+    ).rows,
+    [{ action: "account:delete", note: "Owner asked by email" }],
+  );
+});
+
 test("admin cancellation preserves claimed deletion jobs and only cancels an unstarted owner request", async () => {
   const owner = await corePersonal();
   await db.query(

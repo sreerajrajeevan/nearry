@@ -620,7 +620,12 @@ test("admin: account detail falls back to the report note when no direct suspend
 });
 
 test("admin: account actions are owner-only, need a reason and forward the exact decision", async () => {
-  for (const decision of ["suspend", "unsuspend", "cancel-deletion"]) {
+  for (const decision of [
+    "suspend",
+    "unsuspend",
+    "cancel-deletion",
+    "delete",
+  ]) {
     const f = fixture();
     const r = await f.handler(
       req({
@@ -679,7 +684,7 @@ test("admin: account actions are owner-only, need a reason and forward the exact
           action: "decide",
           kind: "account",
           id: user,
-          decision: "delete",
+          decision: "erase-everything",
           note: "x",
         }),
       )
