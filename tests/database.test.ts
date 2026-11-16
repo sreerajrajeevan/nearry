@@ -4800,3 +4800,23 @@ test("booking limits: up to 2 people, one booking per offer per day, at most 3 w
   );
   await book(offers[3].slot, 1, busy);
 });
+
+test("the usage report runs on the real schema and lists no people", async () => {
+  const sql = await readFile("supabase/ops/usage-report.sql", "utf8");
+  // Read-only: no writes or definitions anywhere in the report.
+  assert.doesNotMatch(
+    sql.replace(/--.*$/gm, ""),
+    /\b(insert|update|delete|drop|alter|create|grant|truncate)\b/i,
+  );
+  const blocks = sql
+    .split(/;\s*\n/)
+    .map((b) => b.replace(/--.*$/gm, "").trim())
+    .filter(Boolean);
+  assert.equal(blocks.length, 5);
+  for (const block of blocks) {
+    const { fields } = await db.query(block);
+    // Aggregates only: no id, name or email columns come back.
+    for (const f of fields)
+      assert.doesNotMatch(f.name, /(^|_)(id|name|email)$/);
+  }
+});

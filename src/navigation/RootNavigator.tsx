@@ -16,6 +16,7 @@ import { usePushSetup } from "../hooks/useUnreadCounts";
 import { LoadingState } from "../components/LoadingState";
 import { WelcomeScreen } from "../screens/WelcomeScreen";
 import { usePlanLinks } from "../hooks/usePlanLinks";
+import { setMonitoringAccount } from "../services/monitoring";
 import { NotificationPrompt } from "../components/NotificationPrompt";
 import { IntroductionScreen } from "../screens/onboarding/IntroductionScreen";
 import { PersonalOnboardingScreen } from "../screens/onboarding/PersonalOnboardingScreen";
@@ -60,6 +61,8 @@ export function RootNavigator() {
   usePushSetup();
 
   usePlanLinks();
+  const crashTag = profile?.accountType ?? null;
+  useEffect(() => setMonitoringAccount(crashTag), [crashTag]);
   const shownRoleMismatch = useRef<typeof roleMismatch>(null);
 
   // The login lane is only a hint: one email = one account = one fixed type.

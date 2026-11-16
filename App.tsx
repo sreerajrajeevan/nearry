@@ -23,6 +23,11 @@ import { colors } from "./src/theme";
 import { MotionProvider } from "./src/store/MotionContext";
 import { ToastProvider } from "./src/store/ToastContext";
 import { AppAlertHost } from "./src/components/AppAlertHost";
+import { AppErrorBoundary } from "./src/components/AppErrorBoundary";
+import { initMonitoring, trackScreen } from "./src/services/monitoring";
+
+// Before anything renders, so start-up crashes are caught too.
+initMonitoring();
 
 // Hold the native brand artwork until React has laid out its matching launch frame.
 void SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -71,7 +76,13 @@ function AppShell({ resourcesReady }: { resourcesReady: boolean }) {
             }
             pointerEvents={launchVisible ? "none" : "auto"}
           >
-            <NavigationContainer theme={navTheme} ref={navigationRef}>
+            <NavigationContainer
+              theme={navTheme}
+              ref={navigationRef}
+              onStateChange={() =>
+                trackScreen(navigationRef.getCurrentRoute()?.name)
+              }
+            >
               <RootNavigator />
             </NavigationContainer>
           </View>
@@ -100,21 +111,23 @@ export default function App() {
   });
   const [assets, assetError] = useAssets(BRAND_ASSETS);
   return (
-    <SafeAreaProvider>
-      <MotionProvider>
-        <StatusBar style="dark" />
-        <ToastProvider>
-          <AuthProvider>
-            <AppShell
-              resourcesReady={
-                !!(fontsLoaded || fontError) && !!(assets || assetError)
-              }
-            />
-          </AuthProvider>
-        </ToastProvider>
-        <AppAlertHost />
-      </MotionProvider>
-    </SafeAreaProvider>
+    <AppErrorBoundary>
+      <SafeAreaProvider>
+        <MotionProvider>
+          <StatusBar style="dark" />
+          <ToastProvider>
+            <AuthProvider>
+              <AppShell
+                resourcesReady={
+                  !!(fontsLoaded || fontError) && !!(assets || assetError)
+                }
+              />
+            </AuthProvider>
+          </ToastProvider>
+          <AppAlertHost />
+        </MotionProvider>
+      </SafeAreaProvider>
+    </AppErrorBoundary>
   );
 }
 const styles = StyleSheet.create({
