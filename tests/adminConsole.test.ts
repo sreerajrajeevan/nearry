@@ -401,6 +401,7 @@ test("admin: moderators cannot suspend; decisions require valid IDs and rejectio
       id: review,
       decision: "approved",
       note: " Checked ",
+      locationConfirmed: true,
     }),
   );
   assert.equal(ok.status, 200);
@@ -410,6 +411,7 @@ test("admin: moderators cannot suspend; decisions require valid IDs and rejectio
     p_record_id: review,
     p_decision: "approved",
     p_note: "Checked",
+    p_location_confirmed: true,
   });
 });
 test("admin: server errors never expose private SQL, paths or credentials; malformed/large requests fail", async () => {
@@ -768,4 +770,33 @@ test("admin: expected account conflicts are actionable and internal errors remai
     (await response.json()).error,
     "Request failed. Please refresh and try again.",
   );
+});
+
+test("admin business approval requires explicit location review; rejection remains available", async () => {
+  const f = fixture();
+  const response = await f.handler(
+    req({
+      action: "decide",
+      kind: "business",
+      id: review,
+      decision: "approved",
+      note: "",
+    }),
+  );
+  assert.equal(response.status, 400);
+  assert.match(await response.text(), /address and map pin/);
+  assert.equal(
+    f.calls.filter((c) => c.rpc === "admin_console_decide").length,
+    0,
+  );
+  const rejection = await f.handler(
+    req({
+      action: "decide",
+      kind: "business",
+      id: review,
+      decision: "rejected",
+      note: "Address does not match proof",
+    }),
+  );
+  assert.equal(rejection.status, 200);
 });

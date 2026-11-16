@@ -511,6 +511,19 @@ export function createAdminConsoleHandler(
             403,
             origin,
           );
+        if (
+          kind === "business" &&
+          decision === "approved" &&
+          payload.locationConfirmed !== true
+        )
+          return json(
+            {
+              error:
+                "Confirm that you reviewed the business address and map pin.",
+            },
+            400,
+            origin,
+          );
         if (kind === "selfie" && decision === "verified")
           await selfieComparison(payload.id);
         checked(
@@ -520,6 +533,9 @@ export function createAdminConsoleHandler(
             p_record_id: payload.id,
             p_decision: decision,
             p_note: payload.note.trim(),
+            ...(kind === "business"
+              ? { p_location_confirmed: payload.locationConfirmed === true }
+              : {}),
           }),
         );
         return json({ ok: true }, 200, origin);

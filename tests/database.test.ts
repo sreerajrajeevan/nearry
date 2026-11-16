@@ -2,6 +2,15 @@ import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { readFile, readdir } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
+const submittedVenue = {
+  name: "Reviewed Salon",
+  category: "Salon",
+  area: "Kakkanad",
+  address: "12 Park Road, Kakkanad, Kochi 682030",
+  latitude: 10.01,
+  longitude: 76.35,
+  source: "manual",
+};
 let db: any;
 let external = false;
 let legacyGroupNotice: any;
@@ -188,6 +197,10 @@ before(async () => {
       [id, role === "business" ? "verified" : "unverified"],
     );
   }
+  await db.query(
+    "insert into venues(business_id,name,category,area,verified_at) values($1,'Test Salon','Salon','Kakkanad',now())",
+    [biz],
+  );
 });
 after(async () => {
   await db?.close();
@@ -747,9 +760,14 @@ async function auditBusiness(verified = true) {
     ],
   );
   await db.query(
-    'update profiles set onboarding_completed=true,business_name=\'Audit Salon\',business_details=\'{"category":"Salon","area":"Kakkanad"}\',verification_status=$2 where id=$1',
+    'update profiles set role_selected=true,onboarding_completed=true,business_name=\'Audit Salon\',business_details=\'{"category":"Salon","area":"Kakkanad"}\',verification_status=$2 where id=$1',
     [id, verified ? "verified" : "unverified"],
   );
+  if (verified)
+    await db.query(
+      "insert into venues(business_id,name,category,area,verified_at) values($1,'Audit Salon','Salon','Kakkanad',now())",
+      [id],
+    );
   return id;
 }
 async function auditOffer(owner: string) {
@@ -778,7 +796,10 @@ test("audit: proof submission works without pg_net and queues a private review j
     ),
   );
   await asUser(owner, (tx) =>
-    tx.query("select submit_verification($1)", [path]),
+    tx.query("select submit_business_verification($1,$2)", [
+      path,
+      JSON.stringify(submittedVenue),
+    ]),
   );
   assert.equal(
     (
@@ -1046,7 +1067,10 @@ test("audit: review jobs are private and reviews are atomic, single-use, and bou
       ),
     );
     await asUser(owner, (tx) =>
-      tx.query("select submit_verification($1)", [path]),
+      tx.query("select submit_business_verification($1,$2)", [
+        path,
+        JSON.stringify(submittedVenue),
+      ]),
     );
     return (
       await db.query(
@@ -1066,7 +1090,7 @@ test("audit: review jobs are private and reviews are atomic, single-use, and bou
   );
   await assert.rejects(
     asUser(owner, (tx) =>
-      tx.query("select review_verification($1,'approved',null)", [old]),
+      tx.query("select review_verification($1,'approved',null,true)", [old]),
     ),
     /permission denied/,
   );
@@ -1083,7 +1107,7 @@ test("audit: review jobs are private and reviews are atomic, single-use, and bou
     "Need a clearer photo",
   );
   await assert.rejects(
-    db.query("select review_verification($1,'approved',null)", [old]),
+    db.query("select review_verification($1,'approved',null,true)", [old]),
     /stale|completed/,
   );
   const current = await submit("new.png");
@@ -1096,14 +1120,16 @@ test("audit: review jobs are private and reviews are atomic, single-use, and bou
     null,
   );
   await assert.rejects(
-    db.query("select review_verification($1,'approved',null)", [old]),
+    db.query("select review_verification($1,'approved',null,true)", [old]),
     /stale|completed/,
   );
   await assert.rejects(
     db.query("select review_verification($1,'bogus',null)", [current]),
     /invalid decision/,
   );
-  await db.query("select review_verification($1,'approved',null)", [current]);
+  await db.query("select review_verification($1,'approved',null,true)", [
+    current,
+  ]);
   assert.equal(
     (
       await db.query("select verification_status from profiles where id=$1", [
@@ -1174,7 +1200,10 @@ test(
       ),
     );
     await asUser(owner, (tx) =>
-      tx.query("select submit_verification($1)", [path]),
+      tx.query("select submit_business_verification($1,$2)", [
+        path,
+        JSON.stringify(submittedVenue),
+      ]),
     );
     const job = (
       await db.query(
@@ -1203,7 +1232,9 @@ test(
       asUser(
         null,
         (tx) =>
-          tx.query("select review_verification($1,'approved',null)", [job]),
+          tx.query("select review_verification($1,'approved',null,true)", [
+            job,
+          ]),
         "service_role",
       ),
       asUser(
@@ -2850,6 +2881,10 @@ test("admin: business review queue, old requests, decisions and audit use curren
         [id],
       )
     ).rows[0].id;
+    await db.query(
+      "update verification_review_jobs set venue_submission=$2 where id=$1",
+      [review, JSON.stringify(submittedVenue)],
+    );
     return { id, review, path };
   };
   const business = await makeBusiness("Older cafe request");
@@ -2861,7 +2896,7 @@ test("admin: business review queue, old requests, decisions and audit use curren
     asUser(
       null,
       (tx) =>
-        tx.query("select admin_console_decide($1,'business',$2,$3,$4)", [
+        tx.query("select admin_console_decide($1,'business',$2,$3,$4,true)", [
           owner,
           id,
           decision,
@@ -2914,7 +2949,7 @@ test("admin: business review queue, old requests, decisions and audit use curren
     asUser(
       null,
       (tx) =>
-        tx.query("select review_verification($1,'approved','')", [
+        tx.query("select review_verification($1,'approved','',true)", [
           business.review,
         ]),
       "service_role",
@@ -4080,11 +4115,7 @@ test("group notification sender names support Unicode, missing names and bounded
   const originalName = (
     await db.query("select display_name from profiles where id=$1", [host])
   ).rows[0].display_name;
-  const sendAndRead = async (
-    name: string,
-    message: string,
-    key: string,
-  ) => {
+  const sendAndRead = async (name: string, message: string, key: string) => {
     await db.query("update profiles set display_name=$1 where id=$2", [
       name,
       host,
@@ -4933,4 +4964,463 @@ test("the usage report runs on the real schema and lists no people", async () =>
     for (const f of fields)
       assert.doesNotMatch(f.name, /(^|_)(id|name|email)$/);
   }
+});
+
+test("business venue: proof and immutable location are reviewed atomically; offers inherit the approved venue", async () => {
+  const owner = await auditBusiness(false),
+    path = `${owner}/venue-proof.jpg`;
+  await asUser(owner, (tx) =>
+    tx.query(
+      "insert into storage.objects(bucket_id,name) values('verification_docs',$1)",
+      [path],
+    ),
+  );
+  await assert.rejects(
+    asUser(owner, (tx) => tx.query("select submit_verification($1)", [path])),
+    /include your business address/,
+  );
+  await assert.rejects(
+    asUser(owner, (tx) =>
+      tx.query("select submit_business_verification($1,$2)", [
+        path,
+        JSON.stringify({ ...submittedVenue, address: "" }),
+      ]),
+    ),
+    /full address/,
+  );
+  await assert.rejects(
+    asUser(b, (tx) =>
+      tx.query("select submit_business_verification($1,$2)", [
+        path,
+        JSON.stringify(submittedVenue),
+      ]),
+    ),
+    /business profile/,
+  );
+  await asUser(owner, (tx) =>
+    tx.query("select submit_business_verification($1,$2)", [
+      path,
+      JSON.stringify(submittedVenue),
+    ]),
+  );
+  const job = (
+    await db.query(
+      "select id,venue_submission from verification_review_jobs where user_id=$1 and reviewed_at is null",
+      [owner],
+    )
+  ).rows[0];
+  assert.deepEqual(job.venue_submission, submittedVenue);
+  await assert.rejects(
+    asUser(owner, (tx) =>
+      tx.query(
+        "update verification_review_jobs set venue_submission='{}' where id=$1",
+        [job.id],
+      ),
+    ),
+    /permission denied/,
+  );
+  await assert.rejects(
+    asUser(owner, (tx) =>
+      tx.query("select submit_business_verification($1,$2)", [
+        path,
+        JSON.stringify(submittedVenue),
+      ]),
+    ),
+    /already under review/,
+  );
+  // Changing the private profile after submission must not move the reviewed pin.
+  await asUser(owner, (tx) =>
+    tx.query("update profiles set business_details=$2 where id=$1", [
+      owner,
+      JSON.stringify({
+        category: "Salon",
+        area: "A different city",
+        latitude: 40,
+        longitude: 20,
+      }),
+    ]),
+  );
+  assert.equal(
+    (
+      await db.query(
+        "select count(*)::int n from venues where business_id=$1",
+        [owner],
+      )
+    ).rows[0].n,
+    0,
+  );
+  const draft = (
+    await asUser(owner, (tx) =>
+      tx.query(
+        "insert into offers(business_id,title,description,starts_at,ends_at,status) values($1,'Review offer','A review test offer description',now()+interval '3 hours',now()+interval '5 hours','draft') returning id,venue_id",
+        [owner],
+      ),
+    )
+  ).rows[0];
+  assert.equal(draft.venue_id, null);
+  await asUser(
+    null,
+    (tx) =>
+      tx.query("select review_verification($1,'approved',null,true)", [job.id]),
+    "service_role",
+  );
+  const venue = (
+    await db.query("select * from venues where business_id=$1", [owner])
+  ).rows[0];
+  assert.equal(venue.name, submittedVenue.name);
+  assert.equal(venue.address, submittedVenue.address);
+  assert.equal(venue.area, submittedVenue.area);
+  assert.equal(venue.location_lat, submittedVenue.latitude);
+  assert.equal(venue.location_lng, submittedVenue.longitude);
+  if (external)
+    assert.equal(
+      (
+        await db.query(
+          "select st_dwithin(location,st_setsrid(st_makepoint(76.35,10.01),4326)::geography,1) matches from venues where id=$1",
+          [venue.id],
+        )
+      ).rows[0].matches,
+      true,
+    );
+  assert.equal(
+    (await db.query("select venue_id from offers where id=$1", [draft.id]))
+      .rows[0].venue_id,
+    venue.id,
+  );
+  const second = (
+    await asUser(owner, (tx) =>
+      tx.query(
+        "insert into offers(business_id,title,description,starts_at,ends_at,status) values($1,'Next offer','Next approved venue offer',now()+interval '7 hours',now()+interval '9 hours','draft') returning venue_id",
+        [owner],
+      ),
+    )
+  ).rows[0];
+  assert.equal(second.venue_id, venue.id);
+  const state = (
+    await asUser(owner, (tx) => tx.query("select get_my_business_venue() v"))
+  ).rows[0].v;
+  assert.equal(state.venue.id, venue.id);
+  assert.deepEqual(state.submission, submittedVenue);
+  assert.equal(
+    (await asUser(b, (tx) => tx.query("select get_my_business_venue() v")))
+      .rows[0].v,
+    null,
+  );
+  await assert.rejects(
+    asUser(owner, (tx) =>
+      tx.query(
+        "update venues set address='Unreviewed address',location_lat=40 where id=$1",
+        [venue.id],
+      ),
+    ),
+    /permission denied/,
+  );
+  await assert.rejects(
+    asUser(
+      null,
+      (tx) =>
+        tx.query("select review_verification($1,'approved',null,true)", [
+          job.id,
+        ]),
+      "service_role",
+    ),
+    /already completed/,
+  );
+  assert.equal(
+    (
+      await db.query(
+        "select count(*)::int n from venues where business_id=$1",
+        [owner],
+      )
+    ).rows[0].n,
+    1,
+  );
+});
+
+test("business venue: rejected or old proof-only requests never create a venue or grant approval", async () => {
+  const owner = await auditBusiness(false),
+    path = `${owner}/old-proof.jpg`;
+  await db.query(
+    "insert into storage.objects(bucket_id,name) values('verification_docs',$1)",
+    [path],
+  );
+  // Reproduce a request submitted by an older app before location was required.
+  await db.query(
+    "update profiles set verification_status='pending',verification_doc_path=$2 where id=$1",
+    [owner, path],
+  );
+  const old = (
+    await db.query(
+      "select id from verification_review_jobs where user_id=$1 and reviewed_at is null",
+      [owner],
+    )
+  ).rows[0].id;
+  await assert.rejects(
+    asUser(
+      null,
+      (tx) =>
+        tx.query("select review_verification($1,'approved',null,true)", [old]),
+      "service_role",
+    ),
+    /no complete venue/,
+  );
+  assert.equal(
+    (
+      await db.query("select verification_status from profiles where id=$1", [
+        owner,
+      ])
+    ).rows[0].verification_status,
+    "pending",
+  );
+  await asUser(owner, (tx) =>
+    tx.query("select submit_business_verification($1,$2)", [
+      path,
+      JSON.stringify(submittedVenue),
+    ]),
+  );
+  const current = (
+    await db.query(
+      "select id from verification_review_jobs where user_id=$1 and reviewed_at is null",
+      [owner],
+    )
+  ).rows[0].id;
+  assert.notEqual(current, old);
+  await assert.rejects(
+    asUser(
+      null,
+      (tx) =>
+        tx.query("select review_verification($1,'approved',null,true)", [old]),
+      "service_role",
+    ),
+    /already completed/,
+  );
+  await asUser(
+    null,
+    (tx) =>
+      tx.query(
+        "select review_verification($1,'rejected','Address does not match proof')",
+        [current],
+      ),
+    "service_role",
+  );
+  assert.equal(
+    (
+      await db.query(
+        "select count(*)::int n from venues where business_id=$1",
+        [owner],
+      )
+    ).rows[0].n,
+    0,
+  );
+});
+
+test("business venue: a verified legacy account must add its venue before publishing", async () => {
+  const owner = await auditBusiness(false),
+    path = `${owner}/legacy-location.jpg`;
+  await db.query(
+    "update profiles set verification_status='verified' where id=$1",
+    [owner],
+  );
+  await assert.rejects(auditOffer(owner), /business venue/);
+  await db.query(
+    "insert into storage.objects(bucket_id,name) values('verification_docs',$1)",
+    [path],
+  );
+  await asUser(owner, (tx) =>
+    tx.query("select submit_business_verification($1,$2)", [
+      path,
+      JSON.stringify(submittedVenue),
+    ]),
+  );
+  const job = (
+    await db.query(
+      "select id from verification_review_jobs where user_id=$1 and reviewed_at is null",
+      [owner],
+    )
+  ).rows[0].id;
+  await asUser(
+    null,
+    (tx) =>
+      tx.query("select review_verification($1,'approved',null,true)", [job]),
+    "service_role",
+  );
+  const offer = await auditOffer(owner);
+  assert.ok(
+    (await db.query("select venue_id from offers where id=$1", [offer.id]))
+      .rows[0].venue_id,
+  );
+});
+
+test("business venue: approving a legacy live offer attaches its venue without changing slots, bookings or chat", async () => {
+  const owner = await auditBusiness(false),
+    customer = await corePersonal(),
+    path = `${owner}/location-proof.jpg`;
+  await db.query(
+    "update profiles set verification_status='verified' where id=$1",
+    [owner],
+  );
+  // Simulate the old release, which allowed live offers without venue_id.
+  let offer: { id: string; slot: string };
+  await db.exec("alter table offers disable trigger trg_guard_offer_publish");
+  try {
+    offer = await auditOffer(owner);
+  } finally {
+    await db.exec("alter table offers enable trigger trg_guard_offer_publish");
+  }
+  const booking = (
+    await asUser(customer, (tx) =>
+      tx.query("select book_offer_slot($1,1) r", [offer!.slot]),
+    )
+  ).rows[0].r;
+  await asUser(owner, (tx) =>
+    tx.query("select change_booking_status($1,'confirmed')", [
+      booking.booking_id,
+    ]),
+  );
+  const chat = (
+    await asUser(customer, (tx) =>
+      tx.query("select get_or_create_conversation($1,null,$2) id", [
+        owner,
+        booking.booking_id,
+      ]),
+    )
+  ).rows[0].id;
+  await asUser(customer, (tx) =>
+    tx.query(
+      "insert into messages(conversation_id,sender_id,body) values($1,$2,'Keep our booking conversation')",
+      [chat, customer],
+    ),
+  );
+  const before = (
+    await db.query(
+      "select id,starts_at::text,ends_at::text,capacity from offer_slots where offer_id=$1 order by id",
+      [offer!.id],
+    )
+  ).rows;
+  const reservation = (
+    await db.query("select to_jsonb(b) b from bookings b where id=$1", [
+      booking.booking_id,
+    ])
+  ).rows[0].b;
+  await db.query(
+    "insert into storage.objects(bucket_id,name) values('verification_docs',$1)",
+    [path],
+  );
+  await asUser(owner, (tx) =>
+    tx.query("select submit_business_verification($1,$2)", [
+      path,
+      JSON.stringify(submittedVenue),
+    ]),
+  );
+  const job = (
+    await db.query(
+      "select id from verification_review_jobs where user_id=$1 and reviewed_at is null",
+      [owner],
+    )
+  ).rows[0].id;
+  await asUser(
+    null,
+    (tx) =>
+      tx.query("select review_verification($1,'approved',null,true)", [job]),
+    "service_role",
+  );
+  assert.ok(
+    (await db.query("select venue_id from offers where id=$1", [offer!.id]))
+      .rows[0].venue_id,
+  );
+  assert.deepEqual(
+    (
+      await db.query(
+        "select id,starts_at::text,ends_at::text,capacity from offer_slots where offer_id=$1 order by id",
+        [offer!.id],
+      )
+    ).rows,
+    before,
+  );
+  assert.deepEqual(
+    (
+      await db.query("select to_jsonb(b) b from bookings b where id=$1", [
+        booking.booking_id,
+      ])
+    ).rows[0].b,
+    reservation,
+  );
+  assert.equal(
+    (
+      await db.query(
+        "select count(*)::int n from conversations where booking_id=$1",
+        [booking.booking_id],
+      )
+    ).rows[0].n,
+    1,
+  );
+  assert.equal(
+    (
+      await db.query("select body from messages where conversation_id=$1", [
+        chat,
+      ])
+    ).rows[0].body,
+    "Keep our booking conversation",
+  );
+});
+
+test("business venue: old service callers cannot approve without confirming the location", async () => {
+  const owner = await auditBusiness(false),
+    path = `${owner}/confirm-map.jpg`;
+  await db.query(
+    "insert into storage.objects(bucket_id,name) values('verification_docs',$1)",
+    [path],
+  );
+  await asUser(owner, (tx) =>
+    tx.query("select submit_business_verification($1,$2)", [
+      path,
+      JSON.stringify(submittedVenue),
+    ]),
+  );
+  const job = (
+    await db.query(
+      "select id from verification_review_jobs where user_id=$1 and reviewed_at is null",
+      [owner],
+    )
+  ).rows[0].id;
+  await assert.rejects(
+    asUser(
+      null,
+      (tx) => tx.query("select review_verification($1,'approved',null)", [job]),
+      "service_role",
+    ),
+    /confirm the business address/,
+  );
+  await assert.rejects(
+    asUser(
+      null,
+      (tx) =>
+        tx.query(
+          "select admin_console_decide($1,'business',$2,'approved','')",
+          [host, job],
+        ),
+      "service_role",
+    ),
+    /confirm the business address/,
+  );
+  await assert.rejects(
+    asUser(
+      null,
+      (tx) =>
+        tx.query(
+          "select review_verification_before_venue($1,'approved',null)",
+          [job],
+        ),
+      "service_role",
+    ),
+    /permission denied/,
+  );
+  assert.equal(
+    (
+      await db.query("select verification_status from profiles where id=$1", [
+        owner,
+      ])
+    ).rows[0].verification_status,
+    "pending",
+  );
 });
