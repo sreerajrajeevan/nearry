@@ -107,6 +107,11 @@ before(async () => {
           /create function public.nearby_post_cards[\s\S]*?grant execute on function public.nearby_post_cards[^;]+;/,
           "",
         );
+      if (file === "00047_hosted_by_filter.sql")
+        sql = sql.replace(
+          /drop function if exists public.nearby_post_cards[\s\S]*?grant execute on function public.nearby_post_cards[^;]+;/,
+          "",
+        );
       if (file === "00014_location.sql")
         sql = sql.replace(
           /create or replace function nearby_venues_with_distance[\s\S]*?grant execute on function nearby_venues_with_distance[^;]+;/,
@@ -3725,6 +3730,14 @@ test(
         "anon",
       ),
     );
+    // The Hosted by filter is Premium-gated even when nothing matches.
+    await assert.rejects(
+      () =>
+        asUser(stranger, async (tx) =>
+          tx.query("select nearby_post_cards(0.5,0.5,5000,'female')"),
+        ),
+      /premium_required/,
+    );
     await asUser(stranger, async (tx) =>
       tx.query("select set_user_block($1,true)", [owner]),
     );
@@ -5602,4 +5615,77 @@ test("clients cannot read or write entitlements or usage of others", async () =>
     asUser(a, (tx) => tx.query("select * from daily_usage")),
     /permission denied/,
   );
+});
+
+async function hostWithPlan(gender: string, status = "open") {
+  const u = await corePersonal();
+  await db.query("update profiles set gender=$2 where id=$1", [u, gender]);
+  await db.query(
+    `insert into posts(author_id,title,description,starts_at,vacancies,venue_id,status) values($1,'Hosted plan','Hosted by filter fixture',now()+interval '4 hours',2,'10000000-0000-0000-0000-000000000032',$2)`,
+    [u, status],
+  );
+  return u;
+}
+async function premiumUser() {
+  const u = await corePersonal();
+  await db.query(
+    "insert into premium_entitlements(user_id,expires_at) values($1,now()+interval '7 days')",
+    [u],
+  );
+  return u;
+}
+
+test("hosted-by filter refuses free users with premium_required", async () => {
+  const u = await corePersonal();
+  await assert.rejects(
+    asUser(u, (tx) =>
+      tx.query("select * from hosts_matching_gender('female')"),
+    ),
+    /premium_required/,
+  );
+});
+
+test("hosted-by filter returns only open plans' hosts of that gender", async () => {
+  const a = await hostWithPlan("female"),
+    bMale = await hostWithPlan("male"),
+    cClosed = await hostWithPlan("female", "closed");
+  const viewer = await premiumUser();
+  const ids = async (g: string) =>
+    (
+      await asUser(viewer, (tx) =>
+        tx.query("select hosts_matching_gender($1) id", [g]),
+      )
+    ).rows.map((r: any) => r.id);
+  const female = await ids("female");
+  assert.ok(female.includes(a));
+  assert.ok(!female.includes(bMale));
+  assert.ok(!female.includes(cClosed));
+  assert.ok((await ids("male")).includes(bMale));
+  assert.ok(!(await ids("other")).includes(a));
+});
+
+test("hosted-by filter rejects unknown values", async () => {
+  const viewer = await premiumUser();
+  await assert.rejects(
+    asUser(viewer, (tx) =>
+      tx.query("select * from hosts_matching_gender('women')"),
+    ),
+    /invalid host filter/,
+  );
+});
+
+test("gender stays unreadable to other users", async () => {
+  const a = await hostWithPlan("female");
+  const x = await premiumUser();
+  let rows: any[] = [];
+  try {
+    rows = (
+      await asUser(x, (tx) =>
+        tx.query("select gender from profiles where id=$1", [a]),
+      )
+    ).rows;
+  } catch {
+    return;
+  }
+  assert.ok(rows.every((r) => r.gender == null));
 });
