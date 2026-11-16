@@ -66,6 +66,13 @@ export function createReviewHandler(db: any, secret: string) {
         "<p>This submission has already been reviewed or replaced.</p>",
         409,
       );
+    const venue = job.venue_submission;
+    const hasVenue =
+      venue &&
+      Number.isFinite(venue.latitude) &&
+      Math.abs(venue.latitude) <= 90 &&
+      Number.isFinite(venue.longitude) &&
+      Math.abs(venue.longitude) <= 180;
     if (req.method === "POST") {
       const decision = String(form?.get("decision") ?? ""),
         reason = String(form?.get("reason") ?? "").trim();
@@ -75,10 +82,20 @@ export function createReviewHandler(db: any, secret: string) {
           "<p>Choose approve or reject with a reason up to 200 characters.</p>",
           400,
         );
+      if (
+        decision === "approved" &&
+        (!hasVenue || form?.get("locationConfirmed") !== "yes")
+      )
+        return page(
+          "Location review required",
+          "<p>Review the submitted address and map pin before approval. Requests without a venue must be resubmitted in Nearry.</p>",
+          400,
+        );
       const { error: reviewError } = await db.rpc("review_verification", {
         p_review_id: signed.review_id,
         p_decision: decision,
         p_reason: reason,
+        p_location_confirmed: form?.get("locationConfirmed") === "yes",
       });
       if (reviewError)
         return page(
@@ -103,7 +120,7 @@ export function createReviewHandler(db: any, secret: string) {
       );
     return page(
       `Review: ${p.business_name || p.display_name}`,
-      `<p><a href="${esc(document.signedUrl)}" target="_blank" rel="noopener noreferrer">Open private document (expires in five minutes)</a></p><form method="post"><input type="hidden" name="token" value="${esc(token)}"><button name="decision" value="approved">Confirm approval</button><p>Or give a reason for rejection:</p><textarea name="reason" maxlength="200" rows="3"></textarea><button name="decision" value="rejected">Reject submission</button></form>`,
+      `${hasVenue ? `<h2>${esc(venue.name)}</h2><p>${esc(venue.category)} · ${esc(venue.area)}</p><p>${esc(venue.address)}</p><p><a href="https://www.google.com/maps/search/?api=1&amp;query=${venue.latitude},${venue.longitude}" target="_blank" rel="noopener noreferrer">Check the submitted map pin</a></p>` : "<p>No venue was submitted. Ask the business to resubmit its address and location before approving.</p>"}<p><a href="${esc(document.signedUrl)}" target="_blank" rel="noopener noreferrer">Open private document (expires in five minutes)</a></p><form method="post"><input type="hidden" name="token" value="${esc(token)}"><p><label><input type="checkbox" name="locationConfirmed" value="yes"> I checked the business address and map pin against the proof.</label></p><button name="decision" value="approved" ${hasVenue ? "" : "disabled"}>Confirm approval</button><p>Or give a reason for rejection:</p><textarea name="reason" maxlength="200" rows="3"></textarea><button name="decision" value="rejected">Reject submission</button></form>`,
     );
   };
 }

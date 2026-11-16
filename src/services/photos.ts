@@ -1,3 +1,4 @@
+import { assertLive } from "./demoGuard";
 import * as ImagePicker from "expo-image-picker";
 import * as FileSystem from "expo-file-system/legacy";
 import { Platform } from "react-native";
@@ -124,6 +125,7 @@ export async function addVenuePhoto(
   venueId: string,
   photoUrl: string,
 ): Promise<void> {
+  assertLive("upload photos");
   const existing = await listVenuePhotos(venueId);
   const { error } = await (
     await table("venue_photos")
@@ -136,6 +138,7 @@ export async function addVenuePhoto(
 }
 
 export async function deleteVenuePhoto(id: string): Promise<void> {
+  assertLive("delete photos");
   const { error } = await (await table("venue_photos")).delete().eq("id", id);
   if (error) throw new Error(error.message);
 }

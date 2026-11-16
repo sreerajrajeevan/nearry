@@ -1,3 +1,4 @@
+import { assertLive } from "./demoGuard";
 import * as ImagePicker from "expo-image-picker";
 import * as ImageManipulator from "expo-image-manipulator";
 import * as Crypto from "expo-crypto";
@@ -30,6 +31,7 @@ export async function uploadAvatar(
   userId: string,
   localUri: string,
 ): Promise<string> {
+  assertLive("change your photo");
   const supabase = getSupabase()!;
   const {
     data: { session },

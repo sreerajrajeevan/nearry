@@ -554,3 +554,17 @@ textarea {
   margin: 8px 0;
   color: #0c3b2e;
 }
+
+#venue-review {
+  background: var(--surface, #f4f5ef);
+  padding: 18px;
+  border-radius: 16px;
+  margin: 16px 0;
+}
+#venue-review label {
+  display: block;
+  margin-top: 14px;
+}
+.venue-details {
+  white-space: pre-line;
+}

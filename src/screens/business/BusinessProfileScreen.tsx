@@ -1,3 +1,9 @@
+import { BusinessVenueFields } from "../../components/BusinessVenueFields";
+import {
+  BusinessVenueSubmission,
+  BusinessVenueState,
+  businessVenueError,
+} from "../../utils/businessVenue";
 import { Alert } from "../../services/appAlert";
 import { BackButton } from "../../components/BackButton";
 import React, { useCallback, useState } from "react";
@@ -28,18 +34,20 @@ import { useAuth } from "../../store/AuthContext";
 import { useUnreadCounts } from "../../hooks/useUnreadCounts";
 import {
   getVerificationState,
+  getMyBusinessVenue,
   submitVerificationDoc,
   VerificationState,
 } from "../../services/verification";
-import { listVenues } from "../../services/venues";
+import { getVenue } from "../../services/venues";
 import { Venue } from "../../services/mappers";
 import { isDemoMode } from "../../services/supabase";
 
 const STATUS_COPY: Record<VerificationState, string> = {
-  unverified: "Not verified. Submit a business document to get reviewed.",
+  unverified:
+    "Submit your business proof, address and map location for review.",
   pending: "Under review. You can publish once approved.",
   verified: "Verified. Your offers can go live.",
-  rejected: "Not approved. Submit a clearer document to try again.",
+  rejected: "Update your business proof or location and submit again.",
 };
 
 function statusTone(s: VerificationState): "neutral" | "green" | "red" {
@@ -72,6 +80,19 @@ export function BusinessProfileScreen({
   }>({
     status: profile?.verificationStatus ?? "unverified",
   });
+  const [venueState, setVenueState] = useState<BusinessVenueState | null>(null);
+  const [venueLocating, setVenueLocating] = useState(false);
+  const [locationConfirmed, setLocationConfirmed] = useState(false);
+  const [venueDraft, setVenueDraft] = useState<BusinessVenueSubmission>({
+    name: profile?.businessName || "",
+    category: String(profile?.businessDetails?.category || ""),
+    area: String(profile?.businessDetails?.area || ""),
+    address: "",
+    latitude: NaN,
+    longitude: NaN,
+    source: "manual",
+  });
+  const venueInitialized = React.useRef(false);
   const [venue, setVenue] = useState<Venue | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -84,11 +105,15 @@ export function BusinessProfileScreen({
       setVerificationError("");
       const latest = await getVerificationState(profile.id);
       setVerif(latest);
+      const location = await getMyBusinessVenue();
+      setVenueState(location);
+      if (!venueInitialized.current && location.submission)
+        setVenueDraft(location.submission);
+      venueInitialized.current = true;
       // Approval can arrive while this screen is open. Keep the Create gate in sync.
       if (latest.status !== profile.verificationStatus) await refreshProfile();
       if (!verificationOnly) {
-        const venues = await listVenues();
-        setVenue(venues.find((v) => v.businessId === profile.id) ?? null);
+        setVenue(location.venue ? await getVenue(location.venue.id) : null);
       }
     } catch (error) {
       setVerificationError(
@@ -116,10 +141,19 @@ export function BusinessProfileScreen({
     submitLock.current = true;
     setBusy("doc");
     try {
-      await submitVerificationDoc(profile.id);
+      const validation = businessVenueError(venueDraft);
+      if (validation) throw new Error(validation);
+      if (!locationConfirmed)
+        throw new Error(
+          "Confirm that the address and map pin belong to your business.",
+        );
+      await submitVerificationDoc(profile.id, venueDraft);
       await refreshProfile();
       await load();
-      Alert.alert("Submitted", "Your documents are under review.");
+      Alert.alert(
+        "Submitted",
+        "Your business document and venue location are under review.",
+      );
     } catch (e) {
       Alert.alert(
         "Could not submit",
@@ -131,33 +165,81 @@ export function BusinessProfileScreen({
     }
   };
 
+  const needsLocation =
+    verif.status === "verified" && venueState !== null && !venueState.venue;
+  const canSubmit =
+    !!venueState &&
+    (verif.status === "unverified" ||
+      verif.status === "rejected" ||
+      needsLocation ||
+      (verif.status === "pending" && !venueState.submission));
   const verificationCard = (
     <>
-      {verif.status === "verified" ? (
+      {verif.status === "verified" && !needsLocation ? (
         <VerifiedWelcome businessName={name} />
       ) : (
         <Card style={styles.verifyCard} accent={true}>
           <View style={styles.verifyRow}>
             <Text style={styles.verifyTitle}>Business verification</Text>
             <Badge
-              label={verif.status.toUpperCase()}
-              tone={statusTone(verif.status)}
+              label={needsLocation ? "ADD VENUE" : verif.status.toUpperCase()}
+              tone={needsLocation ? "neutral" : statusTone(verif.status)}
             />
           </View>
-          <Text style={styles.verifyDesc}>{STATUS_COPY[verif.status]}</Text>
+          <Text style={styles.verifyDesc}>
+            {needsLocation
+              ? "Your account is verified. Submit your venue’s address and location so the admin can link your offers."
+              : STATUS_COPY[verif.status]}
+          </Text>
+          {verif.status === "pending" && venueState?.submission && (
+            <Text style={styles.verifyDesc}>
+              {venueState.submission.name}
+              {"\n"}
+              {venueState.submission.address}
+              {"\n"}Your submitted location is locked while under review.
+            </Text>
+          )}
+          {canSubmit && (
+            <>
+              <BusinessVenueFields
+                value={venueDraft}
+                onChange={(v) => {
+                  setVenueDraft(v);
+                  setLocationConfirmed(false);
+                }}
+                disabled={busy === "doc"}
+                onLocatingChange={(locating) => {
+                  setVenueLocating(locating);
+                  if (locating) setLocationConfirmed(false);
+                }}
+              />
+              <TouchableOpacity
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: locationConfirmed }}
+                disabled={busy === "doc" || venueLocating}
+                onPress={() => setLocationConfirmed(!locationConfirmed)}
+                style={{ paddingVertical: spacing.md }}
+              >
+                <Text style={styles.verifyDesc}>
+                  {locationConfirmed ? "☑" : "☐"} This is my business’s public
+                  address and exact location. I checked the map pin.
+                </Text>
+              </TouchableOpacity>
+            </>
+          )}
           {verif.status === "rejected" && verif.note ? (
             <Text style={styles.verifyNote}>Reason: {verif.note}</Text>
           ) : null}
-          {(verif.status === "unverified" || verif.status === "rejected") &&
-            !isDemoMode() && (
-              <Button
-                title="Submit document"
-                variant="secondary"
-                loading={busy === "doc"}
-                onPress={onSubmitDoc}
-                style={styles.verifyBtn}
-              />
-            )}
+          {canSubmit && !isDemoMode() && (
+            <Button
+              title="Choose proof & submit for review"
+              disabled={!locationConfirmed || venueLocating}
+              variant="secondary"
+              loading={busy === "doc"}
+              onPress={onSubmitDoc}
+              style={styles.verifyBtn}
+            />
+          )}
         </Card>
       )}
       {!!verificationError && (
@@ -176,8 +258,9 @@ export function BusinessProfileScreen({
   );
   if (verificationOnly) {
     return (
-      <Screen>
+      <Screen keyboard>
         <ScrollView
+          keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scroll}
           refreshControl={
@@ -207,6 +290,7 @@ export function BusinessProfileScreen({
             </Text>
           ) : null}
           {verif.status === "verified" &&
+          !!venueState?.venue &&
           !verificationError &&
           onCreateOffer ? (
             <Button
@@ -245,8 +329,9 @@ export function BusinessProfileScreen({
   }
 
   return (
-    <Screen>
+    <Screen keyboard>
       <ScrollView
+        keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scroll}
         refreshControl={
@@ -313,8 +398,8 @@ export function BusinessProfileScreen({
           </TouchableOpacity>
         ) : (
           <Text style={styles.venueHint}>
-            Your venue is linked by the reviewer alongside your business
-            verification — nothing to do here.
+            Submit your venue’s address and location with your business proof
+            above. Admin approval will link it to your offers automatically.
           </Text>
         )}
 

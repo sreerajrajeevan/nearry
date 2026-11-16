@@ -1,3 +1,5 @@
+import { isDemoBlockedMessage, leaveDemoNow } from "./demoMessage";
+
 export type AppAlertButton = {
   text?: string;
   style?: "default" | "cancel" | "destructive";
@@ -44,6 +46,16 @@ export function createAppAlertQueue() {
       buttons?: AppAlertButton[],
       options: AppAlertOptions = {},
     ) {
+      // Any demo-blocked action shows one consistent prompt, never twice in a row.
+      if (isDemoBlockedMessage(message)) {
+        if (queue.some((a) => isDemoBlockedMessage(a.message))) return;
+        title = "You're in the demo";
+        buttons = [
+          { text: "Keep exploring", style: "cancel" },
+          { text: "Create account", onPress: leaveDemoNow },
+        ];
+        options = { cancelable: true };
+      }
       queue = [
         ...queue,
         {
