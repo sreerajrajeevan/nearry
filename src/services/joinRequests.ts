@@ -1,3 +1,4 @@
+import { assertLive } from "./demoGuard";
 import { getSupabase, isSupabaseConfigured, isDemoMode } from "./supabase";
 import { mockPosts } from "../data/mock";
 import { DbJoinRequest, JoinRequest, NeedPost, toJoinRequest } from "./mappers";
@@ -50,6 +51,7 @@ export async function requestToJoin(
   requesterId: string,
   note?: string,
 ): Promise<JoinRequest> {
+  assertLive("join plans");
   const cleanNote = cleanJoinNote(note);
   if (useMock()) {
     const post = mockPosts.find((p) => p.id === postId);
@@ -104,6 +106,7 @@ export async function requestToJoin(
 
 /** Withdraw my pending request. Approved joins are released via cancelParticipation. */
 export async function withdrawRequest(requestId: string): Promise<void> {
+  assertLive("withdraw requests");
   if (useMock()) {
     return cancelParticipation(requestId);
   }
@@ -119,6 +122,7 @@ export async function withdrawRequest(requestId: string): Promise<void> {
  * filling up reopens via the reopen_post_if_space trigger.
  */
 export async function cancelParticipation(requestId: string): Promise<void> {
+  assertLive("leave plans");
   if (useMock()) {
     const r = mockRequests.find((x) => x.id === requestId);
     if (!r || !["pending", "approved"].includes(r.status))
@@ -152,6 +156,7 @@ export async function cancelParticipation(requestId: string): Promise<void> {
 export async function approveRequest(
   requestId: string,
 ): Promise<{ spotsLeft: number; postClosed: boolean }> {
+  assertLive("approve requests");
   if (useMock()) {
     const r = mockRequests.find((x) => x.id === requestId);
     if (!r) throw new Error("Request not found.");
@@ -181,6 +186,7 @@ export async function approveRequest(
 
 /** Host declines a pending request through the authorized RPC. */
 export async function declineRequest(requestId: string): Promise<void> {
+  assertLive("decline requests");
   if (useMock()) {
     const r = mockRequests.find((x) => x.id === requestId);
     if (!r || r.status !== "pending")

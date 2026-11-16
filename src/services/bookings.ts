@@ -1,3 +1,4 @@
+import { assertLive } from "./demoGuard";
 import { getSupabase, isSupabaseConfigured, isDemoMode } from "./supabase";
 import { multiplexSubscribe } from "./realtime";
 import { mockBookings, mockOffers } from "../data/mock";
@@ -41,6 +42,7 @@ export async function bookOffer(
   slotId: string,
   partySize: number,
 ): Promise<{ bookingId: string; seatsLeft: number }> {
+  assertLive("book offers");
   if (
     !Number.isInteger(partySize) ||
     partySize < 1 ||
@@ -154,6 +156,7 @@ export async function listBookingsForBusiness(
 
 /** Business confirms a pending booking. */
 export async function confirmBooking(bookingId: string): Promise<void> {
+  assertLive("confirm bookings");
   if (useMock()) {
     const b = mockBookings.find((x) => x.id === bookingId);
     if (
@@ -179,6 +182,7 @@ export async function confirmBooking(bookingId: string): Promise<void> {
  * free up automatically.
  */
 export async function cancelBooking(bookingId: string): Promise<void> {
+  assertLive("cancel bookings");
   if (useMock()) {
     const b = mockBookings.find((x) => x.id === bookingId);
     if (b) b.status = "cancelled";

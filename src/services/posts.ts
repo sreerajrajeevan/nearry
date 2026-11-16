@@ -1,3 +1,4 @@
+import { assertLive } from "./demoGuard";
 import {
   PostLocation,
   postLocationPatch,
@@ -185,6 +186,7 @@ export async function createPost(
   authorId: string,
   input: NewPostInput,
 ): Promise<NeedPost> {
+  assertLive("post plans");
   const err = validatePostDraft({
     title: input.title,
     description: input.description,
@@ -260,6 +262,7 @@ export async function updatePost(
   postId: string,
   patch: PostPatch,
 ): Promise<NeedPost> {
+  assertLive("edit plans");
   const dbPatch: Record<string, unknown> = {};
   if (patch.location !== undefined)
     Object.assign(dbPatch, postLocationPatch(patch.location));
@@ -337,6 +340,7 @@ export async function updatePost(
 
 /** Host cancellation. Terminal — a cancelled post cannot be reopened. */
 export async function cancelPost(postId: string): Promise<void> {
+  assertLive("cancel plans");
   if (useMock()) {
     const p = mockPosts.find((x) => x.id === postId);
     if (!p) throw new Error("Post not found.");
@@ -350,6 +354,7 @@ export async function cancelPost(postId: string): Promise<void> {
 
 /** Permanently delete a post. Join requests cascade. */
 export async function deletePost(postId: string): Promise<void> {
+  assertLive("delete plans");
   if (useMock()) {
     const i = mockPosts.findIndex((x) => x.id === postId);
     if (i < 0) throw new Error("Post not found.");

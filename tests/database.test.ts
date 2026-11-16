@@ -4080,11 +4080,7 @@ test("group notification sender names support Unicode, missing names and bounded
   const originalName = (
     await db.query("select display_name from profiles where id=$1", [host])
   ).rows[0].display_name;
-  const sendAndRead = async (
-    name: string,
-    message: string,
-    key: string,
-  ) => {
+  const sendAndRead = async (name: string, message: string, key: string) => {
     await db.query("update profiles set display_name=$1 where id=$2", [
       name,
       host,

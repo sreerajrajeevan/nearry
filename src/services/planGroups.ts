@@ -1,3 +1,4 @@
+import { assertLive } from "./demoGuard";
 import { isDemoMode, requireSupabase } from "./supabase";
 import { mockPosts } from "../data/mock";
 import {
@@ -135,6 +136,7 @@ export async function getPlanGroup(
   });
 }
 export async function renamePlanGroup(id: string, name: string, myId: string) {
+  assertLive("rename groups");
   if (name.trim().length < 2 || name.trim().length > 80)
     throw new Error("Use a group name between 2 and 80 characters.");
   if (isDemoMode()) {
@@ -147,6 +149,7 @@ export async function renamePlanGroup(id: string, name: string, myId: string) {
   await rpc("rename_plan_group", { p_group_id: id, p_name: name.trim() });
 }
 export async function leavePlanGroup(id: string, myId: string) {
+  assertLive("leave groups");
   if (isDemoMode()) {
     const g = await getPlanGroup({ groupId: id }, myId);
     if (g.hostId === myId)
@@ -188,6 +191,7 @@ export async function sendPlanGroupMessage(
   body: string,
   clientKey: string,
 ): Promise<PlanGroupMessage> {
+  assertLive("send messages");
   const error = validateMessageBody(body);
   if (error) throw new Error(error);
   if (isDemoMode()) {

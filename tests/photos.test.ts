@@ -214,26 +214,13 @@ test("feed covers are fetched in a batch and mapped to their own posts", async (
   assert.equal(request.url.searchParams.get("post_id"), "in.(one,two)");
 });
 
-test("demo attachments appear in the gallery and feed without network requests", async () => {
+test("the demo refuses photo uploads without network requests", async () => {
   const { setDemoMode } = await import("../src/services/supabase");
   setDemoMode(true);
   try {
-    const post = await posts.createPost("demo-user", {
-      title: "Coffee with photos",
-      venueId: "test-venue",
-      venueName: "Test venue",
-      description: "A friendly coffee together",
-      startsAt: "2099-01-01T12:00:00Z",
-      vacancies: 2,
-      tags: ["coffee"],
-    });
-    await photos.addPostPhoto(post.id, "data:image/png;base64,iVBORw0KGgo=");
-    const gallery = await photos.listPostPhotos(post.id);
-    const feed = await posts.listPosts({ authorId: "demo-user" });
-    assert.equal(gallery.length, 1);
-    assert.equal(
-      feed.find((item) => item.id === post.id)?.coverPhotoUrl,
-      gallery[0].photo_url,
+    await assert.rejects(
+      photos.addPostPhoto("p1", "data:image/png;base64,iVBORw0KGgo="),
+      /This is a demo with sample data, so you can't add photos/,
     );
     assert.equal(calls.length, 0);
   } finally {

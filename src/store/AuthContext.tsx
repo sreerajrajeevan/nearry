@@ -1,3 +1,4 @@
+import { DemoBlockedError } from "../services/demoGuard";
 import React, {
   createContext,
   useContext,
@@ -575,17 +576,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         refreshProfile,
         savePersonalProfile: (input) =>
           action(async () => {
-            if (demoRef.current) {
-              setDemoDetails({
-                displayName: input.displayName,
-                gender: input.gender,
-                age: input.age,
-                termsVersion: POLICY_VERSION,
-                onboardingCompleted: true,
-                roleSelected: true,
-              });
-              return;
-            }
+            if (demoRef.current)
+              throw new DemoBlockedError("edit your profile");
             await savePersonalDetails(input);
             await refreshProfile();
           }),

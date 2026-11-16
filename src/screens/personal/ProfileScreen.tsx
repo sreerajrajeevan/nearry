@@ -172,7 +172,7 @@ export function ProfileScreen({ navigation }: Props) {
           <View style={styles.demo}>
             <Icon name="info" size={16} color={colors.amberDeep} />
             <Text style={styles.demoCopy}>
-              Demo profile · changes stay in this preview
+              Demo profile · sample data, nothing you do here is saved
             </Text>
           </View>
         )}

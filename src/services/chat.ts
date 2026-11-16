@@ -1,3 +1,4 @@
+import { assertLive } from "./demoGuard";
 import { demoUserBlocked, conversationSafety } from "./safety";
 import { getSupabase, isSupabaseConfigured, isDemoMode } from "./supabase";
 import { notifyUnreadChanged } from "./unreadEvents";
@@ -94,6 +95,7 @@ export async function listConversations(): Promise<Conversation[]> {
 export async function deleteConversation(
   conversationId: string,
 ): Promise<void> {
+  assertLive("delete chats");
   if (useMock()) {
     const conversation = mockConversations.find((c) => c.id === conversationId);
     if (!conversation) throw new Error("Conversation not found.");
@@ -156,6 +158,7 @@ export async function sendMessage(
   myId: string,
   body: string,
 ): Promise<ChatMessage> {
+  assertLive("send messages");
   const err = validateMessageBody(body);
   if (err) throw new Error(err);
   const text = body.trim();

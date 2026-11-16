@@ -1,3 +1,4 @@
+import { assertLive } from "./demoGuard";
 import { getSupabase, isDemoMode } from "./supabase";
 
 export type PublicProfile = {
@@ -69,6 +70,7 @@ export async function updateProfile(
   userId: string,
   patch: ProfilePatch,
 ): Promise<void> {
+  assertLive("edit your profile");
   const dbPatch: Record<string, unknown> = {};
   if (patch.displayName !== undefined)
     dbPatch.display_name = patch.displayName.trim();
@@ -99,6 +101,7 @@ export async function completePersonalProfile(input: {
   age: number;
   termsAccepted: boolean;
 }): Promise<void> {
+  assertLive("edit your profile");
   const { error } = await getSupabase()!.rpc("complete_personal_profile", {
     p_display_name: input.displayName,
     p_gender: input.gender,

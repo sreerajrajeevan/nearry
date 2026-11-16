@@ -1,3 +1,4 @@
+import { assertLive } from "./demoGuard";
 import { getSupabase, isSupabaseConfigured, isDemoMode } from "./supabase";
 import { mockVenues } from "../data/mock";
 import { searchLiteral } from "../utils/searchFilter";
@@ -85,6 +86,7 @@ export async function updateVenueAmenities(
   venueId: string,
   amenities: string[],
 ): Promise<void> {
+  assertLive("edit your venue");
   if (useMock()) {
     const v = mockVenues.find((x) => x.id === venueId);
     if (v) v.amenities = amenities;

@@ -1,3 +1,4 @@
+import { assertLive } from "./demoGuard";
 import { Platform } from "react-native";
 import { proofImageType } from "../utils/proofImage";
 import * as ImagePicker from "expo-image-picker";
@@ -40,6 +41,7 @@ function base64ToBytes(b64: string): Uint8Array {
 export async function submitVerificationDoc(
   businessId: string,
 ): Promise<string> {
+  assertLive("submit verification");
   if (useMock()) throw new Error("Verification needs the backend configured.");
 
   const picked = await ImagePicker.launchImageLibraryAsync({
@@ -112,6 +114,7 @@ export async function getVerificationState(businessId: string): Promise<{
 
 /** Claim an unclaimed venue for this business (sets venues.business_id). */
 export async function claimVenue(venueId: string): Promise<void> {
+  assertLive("claim a venue");
   if (useMock())
     throw new Error("Venue claiming needs the backend configured.");
   const supabase = getSupabase()!;
