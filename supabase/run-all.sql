@@ -4773,7 +4773,9 @@ begin
   if auth.uid() is distinct from p_user then return; end if;
   -- Serialize per user and kind so parallel inserts cannot all pass the count.
   perform pg_advisory_xact_lock(hashtextextended(p_user::text || ':' || p_kind, 0));
-  if exists(select 1 from public.daily_usage
+  -- Re-sending a join request does not cost a new slot. Plans never get this
+  -- shortcut: clients can pick the post id, so delete + re-insert must count.
+  if p_kind = 'join' and exists(select 1 from public.daily_usage
     where user_id = p_user and kind = p_kind and day = v_day and ref_id = p_ref) then return; end if;
   v_limit := case p_kind when 'plan' then 3 else 10 end;
   if not public.has_premium(p_user)
@@ -4812,8 +4814,9 @@ notify pgrst, 'reload schema';
 -- 00047 — Nearry Premium: server-side "Hosted by" filter.
 -- Gender is never readable across profiles; the filter runs only inside this
 -- security-definer function, which returns host ids (open, upcoming plans
--- only) and is Premium-gated. nearby_post_cards gains an optional host-gender
--- argument; the old three-argument call keeps working through the default.
+-- only, honouring blocks, suspended accounts and removed plans) and is
+-- Premium-gated. nearby_post_cards gains an optional host-gender argument;
+-- the old three-argument call keeps working through the default.
 
 create function public.hosts_matching_gender(p_gender text) returns setof uuid as $$
 begin
@@ -4826,7 +4829,9 @@ begin
  return query
  select distinct p.author_id from public.posts p
  join public.profiles pr on pr.id=p.author_id
- where p.status='open' and p.starts_at>now() and pr.gender=p_gender;
+ where p.status='open' and p.starts_at>now() and (p.expires_at is null or p.expires_at>now())
+  and pr.gender=p_gender
+  and public.visible_author(p.author_id) and public.content_visible('post',p.id);
 end;
 $$ language plpgsql stable security definer set search_path = public, pg_temp;
 revoke all on function public.hosts_matching_gender(text) from public, anon;

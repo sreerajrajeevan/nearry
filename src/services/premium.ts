@@ -16,7 +16,8 @@ export type PremiumSnapshot = {
 export interface PurchasesAdapter {
   identify(userId: string): Promise<void>;
   plans(): Promise<Omit<PremiumPlan, "savingsPercent">[]>;
-  purchase(pkg: unknown): Promise<"done" | "cancelled">;
+  /** "owned": Google says this account already has the product; "pending": payment not confirmed yet. */
+  purchase(pkg: unknown): Promise<"done" | "cancelled" | "owned" | "pending">;
   restore(): Promise<void>;
   signOut(): Promise<void>;
 }
@@ -47,6 +48,9 @@ export function planSavings(plans: PremiumPlan[]): PremiumPlan[] {
   });
 }
 
+export type RestoreStatus = "premium" | "free" | "unavailable";
+const PENDING =
+  "Your payment is pending. Premium turns on as soon as Google confirms it.";
 const CONFIRMING =
   "Your purchase went through. We're still confirming it — tap Restore in a minute.";
 
@@ -94,6 +98,10 @@ export class PremiumStore {
   }
   private apply(expiresAt: string | null) {
     this.publish({ expiresAt, status: this.statusFor(expiresAt) });
+  }
+  private currentStatus(): RestoreStatus {
+    const s = this.state.status;
+    return s === "premium" || s === "unavailable" ? s : "free";
   }
   load = async (): Promise<void> => {
     const { adapter, demo, userId } = this.deps;
@@ -150,21 +158,28 @@ export class PremiumStore {
     this.publish({ busy: true });
     try {
       const result = await adapter.purchase(plan.pkg);
+      if (result === "pending") throw new Error(PENDING);
+      if (result === "owned") {
+        // Already bought on this Google account: treat it like a restore.
+        await adapter.restore();
+        await this.confirm(true);
+        return "done";
+      }
       if (result === "done") await this.confirm(true);
       return result;
     } finally {
       this.publish({ busy: false });
     }
   };
-  restore = async (): Promise<void> => {
+  restore = async (): Promise<RestoreStatus> => {
     const { adapter, demo } = this.deps;
-    if (!adapter || demo)
-      throw new Error("Restoring purchases isn't available right now.");
-    if (this.state.busy) return;
+    if (!adapter || demo) return "unavailable";
+    if (this.state.busy) return this.currentStatus();
     this.publish({ busy: true });
     try {
       await adapter.restore();
       await this.confirm(false);
+      return this.currentStatus();
     } finally {
       this.publish({ busy: false });
     }

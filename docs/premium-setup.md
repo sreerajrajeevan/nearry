@@ -39,8 +39,8 @@ The app reads `EXPO_PUBLIC_REVENUECAT_ANDROID_KEY`: the public `goog_` key.
 3. Make a Play build (see `docs/play-test-release.md`) and upload it to the
    **Internal testing** track in Play Console.
 
-It is fine that no products exist yet. Until they do, the app just shows
-Premium as unavailable.
+It is fine that no products exist yet. Until they do, the Premium sheet shows
+"Plans couldn't load" with a Try again button, and nothing can be bought.
 
 ## 3. Google Play: the subscription
 
@@ -108,10 +108,20 @@ A webhook is a message RevenueCat sends us when someone subscribes or cancels.
    Migrations**.
 2. Apply any earlier migrations not yet applied (for example `00044` and
    `00045`), in number order, in the **SQL editor**.
-3. Then run `supabase/migrations/00046_premium_limits.sql`, then
-   `supabase/migrations/00047_hosted_by_filter.sql`.
+3. Wait until the Premium build has reached your users (the rollout is live and
+   people have updated). Only then run
+   `supabase/migrations/00046_premium_limits.sql`, then
+   `supabase/migrations/00047_hosted_by_filter.sql`. 00046 turns on the daily
+   limits; older builds don't know about them and would show people the raw
+   text `daily_plan_limit` instead of the Premium sheet.
 
-Do this before releasing the new build to everyone.
+### Before going live
+
+Run the external-database test suite once against a staging database. Create a
+disposable database named `nearry_test` with the PostGIS extension, then run
+the tests with `TEST_DATABASE_URL` pointing at it. The normal test run skips
+the checks for `nearby_post_cards` and the daily-limit concurrency lock because
+they need a real PostGIS database.
 
 ## 8. Privacy page and Play forms
 

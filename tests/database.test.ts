@@ -5689,3 +5689,47 @@ test("gender stays unreadable to other users", async () => {
   }
   assert.ok(rows.every((r) => r.gender == null));
 });
+
+test("hosted-by filter hides hosts who blocked the caller, suspended hosts and removed plans", async () => {
+  const visible = await hostWithPlan("female"),
+    blocker = await hostWithPlan("female"),
+    suspended = await hostWithPlan("female"),
+    removed = await hostWithPlan("female");
+  const viewer = await premiumUser();
+  await asUser(blocker, (tx) =>
+    tx.query("select set_user_block($1,true)", [viewer]),
+  );
+  await db.query("update profiles set suspended_at=now() where id=$1", [
+    suspended,
+  ]);
+  await db.query(
+    "insert into removed_content(target_kind,target_id) select 'post',id from posts where author_id=$1",
+    [removed],
+  );
+  const female = (
+    await asUser(viewer, (tx) =>
+      tx.query("select hosts_matching_gender('female') id"),
+    )
+  ).rows.map((r: any) => r.id);
+  assert.ok(female.includes(visible));
+  assert.ok(!female.includes(blocker));
+  assert.ok(!female.includes(suspended));
+  assert.ok(!female.includes(removed));
+});
+
+test("deleting and re-inserting a plan with the same id still counts", async () => {
+  const u = await corePersonal();
+  const first = (await planAs(u, "Plan 0")).rows[0].id;
+  await planAs(u, "Plan 1");
+  await planAs(u, "Plan 2");
+  await asUser(u, (tx) => tx.query("select delete_post($1)", [first]));
+  await assert.rejects(
+    asUser(u, (tx) =>
+      tx.query(
+        "insert into posts(id,author_id,title,description,starts_at,vacancies,venue_id) values($1,$2,'Again','A friendly evening by the waterfront',now()+interval '4 hours',2,'10000000-0000-0000-0000-000000000032')",
+        [first, u],
+      ),
+    ),
+    /daily_plan_limit/,
+  );
+});

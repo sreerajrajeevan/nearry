@@ -1,8 +1,9 @@
 -- 00047 — Nearry Premium: server-side "Hosted by" filter.
 -- Gender is never readable across profiles; the filter runs only inside this
 -- security-definer function, which returns host ids (open, upcoming plans
--- only) and is Premium-gated. nearby_post_cards gains an optional host-gender
--- argument; the old three-argument call keeps working through the default.
+-- only, honouring blocks, suspended accounts and removed plans) and is
+-- Premium-gated. nearby_post_cards gains an optional host-gender argument;
+-- the old three-argument call keeps working through the default.
 begin;
 
 create function public.hosts_matching_gender(p_gender text) returns setof uuid as $$
@@ -16,7 +17,9 @@ begin
  return query
  select distinct p.author_id from public.posts p
  join public.profiles pr on pr.id=p.author_id
- where p.status='open' and p.starts_at>now() and pr.gender=p_gender;
+ where p.status='open' and p.starts_at>now() and (p.expires_at is null or p.expires_at>now())
+  and pr.gender=p_gender
+  and public.visible_author(p.author_id) and public.content_visible('post',p.id);
 end;
 $$ language plpgsql stable security definer set search_path = public, pg_temp;
 revoke all on function public.hosts_matching_gender(text) from public, anon;

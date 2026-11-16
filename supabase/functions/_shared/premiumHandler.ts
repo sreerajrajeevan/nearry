@@ -50,8 +50,12 @@ export function createPremiumHandler(deps: Deps) {
     }
     const sub = subscriber?.subscriptions?.[ent.product_identifier];
     let expires: string = ent.expires_date ?? LIFETIME;
-    const grace: string | null = sub?.grace_period_expires_date ?? null;
-    if (grace && Date.parse(grace) > Date.parse(expires)) expires = grace;
+    for (const grace of [
+      sub?.grace_period_expires_date,
+      ent.grace_period_expires_date,
+    ])
+      if (typeof grace === "string" && Date.parse(grace) > Date.parse(expires))
+        expires = grace;
     const { error } = await db.from("premium_entitlements").upsert(
       {
         user_id: id,
@@ -103,7 +107,9 @@ export function createPremiumHandler(deps: Deps) {
       const { data, error } = await db.auth.getUser(header.slice(7));
       if (error || !data?.user?.id) return json({ error: "unauthorized" }, 401);
       return json({ expires_at: await refresh(data.user.id) });
-    } catch {
+    } catch (e) {
+      // Never log headers or the body: they carry secrets and user ids.
+      console.error("revenuecat-webhook", String(e));
       return json({ error: "upstream failure" }, 502);
     }
   };

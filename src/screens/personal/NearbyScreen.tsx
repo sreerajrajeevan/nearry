@@ -303,13 +303,14 @@ export function NearbyScreen() {
 
   // Premium ended: the filter no longer applies. Never while still loading,
   // or a Premium user would lose it on every app start.
+  // Also cleared without a location: the filter is only applied with a point.
   useEffect(() => {
     if (
       hostGender !== "all" &&
-      (premiumStatus === "free" || premiumStatus === "unavailable")
+      (premiumStatus === "free" || premiumStatus === "unavailable" || !point)
     )
       setOptions((o) => ({ ...o, hostGender: "all" }));
-  }, [hostGender, premiumStatus]);
+  }, [hostGender, premiumStatus, point]);
 
   // A stable function, so it can sit in the focus effect's dependencies.
   const refreshMyRequests = useMyRequests()?.refresh;

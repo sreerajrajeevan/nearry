@@ -44,7 +44,9 @@ begin
   if auth.uid() is distinct from p_user then return; end if;
   -- Serialize per user and kind so parallel inserts cannot all pass the count.
   perform pg_advisory_xact_lock(hashtextextended(p_user::text || ':' || p_kind, 0));
-  if exists(select 1 from public.daily_usage
+  -- Re-sending a join request does not cost a new slot. Plans never get this
+  -- shortcut: clients can pick the post id, so delete + re-insert must count.
+  if p_kind = 'join' and exists(select 1 from public.daily_usage
     where user_id = p_user and kind = p_kind and day = v_day and ref_id = p_ref) then return; end if;
   v_limit := case p_kind when 'plan' then 3 else 10 end;
   if not public.has_premium(p_user)

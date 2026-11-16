@@ -13,6 +13,7 @@ import {
   PremiumReason,
   PremiumSnapshot,
   PremiumStore,
+  RestoreStatus,
   readPremiumExpiry,
   syncPremium,
 } from "../services/premium";
@@ -27,7 +28,8 @@ type PremiumValue = {
   demo: boolean;
   showUpgrade: (reason: PremiumReason) => void;
   purchase: (id: PremiumPlanId) => Promise<"done" | "cancelled">;
-  restore: () => Promise<void>;
+  load: () => Promise<void>;
+  restore: () => Promise<RestoreStatus>;
 };
 const Context = createContext<PremiumValue | null>(null);
 
@@ -69,6 +71,7 @@ export function PremiumProvider({ children }: { children: React.ReactNode }) {
       showUpgrade,
       purchase: store.purchase,
       restore: store.restore,
+      load: () => store.load().catch(() => {}),
     }),
     [snapshot, demo, showUpgrade, store],
   );

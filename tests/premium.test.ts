@@ -234,3 +234,35 @@ test("adapter throwing in purchase releases busy", async () => {
   await assert.rejects(t.store.purchase("monthly"), /billing/);
   assert.equal(t.store.getSnapshot().busy, false);
 });
+
+test("restore resolves to the resulting status", async () => {
+  const ok = make();
+  await ok.store.load();
+  assert.equal(await ok.store.restore(), "premium");
+  const none = make({ sync: async () => null });
+  await none.store.load();
+  assert.equal(await none.store.restore(), "free");
+  const demo = make({ demo: true });
+  await demo.store.load();
+  assert.equal(await demo.store.restore(), "unavailable");
+});
+
+test("already-owned purchase restores and syncs into premium", async () => {
+  const t = make();
+  t.f.adapter.purchase = async () => "owned";
+  await t.store.load();
+  assert.equal(await t.store.purchase("monthly"), "done");
+  assert.ok(t.f.calls.includes("restore"));
+  assert.equal(t.store.getSnapshot().status, "premium");
+  assert.equal(t.store.getSnapshot().busy, false);
+});
+
+test("pending payment gives a friendly message and releases busy", async () => {
+  const t = make();
+  t.f.adapter.purchase = async () => "pending";
+  await t.store.load();
+  await assert.rejects(t.store.purchase("monthly"), /payment is pending/);
+  assert.equal(t.store.getSnapshot().busy, false);
+  assert.equal(t.syncCalls.n, 0);
+  assert.equal(t.store.getSnapshot().status, "free");
+});

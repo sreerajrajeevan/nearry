@@ -184,6 +184,7 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
       }
       const reason = premiumBlock(e instanceof Error ? e.message : "");
       if (reason && premium) {
+        setRetryNote(note);
         premium.showUpgrade(reason);
         return;
       }

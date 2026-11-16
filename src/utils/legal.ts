@@ -117,7 +117,7 @@ export function legalSections(
     },
     {
       title: "Purchases",
-      body: "Nearry Premium is an optional subscription. Purchases are processed by Google Play, and we never see your payment card or bank details. RevenueCat receives your Nearry account id and your purchase history so it can manage your subscription and tell us whether Premium is active. You can cancel at any time in Google Play.",
+      body: "Nearry Premium is an optional subscription. Purchases are processed by Google Play, and we never see your payment card or bank details. RevenueCat receives your Nearry account id and your purchase history so it can manage your subscription and tell us whether Premium is active. You can cancel at any time in Google Play. Google Play and RevenueCat keep purchase records after you delete your Nearry account, and deleting your account does not cancel a subscription, so cancel it in Google Play first.",
     },
     {
       title: "Service providers",

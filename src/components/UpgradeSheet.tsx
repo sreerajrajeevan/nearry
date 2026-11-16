@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Animated,
   Modal,
@@ -59,7 +59,13 @@ export function UpgradeSheet({
   const reduced = useReducedMotion();
   const [selected, setSelected] = useState<PremiumPlanId>("monthly");
   const [error, setError] = useState<string | null>(null);
-  if (!premium) return null;
+  const isPremium = !!premium?.isPremium;
+  // Premium arrived by any path (restore, webhook, another device): never
+  // leave a purchase button in front of someone who already has it.
+  useEffect(() => {
+    if (isPremium) onClose();
+  }, [isPremium, onClose]);
+  if (!premium || isPremium) return null;
   const { snapshot, demo } = premium;
   const unavailable = snapshot.status === "unavailable";
   const busy = snapshot.busy;
@@ -67,6 +73,7 @@ export function UpgradeSheet({
     snapshot.plans.find((p) => p.id === id),
   ).filter((p): p is NonNullable<typeof p> => !!p);
   const chosen = plans.find((p) => p.id === selected) ?? plans[0];
+  const noPlans = snapshot.status === "free" && plans.length === 0;
   const canBuy = !unavailable && !!chosen && snapshot.status !== "loading";
   const note = unavailable
     ? demo
@@ -90,7 +97,13 @@ export function UpgradeSheet({
   const restore = async () => {
     setError(null);
     try {
-      await premium.restore();
+      const status = await premium.restore();
+      if (status === "premium") {
+        toast("You're Premium 🎉");
+        onClose();
+      } else if (status === "free") {
+        setError("No active Premium found for this Google account.");
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong.");
     }
@@ -213,6 +226,18 @@ export function UpgradeSheet({
                 </View>
               )}
               {!!note && <Text style={styles.note}>{note}</Text>}
+              {noPlans && (
+                <View>
+                  <Text style={styles.note}>
+                    Plans couldn't load. Check your connection and try again.
+                  </Text>
+                  <Button
+                    title="Try again"
+                    variant="secondary"
+                    onPress={() => void premium.load()}
+                  />
+                </View>
+              )}
               {!!chosen && !unavailable && (
                 <Text style={styles.renew}>
                   Renews automatically at {chosen.priceString} per{" "}

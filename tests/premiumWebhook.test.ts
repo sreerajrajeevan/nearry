@@ -121,6 +121,25 @@ test("grace period extends expires_at", async () => {
   assert.equal(t.upserts[0].expires_at, "2030-01-17T00:00:00Z");
 });
 
+test("grace period on the entitlement itself extends expires_at", async () => {
+  const t = setup({
+    subscribers: {
+      [A]: {
+        entitlements: {
+          premium: {
+            expires_date: "2030-01-01T00:00:00Z",
+            grace_period_expires_date: "2030-01-10T00:00:00Z",
+            product_identifier: "nearry_monthly",
+          },
+        },
+        subscriptions: { nearry_monthly: { store: "play_store" } },
+      },
+    },
+  });
+  await t.handler(hook({ event: { app_user_id: A } }));
+  assert.equal(t.upserts[0].expires_at, "2030-01-10T00:00:00Z");
+});
+
 test("null expires_date means lifetime", async () => {
   const t = setup({ subscribers: { [A]: sub(null) } });
   await t.handler(hook({ event: { app_user_id: A } }));
@@ -173,9 +192,16 @@ test("deleted account (23503) returns 200", async () => {
   assert.equal(res.status, 200);
 });
 
-test("RevenueCat API failure returns 502", async () => {
+test("RevenueCat API failure returns 502 and logs without secrets", async (ctx) => {
+  const logged: unknown[][] = [];
+  ctx.mock.method(console, "error", (...a: unknown[]) => {
+    logged.push(a);
+  });
   const t = setup({ apiStatus: 500 });
   const res = await t.handler(hook({ event: { app_user_id: A } }));
+  assert.equal(logged.length, 1);
+  assert.equal(logged[0][0], "revenuecat-webhook");
+  assert.ok(!JSON.stringify(logged).includes(SECRET));
   assert.equal(res.status, 502);
 });
 

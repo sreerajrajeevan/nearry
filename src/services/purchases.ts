@@ -7,6 +7,10 @@ const PLAN_BY_TYPE: Record<string, PremiumPlanId> = {
   THREE_MONTH: "quarterly",
 };
 
+// PURCHASES_ERROR_CODE.PRODUCT_ALREADY_PURCHASED_ERROR / PAYMENT_PENDING_ERROR.
+const ALREADY_OWNED = "6";
+const PAYMENT_PENDING = "20";
+
 let configured = false;
 
 /** The only module that touches react-native-purchases; null when unavailable. */
@@ -55,9 +59,14 @@ export function createRevenueCatAdapter(): PurchasesAdapter | null {
         await Purchases.purchasePackage(pkg);
         return "done";
       } catch (e) {
-        if ((e as { userCancelled?: boolean })?.userCancelled)
-          return "cancelled";
-        throw e;
+        const err = e as { userCancelled?: boolean; code?: string | number };
+        if (err?.userCancelled) return "cancelled";
+        // Compared as strings so this does not import the SDK enum.
+        const code = String(err?.code ?? "");
+        if (code === ALREADY_OWNED) return "owned";
+        if (code === PAYMENT_PENDING) return "pending";
+        // Never show raw SDK text.
+        throw new Error("Purchase didn't go through. Please try again.");
       }
     },
     async restore() {
