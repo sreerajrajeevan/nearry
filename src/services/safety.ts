@@ -1,3 +1,4 @@
+import { assertLive } from "./demoGuard";
 import { getSupabase, isDemoMode } from "./supabase";
 import { notifyUnreadChanged } from "./unreadEvents";
 import { mockConversations } from "../data/mock";
@@ -49,6 +50,7 @@ export async function reportContent(
   reason: string,
   details: string,
 ): Promise<string> {
+  assertLive("send reports");
   if (!REPORT_REASONS.some((r) => r.id === reason) || details.length > 1000)
     throw new Error("Choose a reason and keep details under 1,000 characters.");
   if (isDemoMode()) {
@@ -74,6 +76,7 @@ export async function blockUser(
   blocked: boolean,
   name = "Neighbour",
 ): Promise<void> {
+  assertLive("block people");
   if (isDemoMode()) {
     if (blocked)
       demoBlocks.set(id, { id, name, created_at: new Date().toISOString() });
@@ -132,6 +135,7 @@ export async function setPushEnabled(enabled: boolean): Promise<void> {
 export async function requestAccountDeletion(
   confirmation: string,
 ): Promise<void> {
+  assertLive("delete an account");
   if (isDemoMode()) throw new Error("The demo has no real account to delete.");
   if (confirmation !== "DELETE") throw new Error("Type DELETE to confirm.");
   await rpc("request_account_deletion", { p_confirmation: confirmation });

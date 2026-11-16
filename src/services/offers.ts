@@ -1,3 +1,4 @@
+import { assertLive } from "./demoGuard";
 import { demoUserBlocked } from "./safety";
 import { getSupabase, isSupabaseConfigured, isDemoMode } from "./supabase";
 import { LIVE_FEED_CALM, multiplexSubscribe } from "./realtime";
@@ -115,6 +116,7 @@ export async function createDraft(
   businessId: string,
   input: NewOfferInput,
 ): Promise<Offer> {
+  assertLive("create offers");
   const err = validateOfferInput(input);
   if (err) throw new Error(err);
   if (useMock()) {
@@ -158,6 +160,7 @@ export async function createDraft(
  * is verified — the error surfaces here.
  */
 export async function publishOffer(offerId: string): Promise<Offer> {
+  assertLive("publish offers");
   if (useMock()) {
     const o = mockOffers.find((x) => x.id === offerId);
     if (!o) throw new Error("Offer not found.");
@@ -185,6 +188,7 @@ export async function updateOffer(
     priceCents?: number | null;
   },
 ): Promise<Offer> {
+  assertLive("edit offers");
   const dbPatch: Record<string, unknown> = {};
   if (input.title !== undefined) dbPatch.title = input.title.trim();
   if (input.description !== undefined)
@@ -243,6 +247,7 @@ export async function updateOffer(
 
 /** Delete a draft offer. Only drafts with no bookings can be deleted. */
 export async function deleteOffer(offerId: string): Promise<void> {
+  assertLive("delete offers");
   if (useMock()) {
     const i = mockOffers.findIndex((x) => x.id === offerId);
     if (i < 0) throw new Error("Offer not found.");
@@ -260,6 +265,7 @@ export async function deleteOffer(offerId: string): Promise<void> {
 
 /** End an offer early. Terminal for customers; business keeps history. */
 export async function cancelOffer(offerId: string): Promise<void> {
+  assertLive("cancel offers");
   if (useMock()) {
     const o = mockOffers.find((x) => x.id === offerId);
     if (!o) throw new Error("Offer not found.");

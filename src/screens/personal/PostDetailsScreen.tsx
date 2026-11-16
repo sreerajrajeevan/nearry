@@ -1,3 +1,4 @@
+import { assertLive } from "../../services/demoGuard";
 import { Alert } from "../../services/appAlert";
 import { PlanDetailsSkeleton } from "../../components/Skeletons";
 import { useToast } from "../../store/ToastContext";
@@ -149,6 +150,13 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
   const [retryNote, setRetryNote] = useState("");
   const sendJoin = async (note: string) => {
     if (!myId || busy) return;
+    try {
+      // The demo never pretends a request was sent.
+      assertLive("join plans");
+    } catch {
+      setJoinOpen(false);
+      return;
+    }
     setBusy("join");
     setJoinError("");
     // Instant: close the sheet and show "Requested" now; undo if it fails.

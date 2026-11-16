@@ -1,3 +1,4 @@
+import { assertLive } from "./demoGuard";
 import {
   BusinessVenueSubmission,
   BusinessVenueState,
@@ -46,6 +47,7 @@ export async function submitVerificationDoc(
   businessId: string,
   venue: BusinessVenueSubmission,
 ): Promise<string> {
+  assertLive("submit verification");
   if (useMock()) throw new Error("Verification needs the backend configured.");
   const validation = businessVenueError(venue);
   if (validation) throw new Error(validation);
@@ -124,6 +126,7 @@ export async function getVerificationState(businessId: string): Promise<{
 
 /** Claim an unclaimed venue for this business (sets venues.business_id). */
 export async function claimVenue(venueId: string): Promise<void> {
+  assertLive("claim a venue");
   if (useMock())
     throw new Error("Venue claiming needs the backend configured.");
   const supabase = getSupabase()!;

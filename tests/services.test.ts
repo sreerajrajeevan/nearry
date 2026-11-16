@@ -217,13 +217,12 @@ test("a read acknowledgement includes the last displayed message id", async () =
   assert.equal(calls.length, 0);
 });
 
-test("demo inbox snapshots refresh after reads and sends without mutating previous results", async () => {
+test("demo inbox snapshots refresh after reads, and sending is refused", async () => {
   const { setDemoMode } = await import("../src/services/supabase");
-  const { mockConversations, mockMessages } = await import("../src/data/mock");
+  const { mockConversations } = await import("../src/data/mock");
   const { getUnreadCounts } = await import("../src/services/unread");
   const conversation = mockConversations[0];
   const original = { ...conversation };
-  const originalMessages = mockMessages.length;
   setDemoMode(true);
   try {
     conversation.unreadCount = 2;
@@ -236,45 +235,70 @@ test("demo inbox snapshots refresh after reads and sends without mutating previo
     assert.equal(read[0].unreadCount, 0);
     assert.equal(before[0].unreadCount, 2);
     assert.equal((await getUnreadCounts()).messages, unreadBefore.messages - 2);
-    await chat.sendMessage(conversation.id, "demo-user", "See you at six!");
-    const sent = await chat.listConversations();
-    assert.equal(sent[0].lastBody, "See you at six!");
-    assert.equal(read[0].lastBody, original.lastBody);
+    await assert.rejects(
+      chat.sendMessage(conversation.id, "demo-user", "See you at six!"),
+      /can't send messages/,
+    );
+    assert.equal(
+      (await chat.listConversations())[0].lastBody,
+      original.lastBody,
+    );
     assert.equal(calls.length, 0);
   } finally {
     Object.assign(conversation, original);
-    mockMessages.splice(originalMessages);
     setDemoMode(false);
   }
 });
 
-test("demo requests enforce capacity and leaving a full post reopens it", async () => {
+test("the demo refuses every write and leaves the sample data unchanged", async () => {
   const { setDemoMode } = await import("../src/services/supabase");
   const requests = await import("../src/services/joinRequests");
-  const { mockPosts } = await import("../src/data/mock");
+  const groups = await import("../src/services/planGroups");
+  const bookings = await import("../src/services/bookings");
+  const offers = await import("../src/services/offers");
+  const safety = await import("../src/services/safety");
+  const { mockPosts, mockBookings, mockOffers } =
+    await import("../src/data/mock");
+  const snapshot = JSON.stringify([mockPosts, mockBookings, mockOffers]);
   setDemoMode(true);
   try {
-    const post = await posts.createPost("host", {
-      title: "Audit game",
-      venueId: "test-venue",
-      venueName: "Test venue",
-      description: "Friendly audit game",
-      startsAt: new Date(Date.now() + 7200000).toISOString(),
-      vacancies: 1,
-      tags: [],
-    });
-    await assert.rejects(requests.requestToJoin(post.id, "host"), /own post/);
-    const first = await requests.requestToJoin(post.id, "participant");
-    await assert.rejects(
-      requests.requestToJoin(post.id, "participant"),
-      /already/,
+    const refused: [string, () => Promise<unknown>][] = [
+      [
+        "post plans",
+        () =>
+          posts.createPost("demo-user", {
+            title: "Audit game",
+            venueId: "test-venue",
+            venueName: "Test venue",
+            description: "Friendly audit game",
+            startsAt: new Date(Date.now() + 7200000).toISOString(),
+            vacancies: 1,
+            tags: [],
+          }),
+      ],
+      ["edit plans", () => posts.updatePost(mockPosts[0].id, { title: "x" })],
+      ["cancel plans", () => posts.cancelPost(mockPosts[0].id)],
+      [
+        "join plans",
+        () => requests.requestToJoin(mockPosts[0].id, "demo-user"),
+      ],
+      ["approve requests", () => requests.approveRequest("r1")],
+      [
+        "send messages",
+        () => groups.sendPlanGroupMessage("g", "demo-user", "hi"),
+      ],
+      ["book offers", () => bookings.bookOffer(mockOffers[0].id, "s", 1)],
+      ["publish offers", () => offers.publishOffer(mockOffers[0].id)],
+      ["send reports", () => safety.reportContent({} as never)],
+      ["block people", () => safety.blockUser("u1")],
+    ];
+    for (const [action, run] of refused)
+      await assert.rejects(run(), new RegExp(`can't ${action}`), action);
+    assert.equal(
+      JSON.stringify([mockPosts, mockBookings, mockOffers]),
+      snapshot,
     );
-    const result = await requests.approveRequest(first.id);
-    assert.deepEqual(result, { spotsLeft: 0, postClosed: true });
-    await assert.rejects(requests.requestToJoin(post.id, "other"), /full/);
-    await requests.cancelParticipation(first.id);
-    assert.equal(mockPosts.find((p) => p.id === post.id)?.status, "open");
-    assert.equal(mockPosts.find((p) => p.id === post.id)?.spotsLeft, 1);
+    assert.equal(calls.length, 0);
   } finally {
     setDemoMode(false);
   }
@@ -762,51 +786,6 @@ test("host inbox requests are bounded, unexpired and scoped to the host's own po
   assert.equal(result[0].postTitle, "Movie night");
 });
 
-test("demo plan groups stay absent until approval and disappear when the last participant leaves", async () => {
-  const { setDemoMode } = await import("../src/services/supabase");
-  const { mockPosts } = await import("../src/data/mock");
-  const groups = await import("../src/services/planGroups");
-  const requests = await import("../src/services/joinRequests");
-  const id = "test-group-after-approval",
-    owner = "test-group-owner",
-    member = "test-group-member";
-  mockPosts.unshift({
-    ...mockPosts[0],
-    id,
-    authorId: owner,
-    title: "Movie plan without a chat",
-    startsAt: new Date(Date.now() + 7200000).toISOString(),
-    expiresAt: undefined,
-    vacancies: 2,
-    joinedCount: 0,
-    spotsLeft: 2,
-    status: "open",
-  });
-  setDemoMode(true);
-  try {
-    assert.equal((await groups.listPlanGroups(owner)).length, 0);
-    await assert.rejects(
-      groups.getPlanGroup({ postId: id }, owner),
-      /first member/,
-    );
-    const req = await requests.requestToJoin(id, member);
-    assert.equal((await groups.listPlanGroups(owner)).length, 0);
-    await requests.approveRequest(req.id);
-    const group = (await groups.listPlanGroups(owner))[0];
-    assert.equal(group.name, "Movie plan without a chat");
-    assert.equal(group.memberCount, 2);
-    await groups.leavePlanGroup(group.id, member);
-    assert.equal((await groups.listPlanGroups(owner)).length, 0);
-    assert.equal(mockPosts.find((p) => p.id === id)!.spotsLeft, 2);
-  } finally {
-    setDemoMode(false);
-    mockPosts.splice(
-      mockPosts.findIndex((p) => p.id === id),
-      1,
-    );
-  }
-});
-
 test("a join request sends a trimmed optional note and rejects one over 280 characters", async () => {
   const requests = await import("../src/services/joinRequests");
   const row = {
@@ -868,41 +847,4 @@ test("a host's public profile reads only public columns", async () => {
     avatarUrl: "https://example.invalid/a.jpg",
     bio: "Morning runs and filter coffee.",
   });
-});
-
-test("demo bookings follow the same limits: 2 people, one per offer per day, 3 waiting", async () => {
-  const { setDemoMode } = await import("../src/services/supabase");
-  const bookings = await import("../src/services/bookings");
-  const { mockBookings, mockOffers } = await import("../src/data/mock");
-  setDemoMode(true);
-  const before = mockBookings.length;
-  try {
-    await assert.rejects(
-      bookings.bookOffer(mockOffers[0].id, "x", 3),
-      /1 or 2 people/,
-    );
-    const offer = mockOffers.find((o) => o.id === "o-demo-turf")!;
-    const slots = (await bookings.listOfferSlots(offer.id)).filter(
-      (s) => s.seats_left > 0,
-    );
-    const first = await bookings.bookOffer(offer.id, slots[0].id, 1);
-    assert.equal(
-      (await bookings.bookOffer(offer.id, slots[0].id, 1)).bookingId,
-      first.bookingId,
-    );
-    const sameDay = slots.find(
-      (s, i) =>
-        i > 0 &&
-        new Date(s.starts_at).toDateString() ===
-          new Date(slots[0].starts_at).toDateString(),
-    );
-    if (sameDay)
-      await assert.rejects(
-        bookings.bookOffer(offer.id, sameDay.id, 1),
-        /one booking for this offer on that day/,
-      );
-  } finally {
-    mockBookings.splice(0, mockBookings.length - before);
-    setDemoMode(false);
-  }
 });

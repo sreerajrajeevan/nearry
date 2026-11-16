@@ -18,6 +18,7 @@ import { WelcomeScreen } from "../screens/WelcomeScreen";
 import { usePlanLinks } from "../hooks/usePlanLinks";
 import { setMonitoringAccount } from "../services/monitoring";
 import { NotificationPrompt } from "../components/NotificationPrompt";
+import { DemoFrame } from "../components/DemoBar";
 import { IntroductionScreen } from "../screens/onboarding/IntroductionScreen";
 import { PersonalOnboardingScreen } from "../screens/onboarding/PersonalOnboardingScreen";
 import { onboardingLane } from "../utils/onboarding";
@@ -116,7 +117,7 @@ export function RootNavigator() {
     return <AccountTypeScreen />;
 
   return (
-    <>
+    <DemoFrame>
       <Stack.Navigator
         screenOptions={{
           headerShown: false,
@@ -161,7 +162,7 @@ export function RootNavigator() {
         <Stack.Screen name="Legal" component={LegalScreen} />
       </Stack.Navigator>
       <NotificationPrompt />
-    </>
+    </DemoFrame>
   );
 }
 

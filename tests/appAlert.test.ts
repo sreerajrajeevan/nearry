@@ -99,3 +99,24 @@ test("subscriber cleanup and copied button configuration survive caller mutation
   assert.equal(updates, 1);
   assert.equal(queue.getSnapshot(), null);
 });
+
+test("a demo-blocked action shows one 'You're in the demo' prompt with sign-up", async () => {
+  const { createAppAlertQueue } = await import("../src/services/appAlert");
+  const { demoBlockedMessage, setLeaveDemoHandler } =
+    await import("../src/services/demoMessage");
+  let left = 0;
+  setLeaveDemoHandler(() => left++);
+  const q = createAppAlertQueue();
+  q.alert("", demoBlockedMessage("post plans"));
+  q.alert("Couldn't post", demoBlockedMessage("post plans"));
+  const shown = q.getSnapshot()!;
+  assert.equal(shown.title, "You're in the demo");
+  assert.deepEqual(
+    shown.buttons.map((b) => b.text),
+    ["Keep exploring", "Create account"],
+  );
+  q.choose(shown.id, 1);
+  assert.equal(left, 1);
+  assert.equal(q.getSnapshot(), null);
+  setLeaveDemoHandler(null);
+});

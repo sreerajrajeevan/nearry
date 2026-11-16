@@ -1,3 +1,4 @@
+import { assertLive } from "./demoGuard";
 import { getSupabase, isDemoMode } from "./supabase";
 
 export type PhotoRef = { id: string; photo_url: string; sort_order: number };
@@ -48,6 +49,7 @@ export async function addPostPhoto(
   postId: string,
   photoUrl: string,
 ): Promise<void> {
+  assertLive("add photos");
   const existing = await listPostPhotos(postId);
   // A retry after a lost response must not attach the same uploaded photo twice.
   if (existing.some((photo) => photo.photo_url === photoUrl)) return;
@@ -75,6 +77,7 @@ export async function addPostPhoto(
 }
 
 export async function deletePostPhoto(id: string): Promise<void> {
+  assertLive("delete photos");
   if (isDemoMode()) {
     for (const [postId, photos] of demoPhotos)
       demoPhotos.set(
@@ -99,6 +102,7 @@ export async function savePostPhotos(
   upload: (uri: string) => Promise<string>,
   attach: (postId: string, url: string) => Promise<void> = addPostPhoto,
 ): Promise<{ pending: PendingPostPhoto[]; error: string }> {
+  assertLive("add photos");
   const pending: PendingPostPhoto[] = [];
   let error = "";
   // Stop at the first failure to preserve the host's chosen cover/order.
@@ -123,6 +127,7 @@ export async function savePhotoSelection(
   photos: EditablePostPhoto[],
   upload: (uri: string) => Promise<string>,
 ): Promise<{ photos: EditablePostPhoto[]; error: string }> {
+  assertLive("change photos");
   const next = photos.map((photo) => ({ ...photo }));
   try {
     if (next.length > MAX_POST_PHOTOS)
