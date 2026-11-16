@@ -25,4 +25,18 @@ export async function getCurrentPosition(): Promise<LatLng | null> {
   }
 }
 
+/** Refreshes the position only when permission was already given: never prompts. */
+export async function getPositionIfAllowed(): Promise<LatLng | null> {
+  try {
+    const { status } = await Location.getForegroundPermissionsAsync();
+    if (status !== "granted") return null;
+    const pos = await Location.getCurrentPositionAsync({
+      accuracy: Location.Accuracy.Balanced,
+    });
+    return { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
+  } catch {
+    return null;
+  }
+}
+
 export { distanceKm } from "./locationDistance";

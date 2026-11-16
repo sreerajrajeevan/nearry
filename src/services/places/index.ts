@@ -8,6 +8,7 @@ export type {
   Place,
   PlaceBias,
   PlaceAttribution,
+  PlaceKind,
   PlaceSuggestion,
 } from "../../../supabase/functions/_shared/placeTypes";
 import type {
@@ -20,6 +21,7 @@ const samples: Place[] = [
   {
     provider: "demo",
     id: "infopark",
+    kind: "spot",
     name: "Infopark",
     address: "Sample location · Kakkanad, Kochi",
     latitude: 10.007,
@@ -29,6 +31,7 @@ const samples: Place[] = [
   {
     provider: "demo",
     id: "kakkanad",
+    kind: "area",
     name: "Kakkanad",
     address: "Sample location · Kochi, Kerala",
     latitude: 10.0159,
@@ -38,6 +41,7 @@ const samples: Place[] = [
   {
     provider: "demo",
     id: "kochi",
+    kind: "city",
     name: "Kochi",
     address: "Sample location · Kerala",
     latitude: 9.9312,

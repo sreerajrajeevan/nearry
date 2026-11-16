@@ -1,4 +1,9 @@
-import type { Place, PlaceBias, PlaceProvider } from "./placeTypes.ts";
+import type {
+  Place,
+  PlaceBias,
+  PlaceKind,
+  PlaceProvider,
+} from "./placeTypes.ts";
 import { validPoint } from "./placeTypes.ts";
 const attribution = [
   { label: "Powered by Geoapify", url: "https://www.geoapify.com/" },
@@ -7,6 +12,13 @@ const attribution = [
     url: "https://www.openstreetmap.org/copyright",
   },
 ];
+function geoapifyKind(type: unknown): PlaceKind | undefined {
+  if (typeof type !== "string") return undefined;
+  if (["city", "county", "state", "country"].includes(type)) return "city";
+  if (["suburb", "district", "postcode", "street"].includes(type))
+    return "area";
+  return type === "amenity" || type === "building" ? "spot" : undefined;
+}
 export function mapGeoapifyResults(payload: unknown): Place[] {
   const results = (payload as { results?: unknown[] } | null)?.results;
   if (!Array.isArray(results)) throw new Error("Invalid place response");
@@ -40,6 +52,9 @@ export function mapGeoapifyResults(payload: unknown): Place[] {
         typeof r.formatted === "string" ? r.formatted.slice(0, 500) : name,
       ...point,
       attributions: [...attribution, ...extra],
+      ...(geoapifyKind(r.result_type)
+        ? { kind: geoapifyKind(r.result_type) }
+        : {}),
     });
   }
   return [...places.values()].slice(0, 5);

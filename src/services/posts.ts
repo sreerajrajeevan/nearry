@@ -9,7 +9,7 @@ import { distanceKm } from "./locationDistance";
 import { demoUserBlocked } from "./safety";
 import { getSupabase, isSupabaseConfigured, isDemoMode } from "./supabase";
 import { multiplexSubscribe } from "./realtime";
-import { mockPosts } from "../data/mock";
+import { mockPosts, mockVenues } from "../data/mock";
 import {
   DbPost,
   NeedPost,
@@ -102,7 +102,11 @@ export async function listPosts(filter: PostFilter = {}): Promise<NeedPost[]> {
     if (filter.nearby) {
       const origin = filter.nearby;
       posts = posts.flatMap((p) => {
-        if (!p.location) return [];
+        if (!p.location) {
+          // Sample venues have a sample distance but no coordinates.
+          const km = mockVenues.find((v) => v.id === p.venueId)?.distanceKm;
+          return km != null && km <= origin.radiusM / 1000 ? [p] : [];
+        }
         const km = distanceKm(origin, p.location);
         return km <= origin.radiusM / 1000 ? [{ ...p, distanceKm: km }] : [];
       });

@@ -1,5 +1,10 @@
 /** App-facing contract: provider IDs are never Nearry venue IDs. */
 export type PlaceAttribution = { label: string; url?: string };
+/** Rough size of a place, used to pick a sensible search distance. */
+export const PLACE_KINDS = ["city", "area", "spot"] as const;
+export type PlaceKind = (typeof PLACE_KINDS)[number];
+export const validPlaceKind = (value: unknown): value is PlaceKind =>
+  PLACE_KINDS.includes(value as PlaceKind);
 export type Place = {
   provider: string;
   id: string;
@@ -8,6 +13,8 @@ export type Place = {
   latitude: number;
   longitude: number;
   attributions: PlaceAttribution[];
+  /** Optional: older endpoints and stored places do not send it. */
+  kind?: PlaceKind;
 };
 export type PlaceBias = { latitude: number; longitude: number };
 export interface PlaceProvider {
@@ -34,6 +41,7 @@ export function validPlace(value: unknown): value is Place {
     typeof p.name === "string" &&
     !!p.name &&
     typeof p.address === "string" &&
+    (p.kind === undefined || validPlaceKind(p.kind)) &&
     Array.isArray(p.attributions) &&
     p.attributions.every(
       (a) =>
@@ -46,7 +54,7 @@ export function validPlace(value: unknown): value is Place {
 /** Predictions have no coordinates until the person selects one. */
 export type PlaceSuggestion = Pick<
   Place,
-  "provider" | "id" | "name" | "address" | "attributions"
+  "provider" | "id" | "name" | "address" | "attributions" | "kind"
 > &
   Partial<PlaceBias>;
 export function validSuggestion(value: unknown): value is PlaceSuggestion {
@@ -64,6 +72,7 @@ export function validSuggestion(value: unknown): value is PlaceSuggestion {
     p.address.length <= 500 &&
     p.latitude === undefined &&
     p.longitude === undefined &&
+    (p.kind === undefined || validPlaceKind(p.kind)) &&
     Array.isArray(p.attributions) &&
     p.attributions.every(
       (a) =>
