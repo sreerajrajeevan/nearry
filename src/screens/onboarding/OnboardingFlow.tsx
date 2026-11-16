@@ -11,7 +11,8 @@ import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../../navigation/types";
 import { useAuth } from "../../store/AuthContext";
-import { pickAvatar, uploadAvatar } from "../../services/avatars";
+import { uploadAvatar } from "../../services/avatars";
+import { useAvatarPicker } from "../../hooks/useAvatarPicker";
 import { updateProfile } from "../../services/profile";
 import { TermsAgreement } from "../../components/TermsAgreement";
 import { MotionPressable } from "../../components/Motion";
@@ -72,6 +73,7 @@ export function OnboardingFlow({
   business?: boolean;
   onFinished?: () => void;
 }) {
+  const { pickAvatar, avatarCropper } = useAvatarPicker();
   const {
     profile,
     completeOnboarding,
@@ -708,6 +710,7 @@ export function OnboardingFlow({
           )}
         </>
       )}
+      {avatarCropper}
     </OnboardingLayout>
   );
 }
@@ -715,12 +718,12 @@ const styles = StyleSheet.create({
   photo: {
     width: 74,
     height: 74,
-    borderRadius: 24,
+    borderRadius: 37,
     backgroundColor: c.peach,
     alignItems: "center",
     justifyContent: "center",
   },
-  photoImage: { width: 74, height: 74, borderRadius: 24 },
+  photoImage: { width: 74, height: 74, borderRadius: 37 },
   camera: {
     position: "absolute",
     right: -4,
