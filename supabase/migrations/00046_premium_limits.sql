@@ -23,7 +23,7 @@ grant select, insert, update, delete on public.premium_entitlements to service_r
 create or replace function public.has_premium(p_user uuid) returns boolean as $$
   select exists(select 1 from public.premium_entitlements
     where user_id = p_user and expires_at > now());
-$$ language sql stable security definer set search_path = public;
+$$ language sql stable security definer set search_path = public, pg_temp;
 revoke execute on function public.has_premium(uuid) from public, anon, authenticated;
 grant execute on function public.has_premium(uuid) to service_role;
 
@@ -42,6 +42,8 @@ create or replace function public.count_daily_usage(p_user uuid, p_kind text, p_
 declare v_day date := (now() at time zone 'Asia/Kolkata')::date; v_limit int;
 begin
   if auth.uid() is distinct from p_user then return; end if;
+  -- Serialize per user and kind so parallel inserts cannot all pass the count.
+  perform pg_advisory_xact_lock(hashtextextended(p_user::text || ':' || p_kind, 0));
   if exists(select 1 from public.daily_usage
     where user_id = p_user and kind = p_kind and day = v_day and ref_id = p_ref) then return; end if;
   v_limit := case p_kind when 'plan' then 3 else 10 end;
@@ -51,7 +53,7 @@ begin
   end if;
   insert into public.daily_usage(user_id, day, kind, ref_id) values(p_user, v_day, p_kind, p_ref);
 end;
-$$ language plpgsql security definer set search_path = public;
+$$ language plpgsql security definer set search_path = public, pg_temp;
 revoke execute on function public.count_daily_usage(uuid, text, uuid) from public, anon, authenticated;
 
 create or replace function public.daily_plan_limit_trg() returns trigger as $$
@@ -59,7 +61,7 @@ begin
   perform public.count_daily_usage(new.author_id, 'plan', new.id);
   return new;
 end;
-$$ language plpgsql security definer set search_path = public;
+$$ language plpgsql security definer set search_path = public, pg_temp;
 revoke execute on function public.daily_plan_limit_trg() from public, anon, authenticated;
 create trigger a_daily_plan_limit before insert on public.posts
   for each row execute function public.daily_plan_limit_trg();
@@ -69,7 +71,7 @@ begin
   perform public.count_daily_usage(new.requester_id, 'join', new.post_id);
   return new;
 end;
-$$ language plpgsql security definer set search_path = public;
+$$ language plpgsql security definer set search_path = public, pg_temp;
 revoke execute on function public.daily_join_limit_trg() from public, anon, authenticated;
 create trigger a_daily_join_limit before insert on public.join_requests
   for each row execute function public.daily_join_limit_trg();
