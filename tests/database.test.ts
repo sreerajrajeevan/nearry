@@ -4,6 +4,7 @@ import { readFile, readdir } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
 let db: any;
 let external = false;
+let legacyGroupNotice: any;
 const host = "00000000-0000-0000-0000-000000000001",
   b = "00000000-0000-0000-0000-000000000002",
   c = "00000000-0000-0000-0000-000000000003",
@@ -131,6 +132,22 @@ before(async () => {
           update plan_groups set name='Original custom name',custom_name=true where post_id='10000000-0000-0000-0000-000000003801';
           insert into plan_group_messages(group_id,sender_id,body,client_key) select id,'00000000-0000-0000-0000-000000003601','Preserve this old message','before-first-join-migration' from plan_groups where post_id='10000000-0000-0000-0000-000000003801';
         `);
+      }
+      if (file === "00042_plan_message_notification_sender.sql") {
+        await db.exec(`
+          insert into plan_group_messages(group_id,sender_id,body,client_key)
+          select id,'00000000-0000-0000-0000-000000003601','Legacy hello','legacy-notice-sender-00042'
+          from plan_groups where post_id='10000000-0000-0000-0000-000000003601';
+          update notifications set read_at='2026-01-01 00:00:00+00'
+          where kind='plan_group_message' and ref_id in
+          (select id from plan_group_messages where client_key='legacy-notice-sender-00042');
+        `);
+        legacyGroupNotice = (
+          await db.query(`select n.id,n.title,n.created_at::text,n.read_at::text,
+            (select count(*)::int from push_jobs where notification_id=n.id) push_jobs
+            from notifications n join plan_group_messages m on m.id=n.ref_id
+            where n.kind='plan_group_message' and m.client_key='legacy-notice-sender-00042'`)
+        ).rows[0];
       }
       await db.exec(sql);
       if (file === "00009_offers_bookings.sql") {
@@ -4023,6 +4040,78 @@ test("bright onboarding saves private preferences and profile atomically without
   assert.equal(businessDetails.longitude, undefined);
 });
 
+test("existing group notifications gain the sender without changing read state or requeuing push", async () => {
+  assert.ok(legacyGroupNotice);
+  const notice = (
+    await db.query(
+      `select n.id,n.title,n.body,n.created_at::text,n.read_at::text,
+      (select count(*)::int from push_jobs where notification_id=n.id) push_jobs
+      from notifications n where n.id=$1`,
+      [legacyGroupNotice.id],
+    )
+  ).rows[0];
+  assert.deepEqual(notice, {
+    ...legacyGroupNotice,
+    body: "Existing member: Legacy hello",
+  });
+});
+
+test("group notification sender names support Unicode, missing names and bounded previews", async () => {
+  const pid = await post(2);
+  const rid = await request(b, pid);
+  await asUser(host, (tx) =>
+    tx.query("select approve_join_request($1)", [rid]),
+  );
+  const group = (
+    await db.query("select id from plan_groups where post_id=$1", [pid])
+  ).rows[0].id;
+  const originalName = (
+    await db.query("select display_name from profiles where id=$1", [host])
+  ).rows[0].display_name;
+  const sendAndRead = async (
+    name: string,
+    message: string,
+    key: string,
+  ) => {
+    await db.query("update profiles set display_name=$1 where id=$2", [
+      name,
+      host,
+    ]);
+    const sent = await asUser(host, (tx) =>
+      tx.query("select send_plan_group_message($1,$2,$3) m", [
+        group,
+        message,
+        key,
+      ]),
+    );
+    return (
+      await db.query(
+        "select body from notifications where kind='plan_group_message' and ref_id=$1 and user_id=$2",
+        [sent.rows[0].m.id, b],
+      )
+    ).rows[0].body;
+  };
+  try {
+    assert.equal(
+      await sendAndRead("  ശ്രീ\n 🌿  ", "Hi 👋", "sender-unicode-00042"),
+      "ശ്രീ 🌿: Hi 👋",
+    );
+    assert.equal(
+      await sendAndRead(" \n ", "Hello", "sender-empty-00042"),
+      "Someone: Hello",
+    );
+    assert.equal(
+      await sendAndRead("A".repeat(100), "x".repeat(200), "sender-long-00042"),
+      `${"A".repeat(80)}: ${"x".repeat(140)}`,
+    );
+  } finally {
+    await db.query("update profiles set display_name=$1 where id=$2", [
+      originalName,
+      host,
+    ]);
+  }
+});
+
 test("plan groups are automatic, private and follow approved membership and released capacity", async () => {
   const pid = await post(1);
   assert.equal(
@@ -4066,6 +4155,19 @@ test("plan groups are automatic, private and follow approved membership and rele
       ]),
     );
   const first = (await send()).rows[0].m;
+  const notice = (
+    await db.query(
+      "select user_id,title,body from notifications where kind='plan_group_message' and ref_id=$1",
+      [first.id],
+    )
+  ).rows;
+  assert.deepEqual(notice, [
+    {
+      user_id: b,
+      title: "Football tonight",
+      body: "Test User: Meet by the entrance",
+    },
+  ]);
   assert.equal((await send()).rows[0].m.id, first.id);
   assert.equal(
     (
