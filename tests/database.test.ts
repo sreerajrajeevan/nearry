@@ -201,6 +201,12 @@ before(async () => {
     "insert into venues(business_id,name,category,area,verified_at) values($1,'Test Salon','Salon','Kakkanad',now())",
     [biz],
   );
+  // Shared fixture users send many requests across the suite; the free daily
+  // limits are covered by dedicated tests that use fresh users.
+  await db.query(
+    "insert into premium_entitlements(user_id,expires_at) values($1,now()+interval '10 years'),($2,now()+interval '10 years'),($3,now()+interval '10 years')",
+    [b, c, outsider],
+  );
 });
 after(async () => {
   await db?.close();
@@ -5474,5 +5480,126 @@ test("business venue: old service callers cannot approve without confirming the 
       ])
     ).rows[0].verification_status,
     "pending",
+  );
+});
+
+async function planAs(id: string, title = "Evening walk") {
+  return asUser(id, (tx) =>
+    tx.query(
+      "insert into posts(author_id,title,description,starts_at,vacancies,venue_id) values($1,$2,'A friendly evening by the waterfront',now()+interval '4 hours',2,'10000000-0000-0000-0000-000000000032') returning id",
+      [id, title],
+    ),
+  );
+}
+
+test("free users can post 3 plans a day; the 4th is refused with daily_plan_limit", async () => {
+  const u = await corePersonal();
+  for (let i = 0; i < 3; i++) await planAs(u, `Plan ${i}`);
+  await assert.rejects(planAs(u, "Plan 4"), /daily_plan_limit/);
+});
+
+test("deleting a plan does not give the daily slot back", async () => {
+  const u = await corePersonal();
+  const ids: string[] = [];
+  for (let i = 0; i < 3; i++)
+    ids.push((await planAs(u, `Plan ${i}`)).rows[0].id);
+  await asUser(u, (tx) => tx.query("select delete_post($1)", [ids[0]]));
+  await assert.rejects(planAs(u, "Plan 4"), /daily_plan_limit/);
+});
+
+test("yesterday's usage does not count", async () => {
+  const u = await corePersonal();
+  for (let i = 0; i < 3; i++)
+    await db.query(
+      "insert into daily_usage(user_id,kind,day,ref_id) values($1,'plan',(now() at time zone 'Asia/Kolkata')::date - 1,gen_random_uuid())",
+      [u],
+    );
+  await planAs(u, "Today");
+});
+
+test("premium users are counted but never blocked", async () => {
+  const u = await corePersonal();
+  await db.query(
+    "insert into premium_entitlements(user_id,expires_at) values($1,now()+interval '7 days')",
+    [u],
+  );
+  for (let i = 0; i < 5; i++) await planAs(u, `Plan ${i}`);
+  assert.equal(
+    Number(
+      (
+        await db.query(
+          "select count(*) c from daily_usage where user_id=$1 and kind='plan'",
+          [u],
+        )
+      ).rows[0].c,
+    ),
+    5,
+  );
+  await db.query(
+    "update premium_entitlements set expires_at=now()-interval '1 minute' where user_id=$1",
+    [u],
+  );
+  await assert.rejects(planAs(u, "Lapsed"), /daily_plan_limit/);
+});
+
+test("10 join requests a day; re-sending the same request does not count", async () => {
+  const u = await corePersonal();
+  const posts: string[] = [];
+  for (let i = 0; i < 11; i++) posts.push(await post(5));
+  const reqs: string[] = [];
+  for (let i = 0; i < 10; i++) reqs.push(await request(u, posts[i]));
+  await asUser(u, (tx) =>
+    tx.query("select withdraw_join_request($1)", [reqs[0]]),
+  );
+  await request(u, posts[0]);
+  await assert.rejects(request(u, posts[10]), /daily_join_limit/);
+});
+
+test("server-side inserts are never limited", async () => {
+  const count = async () =>
+    Number(
+      (
+        await db.query("select count(*) c from daily_usage where user_id=$1", [
+          host,
+        ])
+      ).rows[0].c,
+    );
+  const before = await count();
+  for (let i = 0; i < 5; i++) await post();
+  assert.equal(await count(), before);
+});
+
+test("clients cannot read or write entitlements or usage of others", async () => {
+  const a = await corePersonal(),
+    other = await corePersonal();
+  await db.query(
+    "insert into premium_entitlements(user_id,expires_at) values($1,now()+interval '1 day'),($2,now()+interval '1 day')",
+    [a, other],
+  );
+  const rows = (
+    await asUser(a, (tx) =>
+      tx.query("select user_id from premium_entitlements"),
+    )
+  ).rows;
+  assert.deepEqual(
+    rows.map((r: any) => r.user_id),
+    [a],
+  );
+  await assert.rejects(
+    asUser(a, (tx) =>
+      tx.query(
+        "insert into premium_entitlements(user_id,expires_at) values($1,now()+interval '1 day')",
+        [a],
+      ),
+    ),
+    /permission denied|row-level security/,
+  );
+  await assert.rejects(
+    asUser(a, (tx) => tx.query("select has_premium($1)", [other])),
+    /permission denied/,
+  );
+  await assert.rejects(
+    asUser(a, (tx) => tx.query("select * from daily_usage")),
+    /permission denied/,
   );
 });
