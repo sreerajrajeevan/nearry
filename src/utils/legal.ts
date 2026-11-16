@@ -1,7 +1,7 @@
 export type LegalPage = "privacy" | "terms" | "child-safety";
 export const POLICY_VERSION = "2026-10-19";
 export function legalUpdated(page: LegalPage): string {
-  return page === "child-safety" ? "16 November 2026" : "19 October 2026";
+  return page === "terms" ? "19 October 2026" : "16 November 2026";
 }
 export function legalTitle(page: LegalPage): string {
   return page === "privacy"
@@ -112,8 +112,12 @@ export function legalSections(
       body: "We use data to authenticate you, show relevant activity, manage requests and bookings, deliver messages and notifications, review businesses, moderate abuse and investigate technical problems. Operational logs may contain request metadata needed for security and reliability. The current app has no advertising or cross-app tracking SDK and does not sell your personal data.",
     },
     {
+      title: "Crash reports",
+      body: "When the app crashes or hits an unexpected error, it sends a crash report to Sentry so we can fix it: the error and where in the app it happened, the app version, device model and operating system, and the screens visited just before. Reports do not include your name, email, account ID, messages, typed text, location or photos, and anything resembling an email address, phone number or coordinates is removed on your phone before sending. Reports are kept for up to 90 days.",
+    },
+    {
       title: "Service providers",
-      body: "Supabase provides authentication, database, file storage and server functions. Google Maps Platform or Geoapify provides searched-place suggestions, depending on the configured search provider. Expo and the phone platform’s Apple/Google push services deliver notifications. Resend delivers email sign-in codes through Supabase Auth when email sign-in is enabled, and business-review links to authorised reviewers. Google is used when you choose Google sign-in. These providers process relevant data to deliver those services; processing locations depend on the configured provider infrastructure.",
+      body: "Supabase provides authentication, database, file storage and server functions. Google Maps Platform or Geoapify provides searched-place suggestions, depending on the configured search provider. Expo and the phone platform’s Apple/Google push services deliver notifications. Resend delivers email sign-in codes through Supabase Auth when email sign-in is enabled, and business-review links to authorised reviewers. Google is used when you choose Google sign-in. Sentry receives crash reports. These providers process relevant data to deliver those services; processing locations depend on the configured provider infrastructure.",
     },
     {
       title: "Retention and account deletion",

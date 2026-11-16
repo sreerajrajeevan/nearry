@@ -67,6 +67,11 @@ jobs:
           EXPO_PUBLIC_SUPPORT_EMAIL: ${{ vars.EXPO_PUBLIC_SUPPORT_EMAIL || secrets.EXPO_PUBLIC_SUPPORT_EMAIL }}
           # Hosted open.html (from npm run legal:export); shared plans link there.
           EXPO_PUBLIC_SHARE_URL: ${{ vars.EXPO_PUBLIC_SHARE_URL }}
+          # Crash reporting: on when the DSN variable is set (docs/crash-reporting.md).
+          EXPO_PUBLIC_SENTRY_DSN: ${{ vars.EXPO_PUBLIC_SENTRY_DSN }}
+          EXPO_PUBLIC_SENTRY_ENVIRONMENT: debug-apk
+          # Debug bundles aren't minified, so no source map upload is needed.
+          SENTRY_DISABLE_AUTO_UPLOAD: "true"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
