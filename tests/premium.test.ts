@@ -154,3 +154,83 @@ test("sync failure after purchase rethrows friendly error; restore recovers", as
   await t.store.restore();
   assert.equal(t.store.getSnapshot().status, "premium");
 });
+
+test("readExpiry failure on a later load keeps premium", async () => {
+  let fail = false;
+  const t = make({
+    readExpiry: async () => {
+      if (fail) throw new Error("offline");
+      return FUTURE;
+    },
+  });
+  await t.store.load();
+  fail = true;
+  await t.store.load();
+  assert.equal(t.store.getSnapshot().status, "premium");
+  assert.equal(t.store.getSnapshot().expiresAt, FUTURE);
+});
+
+test("first load read failure settles on free", async () => {
+  const t = make({
+    readExpiry: async () => {
+      throw new Error("offline");
+    },
+  });
+  await t.store.load();
+  assert.equal(t.store.getSnapshot().status, "free");
+});
+
+test("stale load that began before a purchase does not overwrite", async () => {
+  let release!: (v: string | null) => void;
+  const t = make();
+  await t.store.load();
+  t.f.adapter.identify = async () => {};
+  const slow = new PremiumStore({
+    adapter: t.f.adapter,
+    userId: "u1",
+    demo: false,
+    readExpiry: () => new Promise((r) => (release = r)),
+    sync: async () => FUTURE,
+    now: () => NOW,
+  });
+  await Promise.resolve();
+  const loading = slow.load();
+  await slow.restore().catch(() => {});
+  assert.equal(slow.getSnapshot().status, "premium");
+  release(null);
+  await loading;
+  assert.equal(slow.getSnapshot().status, "premium");
+});
+
+test("identify throwing makes the store unavailable unless premium", async () => {
+  const bad = make();
+  bad.f.adapter.identify = async () => {
+    throw new Error("no native module");
+  };
+  await bad.store.load();
+  assert.equal(bad.store.getSnapshot().status, "unavailable");
+  const paid = make({ readExpiry: async () => FUTURE });
+  paid.f.adapter.identify = async () => {
+    throw new Error("no native module");
+  };
+  await paid.store.load();
+  assert.equal(paid.store.getSnapshot().status, "premium");
+});
+
+test("sync returning null after a done purchase is still-confirming", async () => {
+  const t = make({ sync: async () => null });
+  await t.store.load();
+  await assert.rejects(t.store.purchase("monthly"), /still confirming/);
+  assert.equal(t.store.getSnapshot().status, "free");
+  assert.equal(t.store.getSnapshot().busy, false);
+});
+
+test("adapter throwing in purchase releases busy", async () => {
+  const t = make();
+  t.f.adapter.purchase = async () => {
+    throw new Error("billing unavailable");
+  };
+  await t.store.load();
+  await assert.rejects(t.store.purchase("monthly"), /billing/);
+  assert.equal(t.store.getSnapshot().busy, false);
+});

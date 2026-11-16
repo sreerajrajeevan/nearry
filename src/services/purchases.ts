@@ -1,4 +1,4 @@
-import { Platform } from "react-native";
+import { NativeModules, Platform } from "react-native";
 import type { PremiumPlanId, PurchasesAdapter } from "./premium";
 
 const PLAN_BY_TYPE: Record<string, PremiumPlanId> = {
@@ -19,7 +19,8 @@ export function createRevenueCatAdapter(): PurchasesAdapter | null {
   } catch {
     return null;
   }
-  if (!Purchases) return null;
+  if (typeof Purchases?.configure !== "function" || !NativeModules.RNPurchases)
+    return null;
   return {
     async identify(userId) {
       if (!configured) {

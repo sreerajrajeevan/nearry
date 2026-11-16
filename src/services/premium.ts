@@ -79,27 +79,48 @@ export class PremiumStore {
     this.state = { ...this.state, ...patch };
     this.listeners.forEach((l) => l());
   }
-  private statusFor(expiresAt: string | null): PremiumSnapshot["status"] {
+  private epoch = 0;
+  private broken = false;
+  private isFuture(expiresAt: string | null) {
     const t = expiresAt ? Date.parse(expiresAt) : NaN;
     const now = (this.deps.now ?? (() => new Date()))().getTime();
-    if (Number.isFinite(t) && t > now) return "premium";
-    return !this.deps.adapter || this.deps.demo ? "unavailable" : "free";
+    return Number.isFinite(t) && t > now;
+  }
+  private statusFor(expiresAt: string | null): PremiumSnapshot["status"] {
+    if (this.isFuture(expiresAt)) return "premium";
+    return !this.deps.adapter || this.deps.demo || this.broken
+      ? "unavailable"
+      : "free";
   }
   private apply(expiresAt: string | null) {
     this.publish({ expiresAt, status: this.statusFor(expiresAt) });
   }
   load = async (): Promise<void> => {
     const { adapter, demo, userId } = this.deps;
+    const epoch = this.epoch;
     let expiry: string | null = null;
+    let failed = false;
     try {
       expiry = await this.deps.readExpiry();
     } catch {
-      expiry = null;
+      failed = true;
     }
-    this.apply(expiry);
+    // A purchase/restore confirmation finished meanwhile; its expiry is newer.
+    if (epoch === this.epoch) {
+      if (!failed) this.apply(expiry);
+      else if (this.state.status === "loading") this.apply(null);
+    }
     if (!adapter || demo) return;
     try {
       await adapter.identify(userId);
+    } catch {
+      this.broken = true;
+      this.apply(this.state.expiresAt);
+      return;
+    }
+    this.broken = false;
+    this.apply(this.state.expiresAt);
+    try {
       const plans = planSavings(
         (await adapter.plans()).map((p) => ({ ...p, savingsPercent: null })),
       );
@@ -108,12 +129,16 @@ export class PremiumStore {
       // Plans stay empty; the paywall shows an unavailable state.
     }
   };
-  private async confirm() {
+  private async confirm(requireActive: boolean) {
+    let expiry: string | null;
     try {
-      this.apply(await this.deps.sync());
+      expiry = await this.deps.sync();
     } catch {
       throw new Error(CONFIRMING);
     }
+    if (requireActive && !this.isFuture(expiry)) throw new Error(CONFIRMING);
+    this.epoch++;
+    this.apply(expiry);
   }
   purchase = async (id: PremiumPlanId): Promise<"done" | "cancelled"> => {
     const { adapter, demo } = this.deps;
@@ -125,7 +150,7 @@ export class PremiumStore {
     this.publish({ busy: true });
     try {
       const result = await adapter.purchase(plan.pkg);
-      if (result === "done") await this.confirm();
+      if (result === "done") await this.confirm(true);
       return result;
     } finally {
       this.publish({ busy: false });
@@ -139,7 +164,7 @@ export class PremiumStore {
     this.publish({ busy: true });
     try {
       await adapter.restore();
-      await this.confirm();
+      await this.confirm(false);
     } finally {
       this.publish({ busy: false });
     }
