@@ -15,6 +15,7 @@ import { useAuth } from "../store/AuthContext";
 import { usePushSetup } from "../hooks/useUnreadCounts";
 import { LoadingState } from "../components/LoadingState";
 import { WelcomeScreen } from "../screens/WelcomeScreen";
+import { usePlanLinks } from "../hooks/usePlanLinks";
 import { NotificationPrompt } from "../components/NotificationPrompt";
 import { IntroductionScreen } from "../screens/onboarding/IntroductionScreen";
 import { PersonalOnboardingScreen } from "../screens/onboarding/PersonalOnboardingScreen";
@@ -57,6 +58,8 @@ export function RootNavigator() {
   } = useAuth();
 
   usePushSetup();
+
+  usePlanLinks();
   const shownRoleMismatch = useRef<typeof roleMismatch>(null);
 
   // The login lane is only a hint: one email = one account = one fixed type.

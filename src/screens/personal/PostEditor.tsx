@@ -13,6 +13,7 @@ import {
   planCostCents,
   planPreferencesError,
   planAsksLevel,
+  planErrorSection,
   planBookingLabel,
   planAgeLabel,
   PlanDetails,
@@ -26,6 +27,7 @@ import {
   ScrollView,
   TouchableOpacity,
   StyleSheet,
+  AccessibilityInfo,
 } from "react-native";
 import { PostPhotosField } from "../../components/PostPhotosField";
 import { LoadingState } from "../../components/LoadingState";
@@ -149,6 +151,9 @@ export function PostEditor({
   const [advanced, setAdvanced] = useState(false);
   const [durationOpen, setDurationOpen] = useState(false);
   const [formError, setFormError] = useState("");
+  const [errorSection, setErrorSection] = useState<number | null>(null);
+  const sectionY = useRef<Record<number, number>>({});
+  const scrollRef = useRef<ScrollView>(null);
   const [publishing, setPublishing] = useState(false);
   // Only ask what fits the activity: no skill level for a movie, no booking for a walk.
   const asksLevel = planAsksLevel(activity);
@@ -267,12 +272,41 @@ export function PostEditor({
     onSaved(id);
   };
 
+  // Fixing a field clears the red outline.
+  useEffect(() => {
+    setErrorSection(null);
+  }, [
+    activity,
+    title,
+    description,
+    startsAtDate,
+    venue,
+    cost,
+    costMode,
+    ageMin,
+    ageMax,
+    vacancies,
+  ]);
+  const showProblem = (message: string) => {
+    const section = planErrorSection(message);
+    setFormError(message);
+    setErrorSection(section);
+    const y = sectionY.current[section];
+    if (y !== undefined)
+      scrollRef.current?.scrollTo({ y: Math.max(0, y - 16), animated: true });
+    AccessibilityInfo.announceForAccessibility(message);
+  };
   const handlePublish = async () => {
     if (publishLock.current) return;
     setFormError("");
+    setErrorSection(null);
+    // Collect every problem, then point at the first one on the page.
+    const problems: string[] = [];
+    const flag = (message: string) => {
+      problems.push(message);
+    };
     if (!savedPostId && !activity) {
-      setFormError("Choose what you’re planning.");
-      return;
+      flag("Choose what you’re planning.");
     }
     const preferences: PlanDetails = {
       activity,
@@ -288,8 +322,7 @@ export function PostEditor({
     };
     const preferenceError = planPreferencesError(preferences);
     if (!savedPostId && preferenceError) {
-      setFormError(preferenceError);
-      return;
+      flag(preferenceError);
     }
     if (
       !savedPostId &&
@@ -301,32 +334,27 @@ export function PostEditor({
           location: venue?.location,
         }))
     ) {
-      setFormError(requiredMeetingPlaceMessage);
-      return;
+      flag(requiredMeetingPlaceMessage);
     }
     if (!savedPostId && (unfinishedLocation || (venue && !venue.name.trim()))) {
-      setFormError(
+      flag(
         "Choose a meeting place or add its coordinates, or clear the field to leave it out.",
       );
-      return;
     }
     if (!startsAtDate) {
-      setFormError("Pick a date and time for your post.");
-      return;
+      flag("Pick a date and time for your post.");
     }
     const startsAt = startsAtDate;
     const expiresAt = expiresAtDate;
     const costCents = planCostCents(costMode, cost, vacancies);
     if (costMode !== "free" && costCents === undefined) {
-      setFormError("Enter a valid amount for this plan.");
-      return;
+      flag("Enter a valid amount for this plan.");
     }
     if (
       cost.trim() &&
       (!Number.isFinite(Number(cost.trim())) || Number(cost.trim()) < 0)
     ) {
-      setFormError("Cost must be a non-negative number, or leave it empty.");
-      return;
+      flag("Cost must be a non-negative number, or leave it empty.");
     }
     const err = savedPostId
       ? null
@@ -338,16 +366,20 @@ export function PostEditor({
           vacancies,
           costCents,
         });
-    if (err) {
-      setFormError(err);
-      return;
-    }
+    if (err) flag(err);
     if (original && vacancies < original.joinedCount) {
-      setFormError(
+      flag(
         `Spots cannot be below the ${original.joinedCount} approved participants.`,
       );
+    }
+    if (problems.length) {
+      const first = [...problems].sort(
+        (a, b) => planErrorSection(a) - planErrorSection(b),
+      )[0];
+      showProblem(first);
       return;
     }
+    if (!startsAt) return;
     publishLock.current = true;
     setPublishing(true);
     try {
@@ -506,6 +538,7 @@ export function PostEditor({
   return (
     <Screen keyboard>
       <ScrollView
+        ref={scrollRef}
         style={{ flex: 1 }}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scroll}
@@ -537,7 +570,12 @@ export function PostEditor({
             />
           </View>
         </View>
-        <PlanSection number={1} title="What are you planning?">
+        <PlanSection
+          number={1}
+          error={errorSection === 1 ? formError : ""}
+          onY={(y) => (sectionY.current[1] = y)}
+          title="What are you planning?"
+        >
           <View
             style={styles.activities}
             accessibilityRole="radiogroup"
@@ -583,7 +621,12 @@ export function PostEditor({
             ))}
           </View>
         </PlanSection>
-        <PlanSection number={2} title="Give it a title">
+        <PlanSection
+          number={2}
+          error={errorSection === 2 ? formError : ""}
+          onY={(y) => (sectionY.current[2] = y)}
+          title="Give it a title"
+        >
           <Input
             label="Title"
             placeholder="Pick an activity for a suggestion"
@@ -613,7 +656,12 @@ export function PostEditor({
             disabled={publishing}
           />
         </PlanSection>
-        <PlanSection number={3} title="When">
+        <PlanSection
+          number={3}
+          error={errorSection === 3 ? formError : ""}
+          onY={(y) => (sectionY.current[3] = y)}
+          title="When"
+        >
           <View style={styles.row}>
             {days.map((day) => (
               <TouchableOpacity
@@ -699,7 +747,12 @@ export function PostEditor({
             />
           )}
         </PlanSection>
-        <PlanSection number={4} title="Where">
+        <PlanSection
+          number={4}
+          error={errorSection === 4 ? formError : ""}
+          onY={(y) => (sectionY.current[4] = y)}
+          title="Where"
+        >
           <PostLocationField
             required={!postId}
             value={venue}
@@ -734,7 +787,12 @@ export function PostEditor({
             </TouchableOpacity>
           )}
         </PlanSection>
-        <PlanSection number={5} title="Who can join">
+        <PlanSection
+          number={5}
+          error={errorSection === 5 ? formError : ""}
+          onY={(y) => (sectionY.current[5] = y)}
+          title="Who can join"
+        >
           <Text style={styles.label}>People needed</Text>
           <View style={styles.stepper}>
             <TouchableOpacity
@@ -857,7 +915,12 @@ export function PostEditor({
             </Text>
           )}
         </PlanSection>
-        <PlanSection number={6} title="Cost">
+        <PlanSection
+          number={6}
+          error={errorSection === 6 ? formError : ""}
+          onY={(y) => (sectionY.current[6] = y)}
+          title="Cost"
+        >
           <Choices
             label="How costs work"
             value={costMode}
@@ -896,7 +959,12 @@ export function PostEditor({
             Arrange any payments with the group. Nearry doesn’t collect them.
           </Text>
         </PlanSection>
-        <PlanSection number={7} title="A little peace of mind">
+        <PlanSection
+          number={7}
+          error={errorSection === 7 ? formError : ""}
+          onY={(y) => (sectionY.current[7] = y)}
+          title="A little peace of mind"
+        >
           <View style={styles.settingRow}>
             <Icon name="shield" size={22} />
             <View style={styles.flex}>
@@ -981,7 +1049,12 @@ export function PostEditor({
             </>
           )}
         </PlanSection>
-        <PlanSection number={8} title="A quick preview">
+        <PlanSection
+          number={8}
+          error={errorSection === 8 ? formError : ""}
+          onY={(y) => (sectionY.current[8] = y)}
+          title="A quick preview"
+        >
           <Text style={styles.previewAuthor}>
             {profile?.displayName ?? "You"} · you’re hosting
           </Text>
@@ -1036,7 +1109,7 @@ export function PostEditor({
         <Button
           title={postId ? "Save changes" : "Post plan"}
           loading={publishing}
-          disabled={missing.length > 0}
+          // Always tappable: with something missing, the tap scrolls to it.
           onPress={() => void handlePublish()}
         />
       </View>
@@ -1066,20 +1139,36 @@ export function PostEditor({
 function PlanSection({
   number,
   title,
+  error,
+  onY,
   children,
 }: {
   number: number;
   title: string;
+  /** Shown at the top of the section, which is outlined in red. */
+  error?: string;
+  onY?: (y: number) => void;
   children: React.ReactNode;
 }) {
   return (
-    <View style={styles.section}>
+    <View
+      onLayout={(e) => onY?.(e.nativeEvent.layout.y)}
+      style={[styles.section, !!error && styles.sectionError]}
+    >
       <View style={styles.sectionTop}>
         <Text style={styles.sectionNumber}>{number}</Text>
         <Text accessibilityRole="header" style={styles.sectionTitle}>
           {title}
         </Text>
       </View>
+      {!!error && (
+        <View style={styles.sectionErrorRow}>
+          <Icon name="alert-circle" size={15} color={colors.red} />
+          <Text accessibilityRole="alert" style={styles.sectionErrorText}>
+            {error}
+          </Text>
+        </View>
+      )}
       {children}
     </View>
   );
@@ -1358,6 +1447,23 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   formError: { fontSize: 12, color: colors.red, marginVertical: 5 },
+  sectionError: { borderColor: colors.red, borderWidth: 1.5 },
+  sectionErrorRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 6,
+    marginBottom: 10,
+    padding: 10,
+    borderRadius: 12,
+    backgroundColor: colors.dangerSoft,
+  },
+  sectionErrorText: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 18,
+    color: colors.red,
+    ...weight("600"),
+  },
   photoHint: { fontSize: 12, color: colors.textDim },
   publish: { marginTop: 12 },
   clearBtn: { fontSize: 12, color: colors.accent },

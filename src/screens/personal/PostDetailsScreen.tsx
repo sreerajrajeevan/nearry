@@ -9,6 +9,7 @@ import {
 import { JoinRequestSheet } from "../../components/JoinRequestSheet";
 import { RequestNote } from "../../components/RequestNote";
 import { PersonLink } from "../../components/PersonLink";
+import { planShareMessage } from "../../utils/shareLink";
 import { AudienceBadge, audienceLabel } from "../../components/AudienceBadge";
 import { ProfileRequired } from "../../components/ProfileRequired";
 import {
@@ -241,14 +242,12 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
     scroll.current?.scrollTo({ y: requestsTop.current, animated: !reduced });
   const share = () =>
     void Share.share({
-      message: [
-        post.title,
-        formatWhen(post.startsAt),
-        locationName,
-        "Join me on Nearry.",
-      ]
-        .filter(Boolean)
-        .join("\n"),
+      message: planShareMessage({
+        id: post.id,
+        title: post.title,
+        when: formatWhen(post.startsAt),
+        where: locationName,
+      }),
     }).catch(() => Alert.alert("Could not share", "Please try again."));
 
   return (
