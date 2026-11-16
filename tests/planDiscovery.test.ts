@@ -478,3 +478,11 @@ test("starting soon: open plans with a spot left in the next 3 hours, soonest fi
   assert.equal(spotsLeftLabel(1), "1 spot left");
   assert.equal(spotsLeftLabel(3), "3 spots left");
 });
+
+test("host gender filter defaults to everyone and labels other as Non-binary", async () => {
+  const { DEFAULT_PLAN_OPTIONS, HOST_GENDER_LABELS } =
+    await import("../src/utils/planDiscovery");
+  assert.equal(DEFAULT_PLAN_OPTIONS.hostGender, "all");
+  assert.equal(HOST_GENDER_LABELS.other, "Non-binary");
+  assert.equal(HOST_GENDER_LABELS.all, "Everyone");
+});

@@ -660,6 +660,34 @@ test("nearby plans query coordinates even when no registered venues exist and pr
   );
 });
 
+test("nearby plans send p_host_gender only when a host filter is set", async () => {
+  handler = () => [];
+  await posts.listPosts({
+    nearby: {
+      latitude: 10,
+      longitude: 76,
+      radiusM: 5000,
+      hostGender: "female",
+    },
+  });
+  const withFilter = calls.filter((c) =>
+    c.url.pathname.endsWith("/nearby_post_cards"),
+  );
+  assert.deepEqual(withFilter[withFilter.length - 1].body, {
+    p_lat: 10,
+    p_lng: 76,
+    p_radius_m: 5000,
+    p_host_gender: "female",
+  });
+  await posts.listPosts({
+    nearby: { latitude: 10, longitude: 76, radiusM: 5000 },
+  });
+  const plain = calls.filter((c) =>
+    c.url.pathname.endsWith("/nearby_post_cards"),
+  );
+  assert.ok(!("p_host_gender" in (plain[plain.length - 1].body as object)));
+});
+
 test("publishing without a confirmed meeting place is rejected before any network request", async () => {
   const draft = {
     title: "Coffee together",

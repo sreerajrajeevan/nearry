@@ -4,12 +4,15 @@ import { postCategory, type DiscoveryCategory } from "./discovery";
 export type PlanDateFilter = "all" | "today" | "week" | "weekend";
 export type PlanSort = "soonest" | "nearest" | "newest";
 export type PlanAudience = "all" | "any" | "female" | "male";
+export type HostGender = "all" | "female" | "male" | "other";
 export type PlanOptions = {
   category: DiscoveryCategory | null;
   freeOnly: boolean;
   audience: PlanAudience;
   maxDistanceKm: 2 | 5 | 10 | 25 | null;
   sort: PlanSort;
+  /** Premium; applied by the server, so changing it needs a reload. */
+  hostGender: HostGender;
 };
 export const DEFAULT_PLAN_OPTIONS: PlanOptions = {
   category: null,
@@ -17,6 +20,13 @@ export const DEFAULT_PLAN_OPTIONS: PlanOptions = {
   audience: "all",
   maxDistanceKm: null,
   sort: "soonest",
+  hostGender: "all",
+};
+export const HOST_GENDER_LABELS: Record<HostGender, string> = {
+  all: "Everyone",
+  female: "Women",
+  male: "Men",
+  other: "Non-binary",
 };
 export const PLAN_SORT_LABELS: Record<PlanSort, string> = {
   soonest: "Starting soon",

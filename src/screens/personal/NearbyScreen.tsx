@@ -45,6 +45,8 @@ import { nearbyVenues, listVenues } from "../../services/venues";
 import { NeedPost, Venue, Offer } from "../../services/mappers";
 import { DiscoveryCategory, venueCategory } from "../../utils/discovery";
 import { useAuth } from "../../store/AuthContext";
+import { usePremium } from "../../store/PremiumContext";
+import { premiumBlock } from "../../services/premium";
 import { PersonalTabNav, PersonalTabParamList } from "../../navigation/types";
 import { PlanFilterSheet } from "../../components/PlanFilterSheet";
 import { Icon } from "../../components/Icon";
@@ -54,6 +56,7 @@ import {
   planDistance,
   DEFAULT_PLAN_OPTIONS,
   PLAN_SORT_LABELS,
+  HOST_GENDER_LABELS,
   PLAN_AUDIENCE_LABELS,
   PlanDateFilter,
   PlanOptions,
@@ -122,6 +125,9 @@ export function NearbyScreen() {
     ...DEFAULT_PLAN_OPTIONS,
   });
   const { category, freeOnly } = options;
+  const hostGender = options.hostGender;
+  const premium = usePremium();
+  const premiumStatus = premium?.snapshot.status;
   const [dateFilter, setDateFilter] = useState<PlanDateFilter>("all");
   const [dateMenuOpen, setDateMenuOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -261,7 +267,17 @@ export function NearbyScreen() {
           : await listVenues();
         const ids = point ? places.map((v) => v.id) : undefined;
         const [plans, openings] = await Promise.all([
-          listPosts(point ? { nearby: { ...point, radiusM } } : {}),
+          listPosts(
+            point
+              ? {
+                  nearby: {
+                    ...point,
+                    radiusM,
+                    ...(hostGender !== "all" ? { hostGender } : {}),
+                  },
+                }
+              : {},
+          ),
           listLiveOffers(ids),
         ]);
         if (request.current !== version) return;
@@ -269,12 +285,31 @@ export function NearbyScreen() {
         setVenues(places);
         setOffers(openings);
         setState("ready");
-      } catch {
-        if (request.current === version) setState("error");
+      } catch (e) {
+        if (request.current !== version) return;
+        // The server says the filter is Premium-only: drop it and reload.
+        if (
+          hostGender !== "all" &&
+          premiumBlock(e instanceof Error ? e.message : "") === "filter"
+        ) {
+          setOptions((o) => ({ ...o, hostGender: "all" }));
+          return;
+        }
+        setState("error");
       }
     },
-    [point],
+    [point, hostGender],
   );
+
+  // Premium ended: the filter no longer applies. Never while still loading,
+  // or a Premium user would lose it on every app start.
+  useEffect(() => {
+    if (
+      hostGender !== "all" &&
+      (premiumStatus === "free" || premiumStatus === "unavailable")
+    )
+      setOptions((o) => ({ ...o, hostGender: "all" }));
+  }, [hostGender, premiumStatus]);
 
   // A stable function, so it can sit in the focus effect's dependencies.
   const refreshMyRequests = useMyRequests()?.refresh;
@@ -344,7 +379,10 @@ export function NearbyScreen() {
   const headerLabel =
     shownKm != null ? `${placeName} · ${shownKm} km` : placeName;
   const sheetFilters =
-    freeOnly || options.audience !== "all" || options.sort !== "soonest";
+    freeOnly ||
+    options.audience !== "all" ||
+    options.sort !== "soonest" ||
+    hostGender !== "all";
   const hasFilters = !!category || dateFilter !== "all" || sheetFilters;
   const clearFilters = () => {
     setOptions({ ...DEFAULT_PLAN_OPTIONS });
@@ -380,6 +418,15 @@ export function NearbyScreen() {
             key: "audience",
             label: PLAN_AUDIENCE_LABELS[options.audience],
             remove: () => setOptions((o) => ({ ...o, audience: "all" })),
+          },
+        ]
+      : []),
+    ...(hostGender !== "all"
+      ? [
+          {
+            key: "host",
+            label: `Hosted by: ${HOST_GENDER_LABELS[hostGender]}`,
+            remove: () => setOptions((o) => ({ ...o, hostGender: "all" })),
           },
         ]
       : []),

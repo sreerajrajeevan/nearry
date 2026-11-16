@@ -45,6 +45,8 @@ import { PostPhotoGallery } from "../../components/PostPhotoGallery";
 import { colors, typography, spacing, weight } from "../../theme";
 import { PostDetailsProps } from "../../navigation/types";
 import { useAuth } from "../../store/AuthContext";
+import { usePremium } from "../../store/PremiumContext";
+import { premiumBlock } from "../../services/premium";
 import {
   getPost,
   cancelPost,
@@ -82,6 +84,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
   const { postId } = route.params;
   const { profile, refreshProfile } = useAuth();
+  const premium = usePremium();
   const myId = profile?.id;
 
   const [profilePrompt, setProfilePrompt] = useState(false);
@@ -179,6 +182,11 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
         void refreshProfile().catch(() => {});
         return;
       }
+      const reason = premiumBlock(e instanceof Error ? e.message : "");
+      if (reason && premium) {
+        premium.showUpgrade(reason);
+        return;
+      }
       setRetryNote(note);
       setJoinError(e instanceof Error ? e.message : "Something went wrong.");
       setJoinOpen(true);
@@ -203,6 +211,11 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
         // Refresh stale account details without hiding the recovery action if
         // the network fails. The user can still open the completion form.
         void refreshProfile().catch(() => {});
+        return;
+      }
+      const reason = premiumBlock(e instanceof Error ? e.message : "");
+      if (reason && premium) {
+        premium.showUpgrade(reason);
         return;
       }
       Alert.alert(

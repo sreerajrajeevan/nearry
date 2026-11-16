@@ -40,6 +40,8 @@ import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
 import { colors, weight } from "../../theme";
 import { useAuth } from "../../store/AuthContext";
+import { usePremium } from "../../store/PremiumContext";
+import { premiumBlock } from "../../services/premium";
 import { createPost, getPost, updatePost } from "../../services/posts";
 import {
   PostLocationField,
@@ -114,6 +116,7 @@ export function PostEditor({
   onCancel?: () => void;
 }) {
   const { profile, demoMode } = useAuth();
+  const premium = usePremium();
   const [original, setOriginal] = useState<NeedPost | null>(null);
   const [loading, setLoading] = useState(!!postId);
   const [loadError, setLoadError] = useState("");
@@ -427,6 +430,11 @@ export function PostEditor({
       }
       openSavedPost(id);
     } catch (e) {
+      const reason = premiumBlock(e instanceof Error ? e.message : "");
+      if (reason && premium) {
+        premium.showUpgrade(reason);
+        return;
+      }
       Alert.alert(
         postId ? "Could not save changes" : "Failed to publish",
         e instanceof Error ? e.message : "Please try again.",
