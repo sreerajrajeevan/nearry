@@ -13,7 +13,8 @@ import { colors, typography, spacing, surfaces } from "../../theme";
 import { BusinessStackParamList } from "../../navigation/types";
 import { useAuth } from "../../store/AuthContext";
 import { updateProfile } from "../../services/profile";
-import { pickAvatar, uploadAvatar } from "../../services/avatars";
+import { uploadAvatar } from "../../services/avatars";
+import { useAvatarPicker } from "../../hooks/useAvatarPicker";
 
 type Props = NativeStackScreenProps<
   BusinessStackParamList,
@@ -22,6 +23,7 @@ type Props = NativeStackScreenProps<
 
 /** Edit business name, category and area. */
 export function EditBusinessProfileScreen({ navigation }: Props) {
+  const { pickAvatar, avatarCropper } = useAvatarPicker();
   const { profile, refreshProfile } = useAuth();
   const details = (profile?.businessDetails ?? {}) as {
     category?: string;
@@ -146,6 +148,7 @@ export function EditBusinessProfileScreen({ navigation }: Props) {
           style={styles.btn}
         />
       </ScrollView>
+      {avatarCropper}
     </Screen>
   );
 }

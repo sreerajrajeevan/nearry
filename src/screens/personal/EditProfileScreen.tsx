@@ -19,7 +19,8 @@ import { colors, typography, spacing, surfaces } from "../../theme";
 import { PersonalStackParamList } from "../../navigation/types";
 import { useAuth } from "../../store/AuthContext";
 import { updateProfile } from "../../services/profile";
-import { pickAvatar, uploadAvatar } from "../../services/avatars";
+import { uploadAvatar } from "../../services/avatars";
+import { useAvatarPicker } from "../../hooks/useAvatarPicker";
 
 type Props = NativeStackScreenProps<PersonalStackParamList, "EditProfile">;
 
@@ -41,6 +42,7 @@ const GENDERS = [
 
 /** Edit photo, name, bio, gender and interests. */
 export function EditProfileScreen({ navigation }: Props) {
+  const { pickAvatar, avatarCropper } = useAvatarPicker();
   const { profile, refreshProfile } = useAuth();
   const [name, setName] = useState(profile?.displayName ?? "");
   const [age, setAge] = useState(profile?.age?.toString() ?? "");
@@ -225,6 +227,7 @@ export function EditProfileScreen({ navigation }: Props) {
           style={styles.btn}
         />
       </ScrollView>
+      {avatarCropper}
     </Screen>
   );
 }

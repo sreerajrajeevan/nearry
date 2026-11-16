@@ -6,14 +6,13 @@ import { getSupabase } from "./supabase";
 
 const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL ?? "";
 
-/** Pick a square-cropped image from the library. Returns the local URI or null. */
+/** Pick the original photo; useAvatarPicker provides Nearry's circular crop editor. */
 export async function pickAvatar(): Promise<string | null> {
   // The system picker grants access to the selected photo without broad library permission.
   const result = await ImagePicker.launchImageLibraryAsync({
     mediaTypes: ["images"],
-    allowsEditing: true,
-    aspect: [1, 1],
-    quality: 0.8,
+    allowsEditing: false,
+    quality: 1,
   });
   if (result.canceled || result.assets.length === 0) return null;
   return result.assets[0].uri;
