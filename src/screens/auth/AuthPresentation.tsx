@@ -14,7 +14,7 @@ import {
   onboardingColors as c,
 } from "../../components/onboarding/OnboardingKit";
 import { MotionPressable } from "../../components/Motion";
-import { Icon } from "../../components/Icon";
+import { BrandMark } from "../../components/BrandLogo";
 import { normalizeEmailCode } from "../../utils/emailSignIn";
 import { isValidEmail, isValidOtp } from "../../utils/validation";
 import { weight } from "../../theme";
@@ -113,7 +113,7 @@ export function AuthPresentation(p: Props) {
       }
     >
       <View style={styles.hello} accessible={false}>
-        <Icon name="map-pin" size={34} color={c.amber} />
+        <BrandMark size={40} color={c.amber} dotColor={c.white} />
       </View>
       <OnboardingHeading
         kicker={`${p.kicker} account`}
