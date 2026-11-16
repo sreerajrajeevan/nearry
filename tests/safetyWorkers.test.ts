@@ -7,6 +7,7 @@ import {
 import {
   createPushHandler,
   processPush,
+  pushContent,
 } from "../supabase/functions/_shared/pushHandler";
 
 type Row = Record<string, any>;
@@ -218,7 +219,7 @@ test("storage failure never deletes Auth and retains a retryable deletion job", 
     "Storage unavailable",
   );
 });
-test("push retries skip devices with accepted tickets and never send private message text", async () => {
+test("push retries skip devices with accepted tickets and show the notification text", async () => {
   const f = fakeDb();
   f.tables.profiles.push({ id: "person", push_enabled: true });
   f.tables.push_tokens.push(
@@ -231,7 +232,8 @@ test("push retries skip devices with accepted tickets and never send private mes
     user_id: "person",
     kind: "message",
     ref_id: "conversation",
-    body: "PRIVATE CHAT CONTENT",
+    title: "Asha",
+    body: "See you at   the court at 6?",
   });
   const batches: any[] = [];
   let first = true;
@@ -257,8 +259,12 @@ test("push retries skip devices with accepted tickets and never send private mes
     batches[1].map((m: any) => m.to),
     ["token-two"],
   );
-  assert.equal(JSON.stringify(batches).includes("PRIVATE CHAT CONTENT"), false);
-  assert.deepEqual(batches[0][0].data, { notificationId: "notice" });
+  assert.equal(batches[0][0].title, "Asha");
+  assert.equal(batches[0][0].body, "See you at the court at 6?");
+  assert.deepEqual(batches[0][0].data, {
+    notificationId: "notice",
+    kind: "message",
+  });
 });
 test("receipt rejection removes only stale registrations, preserving a reassigned token", async () => {
   const f = fakeDb();
@@ -290,4 +296,22 @@ test("receipt rejection removes only stale registrations, preserving a reassigne
     ["reassigned-device"],
   );
   assert.ok(f.tables.push_deliveries.every((r) => r.status === "dead"));
+});
+
+test("push text falls back when a notice is blank and is clipped when long", () => {
+  assert.deepEqual(pushContent({ kind: "message", title: " ", body: null }), {
+    title: "Nearry",
+    body: "You have a new message.",
+  });
+  assert.deepEqual(pushContent({ kind: "booking" }), {
+    title: "Nearry",
+    body: "You have an update in Nearry.",
+  });
+  const long = pushContent({
+    kind: "message",
+    title: "T",
+    body: "a".repeat(400),
+  });
+  assert.equal(long.body.length, 180);
+  assert.ok(long.body.endsWith("…"));
 });

@@ -12,7 +12,10 @@ export function notificationTarget(notice: AppNotification, role: AccountType) {
     return { screen: "Conversation", params: { conversationId: notice.refId } };
   if (role === "personal") {
     if (notice.kind === "selfie_review")
-      return { screen: "SelfieVerification", params: undefined };
+      return {
+        screen: "PersonalTabs",
+        params: { screen: "Profile", params: { celebrate: notice.id } },
+      };
     if (
       [
         "join_request",

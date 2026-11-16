@@ -38,7 +38,8 @@ export type PersonalTabParamList = {
   Search: undefined;
   CreatePost: undefined;
   Activity: undefined;
-  Profile: undefined;
+  /** `celebrate` carries the notification that opened the profile. */
+  Profile: { celebrate?: string } | undefined;
 };
 
 /** Stack above the personal tabs: tab screens push details here. */
