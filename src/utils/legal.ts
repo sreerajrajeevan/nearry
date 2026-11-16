@@ -70,7 +70,7 @@ export function legalSections(
       },
       {
         title: "Bookings and meeting others",
-        body: "Hosts and businesses are responsible for accurate details, availability and delivering their plans or services. Nearry does not currently process payments. Confirm prices and arrangements directly with the host or business. Business verification is a document review and optional personal selfie review is a human photo comparison, not proof of legal identity, age, liveness or safety. Meet responsibly and use public places where appropriate. Nearry is not an emergency service.",
+        body: "Hosts and businesses are responsible for accurate details, availability and delivering their plans or services. Nearry does not process payments for plans, offers or bookings, so confirm prices and arrangements directly with the host or business. The optional Nearry Premium subscription is billed by Google Play. Business verification is a document review and optional personal selfie review is a human photo comparison, not proof of legal identity, age, liveness or safety. Meet responsibly and use public places where appropriate. Nearry is not an emergency service.",
       },
       {
         title: "Leaving and changes",

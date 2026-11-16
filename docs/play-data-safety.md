@@ -20,11 +20,14 @@ that assessment. Do not simply answer “No data collected” or “No data shar
 | Purchase history (Financial info) | Nearry Premium subscription purchases made through Google Play; RevenueCat receives the Nearry account id and purchase history to manage the subscription. No card or bank details reach Nearry | Collected when a user subscribes; linked to the account; used for app functionality; shared with RevenueCat as a service provider (not for advertising) |
 | Device or other IDs | Expo/FCM push registration token associated with an account | Optional notifications; functionality. This is not an advertising identifier |
 
-Check whether bookings/reservations with prices fall under **Purchase history**
-for the actual offering. The absence of an in-app payment SDK alone does not
-settle that answer. There is no payment-card, bank-account, phone-number,
-contacts, microphone, background-location, advertising or cross-app
-tracking feature in the reviewed code. Recheck the final dependency manifest.
+Purchase history is declared for the Nearry Premium subscription, which is
+billed by Google Play Billing through the RevenueCat SDK (`react-native-purchases`).
+Nearry never sees card or bank details. Plans, offers and bookings are not paid
+in the app. Check whether bookings/reservations with prices fall under
+**Purchase history** for the actual offering. There is no bank-account,
+phone-number, contacts, microphone, background-location, advertising or
+cross-app tracking feature in the reviewed code. Recheck the final dependency
+manifest.
 Provider operational logs may involve diagnostics and additional metadata;
 confirm their actual collection/retention rather than declaring them absent.
 
