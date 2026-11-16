@@ -70,8 +70,6 @@ jobs:
           # Crash reporting: on when the DSN variable is set (docs/crash-reporting.md).
           EXPO_PUBLIC_SENTRY_DSN: ${{ vars.EXPO_PUBLIC_SENTRY_DSN }}
           EXPO_PUBLIC_SENTRY_ENVIRONMENT: debug-apk
-          # Debug bundles aren't minified, so no source map upload is needed.
-          SENTRY_DISABLE_AUTO_UPLOAD: "true"
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4

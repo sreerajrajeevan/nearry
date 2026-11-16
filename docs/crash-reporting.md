@@ -26,10 +26,12 @@
 4. For Play builds (EAS): add the same `EXPO_PUBLIC_SENTRY_DSN` as an EAS
    environment variable for `production` (and `preview` if used).
 5. Optional, for readable stack traces in Play (release) builds: create a
-   Sentry auth token (Settings → Auth Tokens, scope `project:releases`), add
-   EAS secrets `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT`, and remove
-   `SENTRY_DISABLE_AUTO_UPLOAD` from `eas.json`. Without this, release
-   builds still report crashes; the traces are just harder to read.
+   Sentry auth token (Settings → Auth Tokens, scope `project:releases`) and
+   add EAS secrets `SENTRY_AUTH_TOKEN`, `SENTRY_ORG`, `SENTRY_PROJECT`.
+   `app.config.js` turns on the Sentry build plugin (source map upload) only
+   when `SENTRY_AUTH_TOKEN` is set, so builds without it never fail on the
+   upload. Without it, release builds still report crashes; the traces are
+   just harder to read.
 
 Check it: install the new build and look at Sentry → Issues. To test once,
 temporarily throw an error in a screen in a test build; don't ship that.

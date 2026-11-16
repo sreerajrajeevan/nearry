@@ -11,6 +11,12 @@ module.exports = ({ config }) => {
     plugins: [
       ...(config.plugins ?? []),
       "@react-native-community/datetimepicker",
+      // Uploads source maps for readable crash traces. Only with a Sentry
+      // token: without one the upload step would fail the build. Crash
+      // reporting itself works either way (the SDK is autolinked).
+      ...(process.env.SENTRY_AUTH_TOKEN?.trim()
+        ? ["@sentry/react-native/expo"]
+        : []),
     ],
     ...(googleServicesFile && {
       android: { ...config.android, googleServicesFile },

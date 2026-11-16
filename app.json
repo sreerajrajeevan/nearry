@@ -29,7 +29,6 @@
     "name": "Nearry",
     "orientation": "portrait",
     "plugins": [
-      "@sentry/react-native/expo",
       "expo-location",
       [
         "expo-image-picker",
