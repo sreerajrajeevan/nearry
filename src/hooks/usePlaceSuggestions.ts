@@ -37,11 +37,24 @@ export function usePlaceSuggestions(
     setLoading(true);
     const timer = setTimeout(async () => {
       try {
-        const results = await searchPlaces(text, {
-          bias: bias ?? undefined,
-          sessionToken,
-          signal: controller.signal,
-        });
+        const search = () =>
+          searchPlaces(text, {
+            bias: bias ?? undefined,
+            sessionToken,
+            signal: controller.signal,
+          });
+        let results;
+        try {
+          results = await search();
+        } catch (first) {
+          // Mobile data drops and cold servers are usually gone a moment
+          // later: try once more quietly before showing an error.
+          if (!active || !(first as { retryable?: boolean }).retryable)
+            throw first;
+          await new Promise((resolve) => setTimeout(resolve, 900));
+          if (!active) return;
+          results = await search();
+        }
         if (active) setPlaces(results);
       } catch (e) {
         if (active)

@@ -71,22 +71,21 @@ export async function searchPlaces(
     {
       body: {
         query: text,
-        ...(options.bias ? { bias: options.bias } : {}),
+        // Only the coordinates, whatever extra fields the caller's point has.
+        ...(options.bias
+          ? {
+              bias: {
+                latitude: options.bias.latitude,
+                longitude: options.bias.longitude,
+              },
+            }
+          : {}),
         ...(options.sessionToken ? { sessionToken: options.sessionToken } : {}),
       },
       signal: options.signal,
     },
   );
-  if (error) {
-    let message = "Could not search places. Please try again.";
-    try {
-      const payload = await error.context?.json();
-      if (typeof payload?.error === "string") message = payload.error;
-    } catch {
-      /* network/aborted request */
-    }
-    throw new Error(message);
-  }
+  if (error) throw await placeSearchError(error);
   if (
     !data ||
     !Array.isArray(data.places) ||
@@ -94,6 +93,33 @@ export async function searchPlaces(
   )
     throw new Error("Could not read the place results. Please try again.");
   return data.places.slice(0, 5);
+}
+
+/**
+ * A readable error for a failed place-search call. `retryable` marks the
+ * passing kind (no signal, a busy or failed server) that is worth one quiet
+ * retry before telling the person.
+ */
+export async function placeSearchError(error: {
+  name?: string;
+  context?: { status?: number; json?: () => Promise<any> };
+}): Promise<Error & { retryable: boolean }> {
+  if (error.name === "FunctionsFetchError")
+    return Object.assign(
+      new Error("Can’t reach place search. Check your internet and try again."),
+      { retryable: true },
+    );
+  let message = "Could not search places. Please try again.";
+  try {
+    const payload = await error.context?.json?.();
+    if (typeof payload?.error === "string") message = payload.error;
+  } catch {
+    /* no readable body */
+  }
+  const status = error.context?.status ?? 0;
+  return Object.assign(new Error(message), {
+    retryable: status === 0 || status >= 500,
+  });
 }
 
 /** Resolve coordinates only for the chosen prediction; no details prefetch. */
