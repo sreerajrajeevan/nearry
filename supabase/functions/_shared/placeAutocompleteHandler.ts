@@ -11,6 +11,9 @@ const headers = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
   "Cache-Control": "no-store",
 };
+export const QUOTA_MESSAGE =
+  "Place search has reached its limit for now. Try again later, or use your current location.";
+
 export function createPlaceAutocompleteHandler(deps: {
   provider: PlaceSuggestionProvider | null;
   authenticate: (authorization: string) => Promise<string | null>;
@@ -102,7 +105,10 @@ export function createPlaceAutocompleteHandler(deps: {
       console.error(
         "place-autocomplete failed",
         error instanceof Error ? error.message : "unknown",
+        (error as { quota?: boolean })?.quota ? "(provider quota)" : "",
       );
+      if ((error as { quota?: boolean })?.quota)
+        return json({ error: QUOTA_MESSAGE }, 429);
       return json({ error: "Could not search places. Please try again." }, 502);
     }
   };

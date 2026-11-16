@@ -62,7 +62,9 @@ export function usePlaceSuggestions(
       } finally {
         if (active) setLoading(false);
       }
-    }, 450);
+      // Wait for a pause in typing: each search counts against the
+      // project's daily Google quota.
+    }, 700);
     return () => {
       active = false;
       clearTimeout(timer);
