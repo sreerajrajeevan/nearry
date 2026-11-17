@@ -14,6 +14,7 @@ import {
   ScrollView,
   StyleSheet,
   RefreshControl,
+  TouchableOpacity,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { useLiveQuery } from "../../hooks/useLiveQuery";
@@ -619,7 +620,22 @@ export function ActivityScreen() {
                       }
                     />
                   </View>
-                  <Text style={styles.planTitle}>{booking.offerTitle}</Text>
+                  <TouchableOpacity
+                    accessibilityRole="button"
+                    accessibilityLabel={`Open offer ${booking.offerTitle}`}
+                    activeOpacity={0.7}
+                    onPress={() =>
+                      navigation.navigate("OfferDetails", {
+                        offerId: booking.offerId,
+                      })
+                    }
+                    style={styles.bookingTitleRow}
+                  >
+                    <Text style={[styles.planTitle, styles.flex, styles.flush]}>
+                      {booking.offerTitle}
+                    </Text>
+                    <Icon name="chevron-right" size={18} />
+                  </TouchableOpacity>
                   <View style={styles.meta}>
                     <Icon name="calendar" size={15} />
                     <Text style={styles.metaText}>
@@ -663,6 +679,13 @@ export function ActivityScreen() {
 const styles = StyleSheet.create({
   scroll: { paddingBottom: spacing.xl },
   flex: { flex: 1, minWidth: 0 },
+  bookingTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 10,
+  },
+  flush: { marginBottom: 0 },
   title: {
     ...typography.title,
     fontSize: 28,

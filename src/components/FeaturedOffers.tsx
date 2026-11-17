@@ -23,6 +23,7 @@ import { formatDistance } from "../utils/format";
 import { MotionPressable, PopView } from "./Motion";
 import { LoadingImage } from "./LoadingImage";
 import { ActivityArt } from "./ActivityArt";
+import { offerPriceLabel } from "../utils/offerPrice";
 import { Icon } from "./Icon";
 import { useIsFocused } from "@react-navigation/native";
 import { useReducedMotion } from "../store/MotionContext";
@@ -38,9 +39,7 @@ function offerHeadline(offer: Offer) {
     ? `${offer.discountPct}% OFF`
     : offer.priceCents === 0
       ? "FREE"
-      : offer.priceCents != null
-        ? `₹${(offer.priceCents / 100).toLocaleString("en-IN")}`
-        : null;
+      : offerPriceLabel(offer.priceCents);
 }
 
 function OfferSlide({

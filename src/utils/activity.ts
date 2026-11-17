@@ -60,7 +60,7 @@ export function bookingPresentation(booking: Booking, now = Date.now()) {
         : past
           ? "This booking's time has passed."
           : booking.status === "confirmed"
-            ? "Your place is confirmed. Message the business with any questions."
-            : "Waiting for the business to confirm your booking.",
+            ? "Your place is confirmed. Pay at the venue; message the business with any questions."
+            : "Waiting for the business to confirm. You'll get a notification.",
   };
 }

@@ -5476,3 +5476,62 @@ test("business venue: old service callers cannot approve without confirming the 
     "pending",
   );
 });
+
+test("booking notices say when, where and to pay at the venue, and point at the offer", async () => {
+  const business = await auditBusiness(),
+    customer = await corePersonal();
+  const offer = await auditOffer(business);
+  await db.query("update offers set price_cents=19900 where id=$1", [offer.id]);
+  await db.query("update offer_slots set capacity=2 where id=$1", [offer.slot]);
+  const booked = (
+    await asUser(customer, (tx) =>
+      tx.query("select book_offer_slot($1,2) result", [offer.slot]),
+    )
+  ).rows[0].result;
+  const when = (
+    await db.query(
+      "select booking_notice_when(slot) w from bookings where id=$1",
+      [booked.booking_id],
+    )
+  ).rows[0].w;
+  assert.match(
+    when,
+    /^[A-Z][a-z]{2} \d{1,2} [A-Z][a-z]{2}, \d{1,2}:\d{2} (AM|PM)$/,
+  );
+  const latest = async (user: string, kind: string) =>
+    (
+      await db.query(
+        "select title,body,ref_id from notifications where user_id=$1 and kind=$2 order by created_at desc limit 1",
+        [user, kind],
+      )
+    ).rows[0];
+  const request = await latest(business, "booking");
+  assert.equal(request.title, "New booking request");
+  assert.equal(
+    request.body,
+    `Neighbour wants 2 people for "Audit haircut" · ${when}. Waiting for you to confirm.`,
+  );
+  await asUser(business, (tx) =>
+    tx.query("select change_booking_status($1,'confirmed')", [
+      booked.booking_id,
+    ]),
+  );
+  const confirmed = await latest(customer, "booking_confirmed");
+  assert.equal(confirmed.title, "Booking confirmed");
+  assert.equal(
+    confirmed.body,
+    `"Audit haircut" at Audit Salon · ${when} · 2 people. Pay ₹199 at the venue.`,
+  );
+  assert.equal(confirmed.ref_id, offer.id);
+  assert.equal(
+    (await db.query("select booking_notice_rupees(4950) r")).rows[0].r,
+    "49.50",
+  );
+  await asUser(customer, (tx) =>
+    tx.query("select change_booking_status($1,'cancelled')", [
+      booked.booking_id,
+    ]),
+  );
+  const cancelled = await latest(business, "booking_cancelled");
+  assert.equal(cancelled.body, `"Audit haircut" · ${when} was cancelled.`);
+});
