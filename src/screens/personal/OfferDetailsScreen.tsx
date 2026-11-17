@@ -38,13 +38,14 @@ import { LoadingImage } from "../../components/LoadingImage";
 import { ActivityArt } from "../../components/ActivityArt";
 import { activityArtwork } from "../../utils/activityArtwork";
 import { formatTime, formatWhen } from "../../utils/format";
+import {
+  bookingTotal,
+  formatRupees,
+  offerPayment,
+} from "../../utils/offerPrice";
+import { getOrCreateConversation } from "../../services/chat";
 
 type Props = NativeStackScreenProps<PersonalStackParamList, "OfferDetails">;
-
-function fmtINR(cents?: number): string {
-  if (cents === undefined) return "";
-  return `₹${(cents / 100).toFixed(cents % 100 === 0 ? 0 : 2)}`;
-}
 
 /** Offer details + booking. Capacity enforced atomically server-side. */
 export function OfferDetailsScreen({ route, navigation }: Props) {
@@ -56,6 +57,7 @@ export function OfferDetailsScreen({ route, navigation }: Props) {
   const [formError, setFormError] = useState("");
   const [booking, setBooking] = useState(false);
   const [cancelling, setCancelling] = useState<string | null>(null);
+  const [messaging, setMessaging] = useState<string | null>(null);
   const refreshMine = useMyRequests()?.refresh;
   const toast = useToast();
   const [photoFailed, setPhotoFailed] = useState(false);
@@ -212,6 +214,27 @@ export function OfferDetailsScreen({ route, navigation }: Props) {
       },
     ]);
 
+  const onMessage = async (bookingId: string) => {
+    if (!offer || messaging) return;
+    setMessaging(bookingId);
+    try {
+      const conversationId = await getOrCreateConversation(offer.businessId, {
+        bookingId,
+      });
+      navigation.navigate("Conversation", {
+        conversationId,
+        title: offer.businessName,
+      });
+    } catch (e) {
+      Alert.alert(
+        "Could not open chat",
+        e instanceof Error ? e.message : "Please try again.",
+      );
+    } finally {
+      setMessaging(null);
+    }
+  };
+
   if (state === "loading") {
     return (
       <Screen padded>
@@ -240,6 +263,8 @@ export function OfferDetailsScreen({ route, navigation }: Props) {
     day: "numeric",
     month: "short",
   });
+  const payment = offerPayment(offer.priceCents, partySize);
+  const selectedSlot = slots.find((s) => s.id === slotId);
   const headline =
     typeof offer.discountPct === "number" && offer.discountPct > 0
       ? `${offer.discountPct}% OFF`
@@ -288,7 +313,19 @@ export function OfferDetailsScreen({ route, navigation }: Props) {
           )}
         </View>
         <View style={styles.sheet}>
-          <View style={styles.businessRow}>
+          <TouchableOpacity
+            style={styles.businessRow}
+            disabled={!offer.venueId}
+            activeOpacity={0.8}
+            accessibilityRole={offer.venueId ? "button" : undefined}
+            accessibilityLabel={
+              offer.venueId ? `View ${offer.businessName}` : undefined
+            }
+            onPress={() =>
+              offer.venueId &&
+              navigation.navigate("VenueDetails", { venueId: offer.venueId })
+            }
+          >
             <View style={styles.businessMark}>
               <Text style={styles.businessInitials}>
                 {offer.businessName
@@ -303,7 +340,13 @@ export function OfferDetailsScreen({ route, navigation }: Props) {
             <Text style={styles.business} numberOfLines={2}>
               {offer.businessName}
             </Text>
-          </View>
+            {offer.venueId ? (
+              <View style={styles.venueLink}>
+                <Text style={styles.venueLinkText}>View place</Text>
+                <Icon name="chevron-right" size={16} color={colors.amberDeep} />
+              </View>
+            ) : null}
+          </TouchableOpacity>
           <Text accessibilityRole="header" style={styles.title}>
             {offer.title}
           </Text>
@@ -315,20 +358,26 @@ export function OfferDetailsScreen({ route, navigation }: Props) {
               <Icon name="calendar" size={14} color={colors.amberDeep} />
               <Text style={styles.metaChipText}>Till {ends}</Text>
             </View>
-            {offer.priceCents !== undefined && (
-              <View style={styles.metaChip}>
-                <Icon name="tag" size={14} color={colors.amberDeep} />
-                <Text style={styles.metaChipText}>
-                  {offer.priceCents === 0 ? "Free" : fmtINR(offer.priceCents)}
-                </Text>
-              </View>
-            )}
             <View style={styles.metaChip}>
               <Icon name="users" size={14} color={colors.amberDeep} />
               <Text style={styles.metaChipText}>
                 {offer.slotCapacity}{" "}
                 {offer.slotCapacity === 1 ? "place" : "places"} per slot
               </Text>
+            </View>
+          </View>
+
+          <View
+            style={styles.payCard}
+            accessible
+            accessibilityLabel={`Price: ${payment.amount}. ${payment.note}`}
+          >
+            <View style={styles.payIcon}>
+              <Icon name="map-pin" size={18} color={colors.amberDeep} />
+            </View>
+            <View style={styles.payCopy}>
+              <Text style={styles.payAmount}>{payment.amount}</Text>
+              <Text style={styles.payNote}>{payment.note}</Text>
             </View>
           </View>
 
@@ -357,25 +406,52 @@ export function OfferDetailsScreen({ route, navigation }: Props) {
                     </Text>
                     <Text style={styles.mineStatus}>
                       {b.status === "confirmed"
-                        ? "Confirmed by the business"
+                        ? offer.priceCents === 0
+                          ? "Confirmed · it's free"
+                          : offer.priceCents
+                            ? `Confirmed · pay ${bookingTotal(offer.priceCents, b.partySize)} at the venue${
+                                b.partySize > 1
+                                  ? ` (${formatRupees(offer.priceCents!)} × ${b.partySize})`
+                                  : ""
+                              }`
+                            : "Confirmed · pay at the venue"
                         : `Waiting for ${offer.businessName} to confirm${
                             b.holdExpiresAt
                               ? ` · held till ${formatTime(b.holdExpiresAt)}`
                               : ""
                           }`}
                     </Text>
+                    <View style={styles.mineActions}>
+                      <TouchableOpacity
+                        accessibilityRole="button"
+                        accessibilityLabel={`Message ${offer.businessName}`}
+                        disabled={messaging !== null}
+                        onPress={() => void onMessage(b.id)}
+                        activeOpacity={0.8}
+                        style={styles.mineMessage}
+                      >
+                        <Icon
+                          name="message-circle"
+                          size={15}
+                          color={colors.ink}
+                        />
+                        <Text style={styles.mineMessageText}>
+                          {messaging === b.id ? "Opening…" : "Message"}
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        accessibilityRole="button"
+                        accessibilityLabel={`Cancel booking for ${formatWhen(b.slot)}`}
+                        disabled={cancelling !== null}
+                        onPress={() => onCancel(b.id)}
+                        hitSlop={8}
+                      >
+                        <Text style={styles.mineCancel}>
+                          {cancelling === b.id ? "Cancelling…" : "Cancel"}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
-                  <TouchableOpacity
-                    accessibilityRole="button"
-                    accessibilityLabel={`Cancel booking for ${formatWhen(b.slot)}`}
-                    disabled={cancelling !== null}
-                    onPress={() => onCancel(b.id)}
-                    hitSlop={8}
-                  >
-                    <Text style={styles.mineCancel}>
-                      {cancelling === b.id ? "…" : "Cancel"}
-                    </Text>
-                  </TouchableOpacity>
                 </View>
               ))}
               <Text style={styles.mineNote}>
@@ -519,7 +595,13 @@ export function OfferDetailsScreen({ route, navigation }: Props) {
                 <Text style={styles.formError}>{formError}</Text>
               ) : null}
               <Button
-                title="Request this slot"
+                title={
+                  selectedSlot
+                    ? `Request ${formatTime(selectedSlot.starts_at)} · ${partySize} ${
+                        partySize === 1 ? "person" : "people"
+                      }`
+                    : "Request this slot"
+                }
                 disabled={
                   !slotId ||
                   !slots.some(
@@ -532,8 +614,10 @@ export function OfferDetailsScreen({ route, navigation }: Props) {
               />
               <Text style={styles.note}>
                 Up to {MAX_PARTY_SIZE} people per booking. Your place is held
-                for up to 30 minutes while the business confirms. No payment is
-                collected here.
+                for up to 30 minutes while the business confirms.{" "}
+                {offer.priceCents === 0
+                  ? "This offer is free."
+                  : "You pay at the venue, nothing in the app."}
               </Text>
             </View>
           )}
@@ -623,6 +707,33 @@ const styles = StyleSheet.create({
     ...weight("800"),
   },
   business: { ...typography.heading, fontSize: 16, color: colors.ink, flex: 1 },
+  venueLink: { flexDirection: "row", alignItems: "center", gap: 2 },
+  venueLinkText: {
+    ...typography.label,
+    fontSize: 13,
+    color: colors.amberDeep,
+    ...weight("700"),
+  },
+  payCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginTop: spacing.md,
+    padding: 14,
+    borderRadius: 16,
+    backgroundColor: colors.amberSoft,
+  },
+  payIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.surface,
+  },
+  payCopy: { flex: 1, minWidth: 0, gap: 2 },
+  payAmount: { ...typography.heading, fontSize: 17, color: colors.ink },
+  payNote: { ...typography.caption, color: colors.textDim },
   title: { ...typography.title, color: colors.ink },
   desc: {
     ...typography.body,
@@ -772,6 +883,24 @@ const styles = StyleSheet.create({
   mineCopy: { flex: 1, minWidth: 0, gap: 2 },
   mineWhen: { ...typography.body, color: colors.text, ...weight("700") },
   mineStatus: { ...typography.caption, color: colors.textDim },
+  mineActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    marginTop: 8,
+  },
+  mineMessage: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surfaceRaised,
+  },
+  mineMessageText: { ...typography.label, color: colors.ink, ...weight("700") },
   mineCancel: { ...typography.label, color: colors.red, ...weight("700") },
   mineNote: { ...typography.caption, color: colors.textDim, marginTop: 4 },
 });

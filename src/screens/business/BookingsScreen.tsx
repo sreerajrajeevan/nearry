@@ -2,7 +2,7 @@ import { RowListSkeleton } from "../../components/Skeletons";
 import { Alert } from "../../services/appAlert";
 import { haptic } from "../../services/haptics";
 import { PageHeading } from "../../components/PageHeading";
-import { formatWhen } from "../../utils/format";
+import { formatTime, formatWhen } from "../../utils/format";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   View,
@@ -183,6 +183,9 @@ export function BookingsScreen({ navigation }: Props) {
               <Text style={styles.meta}>
                 {formatWhen(b.slot)} · {b.partySize}{" "}
                 {b.partySize === 1 ? "person" : "people"}
+                {b.status === "pending" && b.holdExpiresAt && !isBookingStale(b)
+                  ? ` · confirm by ${formatTime(b.holdExpiresAt)}`
+                  : ""}
               </Text>
               <View style={styles.actions}>
                 <TouchableOpacity
@@ -207,7 +210,21 @@ export function BookingsScreen({ navigation }: Props) {
                         activeOpacity={0.7}
                         disabled={busy === `x${b.id}`}
                         onPress={() =>
-                          run(`x${b.id}`, () => cancelBooking(b.id))
+                          Alert.alert(
+                            `Decline ${b.customerName}'s request?`,
+                            "They'll be notified and the places released.",
+                            [
+                              { text: "Keep it", style: "cancel" },
+                              {
+                                text: "Decline",
+                                style: "destructive",
+                                onPress: () =>
+                                  void run(`x${b.id}`, () =>
+                                    cancelBooking(b.id),
+                                  ),
+                              },
+                            ],
+                          )
                         }
                       >
                         <Text style={styles.actionLink}>
