@@ -1,17 +1,20 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
   Modal,
   TouchableOpacity,
-  TextInput,
   StyleSheet,
   Pressable,
   ScrollView,
   KeyboardAvoidingView,
+  Keyboard,
+  useWindowDimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, typography, spacing } from "../theme";
+import { TimeWheel } from "./TimeWheel";
+import { clockParts, withClockTime } from "../utils/timePicker";
 
 const WEEKDAYS = ["S", "M", "T", "W", "T", "F", "S"];
 const MONTHS = [
@@ -41,11 +44,13 @@ function Sheet({
   title,
   onClose,
   children,
+  onDone,
 }: {
   visible: boolean;
   title: string;
   onClose: () => void;
   children: React.ReactNode;
+  onDone?: () => void;
 }) {
   return (
     <Modal
@@ -63,29 +68,49 @@ function Sheet({
         />
         <SafeAreaView
           edges={["bottom", "left", "right"]}
-          style={styles.sheet}
+          style={[styles.sheet, !!onDone && styles.timeSheet]}
           accessibilityViewIsModal
         >
-          <View style={styles.sheetHead}>
-            <Text style={styles.sheetTitle}>{title}</Text>
+          <View style={[styles.sheetHead, !!onDone && styles.timeSheetHead]}>
+            {!!onDone && (
+              <Pressable
+                accessibilityRole="button"
+                onPress={onClose}
+                style={styles.doneTouch}
+              >
+                <Text style={styles.cancelBtn}>Cancel</Text>
+              </Pressable>
+            )}
+            <Text
+              style={[styles.sheetTitle, !!onDone && styles.timeSheetTitle]}
+            >
+              {title}
+            </Text>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Done"
-              onPress={onClose}
+              onPress={onDone ?? onClose}
               style={({ pressed }) => [
                 styles.doneTouch,
+                !!onDone && styles.timeDoneTouch,
                 pressed && pressedStyle,
               ]}
             >
-              <Text style={styles.doneBtn}>Done</Text>
+              <Text style={[styles.doneBtn, !!onDone && styles.timeDoneText]}>
+                Done
+              </Text>
             </Pressable>
           </View>
-          <ScrollView
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-          >
-            {children}
-          </ScrollView>
+          {onDone ? (
+            children
+          ) : (
+            <ScrollView
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              {children}
+            </ScrollView>
+          )}
         </SafeAreaView>
       </KeyboardAvoidingView>
     </Modal>
@@ -176,134 +201,83 @@ export function DateSheet({
   );
 }
 
-function Stepper({
-  label,
-  value,
-  onChange,
-  min,
-  max,
-  step = 1,
-}: {
-  label: string;
-  value: number;
-  onChange: (v: number) => void;
-  min: number;
-  max: number;
-  step?: number;
-}) {
-  const range = max - min + 1;
-  const wrap = (v: number) => min + ((((v - min) % range) + range) % range);
-  const dec = () => onChange(wrap(value - step));
-  const inc = () => onChange(wrap(value + step));
-  // Typed value while the field is being edited; null = show the value.
-  const [draft, setDraft] = useState<string | null>(null);
-  const commitDraft = () => {
-    if (draft === null) return;
-    const n = parseInt(draft.replace(/\D/g, ""), 10);
-    if (!Number.isNaN(n)) onChange(Math.min(max, Math.max(min, n)));
-    setDraft(null);
-  };
-  return (
-    <View style={styles.stepCol}>
-      <Text style={styles.stepLabel}>{label}</Text>
-      <TouchableOpacity
-        style={styles.stepBtn}
-        onPress={inc}
-        activeOpacity={0.8}
-      >
-        <Text style={styles.stepText}>+</Text>
-      </TouchableOpacity>
-      <TextInput
-        style={styles.stepInput}
-        value={draft ?? String(value).padStart(2, "0")}
-        keyboardType="number-pad"
-        maxLength={2}
-        selectTextOnFocus
-        onChangeText={(text) => {
-          setDraft(text);
-          const n = parseInt(text.replace(/\D/g, ""), 10);
-          if (!Number.isNaN(n)) onChange(Math.min(max, Math.max(min, n)));
-        }}
-        onBlur={commitDraft}
-        onSubmitEditing={commitDraft}
-        accessibilityLabel={`${label} value, type to change`}
-      />
-      <TouchableOpacity
-        style={styles.stepBtn}
-        onPress={dec}
-        activeOpacity={0.8}
-      >
-        <Text style={styles.stepText}>-</Text>
-      </TouchableOpacity>
-    </View>
-  );
-}
+const HOURS = Array.from({ length: 12 }, (_, i) => i + 1);
+const MINUTES = Array.from({ length: 60 }, (_, i) => i);
 
-/** Time bottom sheet: 12-hour clock with AM/PM. */
-export function TimeSheet({
-  visible,
-  value,
-  onPick,
-  onClose,
-}: {
+/** Remount the draft each time the picker opens, including when value changes outside it. */
+export function TimeSheet(props: {
   visible: boolean;
   value: Date | null;
   onPick: (d: Date) => void;
   onClose: () => void;
 }) {
-  const base = value ?? new Date();
-  const h24 = base.getHours();
-  const [hour12, setHour12] = useState(h24 % 12 === 0 ? 12 : h24 % 12);
-  const [period, setPeriod] = useState<"AM" | "PM">(h24 < 12 ? "AM" : "PM");
-  const [minute, setMinute] = useState(base.getMinutes());
+  return props.visible ? <TimeSelection {...props} /> : null;
+}
+
+function TimeSelection({
+  value,
+  onPick,
+  onClose,
+}: React.ComponentProps<typeof TimeSheet>) {
+  const { height } = useWindowDimensions();
+  const compact = height < 600;
+  useEffect(() => {
+    Keyboard.dismiss();
+  }, []);
+  const [base] = useState(() => new Date(value ?? new Date()));
+  const [time, setTime] = useState(() => clockParts(base));
   const confirm = () => {
-    const h = period === "AM" ? hour12 % 12 : (hour12 % 12) + 12;
-    const next = new Date(base);
-    next.setHours(h, minute, 0, 0);
-    onPick(next);
+    onPick(withClockTime(base, time));
     onClose();
   };
   return (
-    <Sheet visible={visible} title="Pick a time" onClose={confirm}>
+    <Sheet visible title="Pick a time" onClose={onClose} onDone={confirm}>
       <View style={styles.timeRow}>
-        <Stepper
-          label="HOUR"
-          value={hour12}
-          onChange={setHour12}
-          min={1}
-          max={12}
+        <TimeWheel
+          compact={compact}
+          label="Hour"
+          values={HOURS}
+          value={time.hour}
+          onChange={(hour) => setTime((t) => ({ ...t, hour }))}
         />
         <Text style={styles.colon}>:</Text>
-        <Stepper
-          label="MIN"
-          value={minute}
-          onChange={setMinute}
-          min={0}
-          max={59}
-          step={5}
+        <TimeWheel
+          compact={compact}
+          label="Minute"
+          values={MINUTES}
+          value={time.minute}
+          onChange={(minute) => setTime((t) => ({ ...t, minute }))}
         />
         <View style={styles.periodCol}>
-          <Text style={styles.stepLabel}> </Text>
-          {(["AM", "PM"] as const).map((p) => (
-            <TouchableOpacity
-              key={p}
-              style={[styles.periodBtn, period === p && styles.periodActive]}
-              onPress={() => setPeriod(p)}
-              activeOpacity={0.8}
-            >
-              <Text
+          <Text style={styles.stepLabel}>AM / PM</Text>
+          <View style={[styles.periodOptions, compact && { height: 132 }]}>
+            {(["AM", "PM"] as const).map((period) => (
+              <Pressable
+                key={period}
+                accessibilityRole="radio"
+                accessibilityLabel={period}
+                accessibilityState={{ checked: time.period === period }}
+                aria-checked={time.period === period}
                 style={[
-                  styles.periodText,
-                  period === p && styles.periodTextActive,
+                  styles.periodBtn,
+                  time.period === period && styles.periodActive,
                 ]}
+                onPress={() => setTime((t) => ({ ...t, period }))}
               >
-                {p}
-              </Text>
-            </TouchableOpacity>
-          ))}
+                <Text
+                  style={[
+                    styles.periodText,
+                    time.period === period && styles.periodTextActive,
+                  ]}
+                >
+                  {period}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
         </View>
       </View>
-      <Text style={styles.hint}>Tap DONE when set.</Text>
+      <Text style={styles.hint}>Scroll or tap a number to set your time.</Text>
     </Sheet>
   );
 }
@@ -349,6 +323,16 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   doneBtn: { ...typography.label, color: colors.gold },
+  timeSheet: { padding: 16, paddingBottom: 16 },
+  timeSheetHead: { backgroundColor: "transparent", padding: 0 },
+  timeSheetTitle: { color: colors.text, textAlign: "center", fontSize: 17 },
+  cancelBtn: { ...typography.label, color: colors.textDim },
+  timeDoneTouch: {
+    backgroundColor: colors.accent,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+  },
+  timeDoneText: { color: colors.onAccent },
   monthRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -383,38 +367,28 @@ const styles = StyleSheet.create({
     marginVertical: spacing.md,
     gap: 8,
   },
-  stepCol: { alignItems: "center", flex: 1, minWidth: 0 },
-  stepLabel: { ...typography.label, color: colors.textDim, marginBottom: 4 },
-  stepBtn: {
-    width: 56,
-    height: 44,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 8,
-    justifyContent: "center",
-    alignItems: "center",
-    marginVertical: 4,
-  },
-  stepText: { color: colors.text, fontSize: 22 },
-  stepInput: {
-    ...typography.title,
-    color: colors.text,
-    fontSize: 28,
-    width: 56,
-    minWidth: 0,
-    flexShrink: 1,
+  stepLabel: {
+    ...typography.label,
+    color: colors.textDim,
+    marginBottom: 8,
     textAlign: "center",
-    paddingVertical: 2,
   },
-  colon: { ...typography.title, color: colors.textDim, fontSize: 28 },
-  periodCol: { alignItems: "center", flexShrink: 0 },
+  colon: {
+    ...typography.title,
+    color: colors.textDim,
+    fontSize: 28,
+    marginTop: 24,
+  },
+  periodCol: { alignItems: "center", flex: 1, minWidth: 0 },
+  periodOptions: { height: 220, justifyContent: "center", gap: 8 },
   periodBtn: {
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    marginVertical: 4,
+    borderRadius: 12,
+    minWidth: 64,
+    minHeight: 48,
+    justifyContent: "center",
+    alignItems: "center",
   },
   periodActive: { backgroundColor: colors.accent, borderColor: colors.accent },
   periodText: { ...typography.label, color: colors.textDim },
