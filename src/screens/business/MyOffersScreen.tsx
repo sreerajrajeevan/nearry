@@ -29,6 +29,7 @@ import {
 } from "../../services/offers";
 import { Offer } from "../../services/mappers";
 import { formatWhen } from "../../utils/format";
+import { offerPriceLabel } from "../../utils/offerPrice";
 import { colors, typography, spacing, weight } from "../../theme";
 
 type Props = NativeStackScreenProps<BusinessStackParamList, "MyOffers">;
@@ -206,9 +207,7 @@ export function MyOffersScreen({ navigation }: Props) {
             typeof offer.discountPct === "number"
               ? `${offer.discountPct}% off`
               : "",
-            offer.priceCents != null
-              ? `₹${(offer.priceCents / 100).toFixed(2).replace(/\.00$/, "")}`
-              : "",
+            offer.priceCents != null ? offerPriceLabel(offer.priceCents)! : "",
           ]
             .filter(Boolean)
             .join(" · ");

@@ -51,8 +51,17 @@ test("notifications open their account's actual workflow rather than a dead-end 
     screen: "PostDetails",
     params: { postId: "context" },
   });
+  // A booking update opens the offer itself: the booking, venue and chat live there.
+  for (const kind of ["booking_confirmed", "booking_cancelled"])
+    assert.deepEqual(notificationTarget(notice(kind, "offer-1"), "personal"), {
+      screen: "OfferDetails",
+      params: { offerId: "offer-1" },
+    });
   assert.equal(
-    notificationTarget(notice("booking_confirmed"), "personal").params.screen,
+    notificationTarget(
+      { kind: "booking_confirmed" } as AppNotification,
+      "personal",
+    ).params.screen,
     "Activity",
   );
   assert.equal(

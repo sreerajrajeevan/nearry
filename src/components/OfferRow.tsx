@@ -5,6 +5,7 @@ import { formatDistance, formatWhen } from "../utils/format";
 import { postCategory } from "../utils/discovery";
 import { DiscoveryCard } from "./DiscoveryCard";
 import { activityArtwork } from "../utils/activityArtwork";
+import { offerPriceShort } from "../utils/offerPrice";
 
 type Props = { offer: Offer; distanceKm?: number; onPress: () => void };
 export function OfferRow({ offer, distanceKm, onPress }: Props) {
@@ -36,13 +37,7 @@ export function OfferRow({ offer, distanceKm, onPress }: Props) {
       ]
         .filter(Boolean)
         .join(" · ")}
-      detail={
-        offer.priceCents == null
-          ? undefined
-          : offer.priceCents === 0
-            ? "Free"
-            : `₹${(offer.priceCents / 100).toFixed(0)}`
-      }
+      detail={offerPriceShort(offer.priceCents)}
       action={
         mine === "booked"
           ? "Booked"
