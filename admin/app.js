@@ -367,15 +367,22 @@ function renderTable(rows, view) {
       ),
     );
   } else if (view === "reports") {
-    headers = ["Reason", "Subject", "Submitted", "Review"];
+    headers = [
+      "Reason",
+      "Reported person",
+      "Reported by",
+      "Submitted",
+      "Review",
+    ];
     rendered = rows.map((r) =>
       row(
         "<td>" +
           tag(r.reason) +
           "<br>" +
-          safe(r.target_kind) +
+          safe(KIND_LABELS[r.target_kind] || r.target_kind) +
           "</td>" +
           textCell(r.subject) +
+          textCell(r.reporter) +
           textCell(date(r.created_at)) +
           "<td>" +
           action("Review report", r, "report") +
@@ -466,6 +473,219 @@ function renderOperations(o) {
           "</section>",
       )
       .join("");
+}
+let reportRevision = 0;
+const KIND_LABELS = {
+  post: "Plan",
+  photo: "Plan photo",
+  offer: "Offer",
+  venue: "Place",
+  user: "Profile",
+  message: "Private message",
+  conversation: "Private chat",
+  plan_message: "Group chat message",
+};
+const ISO = /^\d{4}-\d{2}-\d{2}T/;
+const show = (v) =>
+  v === null || v === undefined || v === ""
+    ? "—"
+    : String(v)
+        .split(" → ")
+        .map((part) => (ISO.test(part) ? date(part) : part))
+        .join(" → ");
+const detailRows = (pairs) =>
+  pairs
+    .filter(([, v]) => v !== null && v !== undefined && v !== "")
+    .map(
+      ([label, value]) =>
+        '<div class="detail-row"><span>' +
+        safe(label) +
+        "</span><strong>" +
+        safe(show(value)) +
+        "</strong></div>",
+    )
+    .join("");
+const ownImage = (url) =>
+  typeof url === "string" &&
+  url.startsWith(config.supabaseUrl + "/storage/v1/object/public/");
+function personCard(title, p, history) {
+  if (!p)
+    return (
+      '<section class="ctx-card"><h3>' +
+      safe(title) +
+      '</h3><p class="muted">Not recorded.</p></section>'
+    );
+  if (p.missing)
+    return (
+      '<section class="ctx-card"><h3>' +
+      safe(title) +
+      '</h3><p class="muted">This account has been deleted.</p></section>'
+    );
+  const status = p.deletion_requested_at
+    ? "Deletion requested"
+    : p.suspended_at
+      ? "Suspended since " + date(p.suspended_at)
+      : "Active";
+  const name =
+    p.account_type === "business" && p.business_name
+      ? p.business_name + " (" + (p.display_name || "owner") + ")"
+      : p.display_name || "Nearry member";
+  return (
+    '<section class="ctx-card"><h3>' +
+    safe(title) +
+    "</h3>" +
+    detailRows([
+      ["Name", name],
+      ["Email", p.email],
+      ["Account", p.account_type],
+      ["Joined", p.created_at],
+      [
+        "Verification",
+        p.account_type === "business" ? p.verification_status : null,
+      ],
+      ["Status", status],
+      history,
+    ]) +
+    '<button class="secondary small" data-account="' +
+    safe(p.id) +
+    '">Open account</button></section>'
+  );
+}
+function tally(t, label) {
+  if (!t) return [label, null];
+  if (!t.total) return [label, "None"];
+  return [
+    label,
+    t.total +
+      " (" +
+      [
+        t.open && t.open + " open",
+        t.upheld && t.upheld + " upheld",
+        t.dismissed && t.dismissed + " dismissed",
+      ]
+        .filter(Boolean)
+        .join(", ") +
+      ")",
+  ];
+}
+function renderReportContext(ctx) {
+  const r = ctx.report,
+    c = ctx.content,
+    s = ctx.subject;
+  const state = c.missing
+    ? '<span class="chip warn">No longer exists</span>'
+    : c.removedAt
+      ? '<span class="chip warn">Removed ' + safe(date(c.removedAt)) + "</span>"
+      : c.kind === "user"
+        ? ""
+        : '<span class="chip ok">Still live</span>';
+  const images = (c.images || [])
+    .filter(ownImage)
+    .map(
+      (u) =>
+        '<a href="' +
+        safe(u) +
+        '" target="_blank" rel="noopener noreferrer"><img src="' +
+        safe(u) +
+        '" alt="Reported content photo" referrerpolicy="no-referrer"' +
+        (u === c.reportedImage ? ' class="reported"' : "") +
+        " /></a>",
+    )
+    .join("");
+  const thread = (c.messages || [])
+    .map(
+      (m) =>
+        '<div class="msg' +
+        (m.reported ? " reported" : "") +
+        '"><div class="msg-meta">' +
+        safe(m.sender) +
+        " · " +
+        safe(date(m.at)) +
+        (m.reported ? " · <strong>reported</strong>" : "") +
+        '</div><div class="msg-body">' +
+        safe(m.body) +
+        "</div></div>",
+    )
+    .join("");
+  const others = (s?.recentReportsAgainst || [])
+    .map(
+      (o) =>
+        "<li>" +
+        safe(o.reason) +
+        " · " +
+        safe(KIND_LABELS[o.target_kind] || o.target_kind) +
+        " · " +
+        safe(date(o.created_at)) +
+        " · " +
+        safe(o.status) +
+        "</li>",
+    )
+    .join("");
+  $("report-context").innerHTML =
+    '<section class="ctx-card ctx-why"><h3>Why it was reported</h3><p>' +
+    tag(r.reason) +
+    " " +
+    safe(KIND_LABELS[r.target_kind] || r.target_kind) +
+    " · " +
+    safe(date(r.created_at)) +
+    '</p><p class="note">' +
+    (r.details
+      ? safe(r.details)
+      : '<span class="muted">No note added.</span>') +
+    "</p></section>" +
+    '<div class="ctx-people">' +
+    personCard(
+      "Reported by",
+      ctx.reporter,
+      tally(ctx.reporter?.reportsFiled, "Reports they filed"),
+    ) +
+    personCard(
+      "Reported person",
+      s,
+      tally(s?.otherReportsAgainst, "Other reports against them"),
+    ) +
+    "</div>" +
+    (others
+      ? '<section class="ctx-card"><h3>Earlier reports against this person</h3><ul class="ctx-list">' +
+        others +
+        "</ul></section>"
+      : "") +
+    (c.kind === "user"
+      ? ""
+      : '<section class="ctx-card"><h3>What was reported ' +
+        state +
+        "</h3>" +
+        (c.missing
+          ? '<p class="muted">It was deleted after the report. Use the snapshot below.</p>'
+          : (c.title ? "<p><strong>" + safe(c.title) + "</strong></p>" : "") +
+            (c.body ? '<p class="note">' + safe(c.body) + "</p>" : "") +
+            detailRows(c.fields || []) +
+            (images ? '<div class="ctx-images">' + images + "</div>" : "") +
+            (thread
+              ? '<p class="footnote">' +
+                safe(c.messageNote || "") +
+                " Viewing private messages is recorded in the decision history.</p>" +
+                '<div class="thread">' +
+                thread +
+                "</div>"
+              : "")) +
+        "</section>");
+}
+async function loadReportContext(item) {
+  const mine = ++reportRevision;
+  $("report-context").innerHTML =
+    '<p class="muted">Loading who reported it, the person and the content…</p>';
+  try {
+    const ctx = await call({ action: "report", id: item.id });
+    if (mine !== reportRevision || selected?.id !== item.id) return;
+    renderReportContext(ctx);
+  } catch (error) {
+    if (mine !== reportRevision) return;
+    $("report-context").innerHTML =
+      '<p class="feedback">' +
+      safe(error.message) +
+      '</p><button class="secondary small" data-report-retry>Try again</button>';
+  }
 }
 let selected = null,
   proofLoaded = false,
@@ -648,28 +868,14 @@ function closeDialog(force = false) {
   $("proof-link").removeAttribute("href");
   $("dialog-message").textContent = "";
   $("report-evidence").textContent = "";
+  $("report-context").innerHTML = "";
+  reportRevision++;
   $("review-details").textContent = "";
-  $("venue-review").hidden = kind !== "business";
+  $("venue-review").hidden = true;
   $("venue-check").checked = false;
-  const venue = item.venue_submission;
-  const hasVenue =
-    venue &&
-    Number.isFinite(venue.latitude) &&
-    Number.isFinite(venue.longitude);
-  $("venue-details").textContent = hasVenue
-    ? [
-        venue.name,
-        venue.category,
-        venue.address,
-        venue.area,
-        `${venue.latitude}, ${venue.longitude}`,
-      ].join("\n")
-    : "No venue was submitted. Ask the business to update Nearry and resubmit with its address and location. This request cannot be approved.";
-  $("venue-map").hidden = !hasVenue;
+  $("venue-details").textContent = "";
+  $("venue-map").hidden = true;
   $("venue-map").removeAttribute("href");
-  if (hasVenue)
-    $("venue-map").href =
-      `https://www.google.com/maps/search/?api=1&query=${venue.latitude},${venue.longitude}`;
   $("review-note").value = "";
 }
 function openReview(id, kind) {
@@ -742,15 +948,10 @@ function openReview(id, kind) {
           .join(" · ")
       : kind === "selfie"
         ? "Submitted " + date(item.submitted_at)
-        : "Subject: " +
-          item.subject +
-          " · " +
-          item.target_kind +
-          " · " +
-          date(item.created_at);
-  $("report-evidence").textContent = [item.reason, item.details, item.evidence]
-    .filter(Boolean)
-    .join("\n\n");
+        : "Reported " + date(item.created_at);
+  $("report-evidence").textContent = item.evidence || "Nothing was saved.";
+  $("report-context").innerHTML = "";
+  if (kind === "report") void loadReportContext(item);
   document
     .querySelectorAll(".business-action")
     .forEach((b) => (b.hidden = kind !== "business"));
@@ -1011,6 +1212,13 @@ async function start() {
     }
     const btn = event.target.closest("[data-action]");
     if (btn) openReview(btn.dataset.id, btn.dataset.kind);
+    if (
+      event.target.closest("[data-report-retry]") &&
+      selected?.kind === "report"
+    ) {
+      void loadReportContext(selected);
+      return;
+    }
     const accountBtn = event.target.closest("[data-account]");
     if (accountBtn) {
       void openAccount(accountBtn.dataset.account);
