@@ -2,6 +2,7 @@ import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { readFile, readdir } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
+import { bundleSlotAvailable } from "../src/utils/planOfferBundle";
 const submittedVenue = {
   name: "Reviewed Salon",
   category: "Salon",
@@ -454,6 +455,129 @@ test("plan offer bundles: atomic publication reserves host plus vacancies once a
     ).rows[0].status,
     "cancelled",
   );
+});
+
+test("plan offer bundles: leaving succeeds when a waitlisted requester or business becomes unavailable", async () => {
+  for (const reason of [
+    "business-block",
+    "requester-block",
+    "verification",
+  ] as const) {
+    await db.exec("update plan_offer_settings set enabled=true");
+    const f = await bundleFixture();
+    const saved = await f.publish({ ...f.draft, vacancies: 1 });
+    const approved = await request(b, saved.post_id);
+    const waiting = await request(c, saved.post_id);
+    await asUser(f.customer, (tx) =>
+      tx.query("select approve_join_request($1)", [approved]),
+    );
+    assert.equal(
+      (
+        await db.query("select status from join_requests where id=$1", [
+          waiting,
+        ])
+      ).rows[0].status,
+      "full",
+    );
+    if (reason === "verification") {
+      await db.query(
+        "update profiles set verification_status='unverified' where id=$1",
+        [f.business],
+      );
+    } else {
+      await asUser(reason === "business-block" ? f.business : c, (tx) =>
+        tx.query("select set_user_block($1,true)", [
+          reason === "business-block" ? c : f.business,
+        ]),
+      );
+    }
+    if (reason === "business-block") {
+      await asUser(b, (tx) =>
+        tx.query("select withdraw_join_request($1)", [approved]),
+      );
+    } else {
+      const group = (
+        await db.query("select id from plan_groups where post_id=$1", [
+          saved.post_id,
+        ])
+      ).rows[0].id;
+      await asUser(b, (tx) => tx.query("select leave_plan_group($1)", [group]));
+    }
+    assert.equal(
+      (
+        await db.query("select status from join_requests where id=$1", [
+          approved,
+        ])
+      ).rows[0].status,
+      "withdrawn",
+      reason,
+    );
+    assert.equal(
+      (
+        await db.query("select status from join_requests where id=$1", [
+          waiting,
+        ])
+      ).rows[0].status,
+      "declined",
+      reason,
+    );
+    assert.equal(
+      (await db.query("select status from posts where id=$1", [saved.post_id]))
+        .rows[0].status,
+      "open",
+      reason,
+    );
+    assert.equal(
+      (await db.query("select approved_join_count($1) n", [saved.post_id]))
+        .rows[0].n,
+      0,
+      reason,
+    );
+    assert.equal(
+      (
+        await db.query("select party_size from bookings where id=$1", [
+          saved.booking_id,
+        ])
+      ).rows[0].party_size,
+      2,
+      reason,
+    );
+    // Automatic reopening must decline the ineligible waiter, not bypass the safety check.
+    await assert.rejects(
+      request(c, saved.post_id),
+      /Business reservation unavailable/,
+      reason,
+    );
+  }
+  await db.exec("update plan_offer_settings set enabled=false");
+});
+
+test("plan offer bundles: picker availability matches exclusive reservation rules", async () => {
+  await db.exec("update plan_offer_settings set enabled=true");
+  const f = await bundleFixture(5);
+  const ordinary = (
+    await asUser(b, (tx) =>
+      tx.query("select book_offer_slot($1,1) r", [f.slot]),
+    )
+  ).rows[0].r;
+  const readSlot = async () =>
+    (
+      await asUser(f.customer, (tx) =>
+        tx.query("select available_offer_slots($1) slots", [f.offer]),
+      )
+    ).rows[0].slots.find((slot: any) => slot.id === f.slot);
+  const partial = await readSlot();
+  assert.equal(partial.seats_left, 4);
+  assert.equal(bundleSlotAvailable(partial, 4), false);
+  await assert.rejects(f.publish(), /Choose an empty slot/);
+  await asUser(b, (tx) =>
+    tx.query("select change_booking_status($1,'cancelled')", [
+      ordinary.booking_id,
+    ]),
+  );
+  assert.equal(bundleSlotAvailable(await readSlot(), 4), true);
+  assert.ok((await f.publish()).post_id);
+  await db.exec("update plan_offer_settings set enabled=false");
 });
 
 test("plan offer bundles: insufficient capacity and invalid details roll back without creating posts or holds", async () => {

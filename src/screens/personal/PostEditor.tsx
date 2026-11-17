@@ -9,7 +9,10 @@ import {
   createPlanOfferBundle,
   getPlanOfferBundle,
 } from "../../services/planOfferBundles";
-import type { PlanOfferBundle } from "../../utils/planOfferBundle";
+import {
+  bundleSlotAvailable,
+  type PlanOfferBundle,
+} from "../../utils/planOfferBundle";
 import { haptic } from "../../services/haptics";
 import {
   hasPostMeetingPlace,
@@ -337,10 +340,10 @@ export function PostEditor({
     };
     if (
       offerSelection &&
-      (vacancies + 1 > offerSelection.slot.seats_left || vacancies > 49)
+      !bundleSlotAvailable(offerSelection.slot, vacancies + 1)
     ) {
       flag(
-        "Not enough places for this group. Reduce people needed or choose another offer slot.",
+        "Choose an empty future offer slot with enough places for this group, or reduce people needed.",
       );
     }
     if (!savedPostId && !activity) {
@@ -561,7 +564,6 @@ export function PostEditor({
   };
   const chooseActivity = (item: (typeof PLAN_ACTIVITIES)[number]) => {
     const previous = PLAN_ACTIVITIES.find((x) => x.id === activity);
-    if (!title.trim() || title === previous?.title) setTitle(item.title);
     setActivity(item.id);
     if (!planAsksLevel(item.id)) setLevel("any");
     if (!planBookingLabel(item.id)) setVenueBooked(false);
@@ -674,7 +676,11 @@ export function PostEditor({
         >
           <Input
             label="Title"
-            placeholder="Pick an activity for a suggestion"
+            placeholder={
+              PLAN_ACTIVITIES.find((item) => item.id === activity)?.title ||
+              "Give your plan a title"
+            }
+            clearable
             value={title}
             maxLength={80}
             onChangeText={setTitle}

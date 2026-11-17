@@ -5,7 +5,11 @@ import { AvailableSlot, listOfferSlots } from "../services/bookings";
 import { listLiveOffers } from "../services/offers";
 import { getVenue } from "../services/venues";
 import { bundleCreationAvailable } from "../services/planOfferBundles";
-import { bundleOfferEligible, rupees } from "../utils/planOfferBundle";
+import {
+  bundleOfferEligible,
+  bundleSlotAvailable,
+  rupees,
+} from "../utils/planOfferBundle";
 import { formatWhen, formatTime } from "../utils/format";
 import { colors, weight } from "../theme";
 import { Input } from "./Input";
@@ -48,12 +52,7 @@ export function PlanOfferPicker({
         );
       if (chosen) {
         const result = await listOfferSlots(chosen.id);
-        if (active)
-          setSlots(
-            result.filter(
-              (slot) => Date.parse(slot.starts_at) > Date.now() + 15 * 60_000,
-            ),
-          );
+        if (active) setSlots(result);
       } else {
         const result = await listLiveOffers();
         if (active) setOffers(result.filter(bundleOfferEligible));
@@ -73,6 +72,10 @@ export function PlanOfferPicker({
 
   const chooseSlot = async (slot: AvailableSlot) => {
     if (!chosen || busy || disabled) return;
+    if (!bundleSlotAvailable(slot, people)) {
+      setError("Choose an empty future slot with enough places for everyone.");
+      return;
+    }
     setBusy(true);
     setError("");
     try {
@@ -87,6 +90,9 @@ export function PlanOfferPicker({
       setBusy(false);
     }
   };
+  const availableSlots = slots.filter((slot) =>
+    bundleSlotAvailable(slot, people),
+  );
   const visible = offers.filter((offer) =>
     `${offer.title} ${offer.businessName}`
       .toLowerCase()
@@ -115,10 +121,10 @@ export function PlanOfferPicker({
             You are responsible for the full reserved total, even if your plan
             does not fill. The business must confirm within 30 minutes.
           </Text>
-          {people > value.slot.seats_left && (
+          {!bundleSlotAvailable(value.slot, people) && (
             <Text accessibilityRole="alert" style={styles.text}>
-              Not enough places for this group. Reduce people needed or choose
-              another slot.
+              Choose another empty slot or reduce people needed. This slot is
+              unavailable for your group.
             </Text>
           )}
           <Button
@@ -179,18 +185,21 @@ export function PlanOfferPicker({
                         setSlots([]);
                       }}
                     />
-                    {!slots.length && (
+                    {!availableSlots.length && (
                       <Text style={styles.text}>
-                        No future slots available for this offer.
+                        No empty future slots fit your group. Try fewer people
+                        or another offer.
                       </Text>
                     )}
                     <ScrollView style={styles.list} nestedScrollEnabled>
-                      {slots.map((slot) => (
+                      {availableSlots.map((slot) => (
                         <Button
                           key={slot.id}
                           title={`${formatWhen(slot.starts_at)} – ${formatTime(slot.ends_at)} · ${slot.seats_left} places left`}
                           variant="secondary"
-                          disabled={disabled || slot.seats_left < people}
+                          disabled={
+                            disabled || !bundleSlotAvailable(slot, people)
+                          }
                           onPress={() => void chooseSlot(slot)}
                         />
                       ))}

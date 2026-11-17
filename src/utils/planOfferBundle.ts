@@ -35,4 +35,20 @@ export function bundleOfferEligible(offer: Offer) {
   );
 }
 
+/** Group plans require the entire time block, not just enough remaining seats. */
+export function bundleSlotAvailable(
+  slot: { starts_at: string; capacity: number; seats_left: number },
+  people: number,
+  now = Date.now(),
+): boolean {
+  return (
+    Number.isInteger(people) &&
+    people >= 2 &&
+    people <= 50 &&
+    Date.parse(slot.starts_at) > now + 15 * 60_000 &&
+    slot.seats_left === slot.capacity &&
+    slot.capacity >= people
+  );
+}
+
 export { formatRupees as rupees } from "./offerPrice";

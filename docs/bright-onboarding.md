@@ -7,7 +7,7 @@ The approved interactive design is implemented on top of merged PR #41. The scop
 - Personal/Business is the first choice. Three short orange, green and blue introductions explain nearby plans, joining and offers. Back, Skip and login remain available.
 - Google OAuth and email OTP keep their cooldowns, duplicate-request locks and error recovery. Sign-in has no age/terms checkbox; explicit adult/terms confirmation is collected on the final setup review for both account types. Authentication never records consent. No password or phone number is collected. Name is collected after authentication for both providers.
 - The explicit Personal/Business choice is stored for up to one hour across Google redirects and email verification, then committed using `select_account_type` before the profile is shown. Existing accounts keep their saved type. Missing or expired choices use the manual picker; failed profile loads retain the choice for Retry. Sign-out/cancelled sign-in clear it. No age or consent is inferred from Google.
-- Personal setup collects optional profile photo, name, date of birth, gender, interests, optional availability and area/radius. A native birthday picker is used on Android/iOS; the web review uses labelled numeric fields. Only the calculated adult age is sent to the existing server eligibility checks; the full birthday stays in component memory and is discarded on unmount.
+- Personal setup collects optional profile photo, name, date of birth, gender, interests, optional availability and area/radius. A native birthday picker is used on Android/iOS; the web review uses labelled numeric fields. Only the calculated adult age is sent to the existing server eligibility checks; the full birthday stays in an account-scoped draft on this device while setup is unfinished and is removed after completion or sign-out. It is never sent to Supabase.
 - Personal users can browse before finishing. Creating/joining still requires the existing complete adult profile. The completion flow invoked from a plan returns to that plan after saving. Existing completed accounts are not forced through setup again.
 - Business setup saves the owner/contact name, business name/category and area, then opens the dashboard. This does not verify a business or enable unverified publishing.
 - Real location permission is requested only after tapping the location button. Google place predictions resolve after selection. Business may explicitly confirm an area name when search succeeds with no results; this has no coordinates. Personal discovery never pretends a typed, unselected area has a distance.
@@ -29,3 +29,36 @@ Validation includes TypeScript, the complete test suite, real-schema rollback/pr
 For a new Personal and a new Business account, select the type once, use Google without an early checkbox, confirm the correct setup opens directly, and verify the final review requires adult/terms confirmation. Check existing Personal/Business logins from the opposite lane retain the saved type. Also check email OTP, cancelled Google sign-in, and Retry after a failed profile read.
 
 Check the new phone build for keyboard/safe-area layout, native birthday picker and photo picker, location grant/deny, Google and email login, both account types, browse-first recovery from a plan, and saved discovery radius. Email sender/domain restrictions are unchanged by this UI work.
+
+
+## Resume unfinished setup
+
+Personal setup and the later **Complete profile** route share one versioned draft
+per signed-in account and account type. Typing and step changes autosave locally;
+**Explore first** explicitly waits for the latest save before opening Home or
+returning to the originating plan. It is available on every personal setup step.
+The restored page keeps name, birthday/gender, interests, availability and selected
+area/radius. Partial details remain filled on the first page. Business setup also
+restores progress but remains mandatory before its dashboard.
+
+A brief loading state prevents empty defaults from overwriting an existing draft.
+Storage failures have a Retry path. Writes are ordered so fast exit/re-entry reads
+the newest state. Drafts are never shared between accounts or copied to the server.
+They expire on the next read after 30 days; provider coordinates still expire at
+29 days. Native cropped photos use app-private document storage so picker-cache
+cleanup does not remove them when the app is restarted. Expired/orphan photo
+files are removed before starting a fresh draft. Unavailable photos can be chosen
+again without resetting the other fields.
+
+Completion, sign-out and account deletion clear local drafts and private draft
+photos. Old screens cannot recreate a cleared draft. Consent, authentication
+credentials and completion flags are never saved in the draft: the final Terms
+checkbox must be checked again after re-entering setup. Required age, name,
+gender and business-area checks still run, and incomplete profiles cannot create
+or join plans until setup is completed successfully.
+
+No database migration, native dependency or backend deployment is required.
+Phone regression check: type personal details, Explore, then return via Profile
+or a plan; repeat at interests, availability, location and final review. Restart
+the app during unfinished setup and verify the same step/fields/photo. Finish
+setup, sign out, and try a different account to verify no previous draft appears.

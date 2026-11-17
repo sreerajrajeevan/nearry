@@ -2,6 +2,7 @@ import { test, before, after, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import {
   bundleOfferEligible,
+  bundleSlotAvailable,
   bundleStatus,
 } from "../src/utils/planOfferBundle";
 import type { PlanOfferBundle } from "../src/utils/planOfferBundle";
@@ -51,6 +52,48 @@ test("only live fixed-price venue offers with supported durations are attachable
   assert.equal(bundleOfferEligible({ ...offer, status: "draft" }), false);
   assert.equal(bundleOfferEligible({ ...offer, slotMinutes: 15 }), false);
   assert.equal(bundleOfferEligible({ ...offer, venueId: undefined }), false);
+});
+
+test("group slots exclude partial bookings, near-start times and groups outside reserved capacity", () => {
+  const slot = {
+    starts_at: new Date(now + 60 * 60_000).toISOString(),
+    capacity: 5,
+    seats_left: 5,
+  };
+  assert.equal(bundleSlotAvailable(slot, 4, now), true);
+  // Four remaining seats are enough numerically, but the block is no longer exclusive.
+  assert.equal(bundleSlotAvailable({ ...slot, seats_left: 4 }, 4, now), false);
+  assert.equal(bundleSlotAvailable(slot, 6, now), false);
+  assert.equal(bundleSlotAvailable(slot, 2, now), true);
+  assert.equal(
+    bundleSlotAvailable({ ...slot, capacity: 50, seats_left: 50 }, 50, now),
+    true,
+  );
+  for (const people of [1, 51, 2.5])
+    assert.equal(
+      bundleSlotAvailable(
+        { ...slot, capacity: 100, seats_left: 100 },
+        people,
+        now,
+      ),
+      false,
+    );
+  assert.equal(
+    bundleSlotAvailable(
+      { ...slot, starts_at: new Date(now + 15 * 60_000).toISOString() },
+      4,
+      now,
+    ),
+    false,
+  );
+  assert.equal(
+    bundleSlotAvailable(
+      { ...slot, starts_at: new Date(now - 60_000).toISOString() },
+      4,
+      now,
+    ),
+    false,
+  );
 });
 
 const originalFetch = globalThis.fetch;

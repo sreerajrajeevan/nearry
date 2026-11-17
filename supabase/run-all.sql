@@ -5096,7 +5096,12 @@ begin
   select * into business from profiles where id=bundle.business_id;
   if not account_active(bundle.business_id) or business.verification_status<>'verified' or
     not content_visible('offer',booking.offer_id) or
-    users_blocked(bundle.business_id,new.requester_id) then raise exception 'Business reservation unavailable'; end if;
+    users_blocked(bundle.business_id,new.requester_id) then
+    -- Reopening waitlisted requests runs inside another member's leave transaction.
+    -- Keep the safety restriction without rolling back that member's withdrawal.
+    if tg_op='UPDATE' and old.status='full' and new.status='pending' then new.status:='declined';return new;end if;
+    raise exception 'Business reservation unavailable';
+  end if;
   return new;
 end;
 $$ language plpgsql security definer set search_path=public,pg_temp;

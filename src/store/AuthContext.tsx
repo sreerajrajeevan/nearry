@@ -1,3 +1,5 @@
+import { clearOnboardingDrafts } from "../services/localOnboardingDrafts";
+import { personalProfileReady } from "../utils/profileReadiness";
 import { DemoBlockedError } from "../services/demoGuard";
 import React, {
   createContext,
@@ -212,6 +214,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         version.current.current(ticket) &&
         !demoRef.current
       ) {
+        if (
+          (saved.accountType === "business"
+            ? saved.onboardingCompleted
+            : personalProfileReady(saved)) ||
+          saved.deletionRequestedAt
+        ) {
+          await clearOnboardingDrafts(saved.id).catch(() => {});
+          if (
+            !mounted.current ||
+            !version.current.current(ticket) ||
+            demoRef.current
+          )
+            return;
+        }
         profileRef.current = saved;
         setProfile(saved);
         // Existing account, fresh login, lane != saved type: tell the user
@@ -380,6 +396,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
   async function signOut(localOnly = false) {
     await action(async () => {
+      const leavingUser = sessionRef.current?.user.id;
       if (!demoRef.current) {
         if (localOnly) {
           await requireSupabase()
@@ -391,6 +408,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           await serviceSignOut();
         }
       }
+      if (leavingUser) await clearOnboardingDrafts(leavingUser).catch(() => {});
       version.current.invalidate();
       sessionEpoch.current++;
       initialProfiles.current.clear();
@@ -454,6 +472,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           },
         );
         if (error) throw error;
+        await clearOnboardingDrafts(id).catch(() => {});
         if (data.celebrate !== false) setOnboardingCelebration(true);
         await refreshProfile();
         return;
@@ -480,6 +499,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .update(patch)
         .eq("id", id);
       if (error) throw error;
+      await clearOnboardingDrafts(id).catch(() => {});
       if (data.celebrate !== false) setOnboardingCelebration(true);
       if (version.current.current(ticket) && sessionRef.current?.user.id === id)
         await refreshProfile();

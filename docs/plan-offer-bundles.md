@@ -33,10 +33,16 @@ feature activation, Play deployment, or merge is part of this PR.
   the post, reservation and immutable offer snapshot together, or none of them.
 - The business has the existing 30-minute hold window (or until the slot starts,
   whichever comes first) to confirm. Requests/approvals do not confirm the venue.
+- The picker only lists completely empty slots that fit the whole group and
+  start more than 15 minutes from now. It rechecks eligibility on selection and
+  publication; the database remains authoritative if availability changes.
 - Approved participants join the existing plan group automatically. Already
   approved members receive a plan-linked notice when the venue confirms. Pending
   requests do not consume additional venue seats. Leaving reopens a plan spot;
   the group's original venue allocation stays reserved for a replacement.
+  If a waitlisted requester is blocked by the business (in either direction),
+  or the business becomes unavailable, reopening declines that request instead
+  of preventing the departing member from leaving.
 - Prices are copied from the offer, per person, and fixed for this reservation.
   The group total covers the full reserved capacity; the host is responsible for
   that total, even if the group does not fill. Payment happens at the venue.
