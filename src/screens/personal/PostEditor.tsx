@@ -518,7 +518,6 @@ export function PostEditor({
   };
   const chooseActivity = (item: (typeof PLAN_ACTIVITIES)[number]) => {
     const previous = PLAN_ACTIVITIES.find((x) => x.id === activity);
-    if (!title.trim() || title === previous?.title) setTitle(item.title);
     setActivity(item.id);
     if (!planAsksLevel(item.id)) setLevel("any");
     if (!planBookingLabel(item.id)) setVenueBooked(false);
@@ -631,7 +630,11 @@ export function PostEditor({
         >
           <Input
             label="Title"
-            placeholder="Pick an activity for a suggestion"
+            placeholder={
+              PLAN_ACTIVITIES.find((item) => item.id === activity)?.title ||
+              "Give your plan a title"
+            }
+            clearable
             value={title}
             maxLength={80}
             onChangeText={setTitle}
