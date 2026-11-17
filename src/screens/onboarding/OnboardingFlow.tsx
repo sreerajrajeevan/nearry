@@ -1,3 +1,6 @@
+import { useOnboardingDraft } from "../../hooks/useOnboardingDraft";
+import { keepOnboardingPhoto } from "../../services/localOnboardingDrafts";
+import { LoadingState } from "../../components/LoadingState";
 import React, { useCallback, useRef, useState } from "react";
 import {
   BackHandler,
@@ -85,31 +88,49 @@ export function OnboardingFlow({
   } = useAuth();
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const [step, setStep] = useState(0),
-    [done, setDone] = useState(false),
+  const draft = useOnboardingDraft(profile, business, demoMode);
+  const {
+    step,
+    name,
+    dob,
+    gender,
+    businessName,
+    category,
+    interests,
+    preferences,
+    area,
+    photo,
+    uploadedPhoto,
+  } = draft.value;
+  const setStep = (v: React.SetStateAction<number>) => draft.change("step", v);
+  const setName = (v: React.SetStateAction<string>) => draft.change("name", v);
+  const setDob = (v: React.SetStateAction<string>) => draft.change("dob", v);
+  const setGender = (v: React.SetStateAction<typeof gender>) =>
+    draft.change("gender", v);
+  const setBusinessName = (v: React.SetStateAction<string>) =>
+    draft.change("businessName", v);
+  const setCategory = (v: React.SetStateAction<string>) =>
+    draft.change("category", v);
+  const setInterests = (v: React.SetStateAction<string[]>) =>
+    draft.change("interests", v);
+  const setPreferences = (v: React.SetStateAction<typeof preferences>) =>
+    draft.change("preferences", v);
+  const setArea = (v: React.SetStateAction<string>) => draft.change("area", v);
+  const setPhoto = (v: React.SetStateAction<string | null>) =>
+    draft.change("photo", v);
+  const setUploadedPhoto = (v: React.SetStateAction<string | null>) =>
+    draft.change("uploadedPhoto", v);
+  const [done, setDone] = useState(false),
     [saving, setSaving] = useState(false),
     [picking, setPicking] = useState(false),
+    [leaving, setLeaving] = useState(false),
     [locationBusy, setLocationBusy] = useState(false),
     [error, setError] = useState("");
-  const [name, setName] = useState(profile?.displayName ?? ""),
-    [dob, setDob] = useState(""),
-    [gender, setGender] = useState(profile?.gender);
-  const [businessName, setBusinessName] = useState(profile?.businessName ?? ""),
-    [category, setCategory] = useState(
-      String(profile?.businessDetails.category ?? ""),
-    );
-  const [interests, setInterests] = useState<string[]>(
-    profile?.interests ?? [],
-  );
-  const [preferences, setPreferences] = useState(() =>
-    onboardingPreferences(profile?.onboardingPreferences),
-  );
-  const [area, setArea] = useState(String(profile?.businessDetails.area ?? ""));
   const [agreed, setAgreed] = useState(false);
-  const [photo, setPhoto] = useState<string | null>(null),
-    [uploadedPhoto, setUploadedPhoto] = useState<string | null>(null);
+  const leaveLock = useRef(false);
   const lock = useRef(false);
-  const busy = saving || loading || picking || locationBusy;
+  const busy =
+    saving || loading || picking || locationBusy || leaving || !draft.ready;
   const agreementNeeded = profile?.termsVersion !== POLICY_VERSION;
   const review = business ? 2 : 4,
     total = business ? 3 : 5;
@@ -124,16 +145,36 @@ export function OnboardingFlow({
     setError("");
     setStep(next);
   };
+  const explore = async () => {
+    if (busy || leaveLock.current) return;
+    leaveLock.current = true;
+    setLeaving(true);
+    setError("");
+    try {
+      await draft.flush();
+      if (onFinished) onFinished();
+      else deferOnboarding();
+    } catch (e) {
+      setError(
+        e instanceof Error
+          ? e.message
+          : "Could not save your progress. Please try again.",
+      );
+    } finally {
+      leaveLock.current = false;
+      setLeaving(false);
+    }
+  };
   const back = useCallback(() => {
     if (busy || done) return true;
     if (step > 0) {
       setError("");
       setStep(step - 1);
-    } else if (onFinished) onFinished();
-    else if (!business) deferOnboarding();
+    } else if (!business) void explore();
+    else if (onFinished) onFinished();
     else void signOut().catch((e) => setError(e.message));
     return true;
-  }, [busy, done, step, onFinished, business, deferOnboarding, signOut]);
+  }, [busy, done, step, onFinished, business, explore, signOut]);
   useFocusEffect(
     useCallback(() => {
       if (Platform.OS === "web") return;
@@ -148,7 +189,11 @@ export function OnboardingFlow({
     try {
       const uri = await pickAvatar();
       if (uri) {
-        setPhoto(uri);
+        setPhoto(
+          !demoMode && profile
+            ? await keepOnboardingPhoto(profile.id, uri)
+            : uri,
+        );
         setUploadedPhoto(null);
       }
     } catch (e) {
@@ -191,6 +236,7 @@ export function OnboardingFlow({
         setUploadedPhoto(url);
         await updateProfile(profile.id, { avatarUrl: url });
       }
+      draft.pause();
       await completeOnboarding({
         termsAccepted: agreed,
         celebrate: !onFinished,
@@ -225,6 +271,7 @@ export function OnboardingFlow({
       if (onFinished) onFinished();
       else setDone(true);
     } catch (e) {
+      draft.resume();
       setError(
         e instanceof Error
           ? e.message
@@ -249,6 +296,41 @@ export function OnboardingFlow({
         : [...current[key], item],
     }));
   const needsArea = business && step === 1 && !area.trim();
+  if (!draft.ready)
+    return (
+      <OnboardingLayout
+        step={1}
+        total={total}
+        busy={false}
+        footer={
+          draft.error ? (
+            <>
+              <OnboardingButton
+                title="Retry saved setup"
+                onPress={draft.retry}
+              />
+              <OnboardingLink
+                title={business ? "Use a different account" : "Explore for now"}
+                onPress={() => {
+                  if (business)
+                    void signOut().catch((e) => setError(e.message));
+                  else if (onFinished) onFinished();
+                  else deferOnboarding();
+                }}
+              />
+            </>
+          ) : undefined
+        }
+      >
+        {draft.error ? (
+          <Text accessibilityRole="alert" style={ob.error}>
+            {error || draft.error}
+          </Text>
+        ) : (
+          <LoadingState label="Restoring your setup…" layout="compact" />
+        )}
+      </OnboardingLayout>
+    );
   const footer = done ? (
     <OnboardingButton
       title={business ? "Open dashboard" : "Find my next plan"}
@@ -267,10 +349,10 @@ export function OnboardingFlow({
         }
         loading={saving}
       />
-      {!business && step === 0 && !onFinished && (
+      {!business && (
         <OnboardingLink
           title="Explore first, finish my profile later"
-          onPress={deferOnboarding}
+          onPress={() => void explore()}
           disabled={busy}
         />
       )}{" "}
@@ -367,6 +449,15 @@ export function OnboardingFlow({
                       <Image
                         source={{ uri: photo ?? profile?.avatarUrl }}
                         style={styles.photoImage}
+                        onError={() => {
+                          if (photo) {
+                            setPhoto(null);
+                            setUploadedPhoto(null);
+                            setError(
+                              "Your saved photo is no longer available. Choose it again; your other details are saved.",
+                            );
+                          }
+                        }}
                       />
                     ) : (
                       <Text style={{ fontSize: 34 }}>😎</Text>
@@ -692,13 +783,13 @@ export function OnboardingFlow({
               )}
             </>
           )}
-          {!!error && (
+          {!!(error || draft.error) && (
             <Text
               accessibilityRole="alert"
               accessibilityLiveRegion="polite"
               style={ob.error}
             >
-              {error}
+              {error || draft.error}
             </Text>
           )}
           {business && step === 0 && (
