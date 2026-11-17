@@ -100,11 +100,21 @@ categories (the in-app notification list still shows everything), except
 "Nearby players needed", which stops the alert being created at all. Account
 notices (verification, selfie review) are always sent.
 
-**QR link:** `<share page>?newplan=<venue id>`, opening
-`nearry://new-plan?venue=<id>`. Only verified venues get a card. This relies
-on the hosted share page (`open.html`, see docs/share-links.md); until that is
-set up, the card uses the `nearry://` link, which works for people who already
-have the app.
+**QR link (Sree: must open the Play Store when the app isn't installed):**
+the QR always encodes the hosted share page, `<share page>?newplan=<venue id>`,
+never a bare `nearry://` link (a phone without Nearry can't open that). The
+page already does this for plans: on Android it opens
+`intent://new-plan?venue=<id>#Intent;scheme=nearry;package=com.nearry.app;S.browser_fallback_url=<Play Store>`,
+so Android opens Nearry if installed and otherwise goes straight to the Nearry
+Play Store page; on other devices it shows a "Get Nearry on Google Play"
+button. `open.html` (from `npm run legal:export`) gains the `newplan` case with
+its own wording ("Short of players? Post it on Nearry"). Only verified venues
+get a card.
+
+One-time setup this depends on (docs/share-links.md): upload `open.html` next
+to the policy pages and set `EXPO_PUBLIC_SHARE_URL` for builds. If a build has
+no share URL, the business screen does not show a QR; it explains that the
+card isn't set up yet instead of printing a code that can't fall back.
 
 ## Left to the builder
 
