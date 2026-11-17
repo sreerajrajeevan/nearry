@@ -1,3 +1,4 @@
+import { PlanBundleCard } from "../../components/PlanBundleCard";
 import { Alert } from "../../services/appAlert";
 import { PlanListSkeleton } from "../../components/Skeletons";
 import { haptic } from "../../services/haptics";
@@ -650,6 +651,20 @@ export function ActivityScreen() {
                     </Text>
                   </View>
                   <Text style={styles.description}>{view.hint}</Text>
+                  {booking.planBundle && (
+                    <>
+                      <PlanBundleCard bundle={booking.planBundle} />
+                      <Button
+                        title="Open linked plan"
+                        variant="secondary"
+                        onPress={() =>
+                          navigation.navigate("PostDetails", {
+                            postId: booking.planBundle!.postId,
+                          })
+                        }
+                      />
+                    </>
+                  )}
                   {booking.businessId && (
                     <Button
                       title="Message business"
@@ -662,8 +677,12 @@ export function ActivityScreen() {
                   {view.canCancel &&
                     confirmAction(
                       `cancel:${booking.id}`,
-                      "Cancel booking",
-                      "Your reservation will be cancelled and the spot released.",
+                      booking.planBundle
+                        ? "Cancel plan and booking"
+                        : "Cancel booking",
+                      booking.planBundle
+                        ? "This also cancels the linked plan for everyone and releases the whole group reservation."
+                        : "Your reservation will be cancelled and the spot released.",
                       () => cancelBooking(booking.id),
                       "Booking cancelled.",
                     )}

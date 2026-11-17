@@ -14,6 +14,9 @@
     "production": {
       "distribution": "store",
       "environment": "production",
+      "env": {
+        "EXPO_PUBLIC_PLAN_OFFER_BUNDLES": "false"
+      },
       "autoIncrement": true,
       "credentialsSource": "remote",
       "android": {
@@ -27,6 +30,12 @@
         "EXPO_PUBLIC_REVIEWER_LOGIN_ENABLED": "true"
       },
       "credentialsSource": "local"
+    },
+    "bundle-preview": {
+      "extends": "preview",
+      "env": {
+        "EXPO_PUBLIC_PLAN_OFFER_BUNDLES": "true"
+      }
     }
   }
 }

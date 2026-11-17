@@ -22,6 +22,7 @@ export function notificationTarget(notice: AppNotification, role: AccountType) {
         "request_approved",
         "request_declined",
         "post_cancelled",
+        "plan_booking_confirmed",
       ].includes(notice.kind) &&
       notice.refId
     )

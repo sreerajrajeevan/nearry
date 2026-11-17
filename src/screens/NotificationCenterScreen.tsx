@@ -32,7 +32,13 @@ import { AppNotification } from "../services/mappers";
 import { notificationTarget } from "../utils/notificationTarget";
 
 function kindTone(kind: string): "neutral" | "green" | "red" {
-  if (kind === "request_approved" || kind === "booking_confirmed")
+  if (
+    [
+      "request_approved",
+      "booking_confirmed",
+      "plan_booking_confirmed",
+    ].includes(kind)
+  )
     return "green";
   if (kind === "request_declined" || kind === "booking_cancelled") return "red";
   return "neutral";

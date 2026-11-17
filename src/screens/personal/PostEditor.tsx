@@ -1,3 +1,15 @@
+import * as Crypto from "expo-crypto";
+import {
+  PlanOfferPicker,
+  PlanOfferSelection,
+} from "../../components/PlanOfferPicker";
+import { PlanBundleCard } from "../../components/PlanBundleCard";
+import {
+  PLAN_OFFER_BUNDLES,
+  createPlanOfferBundle,
+  getPlanOfferBundle,
+} from "../../services/planOfferBundles";
+import type { PlanOfferBundle } from "../../utils/planOfferBundle";
 import { haptic } from "../../services/haptics";
 import {
   hasPostMeetingPlace,
@@ -114,6 +126,15 @@ export function PostEditor({
   onCancel?: () => void;
 }) {
   const { profile, demoMode } = useAuth();
+  const [offerSelection, setOfferSelection] =
+    useState<PlanOfferSelection | null>(null);
+  const [existingBundle, setExistingBundle] = useState<PlanOfferBundle | null>(
+    null,
+  );
+  const [bundleRetryKey, setBundleRetryKey] = useState(() =>
+    Crypto.randomUUID(),
+  );
+  const reservationLocked = !!offerSelection || !!existingBundle;
   const [original, setOriginal] = useState<NeedPost | null>(null);
   const [loading, setLoading] = useState(!!postId);
   const [loadError, setLoadError] = useState("");
@@ -165,8 +186,12 @@ export function PostEditor({
     let active = true;
     setLoading(true);
     setLoadError("");
-    void Promise.all([getPost(postId), listPostPhotos(postId)])
-      .then(([post, savedPhotos]) => {
+    void Promise.all([
+      getPost(postId),
+      listPostPhotos(postId),
+      getPlanOfferBundle(postId),
+    ])
+      .then(([post, savedPhotos, bundle]) => {
         if (!active) return;
         if (!post) throw new Error("Post not found.");
         if (!profile || post.authorId !== profile.id)
@@ -174,6 +199,7 @@ export function PostEditor({
         if (!postState(post).canEdit)
           throw new Error("Only upcoming, open posts can be edited.");
         setOriginal(post);
+        setExistingBundle(bundle);
         setActivity(post.planDetails?.activity ?? "other");
         setDuration(post.planDetails?.durationMinutes ?? 60);
         setLevel(post.planDetails?.level ?? "any");
@@ -268,6 +294,8 @@ export function PostEditor({
       setGenderPref("any");
       setPhotos([]);
       setSavedPostId(null);
+      setOfferSelection(null);
+      setBundleRetryKey(Crypto.randomUUID());
       setFormError("");
     }
     haptic("success");
@@ -307,6 +335,14 @@ export function PostEditor({
     const flag = (message: string) => {
       problems.push(message);
     };
+    if (
+      offerSelection &&
+      (vacancies + 1 > offerSelection.slot.seats_left || vacancies > 49)
+    ) {
+      flag(
+        "Not enough places for this group. Reduce people needed or choose another offer slot.",
+      );
+    }
     if (!savedPostId && !activity) {
       flag("Choose what you’re planning.");
     }
@@ -413,7 +449,14 @@ export function PostEditor({
                 costCents: costCents ?? null,
               })
             ).id
-          : (await createPost(authorId, details)).id);
+          : offerSelection
+            ? await createPlanOfferBundle(
+                offerSelection.slot.id,
+                details,
+                bundleRetryKey,
+                offerSelection.offer.priceCents!,
+              )
+            : (await createPost(authorId, details)).id);
       setSavedPostId(id);
       const result = await savePhotoSelection(id, photos, (uri) =>
         uploadPhoto(authorId, uri, "posts"),
@@ -658,95 +701,128 @@ export function PostEditor({
             disabled={publishing}
           />
         </PlanSection>
+        {!postId && PLAN_OFFER_BUNDLES && !demoMode && (
+          <PlanOfferPicker
+            value={offerSelection}
+            people={vacancies + 1}
+            disabled={publishing}
+            onChange={(selection) => {
+              setOfferSelection(selection);
+              if (!selection) return;
+              setVenue({
+                venueId: selection.offer.venueId,
+                name: selection.venueName,
+              });
+              setUnfinishedLocation(false);
+              setStartsAtDate(new Date(selection.slot.starts_at));
+              setDuration(
+                (selection.offer.slotMinutes ?? 60) as typeof duration,
+              );
+              setCostMode("person");
+              setCost(String(selection.offer.priceCents! / 100));
+              setVenueBooked(false);
+            }}
+          />
+        )}
+        {existingBundle && <PlanBundleCard bundle={existingBundle} />}
         <PlanSection
           number={3}
           error={errorSection === 3 ? formError : ""}
           onY={(y) => (sectionY.current[3] = y)}
           title="When"
         >
-          <View style={styles.row}>
-            {days.map((day) => (
+          {reservationLocked ? (
+            <Text style={styles.help}>
+              {startsAtDate?.toLocaleString("en-IN")} · {duration} minutes. The
+              selected offer sets the time and duration.
+            </Text>
+          ) : (
+            <>
+              <View style={styles.row}>
+                {days.map((day) => (
+                  <TouchableOpacity
+                    key={day.label}
+                    accessibilityRole="button"
+                    accessibilityState={{
+                      selected: samePlanDay(startsAtDate, day.date),
+                    }}
+                    disabled={publishing}
+                    onPress={() => chooseDay(day.date)}
+                    style={[
+                      styles.day,
+                      samePlanDay(startsAtDate, day.date) && styles.daySelected,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.dayTitle,
+                        samePlanDay(startsAtDate, day.date) && styles.light,
+                      ]}
+                    >
+                      {day.label}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.dayDate,
+                        samePlanDay(startsAtDate, day.date) && styles.light,
+                      ]}
+                    >
+                      {day.date.toLocaleDateString("en-IN", {
+                        day: "numeric",
+                        month: "short",
+                      })}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <View style={styles.row}>
+                <DateTimeField
+                  label="Choose date"
+                  value={startsAtDate ? fmtDate(startsAtDate) : null}
+                  placeholder="More dates"
+                  onPress={() => setPicker({ field: "startsAt", mode: "date" })}
+                />
+                <DateTimeField
+                  label="Start time"
+                  value={startsAtDate ? fmtTime(startsAtDate) : null}
+                  placeholder="Pick a time"
+                  onPress={() => setPicker({ field: "startsAt", mode: "time" })}
+                />
+              </View>
               <TouchableOpacity
-                key={day.label}
                 accessibilityRole="button"
-                accessibilityState={{
-                  selected: samePlanDay(startsAtDate, day.date),
-                }}
+                accessibilityLabel="Plan duration"
                 disabled={publishing}
-                onPress={() => chooseDay(day.date)}
-                style={[
-                  styles.day,
-                  samePlanDay(startsAtDate, day.date) && styles.daySelected,
-                ]}
+                style={styles.settingRow}
+                onPress={() => setDurationOpen(!durationOpen)}
               >
-                <Text
-                  style={[
-                    styles.dayTitle,
-                    samePlanDay(startsAtDate, day.date) && styles.light,
-                  ]}
-                >
-                  {day.label}
-                </Text>
-                <Text
-                  style={[
-                    styles.dayDate,
-                    samePlanDay(startsAtDate, day.date) && styles.light,
-                  ]}
-                >
-                  {day.date.toLocaleDateString("en-IN", {
-                    day: "numeric",
-                    month: "short",
-                  })}
+                <View style={styles.flex}>
+                  <Text style={styles.label}>Duration</Text>
+                  <Text style={styles.help}>How much time to set aside</Text>
+                </View>
+                <Text style={styles.label}>
+                  {duration < 60
+                    ? `${duration} min`
+                    : `${duration / 60} ${duration === 60 ? "hour" : "hours"}`}
+                  ⌄
                 </Text>
               </TouchableOpacity>
-            ))}
-          </View>
-          <View style={styles.row}>
-            <DateTimeField
-              label="Choose date"
-              value={startsAtDate ? fmtDate(startsAtDate) : null}
-              placeholder="More dates"
-              onPress={() => setPicker({ field: "startsAt", mode: "date" })}
-            />
-            <DateTimeField
-              label="Start time"
-              value={startsAtDate ? fmtTime(startsAtDate) : null}
-              placeholder="Pick a time"
-              onPress={() => setPicker({ field: "startsAt", mode: "time" })}
-            />
-          </View>
-          <TouchableOpacity
-            accessibilityRole="button"
-            accessibilityLabel="Plan duration"
-            disabled={publishing}
-            style={styles.settingRow}
-            onPress={() => setDurationOpen(!durationOpen)}
-          >
-            <View style={styles.flex}>
-              <Text style={styles.label}>Duration</Text>
-              <Text style={styles.help}>How much time to set aside</Text>
-            </View>
-            <Text style={styles.label}>
-              {duration < 60
-                ? `${duration} min`
-                : `${duration / 60} ${duration === 60 ? "hour" : "hours"}`}
-              ⌄
-            </Text>
-          </TouchableOpacity>
-          {durationOpen && (
-            <Choices
-              label="Duration"
-              value={String(duration)}
-              onChange={(value) => {
-                setDuration(Number(value) as typeof duration);
-                setDurationOpen(false);
-              }}
-              items={[30, 60, 90, 120, 180, 240].map((n) => ({
-                value: String(n),
-                label: n < 60 ? `${n} min` : `${n / 60} hr`,
-              }))}
-              disabled={publishing}
-            />
+              {durationOpen && (
+                <Choices
+                  label="Duration"
+                  value={String(duration)}
+                  onChange={(value) => {
+                    setDuration(Number(value) as typeof duration);
+                    setDurationOpen(false);
+                  }}
+                  items={[30, 60, 90, 120, 180, 240].map((n) => ({
+                    value: String(n),
+                    label: n < 60 ? `${n} min` : `${n / 60} hr`,
+                  }))}
+                  disabled={publishing}
+                />
+              )}
+            </>
           )}
         </PlanSection>
         <PlanSection
@@ -755,38 +831,47 @@ export function PostEditor({
           onY={(y) => (sectionY.current[4] = y)}
           title="Where"
         >
-          <PostLocationField
-            required={!postId}
-            value={venue}
-            onChange={setVenue}
-            onDraftChange={setUnfinishedLocation}
-            disabled={publishing}
-          />
-          {bookingLabel && (
-            <TouchableOpacity
-              accessibilityRole="switch"
-              accessibilityLabel={bookingLabel}
-              accessibilityState={{ checked: venueBooked }}
-              aria-checked={venueBooked}
-              onPress={() => setVenueBooked(!venueBooked)}
-              disabled={publishing}
-              style={styles.settingRow}
-            >
-              <View style={styles.flex}>
-                <Text style={styles.label}>{bookingLabel}</Text>
-                <Text style={styles.help}>
-                  Let people know if booking is still needed.
-                </Text>
-              </View>
-              <View style={[styles.toggle, venueBooked && styles.toggleOn]}>
-                <View
-                  style={[
-                    styles.toggleThumb,
-                    venueBooked && { alignSelf: "flex-end" },
-                  ]}
-                />
-              </View>
-            </TouchableOpacity>
+          {reservationLocked ? (
+            <Text style={styles.help}>
+              {venue?.name} · Included in the group reservation. Venue
+              confirmation is shown on the plan.
+            </Text>
+          ) : (
+            <>
+              <PostLocationField
+                required={!postId}
+                value={venue}
+                onChange={setVenue}
+                onDraftChange={setUnfinishedLocation}
+                disabled={publishing}
+              />
+              {bookingLabel && (
+                <TouchableOpacity
+                  accessibilityRole="switch"
+                  accessibilityLabel={bookingLabel}
+                  accessibilityState={{ checked: venueBooked }}
+                  aria-checked={venueBooked}
+                  onPress={() => setVenueBooked(!venueBooked)}
+                  disabled={publishing}
+                  style={styles.settingRow}
+                >
+                  <View style={styles.flex}>
+                    <Text style={styles.label}>{bookingLabel}</Text>
+                    <Text style={styles.help}>
+                      Let people know if booking is still needed.
+                    </Text>
+                  </View>
+                  <View style={[styles.toggle, venueBooked && styles.toggleOn]}>
+                    <View
+                      style={[
+                        styles.toggleThumb,
+                        venueBooked && { alignSelf: "flex-end" },
+                      ]}
+                    />
+                  </View>
+                </TouchableOpacity>
+              )}
+            </>
           )}
         </PlanSection>
         <PlanSection
@@ -802,6 +887,7 @@ export function PostEditor({
               accessibilityLabel="Fewer people"
               disabled={
                 publishing ||
+                !!existingBundle ||
                 vacancies <= Math.max(1, original?.joinedCount ?? 0)
               }
               style={styles.stepBtn}
@@ -822,7 +908,11 @@ export function PostEditor({
             <TouchableOpacity
               accessibilityRole="button"
               accessibilityLabel="More people"
-              disabled={publishing || vacancies >= 100}
+              disabled={
+                publishing ||
+                !!existingBundle ||
+                vacancies >= (offerSelection ? 49 : 100)
+              }
               style={styles.stepBtn}
               onPress={() => setVacancies((v) => Math.min(100, v + 1))}
             >
@@ -932,7 +1022,7 @@ export function PostEditor({
               { value: "split", label: "Split fee" },
               { value: "person", label: "Per person" },
             ]}
-            disabled={publishing}
+            disabled={publishing || reservationLocked}
           />
           {costMode !== "free" && (
             <Input
@@ -944,7 +1034,7 @@ export function PostEditor({
               value={cost}
               onChangeText={(v) => setCost(v.replace(/[^0-9.]/g, ""))}
               keyboardType="decimal-pad"
-              editable={!publishing}
+              editable={!publishing && !reservationLocked}
             />
           )}
           {costMode === "split" && (
@@ -1109,7 +1199,13 @@ export function PostEditor({
             : "Looks good. Ready for a new hello?"}
         </Text>
         <Button
-          title={postId ? "Save changes" : "Post plan"}
+          title={
+            postId
+              ? "Save changes"
+              : offerSelection
+                ? "Post plan + request venue"
+                : "Post plan"
+          }
           loading={publishing}
           // Always tappable: with something missing, the tap scrolls to it.
           onPress={() => void handlePublish()}
