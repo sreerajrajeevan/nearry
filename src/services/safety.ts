@@ -102,6 +102,10 @@ export async function listMyReports(): Promise<MyReport[]> {
 export type ConversationSafety = {
   userId: string;
   name: string;
+  isBusiness?: boolean;
+  businessName?: string | null;
+  kind?: "booking" | "plan";
+  contextTitle?: string | null;
   canMessage: boolean;
   blockedByMe: boolean;
 };
@@ -114,6 +118,10 @@ export async function conversationSafety(
       ? {
           userId: c.otherUserId,
           name: c.otherName,
+          isBusiness: c.otherIsBusiness,
+          businessName: c.otherBusinessName,
+          kind: c.bookingId ? "booking" : "plan",
+          contextTitle: c.contextTitle,
           canMessage: !demoUserBlocked(c.otherUserId),
           blockedByMe: demoUserBlocked(c.otherUserId),
         }

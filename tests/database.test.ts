@@ -5477,6 +5477,69 @@ test("business venue: old service callers cannot approve without confirming the 
   );
 });
 
+test("business chats carry the business name; message notices use it", async () => {
+  const business = await auditBusiness(),
+    customer = await corePersonal();
+  await db.query(
+    "update profiles set display_name='Renil',business_name='Café Nine' where id=$1",
+    [business],
+  );
+  const offer = await auditOffer(business);
+  const booked = (
+    await asUser(customer, (tx) =>
+      tx.query("select book_offer_slot($1,1) result", [offer.slot]),
+    )
+  ).rows[0].result;
+  const conversation = (
+    await asUser(customer, (tx) =>
+      tx.query("select get_or_create_conversation($1,null,$2) id", [
+        business,
+        booked.booking_id,
+      ]),
+    )
+  ).rows[0].id;
+  await asUser(business, (tx) =>
+    tx.query(
+      "insert into messages(conversation_id,sender_id,body) values($1,$2,'See you at https://wa.me/918075012815')",
+      [conversation, business],
+    ),
+  );
+  const listed = (
+    await asUser(customer, (tx) =>
+      tx.query("select list_my_conversations() list"),
+    )
+  ).rows[0].list.find((c: any) => c.id === conversation);
+  assert.equal(listed.other_name, "Renil");
+  assert.equal(listed.other_is_business, true);
+  assert.equal(listed.other_business_name, "Café Nine");
+  assert.equal(listed.context_title, "Audit haircut");
+  const safety = (
+    await asUser(customer, (tx) =>
+      tx.query("select conversation_safety($1) s", [conversation]),
+    )
+  ).rows[0].s;
+  assert.equal(safety.name, "Renil");
+  assert.equal(safety.isBusiness, true);
+  assert.equal(safety.businessName, "Café Nine");
+  assert.equal(safety.kind, "booking");
+  assert.equal(safety.contextTitle, "Audit haircut");
+  // The business sees the customer as a person, not a business.
+  const fromBusiness = (
+    await asUser(business, (tx) =>
+      tx.query("select conversation_safety($1) s", [conversation]),
+    )
+  ).rows[0].s;
+  assert.equal(fromBusiness.isBusiness, false);
+  assert.equal(fromBusiness.businessName, null);
+  const notice = (
+    await db.query(
+      "select title from notifications where user_id=$1 and kind='message' order by created_at desc limit 1",
+      [customer],
+    )
+  ).rows[0];
+  assert.equal(notice.title, "Message from Café Nine");
+});
+
 test("booking notices say when, where and to pay at the venue, and point at the offer", async () => {
   const business = await auditBusiness(),
     customer = await corePersonal();
