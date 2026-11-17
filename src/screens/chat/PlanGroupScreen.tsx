@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { LinkedText } from "../../components/LinkedText";
 import {
   ActivityIndicator,
   AppState,
@@ -476,9 +477,12 @@ export function PlanGroupScreen({ route, navigation }: Props) {
                   {!item.mine && (
                     <Text style={styles.sender}>{item.senderName}</Text>
                   )}
-                  <Text style={[styles.body, item.mine && styles.mineText]}>
+                  <LinkedText
+                    style={[styles.body, item.mine && styles.mineText]}
+                    linkStyle={item.mine ? styles.linkMine : styles.link}
+                  >
                     {item.body}
-                  </Text>
+                  </LinkedText>
                   <Text style={[styles.time, item.mine && styles.mineText]}>
                     {new Date(item.createdAt).toLocaleTimeString("en-IN", {
                       hour: "numeric",
@@ -762,6 +766,8 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 4,
   },
   body: { fontSize: 14, lineHeight: 21, color: colors.text },
+  link: { color: colors.amberDeep, ...weight("600") },
+  linkMine: { color: colors.night, ...weight("700") },
   mineText: { color: colors.night },
   sender: {
     fontSize: 11,

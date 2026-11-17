@@ -22,9 +22,11 @@ import {
 import { useFocusEffect } from "@react-navigation/native";
 import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
-import { Avatar } from "../../components/Avatar";
+import { ChatAvatar } from "../../components/ChatAvatar";
+import { LinkedText } from "../../components/LinkedText";
+import { chatIdentity } from "../../utils/chatIdentity";
 import { Icon } from "../../components/Icon";
-import { colors, typography, spacing } from "../../theme";
+import { colors, typography, spacing, weight } from "../../theme";
 import { useAuth } from "../../store/AuthContext";
 import {
   listMessages,
@@ -64,9 +66,12 @@ function Bubble({
         }
         style={[styles.bubble, msg.mine && styles.bubbleMine]}
       >
-        <Text style={[styles.body, msg.mine && styles.bodyMine]}>
+        <LinkedText
+          style={[styles.body, msg.mine && styles.bodyMine]}
+          linkStyle={msg.mine ? styles.linkMine : styles.link}
+        >
           {msg.body}
-        </Text>
+        </LinkedText>
         <Text style={[styles.time, msg.mine && styles.timeMine]}>
           {new Date(msg.createdAt).toLocaleTimeString([], {
             hour: "2-digit",
@@ -225,6 +230,22 @@ export function ConversationScreen({ route, navigation }: Props) {
     }
   };
 
+  // Business chats: business name on top, the person running it underneath.
+  const who = peer
+    ? chatIdentity({
+        name: peer.name,
+        isBusiness: peer.isBusiness,
+        businessName: peer.businessName,
+        booking: peer.kind === "booking",
+        contextTitle: peer.contextTitle,
+      })
+    : {
+        kind: "plan" as const,
+        title: title ?? "Conversation",
+        subtitle: "",
+        tag: "",
+      };
+
   return (
     // The keyboard owner fills the window, outside safe-area padding. Android
     // edge-to-edge does not resize this window; an undefined behavior covers the input.
@@ -239,18 +260,16 @@ export function ConversationScreen({ route, navigation }: Props) {
           >
             <Icon name="arrow-left" size={22} color={colors.text} />
           </TouchableOpacity>
-          <Avatar
-            name={peer?.name ?? title ?? "Conversation"}
-            size={40}
-            tone="clay"
-          />
+          <ChatAvatar name={who.title} kind={who.kind} size={40} />
           <View style={styles.headingText}>
             <Text style={styles.title} numberOfLines={1}>
-              {peer?.name ?? title ?? "Conversation"}
+              {who.title}
             </Text>
-            <Text style={styles.subtitle} numberOfLines={1}>
-              About your plans & bookings
-            </Text>
+            {!!who.subtitle && (
+              <Text style={styles.subtitle} numberOfLines={1}>
+                {who.subtitle}
+              </Text>
+            )}
           </View>
           <TouchableOpacity
             accessibilityRole="button"
@@ -470,6 +489,8 @@ const styles = StyleSheet.create({
   },
   body: { ...typography.body, color: colors.text },
   bodyMine: { color: colors.night },
+  link: { color: colors.amberDeep, ...weight("600") },
+  linkMine: { color: colors.night, ...weight("700") },
   time: {
     ...typography.caption,
     color: colors.textFaint,

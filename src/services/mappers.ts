@@ -455,6 +455,9 @@ export type Conversation = {
   id: string;
   otherUserId: string;
   otherName: string;
+  /** The other side is a business account; show its business name. */
+  otherIsBusiness?: boolean;
+  otherBusinessName?: string;
   postId?: string;
   bookingId?: string;
   contextTitle: string;
@@ -468,6 +471,8 @@ export function toConversation(row: Record<string, unknown>): Conversation {
     id: row.id as string,
     otherUserId: row.other_user_id as string,
     otherName: (row.other_name as string) ?? "Someone",
+    otherIsBusiness: row.other_is_business === true,
+    otherBusinessName: (row.other_business_name as string) || undefined,
     postId: (row.post_id as string) ?? undefined,
     bookingId: (row.booking_id as string) ?? undefined,
     contextTitle: (row.context_title as string) ?? "Chat",
