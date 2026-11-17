@@ -4130,7 +4130,8 @@ test("bright onboarding saves private preferences and profile atomically without
       user,
     ])
   ).rows[0].onboarding_preferences;
-  assert.equal(retained.area, undefined);
+  // Since 00050 the area is kept until the person removes it (nearby alerts).
+  assert.equal(retained.area.label, "Kakkanad");
   assert.deepEqual(retained.days, ["Sat", "Sun"]);
   const businessDetails = (
     await db.query("select business_details from profiles where id=$1", [biz])
@@ -5597,4 +5598,104 @@ test("booking notices say when, where and to pay at the venue, and point at the 
   );
   const cancelled = await latest(business, "booking_cancelled");
   assert.equal(cancelled.body, `"Audit haircut" · ${when} was cancelled.`);
+});
+
+test("notification switches gate push per category; account notices always push", async () => {
+  const u = await corePersonal();
+  const pushed = async (kind: string) => {
+    const n = (
+      await db.query(
+        "insert into notifications(user_id,kind,title,body,ref_id) values($1,$2,'t','b',gen_random_uuid()) returning id",
+        [u, kind],
+      )
+    ).rows[0].id;
+    return (
+      await db.query(
+        "select count(*)::int c from push_jobs where notification_id=$1",
+        [n],
+      )
+    ).rows[0].c;
+  };
+  const prefs = async () =>
+    (
+      await asUser(u, (tx) =>
+        tx.query("select get_notification_preferences() p"),
+      )
+    ).rows[0].p;
+  assert.deepEqual(
+    {
+      messages: (await prefs()).messages,
+      plans: (await prefs()).plans,
+      bookings: (await prefs()).bookings,
+      nearby: (await prefs()).nearby,
+    },
+    { messages: true, plans: true, bookings: true, nearby: true },
+  );
+  assert.equal(await pushed("request_approved"), 1);
+  await asUser(u, (tx) =>
+    tx.query("select set_notification_category('plans',false)"),
+  );
+  assert.equal((await prefs()).plans, false);
+  assert.equal(await pushed("request_approved"), 0);
+  assert.equal(await pushed("booking_confirmed"), 1);
+  for (const c of ["messages", "bookings", "nearby"])
+    await asUser(u, (tx) =>
+      tx.query("select set_notification_category($1,false)", [c]),
+    );
+  assert.equal(await pushed("booking_confirmed"), 0);
+  assert.equal(await pushed("verification_approved"), 1);
+  await assert.rejects(
+    asUser(u, (tx) =>
+      tx.query("select set_notification_category('nope',false)"),
+    ),
+    /unknown notification category/,
+  );
+});
+
+test("alert area is kept, rounded when from GPS, and removable", async () => {
+  const u = await corePersonal();
+  const old = new Date(Date.now() - 40 * 86400000).toISOString();
+  const area = (o: any) =>
+    asUser(u, (tx) => tx.query("select set_alert_area($1::jsonb)", [o]));
+  const stored = async () =>
+    (
+      await db.query(
+        "select onboarding_preferences->'area' a from profiles where id=$1",
+        [u],
+      )
+    ).rows[0].a;
+  await area(
+    JSON.stringify({
+      label: "Kakkanad",
+      latitude: 10.016789,
+      longitude: 76.341234,
+      source: "device",
+      acquiredAt: old,
+    }),
+  );
+  assert.equal((await stored()).latitude, 10.02);
+  assert.equal((await stored()).longitude, 76.34);
+  await db.query("select maintenance_retention_cleanup()");
+  assert.equal((await stored()).label, "Kakkanad");
+  assert.equal(
+    (
+      await asUser(u, (tx) =>
+        tx.query("select get_notification_preferences() p"),
+      )
+    ).rows[0].p.alertArea.label,
+    "Kakkanad",
+  );
+  await area(
+    JSON.stringify({
+      label: "Edappally",
+      latitude: 10.025678,
+      longitude: 76.308912,
+      source: "google",
+      acquiredAt: old,
+    }),
+  );
+  assert.equal((await stored()).latitude, 10.025678);
+  await area(null);
+  assert.equal(await stored(), null);
+  await assert.rejects(area(JSON.stringify({ label: "x" })), /invalid area/i);
 });
