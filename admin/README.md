@@ -64,6 +64,15 @@ transaction. The membership row is locked during the decision, so a concurrent
 revocation cannot silently bypass authorization. Pending requests are filtered
 in SQL before pagination. Overview counts use the same current-request criteria.
 
+Opening a report loads its full context: who reported it (with how many reports
+they have filed and how those ended), the reported person (email, account,
+status and their other reports), and the reported item as it is now, with photos
+from Nearry's own storage and whether it was removed or deleted. The snapshot
+saved at report time stays available underneath. Message reports show only the
+reported message with up to five messages either side; conversation reports show
+the latest twenty. Each time private messages are shown, a `report:view-messages`
+entry is written to the decision history.
+
 Reports show the complete submitted evidence, with confirmation and a reason for
 removal/suspension. Account/conversation reports offer dismissal or owner-only
 account suspension; deleting a specific message needs a message report. This does
