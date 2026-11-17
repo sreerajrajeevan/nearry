@@ -38,7 +38,11 @@ import { LoadingImage } from "../../components/LoadingImage";
 import { ActivityArt } from "../../components/ActivityArt";
 import { activityArtwork } from "../../utils/activityArtwork";
 import { formatTime, formatWhen } from "../../utils/format";
-import { offerPayment } from "../../utils/offerPrice";
+import {
+  bookingTotal,
+  formatRupees,
+  offerPayment,
+} from "../../utils/offerPrice";
 import { getOrCreateConversation } from "../../services/chat";
 
 type Props = NativeStackScreenProps<PersonalStackParamList, "OfferDetails">;
@@ -259,7 +263,7 @@ export function OfferDetailsScreen({ route, navigation }: Props) {
     day: "numeric",
     month: "short",
   });
-  const payment = offerPayment(offer.priceCents);
+  const payment = offerPayment(offer.priceCents, partySize);
   const selectedSlot = slots.find((s) => s.id === slotId);
   const headline =
     typeof offer.discountPct === "number" && offer.discountPct > 0
@@ -372,15 +376,7 @@ export function OfferDetailsScreen({ route, navigation }: Props) {
               <Icon name="map-pin" size={18} color={colors.amberDeep} />
             </View>
             <View style={styles.payCopy}>
-              <Text style={styles.payAmount}>
-                {payment.amount}
-                {offer.priceCents ? (
-                  <Text style={styles.payWhere}>
-                    {" "}
-                    · to be paid at the venue
-                  </Text>
-                ) : null}
-              </Text>
+              <Text style={styles.payAmount}>{payment.amount}</Text>
               <Text style={styles.payNote}>{payment.note}</Text>
             </View>
           </View>
@@ -413,7 +409,11 @@ export function OfferDetailsScreen({ route, navigation }: Props) {
                         ? offer.priceCents === 0
                           ? "Confirmed · it's free"
                           : offer.priceCents
-                            ? `Confirmed · pay ${payment.amount} at the venue`
+                            ? `Confirmed · pay ${bookingTotal(offer.priceCents, b.partySize)} at the venue${
+                                b.partySize > 1
+                                  ? ` (${formatRupees(offer.priceCents!)} × ${b.partySize})`
+                                  : ""
+                              }`
                             : "Confirmed · pay at the venue"
                         : `Waiting for ${offer.businessName} to confirm${
                             b.holdExpiresAt
@@ -733,7 +733,6 @@ const styles = StyleSheet.create({
   },
   payCopy: { flex: 1, minWidth: 0, gap: 2 },
   payAmount: { ...typography.heading, fontSize: 17, color: colors.ink },
-  payWhere: { ...typography.body, color: colors.ink, ...weight("600") },
   payNote: { ...typography.caption, color: colors.textDim },
   title: { ...typography.title, color: colors.ink },
   desc: {

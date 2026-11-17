@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   formatRupees,
+  bookingTotal,
   offerPayment,
   offerPriceLabel,
   offerPriceShort,
@@ -18,13 +19,20 @@ test("rupee prices keep paise and use Indian grouping", () => {
 test("every offer price says it is paid at the venue", () => {
   assert.equal(offerPriceLabel(undefined), null);
   assert.equal(offerPriceLabel(0), "Free");
-  assert.equal(offerPriceShort(19900), "₹199 at venue");
+  assert.equal(offerPriceLabel(19900), "₹199 / person");
+  assert.equal(offerPriceShort(19900), "₹199 / person");
   assert.equal(offerPriceShort(0), "Free");
   assert.equal(offerPriceShort(undefined), "Pay at venue");
   assert.deepEqual(offerPayment(19900), {
-    amount: "₹199",
-    note: "Nothing is paid in the app.",
+    amount: "₹199 / person",
+    note: "To be paid at the venue. Nothing is paid in the app.",
   });
+  assert.equal(
+    offerPayment(19900, 2).note,
+    "₹398 for 2 people, to be paid at the venue. Nothing is paid in the app.",
+  );
+  assert.equal(bookingTotal(19900, 2), "₹398");
+  assert.equal(bookingTotal(0, 2), null);
   assert.match(offerPayment(undefined).note, /Nothing is paid in the app/);
   assert.equal(offerPayment(0).amount, "Free");
 });

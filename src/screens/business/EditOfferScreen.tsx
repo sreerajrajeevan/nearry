@@ -344,7 +344,7 @@ export function EditOfferScreen({ route, navigation }: Props) {
         </FormSection>
         <FormSection
           title="The deal"
-          hint="Add a discount, a price, or both. Customers pay you at the venue; Nearry doesn't take payment. With a discount, enter the price after it."
+          hint="Add a discount, a price, or both. The price is per person, paid to you at the venue; Nearry doesn't take payment. With a discount, enter the price after it."
         >
           <View style={styles.row}>
             <View style={styles.half}>
@@ -359,7 +359,7 @@ export function EditOfferScreen({ route, navigation }: Props) {
             </View>
             <View style={styles.half}>
               <Input
-                label="Price at venue (₹)"
+                label="Price per person (₹)"
                 value={price}
                 onChangeText={(t: string) =>
                   setPrice(t.replace(/[^0-9.]/g, ""))

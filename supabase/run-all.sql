@@ -4732,7 +4732,8 @@ revoke all on function public.admin_console_decide_before_venue(uuid,text,uuid,t
 --
 -- The old confirmation read only '"<offer>" — see you there': no time, no
 -- business, nothing about payment. Nearry takes no payment, so a customer must
--- know to pay at the venue. Times are shown in India time (Asia/Kolkata),
+-- know to pay at the venue. Offer prices are per person, so the notice gives
+-- the total for the party and the per-person price. Times are shown in India time (Asia/Kolkata),
 -- matching the one-booking-per-day rule in 00041.
 --
 -- Same kinds, recipients and ref_id (the offer id) as before; only the title
@@ -4787,7 +4788,10 @@ begin
     v_body := '"' || v_offer || '" at ' || v_business || ' · ' || v_when || ' · ' || v_people || '. '
       || case
            when v_price = 0 then 'It''s free.'
-           when v_price > 0 then 'Pay ₹' || booking_notice_rupees(v_price) || ' at the venue.'
+           when v_price > 0 and new.party_size > 1 then
+             'Pay ₹' || booking_notice_rupees(v_price * new.party_size) || ' at the venue (₹'
+             || booking_notice_rupees(v_price) || ' / person).'
+           when v_price > 0 then 'Pay ₹' || booking_notice_rupees(v_price) || ' at the venue (per person).'
            else 'Pay at the venue.'
          end;
   elsif tg_op = 'UPDATE' and new.status = 'cancelled' and old.status is distinct from 'cancelled' then

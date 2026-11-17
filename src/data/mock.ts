@@ -416,7 +416,7 @@ export const mockNotifications: AppNotification[] = [
     id: "mn3",
     kind: "booking_confirmed",
     title: "Booking confirmed",
-    body: '"A little time for yourself?" at Studio Nine · Today, 4:00 PM · 1 person. Pay ₹450 at the venue.',
+    body: '"A little time for yourself?" at Studio Nine · Today, 4:00 PM · 1 person. Pay ₹450 at the venue (₹450 / person).',
     refId: "o1",
     read: true,
     createdAt,

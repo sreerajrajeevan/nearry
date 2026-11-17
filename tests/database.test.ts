@@ -5520,7 +5520,7 @@ test("booking notices say when, where and to pay at the venue, and point at the 
   assert.equal(confirmed.title, "Booking confirmed");
   assert.equal(
     confirmed.body,
-    `"Audit haircut" at Audit Salon · ${when} · 2 people. Pay ₹199 at the venue.`,
+    `"Audit haircut" at Audit Salon · ${when} · 2 people. Pay ₹398 at the venue (₹199 / person).`,
   );
   assert.equal(confirmed.ref_id, offer.id);
   assert.equal(

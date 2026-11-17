@@ -207,9 +207,7 @@ export function MyOffersScreen({ navigation }: Props) {
             typeof offer.discountPct === "number"
               ? `${offer.discountPct}% off`
               : "",
-            offer.priceCents != null
-              ? `${offerPriceLabel(offer.priceCents)} at venue`
-              : "",
+            offer.priceCents != null ? offerPriceLabel(offer.priceCents)! : "",
           ]
             .filter(Boolean)
             .join(" · ");
