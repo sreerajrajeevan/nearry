@@ -1,6 +1,12 @@
 import { PlanListSkeleton } from "../../components/Skeletons";
 import { useMyRequests } from "../../store/MyRequestsContext";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import {
   View,
   Text,
@@ -10,6 +16,9 @@ import {
   Keyboard,
   FlatList,
   Platform,
+  Animated,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
@@ -18,6 +27,7 @@ import {
   useRoute,
   RouteProp,
 } from "@react-navigation/native";
+import { BottomTabBarHeightContext } from "@react-navigation/bottom-tabs";
 import {
   PlaceAttributions,
   GoogleMapsCredit,
@@ -129,6 +139,50 @@ export function NearbyScreen() {
   const request = useRef(0);
   const scroll = useRef<FlatList<NeedPost>>(null);
   const picked = useRef(false);
+  // The brand header floats above the list instead of living in the list
+  // header: it slides away while scrolling down and comes back the moment
+  // the scroll direction reverses, rather than only at the very top.
+  const tabBarHeight = useContext(BottomTabBarHeightContext);
+  const [headerHeight, setHeaderHeight] = useState(88);
+  const headerShift = useRef(new Animated.Value(0)).current;
+  const headerShown = useRef(true);
+  const lastScrollY = useRef(0);
+  const [backToTop, setBackToTop] = useState(false);
+  const backToTopShown = useRef(false);
+
+  const setHeaderShown = useCallback(
+    (shown: boolean) => {
+      if (headerShown.current === shown) return;
+      headerShown.current = shown;
+      Animated.timing(headerShift, {
+        toValue: shown ? 0 : -headerHeight,
+        duration: 200,
+        useNativeDriver: true,
+      }).start();
+    },
+    [headerHeight, headerShift],
+  );
+
+  const onListScroll = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const y = event.nativeEvent.contentOffset.y;
+      const dy = y - lastScrollY.current;
+      if (y <= headerHeight || dy <= -6) setHeaderShown(true);
+      else if (dy >= 6) setHeaderShown(false);
+      lastScrollY.current = y;
+      const showButton = y > 600;
+      if (showButton !== backToTopShown.current) {
+        backToTopShown.current = showButton;
+        setBackToTop(showButton);
+      }
+    },
+    [headerHeight, setHeaderShown],
+  );
+
+  const scrollToTop = useCallback(() => {
+    scroll.current?.scrollToOffset({ offset: 0, animated: true });
+    setHeaderShown(true);
+  }, [setHeaderShown]);
 
   const persist = (next: HomeLocation) => {
     if (demoMode || !accountId) return;
@@ -416,8 +470,11 @@ export function NearbyScreen() {
 
   return (
     <Screen style={styles.page}>
+      <View style={styles.stage}>
       <FlatList
         ref={scroll}
+        onScroll={onListScroll}
+        scrollEventThrottle={16}
         data={showPlans ? visiblePosts : []}
         keyExtractor={planKey}
         renderItem={renderPlan}
@@ -439,11 +496,10 @@ export function NearbyScreen() {
         }
         ListHeaderComponent={
           <>
-            <PersonalHeader
-              compact
-              context={headerLabel}
-              location
-              onContextPress={openLocation}
+            <View
+              accessibilityElementsHidden
+              importantForAccessibility="no-hide-descendants"
+              style={{ height: headerHeight }}
             />
             {place ? (
               <PlaceAttributions places={[place]} />
@@ -726,6 +782,37 @@ export function NearbyScreen() {
           ) : null
         }
       />
+      <Animated.View
+        style={[
+          styles.floatingHeader,
+          { transform: [{ translateY: headerShift }] },
+        ]}
+        onLayout={(event) => {
+          const height = event.nativeEvent.layout.height;
+          if (height > 0 && Math.abs(height - headerHeight) > 1) {
+            setHeaderHeight(height);
+          }
+        }}
+      >
+        <PersonalHeader
+          compact
+          context={headerLabel}
+          location
+          onContextPress={openLocation}
+        />
+      </Animated.View>
+      {backToTop && (
+        <MotionPressable
+          accessibilityRole="button"
+          accessibilityLabel="Back to top"
+          accessibilityHint="Scroll back to the top of the list"
+          onPress={scrollToTop}
+          style={[styles.backToTop, { bottom: (tabBarHeight ?? 0) + 16 }]}
+        >
+          <Icon name="arrow-up" size={20} color={colors.background} />
+        </MotionPressable>
+      )}
+      </View>
       {filtersOpen && (
         <PlanFilterSheet
           value={options}
@@ -760,6 +847,31 @@ export function NearbyScreen() {
 }
 const styles = StyleSheet.create({
   page: { paddingHorizontal: 16 },
+  stage: { flex: 1 },
+  floatingHeader: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: colors.background,
+    zIndex: 10,
+  },
+  backToTop: {
+    position: "absolute",
+    right: 0,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.ink,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000000",
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 5,
+    zIndex: 10,
+  },
   scroll: { paddingBottom: spacing.xl },
   emptyActions: { gap: 4 },
   widened: {
