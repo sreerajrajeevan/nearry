@@ -1,3 +1,4 @@
+import { CardDistanceProvider } from "./src/store/CardDistanceContext";
 import { UnreadProvider } from "./src/store/UnreadContext";
 import { navigationRef } from "./src/navigation/navigationRef";
 import React, { useEffect, useState } from "react";
@@ -126,11 +127,13 @@ function App() {
           <ToastProvider>
             <AuthProvider>
               <UnreadProvider>
-                <AppShell
-                  resourcesReady={
-                    !!(fontsLoaded || fontError) && !!(assets || assetError)
-                  }
-                />
+                <CardDistanceProvider>
+                  <AppShell
+                    resourcesReady={
+                      !!(fontsLoaded || fontError) && !!(assets || assetError)
+                    }
+                  />
+                </CardDistanceProvider>
               </UnreadProvider>
             </AuthProvider>
           </ToastProvider>

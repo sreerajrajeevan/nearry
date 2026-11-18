@@ -59,7 +59,100 @@ export function tabOptions(
     tabBarBadgeStyle: styles.badge,
   };
 }
+const LIGHT_BAR_HEIGHT = 68;
+
+/**
+ * Nav 1 (personal side): a light bar anchored to the bottom edge, a label
+ * under every tab, and the active tab marked with a soft amber pill. The
+ * dark floating pill above stays in use on the business side.
+ */
+export function useLightTabBarLayout(): BottomTabNavigationOptions {
+  const { bottom } = useSafeAreaInsets();
+  return {
+    tabBarShowLabel: true,
+    tabBarStyle: [
+      styles.lightBar,
+      { height: LIGHT_BAR_HEIGHT + bottom, paddingBottom: bottom },
+    ],
+  };
+}
+
+export function lightTabOptions(
+  icon: IconName,
+  title: string,
+  prominent = false,
+): BottomTabNavigationOptions {
+  return {
+    title,
+    headerShown: false,
+    tabBarHideOnKeyboard: true,
+    tabBarAccessibilityLabel: title,
+    tabBarActiveTintColor: colors.ink,
+    tabBarInactiveTintColor: colors.lineStrong,
+    tabBarActiveBackgroundColor: "transparent",
+    tabBarItemStyle: styles.lightItem,
+    tabBarLabelStyle: styles.lightLabel,
+    tabBarLabel: prominent ? () => null : undefined,
+    tabBarButton: ({ style, disabled, href: _href, ...props }) => (
+      <MotionPressable
+        {...props}
+        disabled={disabled ?? undefined}
+        style={[style, styles.lightTabButton]}
+      />
+    ),
+    tabBarIcon: ({ color, focused }) =>
+      prominent ? (
+        <View style={styles.lightCreate}>
+          <Icon name={icon} size={24} color={colors.onAmber} />
+        </View>
+      ) : (
+        <View
+          style={[styles.lightIconWrap, focused && styles.lightIconWrapActive]}
+        >
+          <Icon name={icon} size={21} color={color} />
+        </View>
+      ),
+    tabBarBadgeStyle: styles.badge,
+  };
+}
+
 const styles = StyleSheet.create({
+  lightBar: {
+    backgroundColor: colors.surface,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    elevation: 0,
+    shadowOpacity: 0,
+  },
+  lightItem: {
+    height: LIGHT_BAR_HEIGHT,
+    paddingVertical: 0,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  lightLabel: { fontSize: 11, ...weight("600") },
+  lightTabButton: { borderRadius: 16 },
+  lightIconWrap: {
+    width: 52,
+    height: 30,
+    borderRadius: 15,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  lightIconWrapActive: { backgroundColor: colors.amberSoft },
+  lightCreate: {
+    width: 50,
+    height: 50,
+    borderRadius: 15,
+    backgroundColor: colors.amber,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000000",
+    shadowOpacity: 0.18,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 4,
+  },
   bar: {
     position: "relative",
     backgroundColor: colors.night,
