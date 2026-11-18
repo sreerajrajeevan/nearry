@@ -2,7 +2,7 @@ import React from "react";
 import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
 import { colors, typography, spacing, weight } from "../theme";
 import { Icon } from "./Icon";
-import { BrandLogo } from "./BrandLogo";
+import { BrandLogo, BrandMark } from "./BrandLogo";
 
 type Props = {
   context?: string;
@@ -13,6 +13,12 @@ type Props = {
   onNotificationsPress?: () => void;
   unreadNotifications?: number;
   compact?: boolean;
+  /**
+   * "stacked" (default): wordmark with the context line under it.
+   * "inline": one row — mark tile, context as a location pill, actions —
+   * used on Home so the feed gets the vertical space instead.
+   */
+  variant?: "stacked" | "inline";
 };
 
 export function BrandHeader({
@@ -24,6 +30,7 @@ export function BrandHeader({
   onNotificationsPress,
   unreadNotifications = 0,
   compact = false,
+  variant = "stacked",
 }: Props) {
   const unread = Math.max(0, Math.floor(unreadMessages));
   const unreadNotifs = Math.max(0, Math.floor(unreadNotifications));
@@ -38,6 +45,99 @@ export function BrandHeader({
       )}
     </>
   );
+  const actions = (
+    <View style={styles.actions}>
+      {onNotificationsPress && (
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel={
+            unreadNotifs > 0
+              ? `Notifications, ${unreadNotifs} unread`
+              : "Notifications"
+          }
+          accessibilityHint="Open your notifications"
+          onPress={onNotificationsPress}
+          activeOpacity={0.7}
+          style={styles.messagesButton}
+        >
+          <Icon name="bell" size={20} color={colors.text} />
+          {unreadNotifs > 0 && (
+            <View
+              style={styles.unreadBadge}
+              pointerEvents="none"
+              accessible={false}
+            >
+              <Text style={styles.unreadText}>
+                {unreadNotifs > 99 ? "99+" : unreadNotifs}
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
+      )}
+      {onMessagesPress && (
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel={
+            unread > 0
+              ? `Messages, ${unread} unread message${unread === 1 ? "" : "s"}`
+              : "Messages"
+          }
+          accessibilityHint="Open your conversations"
+          onPress={onMessagesPress}
+          activeOpacity={0.7}
+          style={styles.messagesButton}
+        >
+          <Icon name="message-circle" size={20} color={colors.text} />
+          {unread > 0 && (
+            <View
+              style={styles.unreadBadge}
+              pointerEvents="none"
+              accessible={false}
+            >
+              <Text style={styles.unreadText}>
+                {unread > 99 ? "99+" : unread}
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+  if (variant === "inline") {
+    return (
+      <View style={[styles.headerInline, compact && styles.compactInline]}>
+        <View
+          style={styles.markTile}
+          accessible
+          accessibilityRole="image"
+          accessibilityLabel="Nearry"
+        >
+          <BrandMark
+            size={23}
+            color={colors.background}
+            dotColor={colors.amber}
+          />
+        </View>
+        {!!context &&
+          (onContextPress ? (
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel={`Change location, ${context}`}
+              hitSlop={6} // 40 tall + 6 + 6 = 52 to touch
+              onPress={onContextPress}
+              style={styles.locationPill}
+              activeOpacity={0.65}
+            >
+              {contextContent}
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.locationPill}>{contextContent}</View>
+          ))}
+        <View style={styles.spacer} />
+        {actions}
+      </View>
+    );
+  }
   return (
     <View style={[styles.header, compact && styles.compactHeader]}>
       <View style={styles.identity}>
@@ -62,62 +162,7 @@ export function BrandHeader({
             </View>
           ))}
       </View>
-      <View style={styles.actions}>
-        {onNotificationsPress && (
-          <TouchableOpacity
-            accessibilityRole="button"
-            accessibilityLabel={
-              unreadNotifs > 0
-                ? `Notifications, ${unreadNotifs} unread`
-                : "Notifications"
-            }
-            accessibilityHint="Open your notifications"
-            onPress={onNotificationsPress}
-            activeOpacity={0.7}
-            style={styles.messagesButton}
-          >
-            <Icon name="bell" size={20} color={colors.text} />
-            {unreadNotifs > 0 && (
-              <View
-                style={styles.unreadBadge}
-                pointerEvents="none"
-                accessible={false}
-              >
-                <Text style={styles.unreadText}>
-                  {unreadNotifs > 99 ? "99+" : unreadNotifs}
-                </Text>
-              </View>
-            )}
-          </TouchableOpacity>
-        )}
-        {onMessagesPress && (
-          <TouchableOpacity
-            accessibilityRole="button"
-            accessibilityLabel={
-              unread > 0
-                ? `Messages, ${unread} unread message${unread === 1 ? "" : "s"}`
-                : "Messages"
-            }
-            accessibilityHint="Open your conversations"
-            onPress={onMessagesPress}
-            activeOpacity={0.7}
-            style={styles.messagesButton}
-          >
-            <Icon name="message-circle" size={20} color={colors.text} />
-            {unread > 0 && (
-              <View
-                style={styles.unreadBadge}
-                pointerEvents="none"
-                accessible={false}
-              >
-                <Text style={styles.unreadText}>
-                  {unread > 99 ? "99+" : unread}
-                </Text>
-              </View>
-            )}
-          </TouchableOpacity>
-        )}
-      </View>
+      {actions}
     </View>
   );
 }
@@ -133,6 +178,37 @@ const styles = StyleSheet.create({
     paddingTop: spacing.sm,
     paddingBottom: spacing.md,
   },
+  headerInline: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.md,
+  },
+  compactInline: { paddingTop: 4, paddingBottom: 8 },
+  markTile: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: colors.ink,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  locationPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    height: 40,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.surface,
+    flexShrink: 1,
+    minWidth: 0,
+  },
+  spacer: { flex: 1 },
   identity: { flex: 1, minWidth: 0 },
   contextButton: {
     flexDirection: "row",

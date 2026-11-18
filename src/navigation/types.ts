@@ -38,6 +38,7 @@ export type PersonalTabParamList = {
   Search: undefined;
   CreatePost: undefined;
   Activity: undefined;
+  Messages: undefined;
   /** `celebrate` carries the notification that opened the profile. */
   Profile: { celebrate?: string } | undefined;
 };
@@ -61,7 +62,6 @@ export type PersonalStackParamList = SafetyStackParamList & {
   /** Every live offer in Home's area; distances are [venueId, km] pairs. */
   AllOffers:
     { venueIds?: string[]; distances?: [string, number][] } | undefined;
-  Messages: undefined;
   Conversation: { conversationId: string; title?: string };
   Notifications: undefined;
 };
