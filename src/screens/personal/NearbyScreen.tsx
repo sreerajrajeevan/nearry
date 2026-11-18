@@ -1,3 +1,5 @@
+import { useCardDistanceOrigin } from "../../store/CardDistanceContext";
+import type { DistanceOrigin } from "../../utils/cardDistance";
 import { PlanListSkeleton } from "../../components/Skeletons";
 import { useMyRequests } from "../../store/MyRequestsContext";
 import React, { useCallback, useEffect, useRef, useState } from "react";
@@ -36,11 +38,7 @@ import { LocationSheet } from "../../components/LocationSheet";
 import { colors, typography, spacing, weight } from "../../theme";
 import { listPosts, subscribeToPosts } from "../../services/posts";
 import { listLiveOffers, subscribeToOffers } from "../../services/offers";
-import {
-  getCurrentPosition,
-  getPositionIfAllowed,
-  LatLng,
-} from "../../services/location";
+import { getCurrentPosition, LatLng } from "../../services/location";
 import { nearbyVenues, listVenues } from "../../services/venues";
 import { NeedPost, Venue, Offer } from "../../services/mappers";
 import { DiscoveryCategory, venueCategory } from "../../utils/discovery";
@@ -95,11 +93,13 @@ export function NearbyScreen() {
   const route = useRoute<RouteProp<PersonalTabParamList, "Nearby">>();
   const { demoMode, profile, session } = useAuth();
   const now = useDiscoveryClock();
+  const cardOrigin = useCardDistanceOrigin();
   const setup = onboardingPreferences(profile?.onboardingPreferences);
   const accountId = profile?.id ?? session?.user.id ?? null;
   const [posts, setPosts] = useState<NeedPost[]>([]);
   const [venues, setVenues] = useState<Venue[]>([]);
   const [offers, setOffers] = useState<Offer[]>([]);
+  const [resultOrigin, setResultOrigin] = useState<DistanceOrigin | null>(null);
   const [state, setState] = useState<"loading" | "error" | "ready">("loading");
   const [refreshing, setRefreshing] = useState(false);
   // Where Home searches from, and what to call it.
@@ -171,10 +171,6 @@ export function NearbyScreen() {
           });
           setPointLabel(NEAR_YOU);
           setChosenKm(saved.distanceKm ?? defaultDistance("me"));
-          // Quietly move to where they are now, without a permission prompt.
-          void getPositionIfAllowed().then((position) => {
-            if (active && position && !picked.current) setPoint(position);
-          });
         }
       })
       .catch(() => {});
@@ -191,6 +187,7 @@ export function NearbyScreen() {
     setPlace(nextRecents[0]);
     setPoint({ latitude: chosen.latitude, longitude: chosen.longitude });
     setPointLabel("");
+    cardOrigin?.selectArea({ kind: "area", point: chosen, label: chosen.name });
     setChosenKm(km);
     setRecents(nextRecents);
     setLocationError("");
@@ -218,6 +215,7 @@ export function NearbyScreen() {
         const km = defaultDistance("me");
         setPlace(null);
         setPoint(position);
+        cardOrigin?.setDevice(position);
         setPointLabel(NEAR_YOU);
         setChosenKm(km);
         setLocationOpen(false);
@@ -268,12 +266,21 @@ export function NearbyScreen() {
         setPosts(plans);
         setVenues(places);
         setOffers(openings);
+        setResultOrigin(
+          demoMode
+            ? { kind: "sample" }
+            : {
+                kind: pointLabel === NEAR_YOU ? "saved" : "area",
+                point: point ?? undefined,
+                label: place?.name || pointLabel || "selected area",
+              },
+        );
         setState("ready");
       } catch {
         if (request.current === version) setState("error");
       }
     },
-    [point],
+    [point, pointLabel, place?.name, demoMode],
   );
 
   // A stable function, so it can sit in the focus effect's dependencies.
@@ -294,11 +301,29 @@ export function NearbyScreen() {
     }, [load, refreshMyRequests]),
   );
   const onRefresh = async () => {
+    cardOrigin?.refresh();
     setRefreshing(true);
     await load(true);
     setRefreshing(false);
   };
 
+  // Keep the discovery area intact; the card provider independently measures from the viewer.
+  useEffect(() => {
+    if (!cardOrigin?.device || place) return;
+    if (!point || pointLabel === NEAR_YOU) {
+      setPoint(cardOrigin.device);
+      setPointLabel(NEAR_YOU);
+      setChosenKm((km) => km ?? defaultDistance("me"));
+    }
+  }, [cardOrigin?.device]);
+  const hintOrigin: DistanceOrigin | undefined = resultOrigin
+    ? cardOrigin?.device &&
+      resultOrigin.point &&
+      cardOrigin.device.latitude === resultOrigin.point.latitude &&
+      cardOrigin.device.longitude === resultOrigin.point.longitude
+      ? { ...resultOrigin, kind: "device" }
+      : resultOrigin
+    : undefined;
   const distances = new Map(venues.map((v) => [v.id, v.distanceKm]));
   const excludeAuthorId = profile?.id ?? session?.user.id;
   const plansWithin = (
@@ -409,6 +434,7 @@ export function NearbyScreen() {
         post={post}
         now={now}
         distanceKm={planDistance(post, distances)}
+        distanceOrigin={hintOrigin}
         onPress={() => navigation.navigate("PostDetails", { postId: post.id })}
       />
     </EnterView>
@@ -540,12 +566,22 @@ export function NearbyScreen() {
                 <FeaturedOffers
                   offers={visibleOffers}
                   distances={distances}
+                  distanceOrigin={hintOrigin}
                   now={now}
                   onOpen={(offerId) =>
                     navigation.navigate("OfferDetails", { offerId })
                   }
                   onViewAll={() =>
                     navigation.navigate("AllOffers", {
+                      distanceOrigin: hintOrigin
+                        ? {
+                            kind:
+                              hintOrigin.kind === "device"
+                                ? "saved"
+                                : hintOrigin.kind,
+                            label: hintOrigin.label,
+                          }
+                        : undefined,
                       // Same area as Home: only the venues it is showing.
                       venueIds: point ? areaVenues.map((v) => v.id) : undefined,
                       distances: areaVenues.flatMap((v) =>
@@ -560,6 +596,7 @@ export function NearbyScreen() {
                   posts={startingSoon}
                   now={now}
                   distanceOf={(post) => planDistance(post, distances)}
+                  distanceOrigin={hintOrigin}
                   onOpen={(postId) =>
                     navigation.navigate("PostDetails", { postId })
                   }

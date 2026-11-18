@@ -19,7 +19,9 @@ import { Offer } from "../services/mappers";
 import { colors, typography, weight } from "../theme";
 import { discoverOffers, spotlightOffers } from "../utils/offerDiscovery";
 import { activityArtwork } from "../utils/activityArtwork";
-import { formatDistance } from "../utils/format";
+import { CardLocation } from "./CardLocation";
+import { useCardDistance } from "../store/CardDistanceContext";
+import type { DistanceOrigin } from "../utils/cardDistance";
 import { MotionPressable, PopView } from "./Motion";
 import { LoadingImage } from "./LoadingImage";
 import { ActivityArt } from "./ActivityArt";
@@ -46,11 +48,13 @@ function OfferSlide({
   offer,
   width,
   distanceKm,
+  distanceOrigin,
   onPress,
 }: {
   offer: Offer;
   width: number;
   distanceKm?: number;
+  distanceOrigin?: DistanceOrigin;
   onPress: () => void;
 }) {
   const [failed, setFailed] = useState(false);
@@ -61,10 +65,11 @@ function OfferSlide({
     day: "numeric",
     month: "short",
   });
-  const meta = [
-    offer.title,
-    distanceKm != null ? formatDistance(distanceKm) : `till ${ends}`,
-  ].join(" · ");
+  const distance = useCardDistance(offer.venueId, undefined, {
+    km: distanceKm,
+    origin: distanceOrigin,
+  });
+  const meta = offer.title;
   return (
     <MotionPressable
       onPress={onPress}
@@ -73,7 +78,7 @@ function OfferSlide({
         headline,
         offer.title,
         offer.businessName,
-        distanceKm != null && formatDistance(distanceKm),
+        distance.label,
         `Till ${ends}`,
         mine === "booked"
           ? "You've booked this"
@@ -84,7 +89,7 @@ function OfferSlide({
       ]
         .filter(Boolean)
         .join(". ")}
-      style={[styles.slide, { width, height: Math.round(width * 0.6) }]}
+      style={[styles.slide, { width, minHeight: Math.round(width * 0.6) }]}
     >
       {offer.coverPhotoUrl && !failed ? (
         <LoadingImage
@@ -120,9 +125,10 @@ function OfferSlide({
           <Text style={styles.business} numberOfLines={1}>
             {offer.businessName}
           </Text>
-          <Text style={styles.meta} numberOfLines={1}>
+          <Text style={styles.meta} numberOfLines={2}>
             {meta}
           </Text>
+          <CardLocation distance={distance.label} />
         </View>
         <PopView trigger={mine}>
           <View
@@ -196,12 +202,14 @@ function Dot({ active }: { active: boolean }) {
 export function FeaturedOffers({
   offers,
   distances,
+  distanceOrigin,
   onOpen,
   onViewAll,
   now = new Date(),
 }: {
   offers: Offer[];
   distances?: ReadonlyMap<string, number | undefined>;
+  distanceOrigin?: DistanceOrigin;
   onOpen: (id: string) => void;
   onViewAll: () => void;
   now?: Date;
@@ -330,6 +338,7 @@ export function FeaturedOffers({
                 distanceKm={
                   offer.venueId ? distances?.get(offer.venueId) : undefined
                 }
+                distanceOrigin={distanceOrigin}
                 onPress={() => onOpen(offer.id)}
               />
             ))}
@@ -418,6 +427,8 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     overflow: "hidden",
     backgroundColor: colors.ink,
+    justifyContent: "flex-end",
+    paddingTop: 85,
   },
   fallback: {
     ...StyleSheet.absoluteFillObject,
@@ -443,10 +454,7 @@ const styles = StyleSheet.create({
     ...weight("800"),
   },
   panel: {
-    position: "absolute",
-    left: 10,
-    right: 10,
-    bottom: 10,
+    margin: 10,
     flexDirection: "row",
     alignItems: "center",
     gap: 8,

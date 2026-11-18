@@ -1,3 +1,4 @@
+import type { DistanceOrigin } from "../utils/cardDistance";
 import type { Place } from "../services/places";
 import {
   CompositeNavigationProp,
@@ -60,7 +61,12 @@ export type PersonalStackParamList = SafetyStackParamList & {
   OfferDetails: { offerId: string };
   /** Every live offer in Home's area; distances are [venueId, km] pairs. */
   AllOffers:
-    { venueIds?: string[]; distances?: [string, number][] } | undefined;
+    | {
+        venueIds?: string[];
+        distances?: [string, number][];
+        distanceOrigin?: DistanceOrigin;
+      }
+    | undefined;
   Messages: undefined;
   Conversation: { conversationId: string; title?: string };
   Notifications: undefined;

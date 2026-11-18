@@ -1,3 +1,4 @@
+import { CardDistanceProvider } from "./src/store/CardDistanceContext";
 import { navigationRef } from "./src/navigation/navigationRef";
 import React, { useEffect, useState } from "react";
 import { View, StyleSheet } from "react-native";
@@ -117,11 +118,13 @@ export default function App() {
           <StatusBar style="dark" />
           <ToastProvider>
             <AuthProvider>
-              <AppShell
-                resourcesReady={
-                  !!(fontsLoaded || fontError) && !!(assets || assetError)
-                }
-              />
+              <CardDistanceProvider>
+                <AppShell
+                  resourcesReady={
+                    !!(fontsLoaded || fontError) && !!(assets || assetError)
+                  }
+                />
+              </CardDistanceProvider>
             </AuthProvider>
           </ToastProvider>
           <AppAlertHost />

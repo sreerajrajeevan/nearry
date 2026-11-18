@@ -103,6 +103,7 @@ export function AllOffersScreen({
             <EnterView key={`${category}:${offer.id}`} index={index}>
               <OfferRow
                 offer={offer}
+                distanceOrigin={route.params?.distanceOrigin}
                 distanceKm={
                   offer.venueId ? distances.get(offer.venueId) : undefined
                 }
