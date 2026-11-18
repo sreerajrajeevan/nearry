@@ -242,7 +242,10 @@ export function VenueDetailsScreen({ route, navigation }: VenueDetailsProps) {
           }}
         >
           <View style={styles.sectionHeading}>
-            <Text accessibilityRole="header" style={styles.sectionTitle}>
+            <Text
+              accessibilityRole="header"
+              style={[styles.sectionTitle, styles.headingTitle]}
+            >
               A little opening
             </Text>
             <Text style={styles.count}>{data.offers.length}</Text>
@@ -291,7 +294,10 @@ export function VenueDetailsScreen({ route, navigation }: VenueDetailsProps) {
           }}
         >
           <View style={styles.sectionHeading}>
-            <Text accessibilityRole="header" style={styles.sectionTitle}>
+            <Text
+              accessibilityRole="header"
+              style={[styles.sectionTitle, styles.headingTitle]}
+            >
               People making plans
             </Text>
             <Text style={styles.count}>{data.posts.length}</Text>
@@ -346,20 +352,22 @@ export function VenueDetailsScreen({ route, navigation }: VenueDetailsProps) {
             Venue photos are unavailable right now.
           </Text>
         )}
-        <SafetyActions
-          target={{
-            kind: "venue",
-            id: venue.id,
-            userId: venue.businessId,
-            name: venue.name,
-          }}
-          onReport={() =>
-            navigation.navigate("Report", {
-              target: { kind: "venue", id: venue.id, name: venue.name },
-            })
-          }
-          onBlocked={() => navigation.goBack()}
-        />
+        <View style={styles.safetyWrap}>
+          <SafetyActions
+            target={{
+              kind: "venue",
+              id: venue.id,
+              userId: venue.businessId,
+              name: venue.name,
+            }}
+            onReport={() =>
+              navigation.navigate("Report", {
+                target: { kind: "venue", id: venue.id, name: venue.name },
+              })
+            }
+            onBlocked={() => navigation.goBack()}
+          />
+        </View>
       </ScrollView>
       <View style={styles.footer}>
         <View style={styles.footerCopy}>
@@ -507,10 +515,12 @@ const styles = StyleSheet.create({
   section: { paddingHorizontal: 24, marginBottom: 28 },
   sectionHeading: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "baseline",
     gap: 10,
     marginBottom: 14,
   },
+  headingTitle: { marginBottom: 0 },
+  safetyWrap: { paddingHorizontal: 24 },
   sectionTitle: {
     ...typography.heading,
     fontSize: 19,
@@ -518,7 +528,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     flexShrink: 1,
   },
-  count: { ...typography.caption, color: colors.accent, marginBottom: 8 },
+  count: { ...typography.caption, color: colors.accent },
   amenityGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
