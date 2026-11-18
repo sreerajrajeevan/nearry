@@ -22,20 +22,55 @@ type BundleRow = {
   status: PlanOfferBundle["status"];
   hold_expires_at: string | null;
 };
-const mapBundle = (row: BundleRow): PlanOfferBundle => ({
-  planTitle: row.plan_title,
-  postId: row.post_id,
-  bookingId: row.booking_id ?? undefined,
-  businessName: row.business_name,
-  offerTitle: row.offer_title,
-  venueName: row.venue_name,
-  startsAt: row.starts_at,
-  endsAt: row.ends_at,
-  partySize: row.party_size,
-  priceCents: row.price_cents,
-  status: row.status,
-  holdExpiresAt: row.hold_expires_at ?? undefined,
-});
+const reservationResponseError = () =>
+  new Error(
+    "Could not read the venue reservation. Please retry before joining.",
+  );
+const validTimestamp = (value: unknown): value is string =>
+  typeof value === "string" && Number.isFinite(Date.parse(value));
+function isBundleRow(value: unknown): value is BundleRow {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const row = value as Partial<BundleRow>;
+  return (
+    typeof row.post_id === "string" &&
+    !!row.post_id.trim() &&
+    [row.plan_title, row.business_name, row.offer_title, row.venue_name].every(
+      (text) => typeof text === "string",
+    ) &&
+    (row.booking_id === null ||
+      (typeof row.booking_id === "string" && !!row.booking_id.trim())) &&
+    validTimestamp(row.starts_at) &&
+    validTimestamp(row.ends_at) &&
+    Date.parse(row.ends_at) > Date.parse(row.starts_at) &&
+    typeof row.party_size === "number" &&
+    Number.isInteger(row.party_size) &&
+    row.party_size >= 2 &&
+    row.party_size <= 50 &&
+    typeof row.price_cents === "number" &&
+    Number.isInteger(row.price_cents) &&
+    row.price_cents >= 0 &&
+    row.price_cents * row.party_size <= 100_000_000 &&
+    ["pending", "confirmed", "cancelled"].includes(row.status ?? "") &&
+    (row.hold_expires_at == null || validTimestamp(row.hold_expires_at))
+  );
+}
+function mapBundle(row: unknown): PlanOfferBundle {
+  if (!isBundleRow(row)) throw reservationResponseError();
+  return {
+    planTitle: row.plan_title,
+    postId: row.post_id,
+    bookingId: row.booking_id ?? undefined,
+    businessName: row.business_name,
+    offerTitle: row.offer_title,
+    venueName: row.venue_name,
+    startsAt: row.starts_at,
+    endsAt: row.ends_at,
+    partySize: row.party_size,
+    priceCents: row.price_cents,
+    status: row.status,
+    holdExpiresAt: row.hold_expires_at ?? undefined,
+  };
+}
 // An older backend is supported when the additive migration has not been applied.
 const migrationMissing = (error: { code?: string }) =>
   error.code === "PGRST205" || error.code === "42P01";
@@ -67,7 +102,7 @@ export async function getPlanOfferBundle(
     throw new Error(
       "Could not check the venue reservation. Please retry before joining.",
     );
-  return data ? mapBundle(data as BundleRow) : null;
+  return data == null ? null : mapBundle(data);
 }
 
 export async function listBookingPlanBundles(
@@ -82,7 +117,9 @@ export async function listBookingPlanBundles(
       .in("booking_id", bookingIds.slice(start, start + 100));
     if (error && migrationMissing(error)) return [];
     if (error) throw new Error(error.message);
-    result.push(...((data ?? []) as BundleRow[]).map(mapBundle));
+    const rows: unknown = data ?? [];
+    if (!Array.isArray(rows)) throw reservationResponseError();
+    result.push(...rows.map(mapBundle));
   }
   return result;
 }
@@ -114,9 +151,9 @@ export async function createPlanOfferBundle(
     },
   );
   if (error) throw new Error(error.message);
-  if (!data?.post_id)
+  if (typeof data?.post_id !== "string" || !data.post_id.trim())
     throw new Error(
       "Could not confirm publication. Retry to check the same request.",
     );
-  return data.post_id as string;
+  return data.post_id;
 }

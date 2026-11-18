@@ -100,6 +100,9 @@ const originalFetch = globalThis.fetch;
 const calls: { url: URL; body: any }[] = [];
 let response: any = null;
 let status = 200;
+let networkFailure = false;
+let replies: { data: unknown; status?: number }[] = [];
+let bookingsApi: typeof import("../src/services/bookings");
 let api: typeof import("../src/services/planOfferBundles");
 before(async () => {
   process.env.EXPO_PUBLIC_PLAN_OFFER_BUNDLES = "true";
@@ -113,17 +116,22 @@ before(async () => {
       url,
       body: typeof init?.body === "string" ? JSON.parse(init.body) : undefined,
     });
-    return new Response(JSON.stringify(response), {
-      status,
+    if (networkFailure) throw new TypeError("Network request failed");
+    const reply = replies.shift() ?? { data: response, status };
+    return new Response(JSON.stringify(reply.data), {
+      status: reply.status ?? 200,
       headers: { "Content-Type": "application/json" },
     });
   }) as typeof fetch;
   api = await import("../src/services/planOfferBundles");
+  bookingsApi = await import("../src/services/bookings");
 });
 beforeEach(() => {
   calls.length = 0;
   response = null;
   status = 200;
+  networkFailure = false;
+  replies = [];
 });
 after(() => {
   globalThis.fetch = originalFetch;
@@ -184,4 +192,169 @@ test("booking metadata uses bounded batches and never asks for private retry pay
         !call.url.searchParams.get("select")?.includes("request_payload"),
     ),
   );
+});
+
+const validRow = {
+  post_id: "plan",
+  plan_title: "Badminton",
+  booking_id: "booking",
+  business_name: "Arena",
+  offer_title: "Court offer",
+  venue_name: "Arena Court 1",
+  starts_at: bundle.startsAt,
+  ends_at: bundle.endsAt,
+  party_size: 4,
+  price_cents: 15000,
+  status: "pending",
+  hold_expires_at: bundle.holdExpiresAt,
+};
+
+test("reservation responses reject malformed fields before they reach render", async () => {
+  response = validRow;
+  assert.equal(
+    (await api.getPlanOfferBundle("plan"))?.offerTitle,
+    "Court offer",
+  );
+  for (const bad of [
+    {},
+    { ...validRow, business_name: { private: "bad" } },
+    { ...validRow, status: "unknown" },
+    { ...validRow, starts_at: "not-a-date" },
+    { ...validRow, ends_at: validRow.starts_at },
+    { ...validRow, party_size: 0 },
+    { ...validRow, party_size: 51 },
+    { ...validRow, price_cents: -1 },
+    { ...validRow, price_cents: 25_000_001 },
+    { ...validRow, booking_id: {} },
+    { ...validRow, hold_expires_at: "not-a-date" },
+  ]) {
+    response = bad;
+    await assert.rejects(api.getPlanOfferBundle("plan"), /reservation.*retry/i);
+  }
+  response = [];
+  assert.equal(await api.getPlanOfferBundle("ordinary-plan"), null);
+  response = {
+    ...validRow,
+    status: "cancelled",
+    booking_id: null,
+    hold_expires_at: null,
+  };
+  assert.equal(
+    bundleStatus((await api.getPlanOfferBundle("plan"))!),
+    "cancelled",
+  );
+});
+
+test("slot responses reject invalid lists, missing rows and impossible capacity before rendering", async () => {
+  const slot = {
+    id: "slot",
+    starts_at: bundle.startsAt,
+    ends_at: bundle.endsAt,
+    capacity: 5,
+    seats_left: 5,
+  };
+  response = [slot];
+  assert.deepEqual(await bookingsApi.listOfferSlots("offer"), [slot]);
+  for (const bad of [
+    { rows: [slot] },
+    [null],
+    [{}],
+    [{ ...slot, capacity: -1 }],
+    [{ ...slot, seats_left: 6 }],
+    [{ ...slot, seats_left: 1.5 }],
+    [{ ...slot, starts_at: "broken" }],
+    [{ ...slot, ends_at: slot.starts_at }],
+  ]) {
+    response = bad;
+    await assert.rejects(bookingsApi.listOfferSlots("offer"), /slots.*retry/i);
+  }
+  response = [];
+  assert.deepEqual(await bookingsApi.listOfferSlots("offer"), []);
+});
+
+test("unexpected publication responses cannot become invalid navigation IDs", async () => {
+  const input = {
+    title: "Badminton",
+    description: "A friendly group game",
+    startsAt: bundle.startsAt,
+    vacancies: 3,
+    tags: [],
+  };
+  for (const data of [
+    null,
+    {},
+    { post_id: {} },
+    { post_id: [] },
+    { post_id: "" },
+    { post_id: 42 },
+  ]) {
+    response = data;
+    await assert.rejects(
+      api.createPlanOfferBundle("slot", input, "retry-key", 15000),
+      /Retry to check the same request/,
+    );
+  }
+});
+
+test("a lost response and service outage can retry the same publication key", async () => {
+  const input = {
+    title: "Badminton",
+    description: "A friendly group game",
+    startsAt: bundle.startsAt,
+    vacancies: 3,
+    tags: [],
+  };
+  networkFailure = true;
+  await assert.rejects(
+    api.createPlanOfferBundle("slot", input, "same-request", 15000),
+  );
+  networkFailure = false;
+  status = 503;
+  response = { message: "Temporarily unavailable" };
+  await assert.rejects(
+    api.createPlanOfferBundle("slot", input, "same-request", 15000),
+  );
+  status = 200;
+  response = { post_id: "saved-plan", booking_id: "saved-booking" };
+  assert.equal(
+    await api.createPlanOfferBundle("slot", input, "same-request", 15000),
+    "saved-plan",
+  );
+  assert.ok(calls.every((call) => call.body.p_client_key === "same-request"));
+});
+
+test("a failed metadata batch returns an error rather than partial reservation context", async () => {
+  replies = [
+    { data: [validRow] },
+    { data: { code: "42501", message: "Denied" }, status: 403 },
+  ];
+  await assert.rejects(
+    api.listBookingPlanBundles(
+      Array.from({ length: 101 }, (_, i) => `booking-${i}`),
+    ),
+    /Denied/,
+  );
+  assert.equal(calls.length, 2);
+  response = [null];
+  await assert.rejects(
+    api.listBookingPlanBundles(["booking"]),
+    /reservation.*retry/i,
+  );
+});
+
+test("invalid hold times and malformed slots fail closed instead of throwing during render", () => {
+  assert.equal(
+    bundleStatus({ ...bundle, holdExpiresAt: "broken" }, now),
+    "expired",
+  );
+  for (const slot of [
+    null,
+    undefined,
+    {},
+    { starts_at: "broken", capacity: 5, seats_left: 5 },
+    { starts_at: bundle.startsAt, capacity: 5.5, seats_left: 5.5 },
+    { starts_at: bundle.startsAt, capacity: 0, seats_left: 0 },
+  ]) {
+    assert.equal(bundleSlotAvailable(slot as any, 4, now), false);
+  }
 });

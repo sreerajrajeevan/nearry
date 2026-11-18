@@ -61,9 +61,12 @@ feature activation, Play deployment, or merge is part of this PR.
 
 ## Verification
 
-Run `npm run sql:check`, `npm run typecheck`, and `npm test`. The database suite
-runs migrations in a disposable database; use `TEST_DATABASE_URL` pointing only
-to a database named `nearry_test` for real PostgreSQL/PostGIS concurrency tests.
+Run `npm run sql:check`, `npm run typecheck`, and `npm test`. The tests cover malformed reservation/slot responses, retry after a connection failure,
+invalid publication IDs, empty and partially booked slots, cancelled/expired holds,
+changed age/gender eligibility, 50-person and price boundaries, and simultaneous
+last-spot approvals. Invalid read data produces a retry state before rendering.
+The database suite runs migrations in a disposable database; use
+`TEST_DATABASE_URL` pointing only to a database named `nearry_test` for real PostgreSQL/PostGIS concurrency tests.
 
 Phone staging checklist: attach/remove an offer; retry failed loading; select a
 slot; reject a group larger than capacity; verify venue/time/price fill; publish

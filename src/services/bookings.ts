@@ -1,3 +1,5 @@
+import { isAvailableSlot, type AvailableSlot } from "../utils/bookingSlots";
+export type { AvailableSlot } from "../utils/bookingSlots";
 import { listBookingPlanBundles } from "./planOfferBundles";
 import { assertLive } from "./demoGuard";
 import { getSupabase, isSupabaseConfigured, isDemoMode } from "./supabase";
@@ -250,13 +252,6 @@ function friendlyBookingError(message: string): string {
   return message;
 }
 
-export type AvailableSlot = {
-  id: string;
-  starts_at: string;
-  ends_at: string;
-  capacity: number;
-  seats_left: number;
-};
 export async function listOfferSlots(
   offerId: string,
 ): Promise<AvailableSlot[]> {
@@ -297,5 +292,8 @@ export async function listOfferSlots(
     p_offer_id: offerId,
   });
   if (error) throw new Error(error.message);
-  return data ?? [];
+  const slots: unknown = data ?? [];
+  if (!Array.isArray(slots) || !slots.every(isAvailableSlot))
+    throw new Error("Could not load available slots. Please retry.");
+  return slots;
 }
