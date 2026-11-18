@@ -2,7 +2,8 @@ import { GOOGLE_SIGN_IN_PARAMS } from "../utils/emailSignIn";
 import * as WebBrowser from "expo-web-browser";
 import * as Linking from "expo-linking";
 import { Platform } from "react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { rememberPendingRole } from "./pendingRole";
+import { sameOAuthRoute } from "../utils/oauthRoute";
 import { requireSupabase } from "./supabase";
 import { AccountType } from "../navigation/types";
 
@@ -47,7 +48,7 @@ export async function signInWithGoogle(
   if (error) throw new Error(friendlyAuthError(error.message));
   if (!data.url) throw new Error("Could not start Google sign-in.");
 
-  await AsyncStorage.setItem("nearry.pendingRole", accountType);
+  await rememberPendingRole(accountType);
   if (Platform.OS === "web") {
     window.location.assign(data.url);
     return "";
@@ -66,7 +67,7 @@ export async function completeOAuthCallback(
   url: string,
 ): Promise<string | null> {
   const expected = Linking.createURL("auth/callback").split("?")[0];
-  if (url.split("?")[0].split("#")[0] !== expected) return null;
+  if (!sameOAuthRoute(url, expected)) return null;
   const detail =
     extractParam(url, "error_description") || extractParam(url, "error");
   if (detail) {

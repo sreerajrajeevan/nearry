@@ -3,6 +3,7 @@ import { getSupabase, isSupabaseConfigured, isDemoMode } from "./supabase";
 import { multiplexSubscribe } from "./realtime";
 import { mockBookings, mockOffers } from "../data/mock";
 import { Booking, DbBooking, toBooking } from "./mappers";
+import { Cursor, Page } from "../utils/pagination";
 
 const useMock = () => {
   if (isDemoMode()) return true;
@@ -31,7 +32,85 @@ const holdsPlace = (b: Booking, now = Date.now()) =>
     (b.status === "pending" &&
       (!b.holdExpiresAt || new Date(b.holdExpiresAt).getTime() > now)));
 const sameLocalDay = (a: string, b: string) =>
-  new Date(a).toDateString() === new Date(b).toDateString();
+  new Date(a).toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" }) ===
+  new Date(b).toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+
+export type BookingFilter =
+  "UPCOMING" | "ALL" | "PENDING" | "CONFIRMED" | "CANCELLED" | "EXPIRED";
+export async function listBusinessBookingsPage(
+  businessId: string,
+  filter: BookingFilter = "UPCOMING",
+  cursor: Cursor | null = null,
+): Promise<Page<Booking>> {
+  const now = new Date().toISOString(),
+    descending = filter !== "UPCOMING" && filter !== "PENDING";
+  if (useMock()) {
+    const all = mockBookings
+      .filter((b) =>
+        filter === "ALL" || filter === "UPCOMING"
+          ? filter === "ALL" || holdsPlace(b)
+          : filter === "EXPIRED"
+            ? b.status === "pending" && !holdsPlace(b)
+            : b.status === filter.toLowerCase() &&
+              (filter !== "PENDING" || holdsPlace(b)),
+      )
+      .sort(
+        (a, b) =>
+          (a.slot.localeCompare(b.slot) || a.id.localeCompare(b.id)) *
+          (descending ? -1 : 1),
+      );
+    const start = cursor ? all.findIndex((b) => b.id === cursor.id) + 1 : 0,
+      items = all.slice(start, start + 30),
+      last = items.at(-1);
+    return {
+      items,
+      cursor:
+        start + items.length < all.length && last
+          ? { at: last.slot, id: last.id }
+          : null,
+    };
+  }
+  let req = getSupabase()!
+    .from("business_bookings")
+    .select("*")
+    .eq("business_id", businessId)
+    .order("slot", { ascending: !descending })
+    .order("id", { ascending: !descending })
+    .limit(31);
+  if (filter === "UPCOMING" || filter === "PENDING")
+    req = req
+      .gt("slot", now)
+      .or(
+        `status.eq.confirmed,and(status.eq.pending,or(hold_expires_at.is.null,hold_expires_at.gt.${now}))`,
+      );
+  if (filter === "PENDING") req = req.eq("status", "pending");
+  else if (filter === "EXPIRED")
+    req = req.or(
+      `and(status.eq.pending,or(slot.lte.${now},hold_expires_at.lte.${now}))`,
+    );
+  else if (filter !== "UPCOMING" && filter !== "ALL")
+    req = req.eq("status", filter.toLowerCase());
+  if (cursor) {
+    if (
+      !/^[0-9a-f-]{36}$/i.test(cursor.id) ||
+      !Number.isFinite(Date.parse(cursor.at))
+    )
+      throw new Error("Please refresh bookings.");
+    const op = descending ? "lt" : "gt";
+    req = req.or(
+      `slot.${op}.${cursor.at},and(slot.eq.${cursor.at},id.${op}.${cursor.id})`,
+    );
+  }
+  const { data, error } = await req;
+  if (error) throw new Error(error.message);
+  const items = (data ?? []).slice(0, 30).map(fromView),
+    last = items.at(-1);
+  return {
+    items,
+    cursor:
+      (data?.length ?? 0) > 30 && last ? { at: last.slot, id: last.id } : null,
+  };
+}
 
 /**
  * Book seats in the selected business-defined slot. book_offer_slot() locks the offer row,
@@ -149,7 +228,9 @@ export async function listBookingsForBusiness(
     .from("business_bookings")
     .select("*")
     .eq("business_id", businessId)
-    .order("slot", { ascending: true });
+    .gte("slot", new Date(new Date().setHours(0, 0, 0, 0)).toISOString())
+    .order("slot", { ascending: true })
+    .limit(80);
   if (error) throw new Error(error.message);
   return ((data ?? []) as Record<string, unknown>[]).map(fromView);
 }
@@ -280,4 +361,113 @@ export async function listOfferSlots(
   });
   if (error) throw new Error(error.message);
   return data ?? [];
+}
+
+export async function listMyBookingsPage(
+  customerId: string,
+  history = false,
+  cursor: Cursor | null = null,
+): Promise<Page<Booking>> {
+  const now = new Date().toISOString();
+  if (useMock()) {
+    const all = (await listMyBookings(customerId))
+      .filter((b) => !holdsPlace(b) === history)
+      .sort((a, b) => b.slot.localeCompare(a.slot) || b.id.localeCompare(a.id));
+    const start = cursor ? all.findIndex((b) => b.id === cursor.id) + 1 : 0,
+      items = all.slice(start, start + 30),
+      last = items.at(-1);
+    return {
+      items,
+      cursor:
+        start + items.length < all.length && last
+          ? { at: last.slot, id: last.id }
+          : null,
+    };
+  }
+  let req = getSupabase()!
+    .from("bookings")
+    .select("*,offer:offers!bookings_offer_id_fkey(title,business_id)")
+    .eq("customer_id", customerId)
+    .order("slot", { ascending: !history })
+    .order("id", { ascending: !history })
+    .limit(31);
+  req = history
+    ? req.or(
+        "status.eq.cancelled,slot.lte." +
+          now +
+          ",and(status.eq.pending,hold_expires_at.lte." +
+          now +
+          ")",
+      )
+    : req
+        .gt("slot", now)
+        .or(
+          "status.eq.confirmed,and(status.eq.pending,or(hold_expires_at.is.null,hold_expires_at.gt." +
+            now +
+            "))",
+        );
+  if (cursor) {
+    if (
+      !/^[0-9a-f-]{36}$/i.test(cursor.id) ||
+      !Number.isFinite(Date.parse(cursor.at))
+    )
+      throw new Error("Please refresh bookings.");
+    const op = history ? "lt" : "gt";
+    req = req.or(
+      "slot." +
+        op +
+        "." +
+        cursor.at +
+        ",and(slot.eq." +
+        cursor.at +
+        ",id." +
+        op +
+        "." +
+        cursor.id +
+        ")",
+    );
+  }
+  const { data, error } = await req;
+  if (error) throw new Error(error.message);
+  const items = (data ?? []).slice(0, 30).map((row) =>
+      toBooking({
+        ...(row as unknown as DbBooking),
+        business_id: row.offer?.business_id,
+        offer: { title: row.offer?.title ?? "Offer" },
+        customer: { display_name: "You" },
+      }),
+    ),
+    last = items.at(-1);
+  return {
+    items,
+    cursor:
+      (data?.length ?? 0) > 30 && last ? { at: last.slot, id: last.id } : null,
+  };
+}
+export async function businessDaySummary() {
+  const now = new Date(),
+    from = new Date(now.getFullYear(), now.getMonth(), now.getDate()),
+    until = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+  if (useMock()) {
+    const { businessDay } = await import("../utils/businessDay");
+    const day = businessDay(mockBookings, mockOffers, now);
+    return {
+      today: day.today.length,
+      waiting: day.today.filter((b) => b.status === "pending" && holdsPlace(b))
+        .length,
+      liveOffers: day.liveOffers.length,
+      drafts: day.drafts.length,
+    };
+  }
+  const { data, error } = await getSupabase()!.rpc("business_day_summary", {
+    p_from: from.toISOString(),
+    p_until: until.toISOString(),
+  });
+  if (error) throw new Error("Could not load today's totals.");
+  return data as {
+    today: number;
+    waiting: number;
+    liveOffers: number;
+    drafts: number;
+  };
 }

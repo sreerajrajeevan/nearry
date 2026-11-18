@@ -24,7 +24,7 @@ For a native Google login test, use a development/standalone build with the `nea
 
 ## Backend installation / upgrade
 
-Follow [migration instructions](supabase/migrations/README.md). New installs use migrations `00001`–`00025`; existing installations apply only missing migrations. `run-all.sql` is fresh-database-only and refuses to run when profiles already exist. No production database is automatically modified by the application or CI.
+Follow [migration instructions](supabase/migrations/README.md). New installs use the current generated `supabase/run-all.sql` or every migration file in lexicographic filename order; existing installations apply only missing migrations. `run-all.sql` is fresh-database-only and refuses to run when profiles already exist. No production database is automatically modified by the application or CI.
 
 Migrations `00011`–`00018` introduce required RPCs, so deploy migrations and the matching app version together. Older app versions relying on raw join/booking writes will need to update.
 
@@ -110,7 +110,7 @@ See the [core journey changes and phone checklist](docs/core-journey-checklist.m
 
 See [audit scope, fixes, and remaining live checks](docs/backend-audit.md). Offer editing/publishing/cancellation now uses `update_offer`; cancelling an offer also cancels its future reservations. Customers keep the offer context in booking history. Chat loads the newest 200 visible messages, discards stale reloads after sends, and acknowledges only displayed messages while the conversation is focused. Older-message pagination remains future work.
 
-Search treats punctuation and pattern characters as literal text, and keeps expiry and text conditions together. Optional post fields can be explicitly cleared. Badges refresh after local read actions; chat and notification lists refresh on incoming events and app resume. Remote push is owned by the server worker, avoiding duplicate local banners from the same database event.
+Search treats punctuation and pattern characters as literal text, and keeps expiry and text conditions together. Optional post fields can be explicitly cleared; edits must retain a valid meeting place. Badges refresh after local read actions; chat and notification lists refresh on incoming events and app resume. Remote push is owned by the server worker, avoiding duplicate local banners from the same database event.
 
 ## Dependency maintenance
 
@@ -152,3 +152,5 @@ Personal members can submit a private camera selfie from Profile. Review it in t
 Admin dashboard: see [account controls, safety rules and deployment](docs/admin-account-controls.md).
 
 Personal Create Plan and private plan groups: see [flow, migration and phone checks](docs/create-plan-and-groups.md). Apply migration 00036 before installing the new app build.
+
+See [November review fixes, rollout and validation limits](docs/review-fix-tracker.md) for the reliability and scaling update.

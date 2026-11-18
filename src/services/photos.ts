@@ -1,7 +1,9 @@
 import { assertLive } from "./demoGuard";
 import * as ImagePicker from "expo-image-picker";
 import * as FileSystem from "expo-file-system/legacy";
-import { Platform } from "react-native";
+import * as ImageManipulator from "expo-image-manipulator";
+import { withDeadline } from "../utils/deadline";
+import { Image, Platform } from "react-native";
 import { getSupabase, isDemoMode } from "./supabase";
 import { imageBytesFromBase64 } from "../utils/imageBytes";
 import { MAX_PHOTO_BYTES, uploadPhotoBytes } from "./photoStorage";
@@ -86,23 +88,95 @@ export async function uploadPhoto(
   } = await supabase.auth.getSession();
   if (!session || session.user.id !== userId)
     throw new Error("Sign in again to upload photos.");
-  let bytes: Uint8Array;
-  if (Platform.OS === "web") {
-    const response = await fetch(localUri);
-    if (!response.ok)
-      throw new Error("Could not read this photo. Please choose it again.");
-    bytes = new Uint8Array(await response.arrayBuffer());
-  } else {
-    const info = await FileSystem.getInfoAsync(localUri);
-    if (info.exists && info.size > MAX_PHOTO_BYTES)
+  const size = await withDeadline(
+    new Promise<{ width: number; height: number }>((resolve, reject) =>
+      Image.getSize(
+        localUri,
+        (width, height) => resolve({ width, height }),
+        reject,
+      ),
+    ),
+    10_000,
+    "Could not read this photo. Please choose it again.",
+  );
+  const resize = (max: number) =>
+    Math.max(size.width, size.height) > max
+      ? [
+          {
+            resize:
+              size.width >= size.height ? { width: max } : { height: max },
+          },
+        ]
+      : [];
+  const normalized = await withDeadline(
+    ImageManipulator.manipulateAsync(localUri, resize(1600), {
+      compress: 0.82,
+      format: ImageManipulator.SaveFormat.JPEG,
+    }),
+    30_000,
+    "Could not prepare this photo. Try a smaller image.",
+  );
+  let thumbnail: { uri: string } | undefined;
+  const read = async (uri: string) => {
+    if (Platform.OS === "web") {
+      const response = await withDeadline(
+        fetch(uri),
+        10_000,
+        "Could not read this photo.",
+      );
+      if (!response.ok) throw new Error("Choose the photo again.");
+      return new Uint8Array(
+        await withDeadline(
+          response.arrayBuffer(),
+          10_000,
+          "Could not read this photo.",
+        ),
+      );
+    }
+    const info = await FileSystem.getInfoAsync(uri);
+    if (!info.exists || info.size > MAX_PHOTO_BYTES)
       throw new Error("Choose a photo smaller than 10 MB.");
-    bytes = imageBytesFromBase64(
-      await FileSystem.readAsStringAsync(localUri, {
-        encoding: FileSystem.EncodingType.Base64,
-      }),
+    return imageBytesFromBase64(
+      await withDeadline(
+        FileSystem.readAsStringAsync(uri, {
+          encoding: FileSystem.EncodingType.Base64,
+        }),
+        10_000,
+        "Could not read this photo.",
+      ),
     );
+  };
+  try {
+    thumbnail = await withDeadline(
+      ImageManipulator.manipulateAsync(
+        normalized.uri,
+        [
+          {
+            resize:
+              normalized.width >= normalized.height
+                ? { width: Math.min(640, normalized.width) }
+                : { height: Math.min(640, normalized.height) },
+          },
+        ],
+        { compress: 0.76, format: ImageManipulator.SaveFormat.JPEG },
+      ),
+      20_000,
+      "Could not prepare this photo.",
+    );
+    return await uploadPhotoBytes(
+      userId,
+      await read(normalized.uri),
+      folder,
+      await read(thumbnail.uri),
+    );
+  } finally {
+    if (Platform.OS !== "web")
+      for (const uri of new Set([normalized.uri, thumbnail?.uri]))
+        if (uri && uri !== localUri)
+          void FileSystem.deleteAsync(uri, { idempotent: true }).catch(
+            () => {},
+          );
   }
-  return uploadPhotoBytes(userId, bytes, folder);
 }
 
 async function table(tableName: "venue_photos" | "post_photos") {

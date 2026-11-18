@@ -1,3 +1,4 @@
+import { AppErrorBoundary } from "../components/AppErrorBoundary";
 import { SelfieVerificationScreen } from "../screens/personal/SelfieVerificationScreen";
 import { MyRequestsProvider } from "../store/MyRequestsContext";
 import { AllOffersScreen } from "../screens/personal/AllOffersScreen";
@@ -42,6 +43,9 @@ export function PersonalStack() {
     <SavedPlansProvider>
       <MyRequestsProvider>
         <Stack.Navigator
+          screenLayout={({ children }) => (
+            <AppErrorBoundary>{children}</AppErrorBoundary>
+          )}
           screenOptions={{
             headerShown: false,
             contentStyle: { backgroundColor: colors.background },

@@ -408,16 +408,31 @@ export function createAdminConsoleHandler(
           !["all", "suspended", "deletion", "active"].includes(filter)
         )
           return json({ error: "Invalid filter" }, 400, origin);
-        return json(
-          await list(db, payload.section, offset, filter),
-          200,
-          origin,
-        );
+        const rows = await list(db, payload.section, offset, filter);
+        if (["accounts", "business", "selfies"].includes(payload.section))
+          checked(
+            await db.from("admin_console_audit").insert({
+              actor_id: user.id,
+              action: "list:" + payload.section,
+              target_id: null,
+              note: "page " + offset,
+            }),
+          );
+        return json(rows, 200, origin);
       }
       if (payload.action === "account") {
         if (!UUID.test(payload.id ?? ""))
           return json({ error: "Invalid account" }, 400, origin);
-        return json(await accountDetail(payload.id), 200, origin);
+        const detail = await accountDetail(payload.id);
+        checked(
+          await db.from("admin_console_audit").insert({
+            actor_id: user.id,
+            action: "account:view",
+            target_id: payload.id,
+            note: null,
+          }),
+        );
+        return json(detail, 200, origin);
       }
       if (payload.action === "report") {
         if (!UUID.test(payload.id ?? ""))
@@ -440,6 +455,14 @@ export function createAdminConsoleHandler(
           return json({ error: "Invalid review ID" }, 400, origin);
         if (payload.kind === "selfie") {
           const { review, avatarUrl } = await selfieComparison(payload.id);
+          checked(
+            await db.from("admin_console_audit").insert({
+              actor_id: user.id,
+              action: "proof:view-selfie",
+              target_id: payload.id,
+              note: null,
+            }),
+          );
           const signed = checked<any>(
             await db.storage
               .from("selfie_proofs")
@@ -481,6 +504,14 @@ export function createAdminConsoleHandler(
           !review.document_path.startsWith(review.user_id + "/")
         )
           return json({ error: "Review unavailable" }, 404, origin);
+        checked(
+          await db.from("admin_console_audit").insert({
+            actor_id: user.id,
+            action: "proof:view-business",
+            target_id: payload.id,
+            note: null,
+          }),
+        );
         const signed = checked<any>(
           await db.storage
             .from("verification_docs")

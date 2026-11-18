@@ -1,3 +1,4 @@
+import { createSignInFetch } from "./signInTransport";
 import { assertLive } from "./demoGuard";
 import * as ImagePicker from "expo-image-picker";
 import * as ImageManipulator from "expo-image-manipulator";
@@ -52,7 +53,7 @@ export async function uploadAvatar(
     } as any);
 
     const path = `${userId}/avatar-${Crypto.randomUUID()}.jpg`;
-    const response = await fetch(
+    const response = await createSignInFetch(SUPABASE_URL)(
       `${SUPABASE_URL}/storage/v1/object/avatars/${path}`,
       {
         method: "POST",

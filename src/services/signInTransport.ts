@@ -1,4 +1,5 @@
-/** Bound sign-in/profile reads so a stalled connection cannot leave buttons busy forever. */
+import { reportBackendFailure } from "./diagnostics";
+/** Bound backend reads/writes so a stalled connection cannot leave buttons busy forever. */
 export function createSignInFetch(
   baseUrl: string,
   fetcher: typeof fetch = (...args) => fetch(...args),
@@ -9,16 +10,12 @@ export function createSignInFetch(
     const address = new URL(
       typeof input === "string" || input instanceof URL ? input : input.url,
     );
-    if (
-      address.origin !== origin ||
-      !(
-        address.pathname.startsWith("/auth/v1/") ||
-        address.pathname === "/rest/v1/rpc/get_my_profile" ||
-        address.pathname === "/rest/v1/rpc/select_account_type" ||
-        address.pathname === "/rest/v1/rpc/finish_personal_onboarding"
-      )
-    )
-      return fetcher(input, init);
+    if (address.origin !== origin) return fetcher(input, init);
+    const deadlineMs = address.pathname.startsWith("/storage/v1/")
+      ? timeoutMs * 3
+      : address.pathname.endsWith("/logout")
+        ? Math.min(timeoutMs, 5_000)
+        : timeoutMs;
     const controller = new AbortController();
     const upstream =
       init?.signal ??
@@ -31,6 +28,7 @@ export function createSignInFetch(
     let timer: ReturnType<typeof setTimeout> | undefined;
     const deadline = new Promise<never>((_, reject) => {
       timer = setTimeout(() => {
+        reportBackendFailure("timeout");
         // Reject first: a fetch abort may otherwise obscure the useful timeout message.
         reject(
           new Error(
@@ -38,15 +36,18 @@ export function createSignInFetch(
           ),
         );
         controller.abort();
-      }, timeoutMs);
+      }, deadlineMs);
     });
     const request = (async () => {
       const response = await fetcher(input, {
         ...init,
         signal: controller.signal,
       });
+      if (response.status >= 500) reportBackendFailure("server");
       // Include a stalled response body in the deadline, not just its headers.
-      const body = await response.text();
+      const body = address.pathname.startsWith("/storage/v1/")
+        ? await response.arrayBuffer()
+        : await response.text();
       return new Response(
         [204, 205, 304].includes(response.status) ? null : body,
         {

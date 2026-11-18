@@ -46,7 +46,7 @@ function base64ToBytes(b64: string): Uint8Array {
 export async function submitVerificationDoc(
   businessId: string,
   venue: BusinessVenueSubmission,
-): Promise<string> {
+): Promise<string | null> {
   assertLive("submit verification");
   if (useMock()) throw new Error("Verification needs the backend configured.");
   const validation = businessVenueError(venue);
@@ -56,8 +56,7 @@ export async function submitVerificationDoc(
     mediaTypes: ["images"],
     quality: 0.7,
   });
-  if (picked.canceled || !picked.assets[0])
-    throw new Error("No document selected.");
+  if (picked.canceled || !picked.assets[0]) return null;
   const uri = picked.assets[0].uri;
 
   let bytes: Uint8Array;

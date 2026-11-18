@@ -236,7 +236,11 @@ export async function markPlanGroupRead(
     });
   notifyUnreadChanged();
 }
-export function subscribeToPlanGroup(id: string, onChange: () => void) {
+export function subscribeToPlanGroup(
+  id: string,
+  onChange: () => void,
+  postId?: string,
+) {
   if (isDemoMode()) return () => {};
   const messages = multiplexSubscribe(
     "plan-group-" + id,
@@ -253,7 +257,23 @@ export function subscribeToPlanGroup(id: string, onChange: () => void) {
       ),
     onChange,
   );
-  const members = subscribeToPosts(onChange);
+  const members = postId
+    ? multiplexSubscribe(
+        "plan-post-" + postId,
+        (ch, fire) =>
+          ch.on(
+            "postgres_changes",
+            {
+              event: "*",
+              schema: "public",
+              table: "posts",
+              filter: "id=eq." + postId,
+            },
+            () => fire(),
+          ),
+        onChange,
+      )
+    : () => {};
   return () => {
     messages();
     members();

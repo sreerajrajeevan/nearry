@@ -1,3 +1,4 @@
+import { reportBackendFailure } from "../services/diagnostics";
 import { useCallback, useRef, useState } from "react";
 import { AppState } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
@@ -36,11 +37,12 @@ export function useLiveQuery<T>(
       setError("");
       setState("ready");
     } catch (e) {
+      reportBackendFailure("query");
       if (current()) {
         setError(
           e instanceof Error ? e.message : "Check your connection and retry.",
         );
-        setState("error");
+        setState(loadedKey.current === requested.key ? "ready" : "error");
       }
     } finally {
       if (current()) setRefreshing(false);
@@ -60,7 +62,9 @@ export function useLiveQuery<T>(
       const app = AppState.addEventListener("change", (state) => {
         if (state === "active") reload();
       });
-      const timer = setInterval(reload, 30_000);
+      const timer = setInterval(() => {
+        if (AppState.currentState === "active") reload();
+      }, 30_000);
       return () => {
         focused.current = false;
         ++version.current;
@@ -70,5 +74,12 @@ export function useLiveQuery<T>(
       };
     }, [key, refresh]),
   );
-  return { data, state, error, refreshing, refresh };
+  const same = lastKey.current === key;
+  return {
+    data: same ? data : undefined,
+    state: same ? state : ("loading" as const),
+    error: same ? error : "",
+    refreshing,
+    refresh,
+  };
 }

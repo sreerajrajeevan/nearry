@@ -8,18 +8,41 @@ export async function uploadPhotoBytes(
   userId: string,
   bytes: Uint8Array,
   folder: string,
+  thumbnail?: Uint8Array,
 ): Promise<string> {
   if (!bytes.length || bytes.length > MAX_PHOTO_BYTES)
     throw new Error("Choose a photo smaller than 10 MB.");
   if (!/^[a-zA-Z0-9-]+$/.test(userId) || !/^[a-zA-Z0-9-]+$/.test(folder))
     throw new Error("Invalid photo destination.");
   const { extension, contentType } = proofImageType(bytes);
-  const path = `${userId}/${folder}/${Date.now()}-${Math.random().toString(36).slice(2)}.${extension}`;
+  if (thumbnail) {
+    if (
+      thumbnail.length > MAX_PHOTO_BYTES ||
+      proofImageType(thumbnail).extension !== "jpg" ||
+      extension !== "jpg"
+    )
+      throw new Error("Could not prepare the photo preview.");
+  }
+  const path = `${userId}/${folder}/${Date.now()}-${Math.random().toString(36).slice(2)}${thumbnail ? "-full" : ""}.${extension}`;
   const bucket = requireSupabase().storage.from("photos");
+  const thumbPath = thumbnail
+    ? path.replace(/-full\.jpg$/, "-thumb.jpg")
+    : null;
+  if (thumbnail && thumbPath) {
+    const { error } = await bucket.upload(thumbPath, thumbnail, {
+      contentType: "image/jpeg",
+      upsert: false,
+    });
+    if (error)
+      throw new Error("Could not upload the photo preview. Please retry.");
+  }
   const { error } = await bucket.upload(path, bytes, {
     contentType,
     upsert: false,
   });
-  if (error) throw new Error(`Could not upload photo: ${error.message}`);
+  if (error) {
+    if (thumbPath) void bucket.remove([thumbPath]).catch(() => {});
+    throw new Error(`Could not upload photo: ${error.message}`);
+  }
   return bucket.getPublicUrl(path).data.publicUrl;
 }

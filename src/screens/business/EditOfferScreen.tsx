@@ -407,6 +407,12 @@ export function EditOfferScreen({ route, navigation }: Props) {
               </View>
             </FormSection>
             <FormSection title="Slots">
+              <Input
+                label="Court or service name"
+                value={resource}
+                onChangeText={setResource}
+                maxLength={80}
+              />
               <SlotFields
                 capacity={capacity}
                 onCapacity={setCapacity}

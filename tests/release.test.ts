@@ -104,3 +104,35 @@ test("release never inherits the shared debug key; debug builds keep it", () => 
     /Release build type missing/,
   );
 });
+
+test("public release requires share/crash configuration and an explicitly verified email sender", () => {
+  const base = { ...valid, NEARRY_PUBLIC_RELEASE: "true" };
+  assert.equal(releaseProblems(base, () => true).length, 2);
+  const configured = {
+    ...base,
+    EXPO_PUBLIC_SHARE_URL: "https://nearry.example/open.html",
+    EXPO_PUBLIC_SENTRY_DSN: "https://publickey@ingest.sentry.io/123",
+  };
+  assert.deepEqual(
+    releaseProblems(configured, () => true),
+    [],
+  );
+  assert.equal(
+    releaseProblems(
+      { ...configured, EXPO_PUBLIC_EMAIL_OTP_ENABLED: "true" },
+      () => true,
+    ).length,
+    1,
+  );
+  assert.deepEqual(
+    releaseProblems(
+      {
+        ...configured,
+        EXPO_PUBLIC_EMAIL_OTP_ENABLED: "true",
+        NEARRY_EMAIL_SENDER_VERIFIED: "true",
+      },
+      () => true,
+    ),
+    [],
+  );
+});

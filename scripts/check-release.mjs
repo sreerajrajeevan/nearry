@@ -68,6 +68,28 @@ export function releaseProblems(
     problems.push(
       "EXPO_PUBLIC_SUPPORT_EMAIL must be a real monitored email address.",
     );
+  if (env.NEARRY_PUBLIC_RELEASE === "true") {
+    for (const field of ["EXPO_PUBLIC_SHARE_URL", "EXPO_PUBLIC_SENTRY_DSN"]) {
+      try {
+        const link = new URL(env[field] ?? "");
+        if (
+          link.protocol !== "https:" ||
+          placeholderHost(link.hostname) ||
+          link.password
+        )
+          throw new Error();
+      } catch {
+        problems.push(field + " must be configured before a public release.");
+      }
+    }
+    if (
+      env.EXPO_PUBLIC_EMAIL_OTP_ENABLED === "true" &&
+      env.NEARRY_EMAIL_SENDER_VERIFIED !== "true"
+    )
+      problems.push(
+        "Verify the email sender and set NEARRY_EMAIL_SENDER_VERIFIED=true before enabling public email sign-in.",
+      );
+  }
   if (assets.some((name) => !assetExists(name)))
     problems.push(
       "Generate the app icons and splash images with npm run assets before building.",

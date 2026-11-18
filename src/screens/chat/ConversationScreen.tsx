@@ -29,11 +29,14 @@ import { Icon } from "../../components/Icon";
 import { colors, typography, spacing, weight } from "../../theme";
 import { useAuth } from "../../store/AuthContext";
 import {
-  listMessages,
+  listMessagesPage,
   sendMessage,
   markConversationRead,
   subscribeToConversation,
 } from "../../services/chat";
+import * as Crypto from "expo-crypto";
+import { Cursor } from "../../utils/pagination";
+import { setActiveChat } from "../../services/activeChat";
 import { mergeMessages } from "../../utils/chatMessages";
 import { ChatMessage } from "../../services/mappers";
 
@@ -90,6 +93,16 @@ export function ConversationScreen({ route, navigation }: Props) {
   const myId = profile?.id ?? "";
   const [peer, setPeer] = useState<ConversationSafety | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [olderCursor, setOlderCursor] = useState<Cursor | null>(null),
+    [olderBusy, setOlderBusy] = useState(false),
+    [olderError, setOlderError] = useState("");
+  const clearBoundary = useRef<string | null>(null),
+    messagesRef = useRef<ChatMessage[]>([]),
+    olderLock = useRef(false);
+  messagesRef.current = messages;
+  const retry = useRef<{ room: string; body: string; key: string } | null>(
+    null,
+  );
   const [draft, setDraft] = useState("");
   const [state, setState] = useState<"loading" | "error" | "ready">("loading");
   const [sending, setSending] = useState(false);
@@ -129,21 +142,27 @@ export function ConversationScreen({ route, navigation }: Props) {
     const ticket = ++generation.current;
     try {
       const [msgs, safety] = await Promise.all([
-        listMessages(conversationId, myId),
+        listMessagesPage(conversationId, myId),
         conversationSafety(conversationId),
       ]);
       if (!focused.current || ticket !== generation.current) return;
       setPeer(safety);
-      // Use the authoritative snapshot: a clear on another device must remove old bubbles.
-      setMessages(msgs);
+      const sameBoundary = clearBoundary.current === msgs.clearedAt;
+      clearBoundary.current = msgs.clearedAt;
+      setMessages((previous) =>
+        sameBoundary ? mergeMessages(previous, msgs.items) : msgs.items,
+      );
+      setOlderCursor((old) =>
+        sameBoundary && messagesRef.current.length > 60 ? old : msgs.cursor,
+      );
       setState("ready");
-      // Only acknowledge the messages in this displayed snapshot.
-      void markConversationRead(
-        conversationId,
-        msgs[msgs.length - 1]?.id,
-      ).catch(() => {});
     } catch {
-      if (focused.current && ticket === generation.current) setState("error");
+      if (
+        focused.current &&
+        ticket === generation.current &&
+        !messagesRef.current.length
+      )
+        setState("error");
     }
   }, [conversationId, myId]);
 
@@ -152,6 +171,10 @@ export function ConversationScreen({ route, navigation }: Props) {
       focused.current = true;
       ++visit.current;
       setDraft("");
+      clearBoundary.current = null;
+      setOlderCursor(null);
+      setOlderError("");
+      const stopActive = setActiveChat(conversationId);
       setSending(false);
       setPeer(null);
       setSendError("");
@@ -169,6 +192,7 @@ export function ConversationScreen({ route, navigation }: Props) {
       });
       const timer = setInterval(() => void load(), 30_000);
       return () => {
+        stopActive();
         app.remove();
         clearInterval(timer);
         focused.current = false;
@@ -190,13 +214,25 @@ export function ConversationScreen({ route, navigation }: Props) {
     setSendError("");
     setSending(true);
     try {
-      const msg = await sendMessage(conversationId, myId, text);
+      if (retry.current?.room !== sendingRoom || retry.current.body !== text)
+        retry.current = {
+          room: sendingRoom,
+          body: text,
+          key: Crypto.randomUUID(),
+        };
+      const msg = await sendMessage(
+        conversationId,
+        myId,
+        text,
+        retry.current.key,
+      );
       if (
         room.current !== sendingRoom ||
         visit.current !== sendingVisit ||
         !focused.current
       )
         return;
+      retry.current = null;
       ++generation.current; // Discard a reload started before this send committed.
       // Keep anything typed while the send was in flight.
       setDraft((current) => (current === sentDraft ? "" : current));
@@ -229,6 +265,53 @@ export function ConversationScreen({ route, navigation }: Props) {
       }
     }
   };
+
+  const loadOlder = async () => {
+    if (!olderCursor || olderLock.current) return;
+    olderLock.current = true;
+    setOlderBusy(true);
+    setOlderError("");
+    const scope = room.current,
+      visitId = visit.current,
+      boundary = clearBoundary.current;
+    try {
+      const page = await listMessagesPage(conversationId, myId, olderCursor);
+      if (
+        room.current !== scope ||
+        visit.current !== visitId ||
+        !focused.current
+      )
+        return;
+      if (page.clearedAt !== boundary) {
+        void load();
+        return;
+      }
+      stickToBottom.current = false;
+      setMessages((previous) => mergeMessages(page.items, previous));
+      setOlderCursor(page.cursor);
+    } catch {
+      if (room.current === scope && visit.current === visitId)
+        setOlderError("Could not load older messages.");
+    } finally {
+      olderLock.current = false;
+      if (room.current === scope && visit.current === visitId)
+        setOlderBusy(false);
+    }
+  };
+  const visibleRead = useRef(
+    ({
+      viewableItems,
+    }: {
+      viewableItems: Array<{ item: ChatMessage; isViewable: boolean }>;
+    }) => {
+      const last = viewableItems
+        .filter((i) => i.isViewable)
+        .map((i) => i.item)
+        .at(-1);
+      if (last && focused.current && isForeground())
+        void markConversationRead(last.conversationId, last.id).catch(() => {});
+    },
+  ).current;
 
   // Business chats: business name on top, the person running it underneath.
   const who = peer
@@ -313,6 +396,29 @@ export function ConversationScreen({ route, navigation }: Props) {
                   listRef.current?.scrollToEnd({ animated: false });
               }}
               data={messages}
+              maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
+              onViewableItemsChanged={visibleRead}
+              viewabilityConfig={{
+                itemVisiblePercentThreshold: 80,
+                minimumViewTime: 500,
+              }}
+              ListHeaderComponent={
+                <>
+                  {!!olderError && (
+                    <Text accessibilityRole="alert" style={styles.sendError}>
+                      {olderError}
+                    </Text>
+                  )}
+                  {olderCursor && (
+                    <Button
+                      title="Older messages"
+                      variant="ghost"
+                      loading={olderBusy}
+                      onPress={() => void loadOlder()}
+                    />
+                  )}
+                </>
+              }
               keyExtractor={(m: ChatMessage) => m.id}
               renderItem={({ item }: { item: ChatMessage }) => (
                 <Bubble

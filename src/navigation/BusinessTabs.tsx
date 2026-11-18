@@ -1,3 +1,4 @@
+import { AppErrorBoundary } from "../components/AppErrorBoundary";
 import React from "react";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { useUnreadCounts } from "../hooks/useUnreadCounts";
@@ -17,7 +18,12 @@ export function BusinessTabs() {
   const { profile } = useAuth();
   const { messages } = useUnreadCounts();
   return (
-    <Tab.Navigator screenOptions={tabBarLayout}>
+    <Tab.Navigator
+      screenLayout={({ children }) => (
+        <AppErrorBoundary>{children}</AppErrorBoundary>
+      )}
+      screenOptions={tabBarLayout}
+    >
       <Tab.Screen
         name="Dashboard"
         component={DashboardScreen}

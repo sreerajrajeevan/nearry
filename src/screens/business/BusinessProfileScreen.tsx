@@ -147,7 +147,8 @@ export function BusinessProfileScreen({
         throw new Error(
           "Confirm that the address and map pin belong to your business.",
         );
-      await submitVerificationDoc(profile.id, venueDraft);
+      const submitted = await submitVerificationDoc(profile.id, venueDraft);
+      if (!submitted) return;
       await refreshProfile();
       await load();
       Alert.alert(

@@ -1,3 +1,4 @@
+import { AppErrorBoundary } from "../components/AppErrorBoundary";
 import {
   SafetyPrivacyScreen,
   BlockedUsersScreen,
@@ -28,6 +29,9 @@ export function BusinessStack() {
   const reduced = useReducedMotion();
   return (
     <Stack.Navigator
+      screenLayout={({ children }) => (
+        <AppErrorBoundary>{children}</AppErrorBoundary>
+      )}
       screenOptions={{
         headerShown: false,
         contentStyle: { backgroundColor: colors.background },
