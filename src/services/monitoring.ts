@@ -47,3 +47,5 @@ export function trackScreen(name: string | undefined) {
   if (monitoringEnabled && name)
     Sentry.addBreadcrumb({ category: "navigation", message: name });
 }
+
+export const wrapMonitoring = Sentry.wrap;

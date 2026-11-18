@@ -42,6 +42,7 @@ import { Avatar } from "../../components/Avatar";
 import { Button } from "../../components/Button";
 import { Input } from "../../components/Input";
 import { EmptyState } from "../../components/EmptyState";
+import { setActiveChat } from "../../services/activeChat";
 import { LoadingState } from "../../components/LoadingState";
 import { colors, weight } from "../../theme";
 import { planChatReminder, planChatTime } from "../../utils/planChatSchedule";
@@ -133,7 +134,7 @@ export function PlanGroupScreen({ route, navigation }: Props) {
       setHasOlder(page.length === pageSize && page.length < 500);
       setState("ready");
       setError("");
-      if (page.length)
+      if (page.length && stick.current)
         void markPlanGroupRead(next.id, myId, page[page.length - 1]).catch(
           () => {},
         );
@@ -183,7 +184,16 @@ export function PlanGroupScreen({ route, navigation }: Props) {
   useFocusEffect(
     useCallback(() => {
       if (!group?.id) return;
-      return subscribeToPlanGroup(group.id, () => void load());
+      const stopActive = setActiveChat(group.id);
+      const stop = subscribeToPlanGroup(
+        group.id,
+        () => void load(),
+        group.postId,
+      );
+      return () => {
+        stopActive();
+        stop();
+      };
     }, [group?.id, load]),
   );
   const send = async () => {

@@ -1,6 +1,13 @@
+import { mergePage, type Cursor } from "../../utils/pagination";
 import { PlanListSkeleton } from "../../components/Skeletons";
 import { useMyRequests } from "../../store/MyRequestsContext";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useMemo,
+} from "react";
 import {
   View,
   Text,
@@ -34,8 +41,12 @@ import { VenueRow } from "../../components/VenueRow";
 import { DiscoverySearch } from "../../components/DiscoverySearch";
 import { LocationSheet } from "../../components/LocationSheet";
 import { colors, typography, spacing, weight } from "../../theme";
-import { listPosts, subscribeToPosts } from "../../services/posts";
-import { listLiveOffers, subscribeToOffers } from "../../services/offers";
+import {
+  listPostsPage,
+  type PostPageFilter,
+  subscribeToPosts,
+} from "../../services/posts";
+import { listOffersPage, subscribeToOffers } from "../../services/offers";
 import {
   getCurrentPosition,
   getPositionIfAllowed,
@@ -59,6 +70,7 @@ import {
   PlanOptions,
 } from "../../utils/planDiscovery";
 import {
+  HOME_DISTANCES,
   HomeLocation,
   MAX_HOME_DISTANCE,
   RecentPlace,
@@ -102,6 +114,14 @@ export function NearbyScreen() {
   const [offers, setOffers] = useState<Offer[]>([]);
   const [state, setState] = useState<"loading" | "error" | "ready">("loading");
   const [refreshing, setRefreshing] = useState(false);
+  const [cursor, setCursor] = useState<Cursor | null>(null),
+    [loadingMore, setLoadingMore] = useState(false),
+    [pageError, setPageError] = useState("");
+  const [effectiveKm, setEffectiveKm] = useState<number | null>(null),
+    [soonPosts, setSoonPosts] = useState<NeedPost[]>([]);
+  const moreLock = useRef(false),
+    loadedScope = useRef("");
+  const calendarDay = now.toDateString();
   // Where Home searches from, and what to call it.
   const [point, setPoint] = useState<LatLng | null>(() =>
     setup.area
@@ -232,7 +252,7 @@ export function NearbyScreen() {
         });
       } else
         setLocationError(
-          "Location is off for Nearry. Search for your area instead.",
+          "Could not get your location. Check location permission and GPS, or search for your area.",
         );
     } finally {
       setLocating(false);
@@ -248,33 +268,121 @@ export function NearbyScreen() {
     });
   };
 
+  const queryScope = JSON.stringify([
+    accountId,
+    point,
+    chosenKm,
+    options,
+    dateFilter,
+    calendarDay,
+  ]);
+  const pageFilter = (km: number | null): PostPageFilter => ({
+    category: options.category,
+    freeOnly: options.freeOnly,
+    audience: options.audience,
+    sort: options.sort,
+    date: dateFilter,
+    excludeAuthorId: accountId ?? undefined,
+    ...(point
+      ? { nearby: { ...point, radiusM: (km ?? MAX_HOME_DISTANCE) * 1000 } }
+      : {}),
+  });
   const load = useCallback(
     async (silent = false) => {
-      const version = ++request.current;
-      if (!silent) setState("loading");
+      const ticket = ++request.current;
+      if (loadedScope.current !== queryScope) {
+        setVenues([]);
+        setOffers([]);
+        setSoonPosts([]);
+      }
+      if (!silent || loadedScope.current !== queryScope) {
+        setState("loading");
+        setCursor(null);
+      }
+      setPageError("");
       try {
-        // Fetch the widest area once; distance is applied on the phone so
-        // changing it, or widening when nothing is close, needs no reload.
-        const radiusM = MAX_HOME_DISTANCE * 1000;
-        const places = point
-          ? await nearbyVenues(point.latitude, point.longitude, radiusM)
-          : await listVenues();
-        const ids = point ? places.map((v) => v.id) : undefined;
-        const [plans, openings] = await Promise.all([
-          listPosts(point ? { nearby: { ...point, radiusM } } : {}),
-          listLiveOffers(ids),
-        ]);
-        if (request.current !== version) return;
-        setPosts(plans);
-        setVenues(places);
-        setOffers(openings);
+        const max = options.maxDistanceKm ?? MAX_HOME_DISTANCE;
+        const base = point ? Math.min(chosenKm ?? max, max) : max;
+        const radii = point
+          ? [base, ...HOME_DISTANCES.filter((km) => km > base && km <= max)]
+          : [max];
+        let selected = base,
+          page = await listPostsPage(pageFilter(base));
+        if (!page.items.length)
+          for (const radius of radii.slice(1)) {
+            selected = radius;
+            page = await listPostsPage(pageFilter(radius));
+            if (page.items.length) break;
+          }
+        if (request.current !== ticket) return;
+        loadedScope.current = queryScope;
+        setPosts(page.items);
+        setCursor(page.cursor);
+        setEffectiveKm(point ? selected : null);
         setState("ready");
+        // Side previews are independently bounded; they cannot hide a healthy plan feed.
+        const [places, openings, soon] = await Promise.allSettled([
+          point
+            ? nearbyVenues(point.latitude, point.longitude, selected * 1000)
+            : listVenues(),
+          listOffersPage(
+            {
+              discoveryCategory: options.category,
+              ...(point
+                ? { nearby: { ...point, radiusM: selected * 1000 } }
+                : {}),
+            },
+            null,
+            20,
+          ),
+          dateFilter === "all" && options.sort === "soonest"
+            ? Promise.resolve(page)
+            : listPostsPage(
+                { ...pageFilter(selected), date: "all", sort: "soonest" },
+                null,
+                8,
+              ),
+        ]);
+        if (request.current !== ticket) return;
+
+        setVenues(places.status === "fulfilled" ? places.value : []);
+        setOffers(openings.status === "fulfilled" ? openings.value.items : []);
+        setSoonPosts(soon.status === "fulfilled" ? soon.value.items : []);
+        setState("ready");
+        if (openings.status === "rejected")
+          setPageError("Offers could not refresh. Pull down to try again.");
       } catch {
-        if (request.current === version) setState("error");
+        if (request.current === ticket) {
+          if (loadedScope.current === queryScope)
+            setPageError(
+              "Could not refresh nearby plans. Pull down to try again.",
+            );
+          else setState("error");
+        }
       }
     },
-    [point],
+    [point, chosenKm, options, dateFilter, accountId, calendarDay],
   );
+  const loadMore = async () => {
+    if (!cursor || moreLock.current || loadedScope.current !== queryScope)
+      return;
+    moreLock.current = true;
+    setLoadingMore(true);
+    setPageError("");
+    const ticket = request.current;
+    try {
+      const page = await listPostsPage(pageFilter(effectiveKm), cursor);
+      if (ticket !== request.current) return;
+      setPosts((old) => mergePage(old, page.items));
+      setCursor(page.cursor);
+    } catch {
+      if (ticket === request.current)
+        setPageError("Could not load more plans. Please try again.");
+    } finally {
+      moreLock.current = false;
+      setLoadingMore(false);
+    }
+  };
 
   // A stable function, so it can sit in the focus effect's dependencies.
   const refreshMyRequests = useMyRequests()?.refresh;
@@ -299,31 +407,42 @@ export function NearbyScreen() {
     setRefreshing(false);
   };
 
-  const distances = new Map(venues.map((v) => [v.id, v.distanceKm]));
-  const excludeAuthorId = profile?.id ?? session?.user.id;
-  const plansWithin = (
-    opts: PlanOptions,
-    km: number | null,
-    date: PlanDateFilter = dateFilter,
-  ) =>
-    discoveryPlans(
-      posts,
-      { ...opts, date, distances, excludeAuthorId, maxDistanceKm: km },
-      now,
-    );
-  const reachFor = (opts: PlanOptions) =>
-    chosenKm == null
-      ? { distanceKm: null, widened: false }
-      : widenDistance(chosenKm, (km) => plansWithin(opts, km).length);
-  const reach = reachFor(options);
+  const distances = useMemo(
+    () =>
+      new Map([
+        ...venues.map((v) => [v.id, v.distanceKm] as const),
+        ...offers
+          .filter((o) => o.venueId && o.distanceKm != null)
+          .map((o) => [o.venueId!, o.distanceKm] as const),
+      ]),
+    [venues, offers],
+  );
+  const excludeAuthorId = accountId ?? undefined;
+  const reach = {
+    distanceKm: effectiveKm,
+    widened: chosenKm != null && effectiveKm != null && effectiveKm > chosenKm,
+  };
   const shownKm = reach.distanceKm;
   const withinShown = (distance: number | undefined) =>
     shownKm == null || (distance ?? Infinity) <= shownKm;
-  const visiblePosts = plansWithin(options, shownKm);
-  // Ignores the day filter: "soon" is always the next few hours.
-  const startingSoon = startingSoonPlans(
-    plansWithin(options, shownKm, "all"),
-    now,
+  const visiblePosts = useMemo(
+    () =>
+      discoveryPlans(
+        posts,
+        {
+          ...options,
+          date: dateFilter,
+          distances,
+          excludeAuthorId,
+          maxDistanceKm: shownKm,
+        },
+        now,
+      ),
+    [posts, options, dateFilter, distances, excludeAuthorId, shownKm, now],
+  );
+  const startingSoon = useMemo(
+    () => startingSoonPlans(soonPosts, now),
+    [soonPosts, now],
   );
   const visibleOffers = offers.filter(
     (o) =>
@@ -547,7 +666,12 @@ export function NearbyScreen() {
                   onViewAll={() =>
                     navigation.navigate("AllOffers", {
                       // Same area as Home: only the venues it is showing.
-                      venueIds: point ? areaVenues.map((v) => v.id) : undefined,
+                      area: point
+                        ? {
+                            ...point,
+                            radiusM: (shownKm ?? MAX_HOME_DISTANCE) * 1000,
+                          }
+                        : undefined,
                       distances: areaVenues.flatMap((v) =>
                         v.distanceKm == null
                           ? []
@@ -662,6 +786,19 @@ export function NearbyScreen() {
         ListFooterComponent={
           showPlans ? (
             <>
+              {pageError ? (
+                <Text accessibilityRole="alert" style={styles.sectionMeta}>
+                  {pageError}
+                </Text>
+              ) : null}
+              {cursor && (
+                <Button
+                  title="More plans"
+                  loading={loadingMore}
+                  onPress={() => void loadMore()}
+                  variant="secondary"
+                />
+              )}
               {visiblePosts.length === 0 && state !== "loading" && (
                 <>
                   <EmptyState
@@ -674,9 +811,9 @@ export function NearbyScreen() {
                     }
                     hint={
                       hasFilters
-                        ? `Nothing within ${MAX_HOME_DISTANCE} km matches. Try another day or remove a filter.`
+                        ? `Nothing within ${effectiveKm ?? chosenKm ?? MAX_HOME_DISTANCE} km matches. Try another day or remove a filter.`
                         : point
-                          ? `Nothing within ${MAX_HOME_DISTANCE} km right now. Be the first to post one here.`
+                          ? `Nothing within ${effectiveKm ?? chosenKm ?? MAX_HOME_DISTANCE} km right now. Be the first to post one here.`
                           : "Start a plan and invite someone nearby."
                     }
                   />
@@ -730,9 +867,6 @@ export function NearbyScreen() {
         <PlanFilterSheet
           value={options}
           hasLocation={hasLocation}
-          countFor={(draft) =>
-            plansWithin(draft, reachFor(draft).distanceKm).length
-          }
           onClose={() => setFiltersOpen(false)}
           onApply={(next) => {
             setOptions(next);

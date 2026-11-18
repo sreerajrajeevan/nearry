@@ -60,7 +60,12 @@ export type PersonalStackParamList = SafetyStackParamList & {
   OfferDetails: { offerId: string };
   /** Every live offer in Home's area; distances are [venueId, km] pairs. */
   AllOffers:
-    { venueIds?: string[]; distances?: [string, number][] } | undefined;
+    | {
+        venueIds?: string[];
+        distances?: [string, number][];
+        area?: { latitude: number; longitude: number; radiusM: number };
+      }
+    | undefined;
   Messages: undefined;
   Conversation: { conversationId: string; title?: string };
   Notifications: undefined;

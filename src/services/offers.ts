@@ -1,3 +1,15 @@
+import {
+  parsePage,
+  pageSize,
+  type Page,
+  type Cursor,
+} from "../utils/pagination";
+import {
+  discoverOffers,
+  offerDiscoveryCategory,
+  type OfferCategory,
+} from "../utils/offerDiscovery";
+import type { DiscoveryCategory } from "../utils/discovery";
 import { assertLive } from "./demoGuard";
 import { demoUserBlocked } from "./safety";
 import { getSupabase, isSupabaseConfigured, isDemoMode } from "./supabase";
@@ -72,29 +84,174 @@ export async function listLiveOffers(venueIds?: string[]): Promise<Offer[]> {
     .select("*")
     .eq("status", "live")
     .gt("ends_at", new Date().toISOString())
-    .order("ends_at");
+    .order("ends_at")
+    .order("id")
+    .limit(80);
   if (venueIds) query = query.in("venue_id", venueIds);
   const { data, error } = await query;
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(friendlyOfferError(error.message));
   return ((data ?? []) as Record<string, unknown>[]).map(withBusiness);
 }
 
-/** Owner: all my offers, newest first. */
-export async function listMyOffers(businessId: string): Promise<Offer[]> {
-  if (useMock())
-    return mockOffers.filter(
-      (o) => o.businessId === businessId || o.businessId === "b1",
+export type OfferPageFilter = {
+  venueIds?: string[];
+  search?: string;
+  category?: OfferCategory;
+  discoveryCategory?: DiscoveryCategory | null;
+  spotlight?: boolean;
+  nearby?: { latitude: number; longitude: number; radiusM: number };
+};
+export async function listOffersPage(
+  filter: OfferPageFilter = {},
+  cursor: Cursor | null = null,
+  limit = 30,
+): Promise<Page<Offer>> {
+  if (filter.venueIds?.length === 0) return { items: [], cursor: null };
+  if (useMock()) {
+    let items = discoverOffers(
+      await listLiveOffers(filter.venueIds),
+      filter.category ?? "all",
     );
-  const supabase = getSupabase()!;
-  const { data, error } = await supabase
+    if (filter.search)
+      items = items.filter((o) =>
+        (o.title + " " + o.businessName + " " + o.description)
+          .toLowerCase()
+          .includes(filter.search!.toLowerCase()),
+      );
+    if (filter.spotlight) items = items.filter((o) => o.isSpotlight);
+    if (filter.discoveryCategory)
+      items = items.filter(
+        (o) => offerDiscoveryCategory(o) === filter.discoveryCategory,
+      );
+    items.sort(
+      (a, b) =>
+        Number(b.isSpotlight) - Number(a.isSpotlight) ||
+        a.endsAt.localeCompare(b.endsAt) ||
+        a.id.localeCompare(b.id),
+    );
+    const start = cursor ? items.findIndex((o) => o.id === cursor.id) + 1 : 0,
+      rows = items.slice(start, start + pageSize(limit)),
+      last = rows.at(-1);
+    return {
+      items: rows,
+      cursor:
+        start + rows.length < items.length && last
+          ? { at: last.endsAt, id: last.id, spotlight: last.isSpotlight }
+          : null,
+    };
+  }
+  const { nearby, ...rest } = filter;
+  const { data, error } = await getSupabase()!.rpc("discover_offers", {
+    p_filters: {
+      ...rest,
+      ...(nearby
+        ? {
+            latitude: nearby.latitude,
+            longitude: nearby.longitude,
+            radiusM: nearby.radiusM,
+          }
+        : {}),
+    },
+    p_cursor: cursor,
+    p_limit: pageSize(limit),
+  });
+  if (error) throw new Error(friendlyOfferError(error.message));
+  const page = parsePage(data);
+  return { items: page.items.map(withBusiness), cursor: page.cursor };
+}
+
+/** Owner: all my offers, newest first. */
+export type MyOfferFilter = "all" | "live" | "drafts" | "ended";
+export async function listMyOffers(businessId: string): Promise<Offer[]> {
+  return (await listMyOffersPage(businessId, "all", null, 80)).items;
+}
+export async function listMyOffersPage(
+  businessId: string,
+  filter: MyOfferFilter = "all",
+  cursor: Cursor | null = null,
+  limit = 30,
+): Promise<Page<Offer>> {
+  const now = new Date().toISOString(),
+    size = pageSize(limit);
+  if (useMock()) {
+    const all = mockOffers
+      .filter(
+        (o) =>
+          (o.businessId === businessId || o.businessId === "b1") &&
+          (filter === "all" ||
+            (filter === "live" && o.status === "live" && o.endsAt > now) ||
+            (filter === "drafts" && o.status === "draft") ||
+            (filter === "ended" &&
+              (o.status === "ended" ||
+                o.status === "cancelled" ||
+                (o.status === "live" && o.endsAt <= now)))),
+      )
+      .sort(
+        (a, b) =>
+          b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id),
+      );
+    const start = cursor ? all.findIndex((o) => o.id === cursor.id) + 1 : 0,
+      items = all.slice(start, start + size),
+      last = items.at(-1);
+    return {
+      items,
+      cursor:
+        start + items.length < all.length && last
+          ? { at: last.createdAt, id: last.id }
+          : null,
+    };
+  }
+  const db = getSupabase()!;
+  let req = db
     .from("offers")
     .select(
-      "*, business:profiles!offers_business_id_fkey(display_name, business_name)",
+      "*, business:profiles!offers_business_id_fkey(display_name,business_name)",
     )
     .eq("business_id", businessId)
-    .order("created_at", { ascending: false });
-  if (error) throw new Error(error.message);
-  return ((data ?? []) as Record<string, unknown>[]).map(withBusiness);
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
+    .limit(size + 1);
+  if (filter === "live") req = req.eq("status", "live").gt("ends_at", now);
+  if (filter === "drafts") req = req.eq("status", "draft");
+  if (filter === "ended")
+    req = req.or(
+      "status.in.(ended,cancelled),and(status.eq.live,ends_at.lte." + now + ")",
+    );
+  if (cursor) {
+    if (
+      !/^[0-9a-f-]{36}$/i.test(cursor.id) ||
+      !Number.isFinite(Date.parse(cursor.at))
+    )
+      throw new Error("Please refresh your offers.");
+    req = req.or(
+      "created_at.lt." +
+        cursor.at +
+        ",and(created_at.eq." +
+        cursor.at +
+        ",id.lt." +
+        cursor.id +
+        ")",
+    );
+  }
+  const { data, error } = await req;
+  if (error) throw new Error(friendlyOfferError(error.message));
+  const items = (data ?? []).slice(0, size).map(withBusiness),
+    last = items.at(-1);
+  if (items.length) {
+    const { data: counts, error } = await db.rpc("offer_booking_counts", {
+      p_ids: items.map((o) => o.id),
+    });
+    if (error || !counts || typeof counts !== "object" || Array.isArray(counts))
+      throw new Error("Could not load booking counts.");
+    for (const o of items) o.activeBookings = Number(counts[o.id] ?? 0);
+  }
+  return {
+    items,
+    cursor:
+      (data?.length ?? 0) > size && last
+        ? { at: last.createdAt, id: last.id }
+        : null,
+  };
 }
 
 export async function getOffer(id: string): Promise<Offer | null> {
@@ -107,7 +264,7 @@ export async function getOffer(id: string): Promise<Offer | null> {
     )
     .eq("id", id)
     .maybeSingle();
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(friendlyOfferError(error.message));
   return data ? withBusiness(data as Record<string, unknown>) : null;
 }
 
@@ -151,7 +308,7 @@ export async function createDraft(
       "*, business:profiles!offers_business_id_fkey(display_name, business_name)",
     )
     .single();
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(friendlyOfferError(error.message));
   return withBusiness(data as Record<string, unknown>);
 }
 
@@ -241,7 +398,7 @@ export async function updateOffer(
     p_offer_id: offerId,
     p_patch: dbPatch,
   });
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(friendlyOfferError(error.message));
   return withBusiness(data as Record<string, unknown>);
 }
 
@@ -260,7 +417,7 @@ export async function deleteOffer(offerId: string): Promise<void> {
   const { error } = await supabase.rpc("delete_offer", {
     p_offer_id: offerId,
   });
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(friendlyOfferError(error.message));
 }
 
 /** End an offer early. Terminal for customers; business keeps history. */
@@ -284,10 +441,12 @@ export async function cancelOffer(offerId: string): Promise<void> {
     p_offer_id: offerId,
     p_patch: { status: "cancelled" },
   });
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(friendlyOfferError(error.message));
 }
 
-function friendlyOfferError(message: string): string {
+export function friendlyOfferError(message: string): string {
+  if (/overlap|resource already booked/i.test(message))
+    return "This court or service already has an offer during these times. Choose another time or separately available capacity.";
   if (message.toLowerCase().includes("verified"))
     return "Only verified businesses can publish offers. Submit your verification documents first.";
   return message;

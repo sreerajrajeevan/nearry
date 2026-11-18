@@ -81,12 +81,17 @@ export function useOnboardingDraft(
     if (!ready || !session || paused.current) return;
     let active = true;
     const timer = setTimeout(() => {
-      void session.save(state.value).catch(() => {
-        if (active)
-          setError(
-            "Could not save your progress on this device. Please try again before leaving.",
-          );
-      });
+      void session
+        .save(state.value)
+        .then((saved) => {
+          if (active && saved) setError("");
+        })
+        .catch(() => {
+          if (active)
+            setError(
+              "Could not save your progress on this device. Please try again before leaving.",
+            );
+        });
     }, 250);
     const app = AppState.addEventListener("change", (next) => {
       if (next !== "active" && !paused.current)

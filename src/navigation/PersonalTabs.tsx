@@ -1,3 +1,4 @@
+import { AppErrorBoundary } from "../components/AppErrorBoundary";
 import React from "react";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { useUnreadCounts } from "../hooks/useUnreadCounts";
@@ -16,7 +17,12 @@ export function PersonalTabs() {
   const { messages } = useUnreadCounts();
   return (
     <PersonalMessagesContext.Provider value={messages}>
-      <Tab.Navigator screenOptions={tabBarLayout}>
+      <Tab.Navigator
+        screenLayout={({ children }) => (
+          <AppErrorBoundary>{children}</AppErrorBoundary>
+        )}
+        screenOptions={tabBarLayout}
+      >
         <Tab.Screen
           name="Nearby"
           component={NearbyScreen}

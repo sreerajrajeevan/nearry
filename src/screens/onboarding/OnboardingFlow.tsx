@@ -172,7 +172,13 @@ export function OnboardingFlow({
       setStep(step - 1);
     } else if (!business) void explore();
     else if (onFinished) onFinished();
-    else void signOut().catch((e) => setError(e.message));
+    else if (Platform.OS === "android") {
+      // Root Android Back exits normally, after durably saving the business draft.
+      void draft
+        .flush()
+        .then(() => BackHandler.exitApp())
+        .catch((e) => setError(e.message));
+    }
     return true;
   }, [busy, done, step, onFinished, business, explore, signOut]);
   useFocusEffect(
@@ -372,7 +378,7 @@ export function OnboardingFlow({
   );
   return (
     <OnboardingLayout
-      onBack={done ? undefined : back}
+      onBack={done || (business && step === 0) ? undefined : back}
       step={done ? total : step + 1}
       total={total}
       busy={busy}

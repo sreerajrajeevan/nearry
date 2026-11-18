@@ -82,11 +82,6 @@ function Choices<T extends string | number | null>({
   );
 }
 
-const countLabel = (count: number) =>
-  count === 0
-    ? "No plans match"
-    : `Show ${count} plan${count === 1 ? "" : "s"}`;
-
 /**
  * Sort, cost and audience only: category sits on Home's rail and distance in
  * the location sheet. Draft changes are committed only by the Show button.
@@ -94,14 +89,11 @@ const countLabel = (count: number) =>
 export function PlanFilterSheet({
   value,
   hasLocation,
-  countFor,
   onApply,
   onClose,
 }: {
   value: PlanOptions;
   hasLocation: boolean;
-  /** How many plans Home would show with these options. */
-  countFor: (options: PlanOptions) => number;
   onApply: (options: PlanOptions) => void;
   onClose: () => void;
 }) {
@@ -109,7 +101,6 @@ export function PlanFilterSheet({
   const [draft, setDraft] = useState(value);
   const insets = useSafeAreaInsets();
   const reduced = useReducedMotion();
-  const count = countFor(draft);
   return (
     <Modal
       visible
@@ -204,7 +195,7 @@ export function PlanFilterSheet({
                 }
               />
               <Button
-                title={countLabel(count)}
+                title="Apply filters"
                 variant="solid"
                 onPress={() => onApply(draft)}
                 style={styles.apply}

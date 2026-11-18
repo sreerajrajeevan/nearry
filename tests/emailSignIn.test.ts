@@ -93,7 +93,7 @@ test("sign-in transport: provider errors, API headers and no-content sign-out re
     204,
   );
 });
-test("sign-in transport: profile hydration has a deadline; uploads and unrelated endpoints retain their transport", async () => {
+test("sign-in transport: backend requests and storage have deadlines; unrelated hosts retain their transport", async () => {
   let observed: any;
   const fetcher = (async (_input, init) => {
     observed = init;
@@ -104,7 +104,7 @@ test("sign-in transport: profile hydration has a deadline; uploads and unrelated
   await request("https://auth.invalid/storage/v1/object/photos/test.jpg", {
     signal: ownSignal,
   });
-  assert.equal(observed.signal, ownSignal);
+  assert.notEqual(observed.signal, ownSignal);
   await request("https://another.invalid/auth/v1/token", { signal: ownSignal });
   assert.equal(observed.signal, ownSignal);
   const profile = createSignInFetch(

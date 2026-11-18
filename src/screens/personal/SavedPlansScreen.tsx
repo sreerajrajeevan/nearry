@@ -34,7 +34,15 @@ export function SavedPlansScreen({
       void Promise.all((ids ?? []).map((id) => getPost(id)))
         .then((rows) => {
           if (active) {
-            setPosts(rows.filter((post): post is NeedPost => post !== null));
+            setPosts(
+              rows.filter(
+                (post): post is NeedPost =>
+                  post !== null &&
+                  post.status === "open" &&
+                  Date.parse(post.startsAt) > Date.now() &&
+                  (!post.expiresAt || Date.parse(post.expiresAt) > Date.now()),
+              ),
+            );
             setState("ready");
           }
         })

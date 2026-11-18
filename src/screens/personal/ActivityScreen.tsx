@@ -1,3 +1,10 @@
+import { usePagedQuery } from "../../hooks/usePagedQuery";
+import {
+  listMyRequestsPage,
+  listHostRequestPage,
+} from "../../services/joinRequests";
+import { listMyBookingsPage } from "../../services/bookings";
+import { NeedPost, JoinRequest } from "../../services/mappers";
 import { Alert } from "../../services/appAlert";
 import { PlanListSkeleton } from "../../components/Skeletons";
 import { haptic } from "../../services/haptics";
@@ -79,50 +86,61 @@ export function ActivityScreen() {
     setSection("plans");
     setHistory(false);
   }, [myId]);
-  const {
-    data,
-    state,
-    refreshing,
-    refresh: load,
-  } = useLiveQuery(
-    `activity:${myId}`,
-    async () => {
-      if (!myId) return { mine: [], incoming: [], bookings: [] };
-      const [mine, posts, bookings] = await Promise.all([
-        listMyRequests(myId),
-        listPosts({ authorId: myId, status: "all" }),
-        listMyBookings(myId),
-      ]);
-      const incoming = await Promise.all(
-        posts
-          .filter((p) => postState(p).canCancel)
-          .map(async (post) => ({
-            post,
-            requests: (await listRequestsForPost(post.id)).filter(
-              (r) => r.status === "pending",
-            ),
-          })),
-      );
-      return {
-        mine,
-        incoming: incoming.filter((item) => item.requests.length),
-        bookings,
-      };
-    },
-    (refresh) => {
-      const stopPosts = subscribeToPosts(refresh),
-        stopBookings = subscribeToBookings(refresh);
-      return () => {
-        stopPosts();
-        stopBookings();
-      };
-    },
+  const minePage = usePagedQuery(
+    "activity-mine:" + myId + ":" + history,
+    (c) =>
+      myId
+        ? listMyRequestsPage(myId, history, c)
+        : Promise.resolve({ items: [], cursor: null }),
+    subscribeToPosts,
   );
-  const mine = data?.mine ?? [],
-    incoming = (data?.incoming ?? []).filter(
-      ({ post }) => postState(post, now).canCancel,
-    ),
-    bookings = data?.bookings ?? [];
+  const hostPage = usePagedQuery(
+    "activity-incoming:" + myId,
+    (c) =>
+      myId
+        ? listHostRequestPage(myId, c)
+        : Promise.resolve({ items: [], cursor: null }),
+    subscribeToPosts,
+  );
+  const bookingPage = usePagedQuery(
+    "activity-bookings:" + myId + ":" + history,
+    (c) =>
+      myId
+        ? listMyBookingsPage(myId, history, c)
+        : Promise.resolve({ items: [], cursor: null }),
+    subscribeToBookings,
+  );
+  const active =
+    section === "plans"
+      ? minePage
+      : section === "requests"
+        ? hostPage
+        : bookingPage;
+  const state = active.state,
+    refreshing = active.refreshing;
+  const load = async (silent = false) => {
+    await Promise.all([
+      minePage.refresh(silent),
+      hostPage.refresh(silent),
+      bookingPage.refresh(silent),
+    ]);
+  };
+  const mine = minePage.items,
+    bookings = bookingPage.items;
+  const grouped = new Map<
+    string,
+    { post: NeedPost; requests: JoinRequest[] }
+  >();
+  for (const request of hostPage.items) {
+    if (!postState(request.post, now).canCancel) continue;
+    const item = grouped.get(request.post.id) ?? {
+      post: request.post,
+      requests: [],
+    };
+    item.requests.push(request);
+    grouped.set(request.post.id, item);
+  }
+  const incoming = [...grouped.values()];
   const requestCount = incoming.reduce(
     (total, item) => total + item.requests.length,
     0,
@@ -672,6 +690,19 @@ export function ActivityScreen() {
             })
           )}
         </ScreenReveal>
+        {!!active.moreError && (
+          <Text accessibilityRole="alert" style={styles.copy}>
+            {active.moreError}
+          </Text>
+        )}
+        {active.cursor && (
+          <Button
+            title="Load more"
+            variant="ghost"
+            loading={active.loadingMore}
+            onPress={() => void active.loadMore()}
+          />
+        )}
       </ScrollView>
     </Screen>
   );

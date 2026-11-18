@@ -407,6 +407,7 @@ export function VenueDetailsScreen({ route, navigation }: VenueDetailsProps) {
           </MotionPressable>
           {selectedPhoto && (
             <LoadingImage
+              fullSize
               source={{ uri: selectedPhoto }}
               style={styles.fullPhoto}
               resizeMode="contain"

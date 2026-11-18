@@ -1,4 +1,5 @@
-import React from "react";
+import React, { useState } from "react";
+import { photoThumbnail } from "../utils/photoRendition";
 import {
   ImageSourcePropType,
   StyleProp,
@@ -20,6 +21,7 @@ export function LoadingImage({
   onError,
   accessibilityLabel,
   accessible,
+  fullSize = false,
 }: {
   source: ImageSourcePropType;
   style?: StyleProp<ViewStyle>;
@@ -28,10 +30,18 @@ export function LoadingImage({
   onError?: () => void;
   accessibilityLabel?: string;
   accessible?: boolean;
+  fullSize?: boolean;
 }) {
+  const uri =
+    source && typeof source === "object" && "uri" in source
+      ? source.uri
+      : undefined;
+  const [failed, setFailed] = useState<string | null>(null);
+  const preview =
+    uri && !fullSize && failed !== uri ? photoThumbnail(uri) : uri;
   return (
     <Image
-      source={source as never}
+      source={(uri ? { ...(source as object), uri: preview } : source) as never}
       style={[styles.frame, style as never]}
       contentFit={resizeMode}
       transition={180}
@@ -42,7 +52,10 @@ export function LoadingImage({
           : undefined
       }
       onLoad={() => onLoad?.()}
-      onError={() => onError?.()}
+      onError={() => {
+        if (uri && preview !== uri) setFailed(uri);
+        else onError?.();
+      }}
       accessibilityLabel={accessibilityLabel}
       accessible={accessible}
     />

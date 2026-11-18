@@ -24,11 +24,12 @@
     "icon": "./assets/icon.png",
     "ios": {
       "bundleIdentifier": "com.nearry.app",
-      "supportsTablet": true
+      "supportsTablet": false
     },
     "name": "Nearry",
     "orientation": "portrait",
     "plugins": [
+      "expo-secure-store",
       "expo-location",
       [
         "expo-image-picker",
