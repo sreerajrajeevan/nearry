@@ -2,6 +2,7 @@ import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { readFile, readdir } from "node:fs/promises";
 import { PGlite } from "@electric-sql/pglite";
+import { bundleSlotAvailable } from "../src/utils/planOfferBundle";
 const submittedVenue = {
   name: "Reviewed Salon",
   category: "Salon",
@@ -205,7 +206,885 @@ before(async () => {
 after(async () => {
   await db?.close();
 });
+
+async function bundleFixture(capacity = 5) {
+  const business = await auditBusiness();
+  const customer = (await db.query("select gen_random_uuid() id")).rows[0].id;
+  await db.query(
+    'insert into auth.users(id,email,raw_user_meta_data) values($1,$2,\'{"account_type":"personal"}\')',
+    [customer, `${customer}@test.example`],
+  );
+  await db.query(
+    "update profiles set display_name='Bundle host',role_selected=true,onboarding_completed=true,gender='male',age=25,terms_version='2026-10-19' where id=$1",
+    [customer],
+  );
+  const offer = (
+    await db.query(
+      "insert into offers(business_id,title,description,price_cents,starts_at,ends_at,slot_capacity,slot_minutes,resource_key,status) values($1,'Court group offer','A bookable court for a friendly game',15000,now()+interval '4 hours',now()+interval '6 hours',$2,60,gen_random_uuid()::text,'live') returning id",
+      [business, capacity],
+    )
+  ).rows[0].id;
+  const slot = (
+    await db.query(
+      "select id from offer_slots where offer_id=$1 order by starts_at limit 1",
+      [offer],
+    )
+  ).rows[0].id;
+  const key = (await db.query("select gen_random_uuid() id")).rows[0].id;
+  const draft = {
+    title: "Badminton tonight",
+    description: "A friendly game using the court offer",
+    vacancies: 3,
+    tags: ["sports"],
+    gender_preference: "any",
+    plan_details: { activity: "badminton" },
+  };
+  const publish = (input = draft, retryKey = key) =>
+    asUser(
+      customer,
+      async (tx) =>
+        (
+          await tx.query("select create_plan_offer_bundle($1,$2,$3,15000) r", [
+            slot,
+            JSON.stringify(input),
+            retryKey,
+          ])
+        ).rows[0].r,
+    );
+  return { business, customer, offer, slot, key, draft, publish };
+}
+
+test("plan offer bundles: feature starts disabled; users cannot enable it or write bundle rows", async () => {
+  const fixture = await bundleFixture();
+  assert.equal(
+    (
+      await asUser(fixture.customer, (tx) =>
+        tx.query("select plan_offer_bundles_enabled() enabled"),
+      )
+    ).rows[0].enabled,
+    false,
+  );
+  await assert.rejects(fixture.publish(), /not enabled/);
+  await assert.rejects(
+    asUser(fixture.customer, (tx) =>
+      tx.exec("update plan_offer_settings set enabled=true"),
+    ),
+    /permission denied/,
+  );
+  await assert.rejects(
+    asUser(fixture.customer, (tx) =>
+      tx.exec("insert into plan_offer_bundles default values"),
+    ),
+    /permission denied/,
+  );
+  assert.equal(
+    (
+      await db.query("select count(*)::int n from bookings where offer_id=$1", [
+        fixture.offer,
+      ])
+    ).rows[0].n,
+    0,
+  );
+});
+
+test("plan offer bundles: atomic publication reserves host plus vacancies once and supports safe retries", async () => {
+  await db.exec("update plan_offer_settings set enabled=true");
+  const f = await bundleFixture();
+  const first = await f.publish();
+  assert.deepEqual(await f.publish(), first);
+  const row = (
+    await db.query(
+      "select p.*,b.party_size,b.status booking_status from posts p join plan_offer_bundles g on g.post_id=p.id join bookings b on b.id=g.booking_id where p.id=$1",
+      [first.post_id],
+    )
+  ).rows[0];
+  assert.equal(row.vacancies, 3);
+  assert.equal(row.party_size, 4);
+  assert.equal(row.cost_cents, 15000);
+  assert.equal(row.venue_name, "Audit Salon");
+  assert.equal(row.booking_status, "pending");
+  assert.equal(row.plan_details.venueBooked, false);
+  assert.equal(
+    (
+      await db.query("select count(*)::int n from bookings where offer_id=$1", [
+        f.offer,
+      ])
+    ).rows[0].n,
+    1,
+  );
+  assert.equal(
+    (
+      await db.query(
+        "select count(*)::int n from plan_groups where post_id=$1",
+        [first.post_id],
+      )
+    ).rows[0].n,
+    0,
+  );
+  await assert.rejects(
+    f.publish({ ...f.draft, title: "Different title" }),
+    /retry belongs/,
+  );
+  await assert.rejects(
+    asUser(f.customer, (tx) =>
+      tx.query("select create_plan_offer_bundle($1,$2,gen_random_uuid(),1)", [
+        f.slot,
+        JSON.stringify(f.draft),
+      ]),
+    ),
+    /price changed/,
+  );
+  await assert.rejects(
+    asUser(f.customer, (tx) =>
+      tx.query(
+        "select create_plan_offer_bundle($1,$2,gen_random_uuid(),15000)",
+        [f.slot, JSON.stringify({ ...f.draft, venue_id: "forged" })],
+      ),
+    ),
+    /offer supplies/,
+  );
+  // Shared capacity prevents even an ordinary booking from claiming occupied seats.
+  await assert.rejects(
+    asUser(b, (tx) => tx.query("select book_offer_slot($1,2)", [f.slot])),
+    /not enough seats|resource already booked/,
+  );
+  assert.equal(
+    (
+      await asUser(b, (tx) =>
+        tx.query("select available_offer_slots($1) slots", [f.offer]),
+      )
+    ).rows[0].slots.find((s: any) => s.id === f.slot).seats_left,
+    0,
+  );
+  await assert.rejects(
+    asUser(b, (tx) => tx.query("select book_offer_slot($1,1)", [f.slot])),
+    /resource already booked/,
+  );
+  const req = await request(b, first.post_id);
+  await asUser(f.customer, (tx) =>
+    tx.query("select approve_join_request($1)", [req]),
+  );
+  await asUser(f.business, (tx) =>
+    tx.query("select update_offer($1,'{\"price_cents\":20000}')", [f.offer]),
+  );
+  await asUser(f.business, (tx) =>
+    tx.query("select change_booking_status($1,'confirmed')", [
+      first.booking_id,
+    ]),
+  );
+  const memberNotice = (
+    await asUser(b, (tx) =>
+      tx.query(
+        "select body,ref_id from notifications where user_id=$1 and kind='plan_booking_confirmed' order by created_at desc limit 1",
+        [b],
+      ),
+    )
+  ).rows[0];
+  assert.equal(memberNotice.ref_id, first.post_id);
+  assert.match(memberNotice.body, /₹150 per person/);
+  const confirmation = (
+    await db.query(
+      "select body from notifications where user_id=$1 and kind='booking_confirmed' order by created_at desc limit 1",
+      [f.customer],
+    )
+  ).rows[0].body;
+  assert.match(confirmation, /Pay ₹600 at the venue \(₹150 \/ person\)/);
+  assert.equal(
+    (
+      await db.query(
+        "select price_cents from plan_offer_bundles where post_id=$1",
+        [first.post_id],
+      )
+    ).rows[0].price_cents,
+    15000,
+  );
+
+  assert.equal(
+    (
+      await db.query(
+        "select count(*)::int n from plan_groups where post_id=$1",
+        [first.post_id],
+      )
+    ).rows[0].n,
+    1,
+  );
+  await asUser(b, (tx) => tx.query("select withdraw_join_request($1)", [req]));
+  assert.equal(
+    (await db.query("select approved_join_count($1) n", [first.post_id]))
+      .rows[0].n,
+    0,
+  );
+  assert.equal(
+    (
+      await db.query("select party_size from bookings where id=$1", [
+        first.booking_id,
+      ])
+    ).rows[0].party_size,
+    4,
+  );
+  await assert.rejects(
+    asUser(f.customer, (tx) =>
+      tx.query("update posts set vacancies=4 where id=$1", [first.post_id]),
+    ),
+    /group reservation/,
+  );
+  await asUser(f.customer, (tx) =>
+    tx.query("update posts set title='Updated group name' where id=$1", [
+      first.post_id,
+    ]),
+  );
+  assert.equal(
+    (
+      await db.query(
+        "select plan_title from plan_offer_bundles where post_id=$1",
+        [first.post_id],
+      )
+    ).rows[0].plan_title,
+    "Updated group name",
+  );
+  await db.exec("update plan_offer_settings set enabled=false");
+  assert.deepEqual(await f.publish(), first); // A kill switch must not duplicate a completed retry.
+  await asUser(f.customer, (tx) =>
+    tx.query("select cancel_post($1)", [first.post_id]),
+  );
+  assert.equal(
+    (
+      await db.query("select status from bookings where id=$1", [
+        first.booking_id,
+      ])
+    ).rows[0].status,
+    "cancelled",
+  );
+});
+
+test("plan offer bundles: leaving succeeds when a waitlisted requester or business becomes unavailable", async () => {
+  for (const reason of [
+    "business-block",
+    "requester-block",
+    "verification",
+  ] as const) {
+    await db.exec("update plan_offer_settings set enabled=true");
+    const f = await bundleFixture();
+    const saved = await f.publish({ ...f.draft, vacancies: 1 });
+    const approved = await request(b, saved.post_id);
+    const waiting = await request(c, saved.post_id);
+    await asUser(f.customer, (tx) =>
+      tx.query("select approve_join_request($1)", [approved]),
+    );
+    assert.equal(
+      (
+        await db.query("select status from join_requests where id=$1", [
+          waiting,
+        ])
+      ).rows[0].status,
+      "full",
+    );
+    if (reason === "verification") {
+      await db.query(
+        "update profiles set verification_status='unverified' where id=$1",
+        [f.business],
+      );
+    } else {
+      await asUser(reason === "business-block" ? f.business : c, (tx) =>
+        tx.query("select set_user_block($1,true)", [
+          reason === "business-block" ? c : f.business,
+        ]),
+      );
+    }
+    if (reason === "business-block") {
+      await asUser(b, (tx) =>
+        tx.query("select withdraw_join_request($1)", [approved]),
+      );
+    } else {
+      const group = (
+        await db.query("select id from plan_groups where post_id=$1", [
+          saved.post_id,
+        ])
+      ).rows[0].id;
+      await asUser(b, (tx) => tx.query("select leave_plan_group($1)", [group]));
+    }
+    assert.equal(
+      (
+        await db.query("select status from join_requests where id=$1", [
+          approved,
+        ])
+      ).rows[0].status,
+      "withdrawn",
+      reason,
+    );
+    assert.equal(
+      (
+        await db.query("select status from join_requests where id=$1", [
+          waiting,
+        ])
+      ).rows[0].status,
+      "declined",
+      reason,
+    );
+    assert.equal(
+      (await db.query("select status from posts where id=$1", [saved.post_id]))
+        .rows[0].status,
+      "open",
+      reason,
+    );
+    assert.equal(
+      (await db.query("select approved_join_count($1) n", [saved.post_id]))
+        .rows[0].n,
+      0,
+      reason,
+    );
+    assert.equal(
+      (
+        await db.query("select party_size from bookings where id=$1", [
+          saved.booking_id,
+        ])
+      ).rows[0].party_size,
+      2,
+      reason,
+    );
+    // Automatic reopening must decline the ineligible waiter, not bypass the safety check.
+    await assert.rejects(
+      request(c, saved.post_id),
+      /Business reservation unavailable/,
+      reason,
+    );
+  }
+  await db.exec("update plan_offer_settings set enabled=false");
+});
+
+test("plan offer bundles: picker availability matches exclusive reservation rules", async () => {
+  await db.exec("update plan_offer_settings set enabled=true");
+  const f = await bundleFixture(5);
+  const ordinary = (
+    await asUser(b, (tx) =>
+      tx.query("select book_offer_slot($1,1) r", [f.slot]),
+    )
+  ).rows[0].r;
+  const readSlot = async () =>
+    (
+      await asUser(f.customer, (tx) =>
+        tx.query("select available_offer_slots($1) slots", [f.offer]),
+      )
+    ).rows[0].slots.find((slot: any) => slot.id === f.slot);
+  const partial = await readSlot();
+  assert.equal(partial.seats_left, 4);
+  assert.equal(bundleSlotAvailable(partial, 4), false);
+  await assert.rejects(f.publish(), /Choose an empty slot/);
+  await asUser(b, (tx) =>
+    tx.query("select change_booking_status($1,'cancelled')", [
+      ordinary.booking_id,
+    ]),
+  );
+  assert.equal(bundleSlotAvailable(await readSlot(), 4), true);
+  assert.ok((await f.publish()).post_id);
+  await db.exec("update plan_offer_settings set enabled=false");
+});
+
+test("bundle edge cases: malformed publication rolls back every row and a corrected retry succeeds", async () => {
+  await db.exec("update plan_offer_settings set enabled=true");
+  const f = await bundleFixture();
+  for (const payload of [
+    null,
+    [],
+    {},
+    { ...f.draft, title: null },
+    { ...f.draft, title: "x" },
+    { ...f.draft, description: "short" },
+    { ...f.draft, vacancies: -1 },
+    { ...f.draft, vacancies: 0 },
+    { ...f.draft, vacancies: 1.2 },
+    { ...f.draft, gender_preference: "invalid" },
+    { ...f.draft, plan_details: { ageMin: 80, ageMax: 18 } },
+    { ...f.draft, expires_at: new Date(Date.now() - 60_000).toISOString() },
+  ]) {
+    await assert.rejects(
+      asUser(f.customer, (tx) =>
+        tx.query("select create_plan_offer_bundle($1,$2,$3,15000)", [
+          f.slot,
+          JSON.stringify(payload),
+          f.key,
+        ]),
+      ),
+    );
+  }
+  for (const table of ["posts", "bookings", "plan_offer_bundles"]) {
+    const column =
+      table === "posts"
+        ? "author_id"
+        : table === "bookings"
+          ? "customer_id"
+          : "host_id";
+    assert.equal(
+      (
+        await db.query(
+          `select count(*)::int n from ${table} where ${column}=$1`,
+          [f.customer],
+        )
+      ).rows[0].n,
+      0,
+      table,
+    );
+  }
+  const result = await f.publish();
+  assert.deepEqual(await f.publish(), result);
+  await db.exec("update plan_offer_settings set enabled=false");
+});
+
+test("bundle edge cases: expired holds block joins and approvals but never prevent repeated departure", async () => {
+  for (const vacancies of [1, 2]) {
+    await db.exec("update plan_offer_settings set enabled=true");
+    const f = await bundleFixture();
+    const saved = await f.publish({ ...f.draft, vacancies });
+    const approved = await request(b, saved.post_id);
+    const waiting = await request(c, saved.post_id);
+    await asUser(f.customer, (tx) =>
+      tx.query("select approve_join_request($1)", [approved]),
+    );
+    await db.query(
+      "update bookings set hold_expires_at=now()-interval '1 minute' where id=$1",
+      [saved.booking_id],
+    );
+    await assert.rejects(request(outsider, saved.post_id));
+    await assert.rejects(
+      asUser(f.customer, (tx) =>
+        tx.query("select approve_join_request($1)", [waiting]),
+      ),
+    );
+    const group = (
+      await db.query("select id from plan_groups where post_id=$1", [
+        saved.post_id,
+      ])
+    ).rows[0].id;
+    for (let retry = 0; retry < 2; retry++)
+      await asUser(b, (tx) => tx.query("select leave_plan_group($1)", [group]));
+    assert.equal(
+      (await db.query("select approved_join_count($1) n", [saved.post_id]))
+        .rows[0].n,
+      0,
+    );
+    assert.equal(
+      (
+        await db.query("select party_size from bookings where id=$1", [
+          saved.booking_id,
+        ])
+      ).rows[0].party_size,
+      vacancies + 1,
+    );
+    await db.query("select expire_booking_holds()");
+    await db.query("select expire_booking_holds()");
+    assert.equal(
+      (await db.query("select status from posts where id=$1", [saved.post_id]))
+        .rows[0].status,
+      "cancelled",
+    );
+  }
+  await db.exec("update plan_offer_settings set enabled=false");
+});
+
+test("bundle edge cases: incomplete hosts and changed age/gender cannot bypass participation rules", async () => {
+  await db.exec("update plan_offer_settings set enabled=true");
+  const f = await bundleFixture();
+  await db.query("update profiles set age=null where id=$1", [f.customer]);
+  await assert.rejects(f.publish(), /Complete your profile/);
+  await db.query("update profiles set age=18 where id=$1", [f.customer]);
+  const saved = await f.publish({
+    ...f.draft,
+    gender_preference: "female",
+    plan_details: { activity: "badminton", ageMin: 18, ageMax: 20 },
+  } as any);
+  const member = (await db.query("select gen_random_uuid() id")).rows[0].id;
+  await db.query(
+    'insert into auth.users(id,email,raw_user_meta_data) values($1,$2,\'{"account_type":"personal"}\')',
+    [member, `${member}@test.example`],
+  );
+  await db.query(
+    "update profiles set display_name='Edge member',role_selected=true,onboarding_completed=true,gender='male',age=25,terms_version='2026-10-19' where id=$1",
+    [member],
+  );
+  await assert.rejects(request(member, saved.post_id), /females|women|female/i);
+  await db.query("update profiles set gender='female' where id=$1", [member]);
+  await assert.rejects(request(member, saved.post_id), /age range/i);
+  await db.query("update profiles set age=18 where id=$1", [member]);
+  const req = await request(member, saved.post_id);
+  await db.query("update profiles set age=21 where id=$1", [member]);
+  await assert.rejects(
+    asUser(f.customer, (tx) =>
+      tx.query("select approve_join_request($1)", [req]),
+    ),
+    /age range/i,
+  );
+  await db.query("update profiles set age=18 where id=$1", [member]);
+  await asUser(f.customer, (tx) =>
+    tx.query("select approve_join_request($1)", [req]),
+  );
+  assert.equal(
+    (await db.query("select approved_join_count($1) n", [saved.post_id]))
+      .rows[0].n,
+    1,
+  );
+  await db.exec("update plan_offer_settings set enabled=false");
+});
+
+test("bundle edge cases: free and maximum-price groups reserve exactly 50 people", async () => {
+  for (const price of [0, 2_000_000]) {
+    await db.exec("update plan_offer_settings set enabled=true");
+    const f = await bundleFixture(50);
+    const payload = { ...f.draft, vacancies: 49 };
+    if (price > 0) {
+      await asUser(f.business, (tx) =>
+        tx.query("select update_offer($1,'{\"price_cents\":2000001}')", [
+          f.offer,
+        ]),
+      );
+      await assert.rejects(
+        asUser(f.customer, (tx) =>
+          tx.query("select create_plan_offer_bundle($1,$2,$3,2000001)", [
+            f.slot,
+            JSON.stringify(payload),
+            f.key,
+          ]),
+        ),
+        /group total exceeds/,
+      );
+    }
+    await asUser(f.business, (tx) =>
+      tx.query("select update_offer($1,$2)", [
+        f.offer,
+        JSON.stringify({ price_cents: price }),
+      ]),
+    );
+    const saved = (
+      await asUser(f.customer, (tx) =>
+        tx.query("select create_plan_offer_bundle($1,$2,$3,$4) r", [
+          f.slot,
+          JSON.stringify(payload),
+          f.key,
+          price,
+        ]),
+      )
+    ).rows[0].r;
+    const row = (
+      await db.query(
+        "select party_size,price_cents from plan_offer_bundles where post_id=$1",
+        [saved.post_id],
+      )
+    ).rows[0];
+    assert.equal(row.party_size, 50);
+    assert.equal(row.price_cents, price);
+    await assert.rejects(
+      asUser(f.customer, (tx) =>
+        tx.query(
+          "select create_plan_offer_bundle($1,$2,gen_random_uuid(),$3)",
+          [f.slot, JSON.stringify({ ...payload, vacancies: 50 }), price],
+        ),
+      ),
+      /1 to 49/,
+    );
+  }
+  await db.exec("update plan_offer_settings set enabled=false");
+});
+
+test("bundle edge cases: simultaneous last-spot approvals preserve group and reserved capacity", async (t) => {
+  if (!external)
+    return t.skip(
+      "Real PostgreSQL required for independent concurrent connections",
+    );
+  await db.exec("update plan_offer_settings set enabled=true");
+  const f = await bundleFixture();
+  const saved = await f.publish({ ...f.draft, vacancies: 1 });
+  const requests = await Promise.all([
+    request(b, saved.post_id),
+    request(c, saved.post_id),
+  ]);
+  const results = await Promise.allSettled(
+    requests.map((id) =>
+      asUser(f.customer, (tx) =>
+        tx.query("select approve_join_request($1)", [id]),
+      ),
+    ),
+  );
+  assert.equal(results.filter((r) => r.status === "fulfilled").length, 1);
+  assert.equal(
+    (await db.query("select approved_join_count($1) n", [saved.post_id]))
+      .rows[0].n,
+    1,
+  );
+  assert.equal(
+    (
+      await db.query(
+        "select count(*)::int n from plan_groups where post_id=$1",
+        [saved.post_id],
+      )
+    ).rows[0].n,
+    1,
+  );
+  assert.equal(
+    (
+      await db.query("select party_size from bookings where id=$1", [
+        saved.booking_id,
+      ])
+    ).rows[0].party_size,
+    2,
+  );
+  await db.exec("update plan_offer_settings set enabled=false");
+});
+
+test("plan offer bundles: insufficient capacity and invalid details roll back without creating posts or holds", async () => {
+  await db.exec("update plan_offer_settings set enabled=true");
+  const f = await bundleFixture(3);
+  await assert.rejects(f.publish(), /Not enough places/);
+  await assert.rejects(
+    f.publish({ ...f.draft, vacancies: 1, title: "x" }),
+    /invalid post/,
+  );
+  assert.equal(
+    (
+      await db.query("select count(*)::int n from bookings where offer_id=$1", [
+        f.offer,
+      ])
+    ).rows[0].n,
+    0,
+  );
+  assert.equal(
+    (
+      await db.query("select count(*)::int n from posts where author_id=$1", [
+        f.customer,
+      ])
+    ).rows[0].n,
+    0,
+  );
+});
+
+test("plan offer bundles: business cancellation, expiry and reservation removal close plans and release capacity", async () => {
+  for (const mode of [
+    "business",
+    "expiry",
+    "delete",
+    "host-delete",
+    "offer-ended",
+  ] as const) {
+    await db.exec("update plan_offer_settings set enabled=true");
+    const f = await bundleFixture();
+    const saved = await f.publish();
+    const req = await request(c, saved.post_id);
+    if (mode === "business") {
+      await asUser(f.business, (tx) =>
+        tx.query("select change_booking_status($1,'cancelled')", [
+          saved.booking_id,
+        ]),
+      );
+    } else if (mode === "expiry") {
+      await db.query(
+        "update bookings set hold_expires_at=now()-interval '1 minute' where id=$1",
+        [saved.booking_id],
+      );
+      await assert.rejects(request(b, saved.post_id), /cancelled or expired/);
+      await assert.rejects(
+        asUser(f.customer, (tx) =>
+          tx.query("select approve_join_request($1)", [req]),
+        ),
+        /cancelled or expired/,
+      );
+      await db.query("select expire_booking_holds()");
+    } else if (mode === "delete") {
+      await db.query("delete from bookings where id=$1", [saved.booking_id]);
+    } else if (mode === "host-delete") {
+      await assert.rejects(
+        asUser(f.customer, (tx) =>
+          tx.query("select delete_post($1)", [saved.post_id]),
+        ),
+        /has requests/,
+      );
+      await asUser(f.customer, (tx) =>
+        tx.query("select cancel_post($1)", [saved.post_id]),
+      );
+    } else {
+      await asUser(f.business, (tx) =>
+        tx.query('select update_offer($1,\'{"status":"cancelled"}\')', [
+          f.offer,
+        ]),
+      );
+    }
+    assert.equal(
+      (await db.query("select status from posts where id=$1", [saved.post_id]))
+        .rows[0].status,
+      "cancelled",
+      mode,
+    );
+    assert.equal(
+      (
+        await db.query(
+          "select status from plan_offer_bundles where post_id=$1",
+          [saved.post_id],
+        )
+      ).rows[0].status,
+      "cancelled",
+      mode,
+    );
+    assert.ok(
+      (
+        await db.query(
+          "select count(*)::int n from notifications where user_id=$1 and kind='post_cancelled' and ref_id=$2",
+          [c, saved.post_id],
+        )
+      ).rows[0].n > 0,
+      mode,
+    );
+  }
+  // An empty plan can be deleted; its reserved places must be released too.
+  const f = await bundleFixture();
+  const saved = await f.publish();
+  await asUser(f.customer, (tx) =>
+    tx.query("select delete_post($1)", [saved.post_id]),
+  );
+  assert.equal(
+    (
+      await db.query("select status from bookings where id=$1", [
+        saved.booking_id,
+      ])
+    ).rows[0].status,
+    "cancelled",
+  );
+  await db.exec("update plan_offer_settings set enabled=false");
+});
+
+test("plan offer bundles: concurrent ordinary and group bookings cannot overbook one slot", async (t) => {
+  if (!external)
+    return t.skip(
+      "Real PostgreSQL required for independent concurrent connections",
+    );
+  await db.exec("update plan_offer_settings set enabled=true");
+  const f = await bundleFixture(4);
+  const results = await Promise.allSettled([
+    f.publish(),
+    asUser(b, (tx) => tx.query("select book_offer_slot($1,1)", [f.slot])),
+  ]);
+  assert.equal(results.filter((r) => r.status === "fulfilled").length, 1);
+  assert.ok(
+    (
+      await db.query(
+        "select coalesce(sum(party_size),0)::int n from bookings where offer_id=$1 and status in ('pending','confirmed')",
+        [f.offer],
+      )
+    ).rows[0].n <= 4,
+  );
+  await db.exec("update plan_offer_settings set enabled=false");
+});
 // This reset is exercised in a rolled-back transaction, so later fixtures survive.
+test("plan offer bundles: private retry data stays private and blocked venue interactions are rejected", async () => {
+  await db.exec("update plan_offer_settings set enabled=true");
+  const f = await bundleFixture();
+  const saved = await f.publish();
+  const businessRow = await asUser(f.business, (tx) =>
+    tx.query(
+      "select post_id,price_cents,party_size from plan_offer_bundles where booking_id=$1",
+      [saved.booking_id],
+    ),
+  );
+  assert.equal(businessRow.rows[0].party_size, 4);
+  await assert.rejects(
+    asUser(b, (tx) =>
+      tx.query("select request_payload from plan_offer_bundles"),
+    ),
+    /permission denied/,
+  );
+  await assert.rejects(
+    asUser(f.customer, (tx) =>
+      tx.query(
+        "update plan_offer_bundles set status='confirmed' where post_id=$1",
+        [saved.post_id],
+      ),
+    ),
+    /permission denied/,
+  );
+  await assert.rejects(
+    asUser(b, (tx) => tx.query("select cancel_post($1)", [saved.post_id])),
+    /not yours/,
+  );
+  await asUser(f.business, (tx) =>
+    tx.query("select set_user_block($1,true)", [b]),
+  );
+  await assert.rejects(
+    request(b, saved.post_id),
+    /Business reservation unavailable/,
+  );
+  await db.exec("update plan_offer_settings set enabled=false");
+});
+
+test("plan offer bundles: account cleanup cascades safely without orphaning a reserved plan", async () => {
+  for (const owner of ["customer", "business"] as const) {
+    await db.exec("update plan_offer_settings set enabled=true");
+    const f = await bundleFixture();
+    const saved = await f.publish();
+    await asUser(f[owner], (tx) =>
+      tx.query("select request_account_deletion('DELETE')"),
+    );
+    await db.query("select prepare_auth_deletion($1)", [f[owner]]);
+    await db.query("delete from auth.users where id=$1", [f[owner]]);
+    assert.equal(
+      (
+        await db.query("select count(*)::int n from bookings where id=$1", [
+          saved.booking_id,
+        ])
+      ).rows[0].n,
+      0,
+    );
+    const plans = (
+      await db.query("select status from posts where id=$1", [saved.post_id])
+    ).rows;
+    if (owner === "customer") assert.equal(plans.length, 0);
+    else assert.equal(plans[0].status, "cancelled");
+  }
+  await db.exec("update plan_offer_settings set enabled=false");
+});
+
+test("plan offer bundles: concurrent publication retries create just one reservation", async (t) => {
+  if (!external)
+    return t.skip(
+      "Real PostgreSQL required for independent concurrent connections",
+    );
+  await db.exec("update plan_offer_settings set enabled=true");
+  const f = await bundleFixture();
+  const results = await Promise.all([f.publish(), f.publish()]);
+  assert.deepEqual(results[0], results[1]);
+  assert.equal(
+    (
+      await db.query("select count(*)::int n from bookings where offer_id=$1", [
+        f.offer,
+      ])
+    ).rows[0].n,
+    1,
+  );
+  // Exercise opposite cancellation paths with the same booking/plan locks.
+  await Promise.allSettled([
+    asUser(f.customer, (tx) =>
+      tx.query("select cancel_post($1)", [results[0].post_id]),
+    ),
+    asUser(f.business, (tx) =>
+      tx.query("select change_booking_status($1,'cancelled')", [
+        results[0].booking_id,
+      ]),
+    ),
+  ]);
+  assert.equal(
+    (
+      await db.query("select status from bookings where id=$1", [
+        results[0].booking_id,
+      ])
+    ).rows[0].status,
+    "cancelled",
+  );
+  assert.equal(
+    (
+      await db.query("select status from posts where id=$1", [
+        results[0].post_id,
+      ])
+    ).rows[0].status,
+    "cancelled",
+  );
+  await db.exec("update plan_offer_settings set enabled=false");
+});
+
 test("operator testing reset clears the actual schema without removing admin access or global cost limits", async () => {
   const { clearDataSql, CLEAR_TABLES, PROJECT } =
     await import("../scripts/reset-test-data.mjs");

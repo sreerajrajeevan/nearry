@@ -152,3 +152,5 @@ Personal members can submit a private camera selfie from Profile. Review it in t
 Admin dashboard: see [account controls, safety rules and deployment](docs/admin-account-controls.md).
 
 Personal Create Plan and private plan groups: see [flow, migration and phone checks](docs/create-plan-and-groups.md). Apply migration 00036 before installing the new app build.
+
+Optional plan + offer bundles: see [reservation rules, staged rollout and phone checks](docs/plan-offer-bundles.md). Creation is disabled by default; the `bundle-preview` build profile is for staging only.

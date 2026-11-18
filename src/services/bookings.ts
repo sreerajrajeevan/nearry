@@ -1,3 +1,6 @@
+import { isAvailableSlot, type AvailableSlot } from "../utils/bookingSlots";
+export type { AvailableSlot } from "../utils/bookingSlots";
+import { listBookingPlanBundles } from "./planOfferBundles";
 import { assertLive } from "./demoGuard";
 import { getSupabase, isSupabaseConfigured, isDemoMode } from "./supabase";
 import { multiplexSubscribe } from "./realtime";
@@ -112,6 +115,19 @@ export async function bookOffer(
   return { bookingId: res.booking_id, seatsLeft: res.seats_left };
 }
 
+async function withPlanBundles(bookings: Booking[]): Promise<Booking[]> {
+  const bundles = await listBookingPlanBundles(
+    bookings.map((booking) => booking.id),
+  );
+  const byBooking = new Map(
+    bundles.map((bundle) => [bundle.bookingId, bundle]),
+  );
+  return bookings.map((booking) => ({
+    ...booking,
+    planBundle: byBooking.get(booking.id),
+  }));
+}
+
 /** My bookings as a customer, newest first. */
 export async function listMyBookings(customerId: string): Promise<Booking[]> {
   if (useMock())
@@ -125,18 +141,20 @@ export async function listMyBookings(customerId: string): Promise<Booking[]> {
     .eq("customer_id", customerId)
     .order("slot", { ascending: true });
   if (error) throw new Error(error.message);
-  return ((data ?? []) as Record<string, unknown>[]).map((row) => {
-    const offerRow = row.offer as {
-      title?: string;
-      business_id?: string;
-    } | null;
-    return toBooking({
-      ...(row as unknown as DbBooking),
-      business_id: offerRow?.business_id,
-      offer: { title: offerRow?.title ?? "Offer" },
-      customer: { display_name: "You" },
-    });
-  });
+  return withPlanBundles(
+    ((data ?? []) as Record<string, unknown>[]).map((row) => {
+      const offerRow = row.offer as {
+        title?: string;
+        business_id?: string;
+      } | null;
+      return toBooking({
+        ...(row as unknown as DbBooking),
+        business_id: offerRow?.business_id,
+        offer: { title: offerRow?.title ?? "Offer" },
+        customer: { display_name: "You" },
+      });
+    }),
+  );
 }
 
 /** Bookings across all my offers (business view), via the business_bookings view. */
@@ -151,7 +169,9 @@ export async function listBookingsForBusiness(
     .eq("business_id", businessId)
     .order("slot", { ascending: true });
   if (error) throw new Error(error.message);
-  return ((data ?? []) as Record<string, unknown>[]).map(fromView);
+  return withPlanBundles(
+    ((data ?? []) as Record<string, unknown>[]).map(fromView),
+  );
 }
 
 /** Business confirms a pending booking. */
@@ -232,13 +252,6 @@ function friendlyBookingError(message: string): string {
   return message;
 }
 
-export type AvailableSlot = {
-  id: string;
-  starts_at: string;
-  ends_at: string;
-  capacity: number;
-  seats_left: number;
-};
 export async function listOfferSlots(
   offerId: string,
 ): Promise<AvailableSlot[]> {
@@ -279,5 +292,8 @@ export async function listOfferSlots(
     p_offer_id: offerId,
   });
   if (error) throw new Error(error.message);
-  return data ?? [];
+  const slots: unknown = data ?? [];
+  if (!Array.isArray(slots) || !slots.every(isAvailableSlot))
+    throw new Error("Could not load available slots. Please retry.");
+  return slots;
 }

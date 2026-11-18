@@ -1,3 +1,7 @@
+import { useDiscoveryClock } from "../../hooks/useDiscoveryClock";
+import { getPlanOfferBundle } from "../../services/planOfferBundles";
+import { bundleStatus } from "../../utils/planOfferBundle";
+import { PlanBundleCard } from "../../components/PlanBundleCard";
 import { assertLive } from "../../services/demoGuard";
 import { Alert } from "../../services/appAlert";
 import { PlanDetailsSkeleton } from "../../components/Skeletons";
@@ -81,6 +85,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
  */
 export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
   const { postId } = route.params;
+  const now = useDiscoveryClock();
   const { profile, refreshProfile } = useAuth();
   const myId = profile?.id;
 
@@ -100,17 +105,20 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
     async () => {
       const p = await getPost(postId);
       if (!p) throw new Error("Post not found.");
-      const [reqs, mine, selfieChecked, venue, avatars] = await Promise.all([
-        listRequestsForPost(postId),
-        myId ? myRequestForPost(postId, myId) : Promise.resolve(null),
-        isPersonalSelfieChecked(p.authorId).catch(() => false),
-        p.venueId
-          ? getVenue(p.venueId).catch(() => null)
-          : Promise.resolve(null),
-        publicAvatars([p.authorId]).catch(() => new Map<string, string>()),
-      ]);
+      const [reqs, mine, selfieChecked, venue, avatars, bundle] =
+        await Promise.all([
+          listRequestsForPost(postId),
+          myId ? myRequestForPost(postId, myId) : Promise.resolve(null),
+          isPersonalSelfieChecked(p.authorId).catch(() => false),
+          p.venueId
+            ? getVenue(p.venueId).catch(() => null)
+            : Promise.resolve(null),
+          publicAvatars([p.authorId]).catch(() => new Map<string, string>()),
+          getPlanOfferBundle(postId),
+        ]);
       return {
         post: p,
+        bundle,
         requests: reqs,
         myRequest: mine,
         selfieChecked,
@@ -252,6 +260,10 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
   }
 
   const flow = postState(post);
+  const bundle = data?.bundle;
+  const reservationUnavailable =
+    !!bundle &&
+    ["cancelled", "expired"].includes(bundleStatus(bundle, now.getTime()));
   const details = post.planDetails;
   const detailChips = [
     details?.durationMinutes
@@ -453,6 +465,7 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
             <Icon name="chevron-right" size={18} color={colors.textDim} />
           )}
         </MotionPressable>
+        {bundle && <PlanBundleCard bundle={bundle} />}
         <Text accessibilityRole="header" style={styles.sectionHeading}>
           About the plan
         </Text>
@@ -655,10 +668,13 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
           </View>
         ) : (
           <View style={styles.participantActions}>
-            {post.status === "cancelled" ? (
+            {reservationUnavailable ? (
               <Text style={styles.footerStatus}>
-                This plan was cancelled by the host.
+                The venue reservation is unavailable. This plan cannot accept
+                joins.
               </Text>
+            ) : post.status === "cancelled" ? (
+              <Text style={styles.footerStatus}>This plan was cancelled.</Text>
             ) : myRequest?.declineCount !== undefined &&
               myRequest.declineCount >= 2 ? (
               <Text style={styles.footerStatus}>

@@ -1,3 +1,4 @@
+import { PlanBundleCard } from "../../components/PlanBundleCard";
 import { LoadingState } from "../../components/LoadingState";
 import { haptic } from "../../services/haptics";
 import { useToast } from "../../store/ToastContext";
@@ -191,28 +192,36 @@ export function OfferDetailsScreen({ route, navigation }: Props) {
   };
 
   const onCancel = (bookingId: string) =>
-    Alert.alert("Cancel this booking?", "Your place will be released.", [
-      { text: "Keep it", style: "cancel" },
-      {
-        text: "Cancel booking",
-        style: "destructive",
-        onPress: () => {
-          setCancelling(bookingId);
-          void cancelBooking(bookingId)
-            .then(() => {
-              void refreshMine?.();
-              toast("Booking cancelled", "x");
-              return load(true);
-            })
-            .catch((e) =>
-              setFormError(
-                e instanceof Error ? e.message : "Could not cancel. Try again.",
-              ),
-            )
-            .finally(() => setCancelling(null));
+    Alert.alert(
+      "Cancel this booking?",
+      mine.find((b) => b.id === bookingId)?.planBundle
+        ? "This also cancels the linked plan for everyone and releases the whole group reservation."
+        : "Your place will be released.",
+      [
+        { text: "Keep it", style: "cancel" },
+        {
+          text: "Cancel booking",
+          style: "destructive",
+          onPress: () => {
+            setCancelling(bookingId);
+            void cancelBooking(bookingId)
+              .then(() => {
+                void refreshMine?.();
+                toast("Booking cancelled", "x");
+                return load(true);
+              })
+              .catch((e) =>
+                setFormError(
+                  e instanceof Error
+                    ? e.message
+                    : "Could not cancel. Try again.",
+                ),
+              )
+              .finally(() => setCancelling(null));
+          },
         },
-      },
-    ]);
+      ],
+    );
 
   const onMessage = async (bookingId: string) => {
     if (!offer || messaging) return;
@@ -404,23 +413,38 @@ export function OfferDetailsScreen({ route, navigation }: Props) {
                       {formatWhen(b.slot)} · {b.partySize}{" "}
                       {b.partySize === 1 ? "person" : "people"}
                     </Text>
-                    <Text style={styles.mineStatus}>
-                      {b.status === "confirmed"
-                        ? offer.priceCents === 0
-                          ? "Confirmed · it's free"
-                          : offer.priceCents
-                            ? `Confirmed · pay ${bookingTotal(offer.priceCents, b.partySize)} at the venue${
-                                b.partySize > 1
-                                  ? ` (${formatRupees(offer.priceCents!)} × ${b.partySize})`
-                                  : ""
-                              }`
-                            : "Confirmed · pay at the venue"
-                        : `Waiting for ${offer.businessName} to confirm${
-                            b.holdExpiresAt
-                              ? ` · held till ${formatTime(b.holdExpiresAt)}`
-                              : ""
-                          }`}
-                    </Text>
+                    {b.planBundle ? (
+                      <PlanBundleCard bundle={b.planBundle} />
+                    ) : (
+                      <Text style={styles.mineStatus}>
+                        {b.status === "confirmed"
+                          ? offer.priceCents === 0
+                            ? "Confirmed · it's free"
+                            : offer.priceCents
+                              ? `Confirmed · pay ${bookingTotal(offer.priceCents, b.partySize)} at the venue${
+                                  b.partySize > 1
+                                    ? ` (${formatRupees(offer.priceCents!)} × ${b.partySize})`
+                                    : ""
+                                }`
+                              : "Confirmed · pay at the venue"
+                          : `Waiting for ${offer.businessName} to confirm${
+                              b.holdExpiresAt
+                                ? ` · held till ${formatTime(b.holdExpiresAt)}`
+                                : ""
+                            }`}
+                      </Text>
+                    )}
+                    {b.planBundle && (
+                      <Button
+                        title="Open linked plan"
+                        variant="ghost"
+                        onPress={() =>
+                          navigation.navigate("PostDetails", {
+                            postId: b.planBundle!.postId,
+                          })
+                        }
+                      />
+                    )}
                     <View style={styles.mineActions}>
                       <TouchableOpacity
                         accessibilityRole="button"

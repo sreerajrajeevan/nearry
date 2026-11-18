@@ -35,6 +35,7 @@ export const CLEAR_TABLES = [
   "personal_selfie_challenges",
   "verification_review_jobs",
   "join_requests",
+  "plan_offer_bundles",
   "bookings",
   "offer_slots",
   "offers",
@@ -46,6 +47,7 @@ export const CLEAR_TABLES = [
   "admin_console_audit",
 ];
 const KEEP_TABLES = [
+  "plan_offer_settings",
   "profiles",
   "admin_console_members",
   "place_search_usage",
@@ -115,6 +117,8 @@ end $reset$;
 -- Avatar changes can queue media cleanup; clear links before emptying the queues.
 -- All uploads have already been removed through the Storage API.
 update public.profiles set avatar_url=null,verification_doc_path=null where id in (${admins});
+-- Release linked reservations before clearing notification/push queues.
+${tables.includes("plan_offer_bundles") && tables.includes("bookings") ? "update public.bookings set status='cancelled' where status<>'cancelled' and id in (select booking_id from public.plan_offer_bundles);" : ""}
 ${tables.map((t) => `delete from public.${t};`).join("\n")}
 -- Retain global paid-provider quotas, while removing per-account counters.
 delete from public.place_search_usage where scope not in ('global_day','global_second');

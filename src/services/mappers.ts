@@ -1,3 +1,4 @@
+import type { PlanOfferBundle } from "../utils/planOfferBundle";
 import type { PlanDetails } from "../utils/planComposer";
 import {
   PostLocation,
@@ -401,6 +402,7 @@ export type DbBooking = {
 };
 
 export type Booking = {
+  planBundle?: PlanOfferBundle;
   id: string;
   offerId: string;
   customerId: string;

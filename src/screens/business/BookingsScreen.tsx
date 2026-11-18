@@ -1,3 +1,4 @@
+import { rupees } from "../../utils/planOfferBundle";
 import { RowListSkeleton } from "../../components/Skeletons";
 import { Alert } from "../../services/appAlert";
 import { haptic } from "../../services/haptics";
@@ -187,6 +188,23 @@ export function BookingsScreen({ navigation }: Props) {
                   ? ` · confirm by ${formatTime(b.holdExpiresAt)}`
                   : ""}
               </Text>
+              {b.planBundle && (
+                <View style={{ marginBottom: 12 }}>
+                  <Text style={styles.customer}>
+                    Group plan: {b.planBundle.planTitle}
+                  </Text>
+                  <Text style={styles.meta}>
+                    {b.planBundle.partySize} reserved places, including the host
+                    · {rupees(b.planBundle.priceCents)} each ·{" "}
+                    {rupees(b.planBundle.priceCents * b.planBundle.partySize)}{" "}
+                    total, payable at venue.
+                  </Text>
+                  <Text style={styles.meta}>
+                    Confirm this reservation once for the whole group. Declining
+                    or cancelling also cancels the linked plan.
+                  </Text>
+                </View>
+              )}
               <View style={styles.actions}>
                 <TouchableOpacity
                   activeOpacity={0.7}
