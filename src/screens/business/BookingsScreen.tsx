@@ -141,6 +141,8 @@ export function BookingsScreen({ navigation }: Props) {
                 const active = f === filter;
                 return (
                   <TouchableOpacity
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: active }}
                     key={f}
                     onPress={() => setFilter(f)}
                     activeOpacity={0.8}
@@ -348,7 +350,13 @@ const styles = StyleSheet.create({
     gap: spacing.lg,
     marginTop: spacing.md,
   },
-  actionLink: { ...typography.bodySmall, color: colors.textDim },
+  actionLink: {
+    ...typography.bodySmall,
+    color: colors.textDim,
+    minHeight: 44,
+    textAlignVertical: "center",
+    paddingVertical: 12,
+  },
   confirmPill: {
     marginLeft: "auto",
     height: 44,

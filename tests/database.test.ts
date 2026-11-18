@@ -6082,8 +6082,27 @@ test(
         ])
       ).rows[0].id;
       await db.query(
-        "update posts set location_source='google',location_place_id='review-google',location_cached_at=now()-interval '30 days' where id=$1",
+        "update posts set location_source='google',location_place_id='review-google' where id=$1",
         [gid],
+      );
+      // Simulate time passing without a maintenance/write trigger refreshing or removing the cache.
+      // Only this disposable database's test fixture disables triggers, within a transaction.
+      await db.transaction(async (tx: any) => {
+        await tx.exec(
+          "alter table posts disable trigger guard_post_location;alter table posts disable trigger sync_post_location_index;",
+        );
+        await tx.query(
+          "update posts set location_cached_at=now()-interval '30 days' where id=$1",
+          [gid],
+        );
+        await tx.exec(
+          "alter table posts enable trigger guard_post_location;alter table posts enable trigger sync_post_location_index;",
+        );
+      });
+      assert.equal(
+        (await db.query("select * from post_locations where post_id=$1", [gid]))
+          .rows.length,
+        1,
       );
       assert.equal(
         (
@@ -6100,5 +6119,121 @@ test(
     } finally {
       await db.query("delete from posts where author_id=$1", [owner]);
     }
+  },
+);
+
+test(
+  "review PostGIS: offer filters and cursors retain ordinary offers and private booking totals",
+  { skip: !process.env.TEST_DATABASE_URL },
+  async () => {
+    const owner = await auditBusiness(),
+      viewer = await corePersonal();
+    await db.query(
+      "update venues set location=st_setsrid(st_makepoint(76.363,10.007),4326)::geography where business_id=$1",
+      [owner],
+    );
+    const a = await auditOffer(owner),
+      b = await auditOffer(owner);
+    await db.query(
+      "update offers set title='Gym membership',is_spotlight=true where id=$1",
+      [a.id],
+    );
+    await db.query(
+      "update offers set title='Coffee break',is_spotlight=false where id=$1",
+      [b.id],
+    );
+    const venue = (
+      await db.query("select id from venues where business_id=$1", [owner])
+    ).rows[0].id;
+    const filter = {
+      latitude: 10.007,
+      longitude: 76.363,
+      radiusM: 5000,
+      venueIds: [venue],
+    };
+    const page = async (f: any, cursor: any = null) =>
+      (
+        await asUser(viewer, (tx) =>
+          tx.query("select discover_offers($1,$2,1) page", [f, cursor]),
+        )
+      ).rows[0].page;
+    const first = await page(filter),
+      second = await page(filter, first.cursor);
+    assert.equal(first.items[0].id, a.id);
+    assert.equal(second.items[0].id, b.id);
+    assert.equal(second.cursor, null);
+    assert.ok(first.items[0].distance_km < 0.01);
+    assert.equal(
+      (await page({ ...filter, category: "food" })).items[0].id,
+      b.id,
+    );
+    assert.equal(
+      (await page({ ...filter, discoveryCategory: "Play" })).items[0].id,
+      a.id,
+    );
+    assert.equal(
+      (await page({ ...filter, search: "Coffee" })).items[0].id,
+      b.id,
+    );
+    assert.equal((await page({ ...filter, spotlight: true })).cursor, null);
+    assert.equal(
+      (await page({ ...filter, latitude: 12.97, longitude: 77.64 })).items
+        .length,
+      0,
+    );
+    await asUser(viewer, (tx) =>
+      tx.query("select book_offer_slot($1,1)", [a.slot]),
+    );
+    assert.equal(
+      (
+        await asUser(owner, (tx) =>
+          tx.query("select offer_booking_counts($1) counts", [[a.id, b.id]]),
+        )
+      ).rows[0].counts[a.id],
+      1,
+    );
+    assert.deepEqual(
+      (
+        await asUser(viewer, (tx) =>
+          tx.query("select offer_booking_counts($1) counts", [[a.id]]),
+        )
+      ).rows[0].counts,
+      {},
+    );
+  },
+);
+
+test(
+  "review PostgreSQL: concurrent retries publish a direct message exactly once",
+  { skip: !process.env.TEST_DATABASE_URL },
+  async () => {
+    const h = "00000000-0000-0000-0000-000000005001",
+      m = "00000000-0000-0000-0000-000000005002";
+    const cid = (
+      await db.query(
+        "select id from conversations where user_a=least($1::uuid,$2::uuid) and user_b=greatest($1::uuid,$2::uuid) limit 1",
+        [h, m],
+      )
+    ).rows[0].id;
+    const results = await Promise.all(
+      Array.from({ length: 12 }, () =>
+        asUser(h, (tx) =>
+          tx.query(
+            "select send_direct_message($1,'A concurrent retry','review-concurrent-send') item",
+            [cid],
+          ),
+        ),
+      ),
+    );
+    assert.equal(new Set(results.map((r) => r.rows[0].item.id)).size, 1);
+    assert.equal(
+      (
+        await db.query(
+          "select count(*)::int n from messages where conversation_id=$1 and client_key='review-concurrent-send'",
+          [cid],
+        )
+      ).rows[0].n,
+      1,
+    );
   },
 );

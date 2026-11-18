@@ -45,7 +45,11 @@ export function createSignInFetch(
       });
       if (response.status >= 500) reportBackendFailure("server");
       // Include a stalled response body in the deadline, not just its headers.
-      const body = address.pathname.startsWith("/storage/v1/")
+      // Native JSON upload responses use text; only actual file downloads need
+      // ArrayBuffers (which are expensive on some React Native fetch polyfills).
+      const body = /^(image\/|application\/(octet-stream|pdf))/i.test(
+        response.headers?.get("content-type") ?? "",
+      )
         ? await response.arrayBuffer()
         : await response.text();
       return new Response(

@@ -327,7 +327,6 @@ export function NearbyScreen() {
             : listVenues(),
           listOffersPage(
             {
-              spotlight: true,
               discoveryCategory: options.category,
               ...(point
                 ? { nearby: { ...point, radiusM: selected * 1000 } }
