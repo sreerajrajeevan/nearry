@@ -3,7 +3,7 @@ import React, { useEffect, useState } from "react";
 import {
   KeyboardAvoidingView,
   Modal,
-  Platform,
+  ScrollView,
   Pressable,
   StyleSheet,
   Text,
@@ -52,65 +52,69 @@ export function JoinRequestSheet({
       animationType="slide"
       onRequestClose={onClose}
     >
-      <KeyboardAvoidingView
-        style={styles.backdrop}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-      >
+      <KeyboardAvoidingView style={styles.backdrop} behavior="padding">
         <Pressable
           style={StyleSheet.absoluteFill}
           accessibilityRole="button"
           accessibilityLabel="Close"
           onPress={sending ? undefined : onClose}
         />
-        <Animated.View style={drag.style}>
+        <Animated.View style={[styles.sheetContainer, drag.style]}>
           <SafeAreaView
             edges={["bottom", "left", "right"]}
             style={styles.sheet}
             accessibilityViewIsModal
           >
             <SheetGrabber handlers={drag.handlers} />
-            <Text style={styles.title}>Ask to join</Text>
-            <Text style={styles.plan} numberOfLines={2}>
-              {planTitle}
-            </Text>
-            <Text style={styles.label}>Message to {hostName} (optional)</Text>
-            <TextInput
-              accessibilityLabel={`Message to ${hostName}, optional`}
-              value={note}
-              onChangeText={setNote}
-              placeholder={placeholder}
-              placeholderTextColor={colors.textFaint}
-              maxLength={JOIN_NOTE_MAX}
-              multiline
-              editable={!sending}
-              style={styles.input}
-              textAlignVertical="top"
-            />
-            <View style={styles.metaRow}>
-              <Icon name="lock" size={13} color={colors.textDim} />
-              <Text style={styles.meta}>
-                Only the host sees this, with your request.
+            <ScrollView
+              style={styles.scroll}
+              contentContainerStyle={styles.content}
+              keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="none"
+            >
+              <Text style={styles.title}>Ask to join</Text>
+              <Text style={styles.plan} numberOfLines={2}>
+                {planTitle}
               </Text>
-              <Text style={styles.count}>
-                {note.length}/{JOIN_NOTE_MAX}
-              </Text>
-            </View>
-            {!!error && (
-              <Text accessibilityRole="alert" style={styles.error}>
-                {error}
-              </Text>
-            )}
-            <Button
-              title="Send request"
-              loading={sending}
-              onPress={() => onSend(note)}
-            />
-            <Button
-              title="Cancel"
-              variant="ghost"
-              disabled={sending}
-              onPress={onClose}
-            />
+              <Text style={styles.label}>Message to {hostName} (optional)</Text>
+              <TextInput
+                accessibilityLabel={`Message to ${hostName}, optional`}
+                value={note}
+                onChangeText={setNote}
+                placeholder={placeholder}
+                placeholderTextColor={colors.textFaint}
+                maxLength={JOIN_NOTE_MAX}
+                multiline
+                editable={!sending}
+                style={styles.input}
+                textAlignVertical="top"
+              />
+              <View style={styles.metaRow}>
+                <Icon name="lock" size={13} color={colors.textDim} />
+                <Text style={styles.meta}>
+                  Only the host sees this, with your request.
+                </Text>
+                <Text style={styles.count}>
+                  {note.length}/{JOIN_NOTE_MAX}
+                </Text>
+              </View>
+              {!!error && (
+                <Text accessibilityRole="alert" style={styles.error}>
+                  {error}
+                </Text>
+              )}
+              <Button
+                title="Send request"
+                loading={sending}
+                onPress={() => onSend(note)}
+              />
+              <Button
+                title="Cancel"
+                variant="ghost"
+                disabled={sending}
+                onPress={onClose}
+              />
+            </ScrollView>
           </SafeAreaView>
         </Animated.View>
       </KeyboardAvoidingView>
@@ -123,7 +127,11 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
     backgroundColor: "rgba(3,7,18,0.55)",
   },
+  sheetContainer: { maxHeight: "100%", flexShrink: 1 },
+  scroll: { flexShrink: 1 },
+  content: { gap: 6, paddingBottom: 8 },
   sheet: {
+    flexShrink: 1,
     backgroundColor: colors.surface,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,

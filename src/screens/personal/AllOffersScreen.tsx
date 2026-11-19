@@ -89,6 +89,7 @@ export function AllOffersScreen({
           <EnterView index={index}>
             <OfferRow
               offer={o}
+              distanceOrigin={route.params?.distanceOrigin}
               distanceKm={
                 o.distanceKm ??
                 (o.venueId ? distances.get(o.venueId) : undefined)

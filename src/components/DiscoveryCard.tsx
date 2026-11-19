@@ -14,6 +14,8 @@ type Props = {
   title: string;
   meta: string;
   detail?: string;
+  location?: React.ReactNode;
+  locationLabel?: string;
   action: string;
   onPress: () => void;
   imageUrl?: string;
@@ -28,6 +30,8 @@ export function DiscoveryCard({
   title,
   meta,
   detail,
+  location,
+  locationLabel,
   action,
   onPress,
   imageUrl,
@@ -42,6 +46,7 @@ export function DiscoveryCard({
       accessibilityLabel={[
         `${kind}: ${title}`,
         meta,
+        locationLabel,
         detail,
         audience && audienceLabel(audience),
         action,
@@ -69,6 +74,7 @@ export function DiscoveryCard({
         <Text style={styles.kind}>{kind}</Text>
         <Text style={styles.title}>{title}</Text>
         <Text style={styles.meta}>{meta}</Text>
+        {location}
         {audience && <AudienceBadge preference={audience} />}
         <View style={styles.bottom}>
           {!!detail && <Text style={styles.detail}>{detail}</Text>}

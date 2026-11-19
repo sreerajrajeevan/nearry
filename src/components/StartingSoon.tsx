@@ -15,7 +15,9 @@ import { PlanCover } from "./PlanCover";
 import { EnterView, MotionPressable } from "./Motion";
 import { Icon } from "./Icon";
 import { useMotionPreference } from "../store/MotionContext";
-import { formatDistance } from "../utils/format";
+import { CardLocation } from "./CardLocation";
+import { useCardDistanceOrigin } from "../store/CardDistanceContext";
+import { cardDistance, type DistanceOrigin } from "../utils/cardDistance";
 import { spotsLeftLabel, startsInLabel } from "../utils/planDiscovery";
 import { colors, typography, weight } from "../theme";
 
@@ -75,14 +77,25 @@ export function StartingSoon({
   posts,
   now,
   distanceOf,
+  distanceOrigin,
   onOpen,
 }: {
   posts: NeedPost[];
   now: Date;
   distanceOf: (post: NeedPost) => number | undefined;
+  distanceOrigin?: DistanceOrigin;
   onOpen: (postId: string) => void;
 }) {
   const mine = useMyRequests()?.statuses;
+  const origin = useCardDistanceOrigin();
+  const venueIds = posts
+    .map((p) => p.venueId)
+    .filter(Boolean)
+    .join(",");
+  useEffect(() => {
+    for (const post of posts)
+      if (post.venueId) origin?.ensureVenue(post.venueId);
+  }, [venueIds, origin?.ensureVenue]);
   if (!posts.length) return null;
   return (
     <View style={styles.section}>
@@ -106,7 +119,14 @@ export function StartingSoon({
               : status === "approved"
                 ? "You're in"
                 : spotsLeftLabel(post.spotsLeft);
-          const km = distanceOf(post);
+          const venue = post.venueId
+            ? origin?.venues.get(post.venueId)
+            : undefined;
+          const distance = cardDistance(
+            origin?.origin,
+            post.location ?? venue?.point,
+            { km: distanceOf(post), origin: distanceOrigin },
+          );
           return (
             <EnterView key={post.id} index={index}>
               <MotionPressable
@@ -115,7 +135,7 @@ export function StartingSoon({
                   post.title,
                   startsIn,
                   spots,
-                  km != null && formatDistance(km),
+                  distance?.label,
                   "View plan",
                 ]
                   .filter(Boolean)
@@ -152,10 +172,8 @@ export function StartingSoon({
                       color={colors.amberBright}
                     />
                     <Text style={styles.spots}>{spots}</Text>
-                    {km != null && (
-                      <Text style={styles.meta}>· {formatDistance(km)}</Text>
-                    )}
                   </View>
+                  <CardLocation light distance={distance?.label} />
                 </View>
               </MotionPressable>
             </EnterView>
@@ -177,11 +195,12 @@ const styles = StyleSheet.create({
   row: { gap: 12, paddingRight: 16 },
   card: {
     width: 220,
-    height: 150,
+    minHeight: 180,
     borderRadius: 20,
     overflow: "hidden",
     backgroundColor: colors.night,
     justifyContent: "space-between",
+    gap: 18,
     padding: 12,
   },
   live: {
