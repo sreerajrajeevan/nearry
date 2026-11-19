@@ -59,20 +59,16 @@ export function tabOptions(
     tabBarBadgeStyle: styles.badge,
   };
 }
-const LIGHT_BAR_HEIGHT = 68;
+const LIGHT_BAR_HEIGHT = 72;
 
-/**
- * Nav 1 (personal side): a light bar anchored to the bottom edge, a label
- * under every tab, and the active tab marked with a soft amber pill. The
- * dark floating pill above stays in use on the business side.
- */
+/** Personal navigation keeps labels in the familiar dark floating pill. */
 export function useLightTabBarLayout(): BottomTabNavigationOptions {
   const { bottom } = useSafeAreaInsets();
   return {
     tabBarShowLabel: true,
     tabBarStyle: [
-      styles.lightBar,
-      { height: LIGHT_BAR_HEIGHT + bottom, paddingBottom: bottom },
+      styles.bar,
+      { height: LIGHT_BAR_HEIGHT, marginBottom: Math.max(bottom, 12) },
     ],
   };
 }
@@ -87,12 +83,12 @@ export function lightTabOptions(
     headerShown: false,
     tabBarHideOnKeyboard: true,
     tabBarAccessibilityLabel: title,
-    tabBarActiveTintColor: colors.ink,
-    tabBarInactiveTintColor: colors.lineStrong,
+    tabBarActiveTintColor: colors.amberBright,
+    tabBarInactiveTintColor: "#C5CBD4",
     tabBarActiveBackgroundColor: "transparent",
+    tabBarLabelPosition: "below-icon",
     tabBarItemStyle: styles.lightItem,
     tabBarLabelStyle: styles.lightLabel,
-    tabBarLabel: prominent ? () => null : undefined,
     tabBarButton: ({ style, disabled, href: _href, ...props }) => (
       <MotionPressable
         {...props}
@@ -117,21 +113,14 @@ export function lightTabOptions(
 }
 
 const styles = StyleSheet.create({
-  lightBar: {
-    backgroundColor: colors.surface,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    elevation: 0,
-    shadowOpacity: 0,
-  },
   lightItem: {
     height: LIGHT_BAR_HEIGHT,
     paddingVertical: 0,
     justifyContent: "center",
     alignItems: "center",
   },
-  lightLabel: { fontSize: 11, ...weight("600") },
-  lightTabButton: { borderRadius: 16 },
+  lightLabel: { fontSize: 10, lineHeight: 14, marginBottom: 7, ...weight("600") },
+  lightTabButton: { borderRadius: 28 },
   lightIconWrap: {
     width: 52,
     height: 30,
@@ -139,12 +128,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  lightIconWrapActive: { backgroundColor: colors.amberSoft },
+  lightIconWrapActive: { backgroundColor: "rgba(255,255,255,0.08)" },
   lightCreate: {
-    width: 50,
-    height: 50,
-    borderRadius: 15,
-    backgroundColor: colors.amber,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: colors.amberBright,
     alignItems: "center",
     justifyContent: "center",
     shadowColor: "#000000",
