@@ -87,6 +87,7 @@ export function PersonalTabs() {
           options={{
             ...lightTabOptions("search", "Search"),
             tabBarButton: () => null,
+            tabBarItemStyle: { display: "none" },
           }}
         />
       </Tab.Navigator>
