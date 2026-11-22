@@ -64,3 +64,22 @@ test("older servers without the new keys read as everything on", async () => {
   });
   assert.equal(normalizeNotificationPreferences(null).pushEnabled, false);
 });
+
+test("settings list the four switches in order; businesses only see two", async () => {
+  const { NOTIFICATION_SWITCHES, switchesFor, AREA_SIGNUP_HINT } = await import(
+    "../src/utils/notificationSettings"
+  );
+  assert.deepEqual(
+    NOTIFICATION_SWITCHES.map((s: { label: string }) => s.label),
+    ["Messages", "Plan requests and updates", "Bookings", "Nearby players needed"],
+  );
+  assert.deepEqual(
+    switchesFor("business").map((s: { key: string }) => s.key),
+    ["messages", "bookings"],
+  );
+  assert.equal(switchesFor("personal").length, 4);
+  assert.equal(
+    AREA_SIGNUP_HINT,
+    "Add your area to hear when nearby players are needed.",
+  );
+});
