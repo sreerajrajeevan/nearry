@@ -1,3 +1,6 @@
+import { CardLocation } from "./CardLocation";
+import { useCardDistance } from "../store/CardDistanceContext";
+import type { DistanceOrigin } from "../utils/cardDistance";
 import React, { useState } from "react";
 import { samePost } from "../utils/samePost";
 import { useToast } from "../store/ToastContext";
@@ -5,7 +8,7 @@ import { useMyPlanStatus } from "../store/MyRequestsContext";
 import { StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { NeedPost } from "../services/mappers";
-import { formatWhen, formatDistance } from "../utils/format";
+import { formatWhen } from "../utils/format";
 import { postState } from "../utils/flowState";
 import { planCost } from "../utils/planDiscovery";
 import { colors, typography, weight } from "../theme";
@@ -37,12 +40,14 @@ function initialsOf(name: string) {
 function PostRowView({
   post,
   distanceKm,
+  distanceOrigin,
   cta,
   onPress,
   now = new Date(),
 }: {
   post: NeedPost;
   distanceKm?: number;
+  distanceOrigin?: DistanceOrigin;
   cta?: string;
   onPress: () => void;
   now?: Date;
@@ -75,8 +80,11 @@ function PostRowView({
       ? "Last spot"
       : `${post.spotsLeft} spots left`
     : status.label;
-  const where =
-    distanceKm != null ? formatDistance(distanceKm) : (post.venueName ?? "");
+  const distance = useCardDistance(post.venueId, post.location, {
+    km: distanceKm,
+    origin: distanceOrigin,
+  });
+  const where = post.venueName || distance.venueName;
   const when = formatWhen(post.startsAt, now);
   const cost =
     post.costCents == null
@@ -108,9 +116,10 @@ function PostRowView({
           style={[styles.meta, overlay ? styles.metaOnPhoto : styles.metaPlain]}
           numberOfLines={overlay ? 1 : undefined}
         >
-          {[when, where, cost].filter(Boolean).join(" · ")}
+          {[when, cost].filter(Boolean).join(" · ")}
         </Text>
       </View>
+      <CardLocation name={where} distance={distance.label} light={overlay} />
     </>
   );
 
@@ -123,7 +132,7 @@ function PostRowView({
           `Hosted by ${post.authorName}`,
           when,
           post.venueName,
-          distanceKm != null && formatDistance(distanceKm),
+          distance.label,
           badge,
           cost,
           audienceLabel(post.genderPreference),
@@ -496,6 +505,8 @@ export const PostRow = React.memo(
   (prev, next) =>
     prev.cta === next.cta &&
     prev.distanceKm === next.distanceKm &&
+    prev.distanceOrigin?.kind === next.distanceOrigin?.kind &&
+    prev.distanceOrigin?.label === next.distanceOrigin?.label &&
     // Without a shared clock the card reads the time itself: always redraw.
     !!prev.now &&
     !!next.now &&

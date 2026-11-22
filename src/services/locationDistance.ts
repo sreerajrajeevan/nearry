@@ -9,5 +9,5 @@ export function distanceKm(a: LatLng, b: LatLng): number {
   const h =
     Math.sin(dLat / 2) ** 2 +
     Math.cos(la1) * Math.cos(la2) * Math.sin(dLon / 2) ** 2;
-  return 2 * R * Math.asin(Math.sqrt(h));
+  return 2 * R * Math.asin(Math.sqrt(Math.min(1, Math.max(0, h))));
 }

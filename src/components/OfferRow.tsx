@@ -1,14 +1,31 @@
+import { CardLocation } from "./CardLocation";
+import { useCardDistance } from "../store/CardDistanceContext";
+import type { DistanceOrigin } from "../utils/cardDistance";
 import React from "react";
 import { useMyOfferStatus } from "../store/MyRequestsContext";
 import { Offer } from "../services/mappers";
-import { formatDistance, formatWhen } from "../utils/format";
+import { formatWhen } from "../utils/format";
 import { postCategory } from "../utils/discovery";
 import { DiscoveryCard } from "./DiscoveryCard";
 import { activityArtwork } from "../utils/activityArtwork";
 import { offerPriceShort } from "../utils/offerPrice";
 
-type Props = { offer: Offer; distanceKm?: number; onPress: () => void };
-export function OfferRow({ offer, distanceKm, onPress }: Props) {
+type Props = {
+  offer: Offer;
+  distanceKm?: number;
+  distanceOrigin?: DistanceOrigin;
+  onPress: () => void;
+};
+export function OfferRow({
+  offer,
+  distanceKm,
+  distanceOrigin,
+  onPress,
+}: Props) {
+  const distance = useCardDistance(offer.venueId, undefined, {
+    km: distanceKm,
+    origin: distanceOrigin,
+  });
   // After booking, say so instead of inviting another booking.
   const mine = useMyOfferStatus(offer.id);
   const category = postCategory({
@@ -30,13 +47,15 @@ export function OfferRow({ offer, distanceKm, onPress }: Props) {
               : "tag"
       }
       title={offer.title}
-      meta={[
-        offer.businessName,
-        formatWhen(offer.startsAt),
-        distanceKm == null ? null : formatDistance(distanceKm),
-      ]
+      meta={[offer.businessName, formatWhen(offer.startsAt)]
         .filter(Boolean)
         .join(" · ")}
+      locationLabel={[distance.venueName, distance.label]
+        .filter(Boolean)
+        .join(". ")}
+      location={
+        <CardLocation name={distance.venueName} distance={distance.label} />
+      }
       detail={offerPriceShort(offer.priceCents)}
       action={
         mine === "booked"

@@ -1,3 +1,4 @@
+import type { DistanceOrigin } from "../utils/cardDistance";
 import type { Place } from "../services/places";
 import {
   CompositeNavigationProp,
@@ -38,6 +39,7 @@ export type PersonalTabParamList = {
   Search: undefined;
   CreatePost: undefined;
   Activity: undefined;
+  Messages: undefined;
   /** `celebrate` carries the notification that opened the profile. */
   Profile: { celebrate?: string } | undefined;
 };
@@ -63,10 +65,10 @@ export type PersonalStackParamList = SafetyStackParamList & {
     | {
         venueIds?: string[];
         distances?: [string, number][];
+        distanceOrigin?: DistanceOrigin;
         area?: { latitude: number; longitude: number; radiusM: number };
       }
     | undefined;
-  Messages: undefined;
   Conversation: { conversationId: string; title?: string };
   Notifications: undefined;
 };
