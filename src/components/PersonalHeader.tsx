@@ -8,10 +8,13 @@ import { BrandHeader } from "./BrandHeader";
 
 type Props = Pick<
   React.ComponentProps<typeof BrandHeader>,
-  "context" | "location" | "onContextPress" | "compact"
->;
+  "context" | "location" | "onContextPress" | "compact" | "variant"
+> & {
+  /** Home hides this: chats live in the bottom tab bar there. */
+  showMessages?: boolean;
+};
 
-export function PersonalHeader(props: Props) {
+export function PersonalHeader({ showMessages = true, ...props }: Props) {
   const navigation = useNavigation<PersonalTabNav>();
   const unreadMessages = useContext(PersonalMessagesContext);
   const { notifications } = useUnreadCounts();
@@ -19,10 +22,14 @@ export function PersonalHeader(props: Props) {
     <BrandHeader
       {...props}
       unreadMessages={unreadMessages}
-      onMessagesPress={() => {
-        Keyboard.dismiss();
-        navigation.navigate("Messages");
-      }}
+      onMessagesPress={
+        showMessages
+          ? () => {
+              Keyboard.dismiss();
+              navigation.navigate("Messages");
+            }
+          : undefined
+      }
       unreadNotifications={notifications}
       onNotificationsPress={() => {
         Keyboard.dismiss();

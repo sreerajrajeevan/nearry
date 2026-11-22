@@ -454,7 +454,22 @@ export function ProfileScreen({ navigation }: Props) {
           title={demoMode ? "Leave demo" : "Log out"}
           variant="ghost"
           loading={signingOut}
-          onPress={() => void leave()}
+          onPress={() =>
+            Alert.alert(
+              demoMode ? "Leave the demo?" : "Log out?",
+              demoMode
+                ? "You’ll go back to the welcome screen."
+                : "You’ll need to sign in again to use Nearry.",
+              [
+                { text: "Stay", style: "cancel" },
+                {
+                  text: demoMode ? "Leave demo" : "Log out",
+                  style: "destructive",
+                  onPress: () => void leave(),
+                },
+              ],
+            )
+          }
           style={styles.logout}
         />
       </ScrollView>

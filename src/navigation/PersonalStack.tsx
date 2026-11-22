@@ -26,7 +26,6 @@ import { MyPostsScreen } from "../screens/personal/MyPostsScreen";
 import { CompleteProfileScreen } from "../screens/personal/CompleteProfileScreen";
 import { EditProfileScreen } from "../screens/personal/EditProfileScreen";
 import { OfferDetailsScreen } from "../screens/personal/OfferDetailsScreen";
-import { ChatListScreen } from "../screens/chat/ChatListScreen";
 import { PlanGroupScreen } from "../screens/chat/PlanGroupScreen";
 import { ConversationScreen } from "../screens/chat/ConversationScreen";
 import { NotificationCenterScreen } from "../screens/NotificationCenterScreen";
@@ -74,7 +73,6 @@ export function PersonalStack() {
               component={CompleteProfileScreen}
             />
             <Stack.Screen name="OfferDetails" component={OfferDetailsScreen} />
-            <Stack.Screen name="Messages" component={ChatListScreen} />
             <Stack.Screen name="Conversation" component={ConversationScreen} />
             <Stack.Screen name="PlanGroup" component={PlanGroupScreen} />
             <Stack.Screen

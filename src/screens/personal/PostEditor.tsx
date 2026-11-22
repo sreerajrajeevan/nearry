@@ -25,6 +25,7 @@ import { DateSheet, TimeSheet } from "../../components/DateTimeSheets";
 import {
   View,
   Text,
+  TextInput,
   ScrollView,
   TouchableOpacity,
   StyleSheet,
@@ -835,7 +836,28 @@ export function PostEditor({
               <Text style={styles.stepText}>−</Text>
             </TouchableOpacity>
             <View>
-              <Text style={styles.stepValue}>{vacancies}</Text>
+              <TextInput
+                accessibilityLabel="People needed"
+                accessibilityHint="Enter a whole number from 1 to 100"
+                value={vacancies === 0 ? "" : String(vacancies)}
+                keyboardType="number-pad"
+                inputMode="numeric"
+                selectTextOnFocus
+                editable={!publishing}
+                onChangeText={(text) => {
+                  if (/^\d*$/.test(text))
+                    setVacancies(Math.min(100, Number(text)));
+                }}
+                onBlur={() =>
+                  setVacancies((value) =>
+                    Math.min(
+                      100,
+                      Math.max(1, original?.joinedCount ?? 0, value),
+                    ),
+                  )
+                }
+                style={styles.stepValue}
+              />
               <Text style={styles.help}>
                 more {vacancies === 1 ? "person" : "people"}
               </Text>
@@ -850,6 +872,9 @@ export function PostEditor({
               <Text style={styles.stepText}>+</Text>
             </TouchableOpacity>
           </View>
+          <Text style={styles.help}>
+            Type a number or use + / −. Maximum 100.
+          </Text>
           <Choices
             label="Gender"
             value={genderPref ?? "any"}
@@ -1422,6 +1447,9 @@ const styles = StyleSheet.create({
   },
   stepText: { fontSize: 24, color: colors.text },
   stepValue: {
+    minWidth: 80,
+    minHeight: 48,
+    paddingVertical: 4,
     fontSize: 26,
     ...weight("700"),
     color: colors.ink,
