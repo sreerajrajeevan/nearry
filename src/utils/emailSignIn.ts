@@ -20,12 +20,16 @@ export class EmailCodeCooldowns {
   private until = new Map<string, number>();
   constructor(private now = Date.now) {}
   record(email: string) {
+    for (const [key, until] of this.until)
+      if (until <= this.now()) this.until.delete(key);
     this.until.set(normalizeEmail(email), this.now() + 60_000);
   }
   expiresAt(email: string) {
     return this.until.get(normalizeEmail(email)) ?? 0;
   }
 }
+/** Shared across auth-screen remounts; only short-lived recipient cooldowns are retained. */
+export const emailCodeCooldowns = new EmailCodeCooldowns();
 
 /** Only basic sign-in is needed: do not force consent/offline Google access. */
 export const GOOGLE_SIGN_IN_PARAMS = { prompt: "select_account" } as const;

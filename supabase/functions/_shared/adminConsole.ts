@@ -1,4 +1,5 @@
 /** Every operation validates the Supabase session, private allowlist and MFA. */
+import { MESSAGE_KINDS, reportContext } from "./reportContext.ts";
 type Db = any;
 const SECTIONS = new Set([
   "overview",
@@ -16,7 +17,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const PAGE_SIZE = 25;
 const columns: Record<string, string> = {
   reports:
-    "id,subject_user_id,target_kind,target_id,reason,details,snapshot,status,created_at",
+    "id,reporter_id,subject_user_id,target_kind,target_id,reason,details,snapshot,status,created_at",
   users:
     "id,account_type,display_name,business_name,verification_status,onboarding_completed,created_at,suspended_at,deletion_requested_at",
   plans:
@@ -131,7 +132,11 @@ async function list(db: Db, section: string, offset: number, filter?: string) {
     rows = checked(await q.range(offset, offset + PAGE_SIZE));
     if (section === "reports") {
       const ids = [
-        ...new Set(rows.map((r) => r.subject_user_id).filter(Boolean)),
+        ...new Set(
+          rows
+            .flatMap((r) => [r.subject_user_id, r.reporter_id])
+            .filter(Boolean),
+        ),
       ];
       const people: any[] = ids.length
         ? checked(
@@ -141,13 +146,15 @@ async function list(db: Db, section: string, offset: number, filter?: string) {
               .in("id", ids),
           )
         : [];
-      rows = rows.map(({ snapshot, ...r }) => ({
+      const nameOf = (id: string | null) => {
+        const p = people.find((x) => x.id === id);
+        return p?.business_name || p?.display_name || "Member";
+      };
+      rows = rows.map(({ snapshot, reporter_id, ...r }) => ({
         ...r,
         evidence: snapshot,
-        subject:
-          people.find((p) => p.id === r.subject_user_id)?.business_name ||
-          people.find((p) => p.id === r.subject_user_id)?.display_name ||
-          "Member",
+        subject: nameOf(r.subject_user_id),
+        reporter: reporter_id ? nameOf(reporter_id) : "Deleted account",
       }));
     }
   }
@@ -401,22 +408,61 @@ export function createAdminConsoleHandler(
           !["all", "suspended", "deletion", "active"].includes(filter)
         )
           return json({ error: "Invalid filter" }, 400, origin);
-        return json(
-          await list(db, payload.section, offset, filter),
-          200,
-          origin,
-        );
+        const rows = await list(db, payload.section, offset, filter);
+        if (["accounts", "business", "selfies"].includes(payload.section))
+          checked(
+            await db.from("admin_console_audit").insert({
+              actor_id: user.id,
+              action: "list:" + payload.section,
+              target_id: null,
+              note: "page " + offset,
+            }),
+          );
+        return json(rows, 200, origin);
       }
       if (payload.action === "account") {
         if (!UUID.test(payload.id ?? ""))
           return json({ error: "Invalid account" }, 400, origin);
-        return json(await accountDetail(payload.id), 200, origin);
+        const detail = await accountDetail(payload.id);
+        checked(
+          await db.from("admin_console_audit").insert({
+            actor_id: user.id,
+            action: "account:view",
+            target_id: payload.id,
+            note: null,
+          }),
+        );
+        return json(detail, 200, origin);
+      }
+      if (payload.action === "report") {
+        if (!UUID.test(payload.id ?? ""))
+          return json({ error: "Invalid report" }, 400, origin);
+        const context = await reportContext(db, payload.id, supabaseUrl);
+        // Reading someone's private messages is always recorded.
+        if (MESSAGE_KINDS.has(context.content.kind))
+          checked(
+            await db.from("admin_console_audit").insert({
+              actor_id: user.id,
+              action: "report:view-messages",
+              target_id: payload.id,
+              note: context.content.kind,
+            }),
+          );
+        return json(context, 200, origin);
       }
       if (payload.action === "proof") {
         if (!UUID.test(payload.id ?? ""))
           return json({ error: "Invalid review ID" }, 400, origin);
         if (payload.kind === "selfie") {
           const { review, avatarUrl } = await selfieComparison(payload.id);
+          checked(
+            await db.from("admin_console_audit").insert({
+              actor_id: user.id,
+              action: "proof:view-selfie",
+              target_id: payload.id,
+              note: null,
+            }),
+          );
           const signed = checked<any>(
             await db.storage
               .from("selfie_proofs")
@@ -458,6 +504,14 @@ export function createAdminConsoleHandler(
           !review.document_path.startsWith(review.user_id + "/")
         )
           return json({ error: "Review unavailable" }, 404, origin);
+        checked(
+          await db.from("admin_console_audit").insert({
+            actor_id: user.id,
+            action: "proof:view-business",
+            target_id: payload.id,
+            note: null,
+          }),
+        );
         const signed = checked<any>(
           await db.storage
             .from("verification_docs")

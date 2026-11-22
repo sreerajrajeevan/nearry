@@ -104,7 +104,8 @@ export function BirthdayField({
         {savedAge && !value
           ? `Your saved age is ${savedAge}. Choose a birthday only to update it. `
           : ""}
-        Only your age is saved. Nearry is for ages 18+.
+        Only your age is saved to your profile. Unfinished setup stays on this
+        device. Nearry is for ages 18+.
       </Text>
       {!!value && ageFromBirthday(value) === null && (
         <Text accessibilityRole="alert" style={ob.error}>

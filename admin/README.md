@@ -56,13 +56,22 @@ Open the review, load its private proof, inspect it, and explicitly confirm revi
 before approval. The preview URL lasts 60 seconds and can be reloaded. Rejection
 requires a reason, which is delivered to the business. Current pending proofs
 remain reviewable by an MFA-authenticated administrator even if their old emailed
-review link expired. Emailed links retain their original seven-day expiry.
+review link expired. Email URLs now hand off to the dashboard; possession of a link grants no account access.
 Changed/replaced documents and already completed decisions are rejected.
 
 Approval/rejection, business notification and admin audit row are one database
 transaction. The membership row is locked during the decision, so a concurrent
 revocation cannot silently bypass authorization. Pending requests are filtered
 in SQL before pagination. Overview counts use the same current-request criteria.
+
+Opening a report loads its full context: who reported it (with how many reports
+they have filed and how those ended), the reported person (email, account,
+status and their other reports), and the reported item as it is now, with photos
+from Nearry's own storage and whether it was removed or deleted. The snapshot
+saved at report time stays available underneath. Message reports show only the
+reported message with up to five messages either side; conversation reports show
+the latest twenty. Each time private messages are shown, a `report:view-messages`
+entry is written to the decision history.
 
 Reports show the complete submitted evidence, with confirmation and a reason for
 removal/suspension. Account/conversation reports offer dismissal or owner-only
@@ -71,9 +80,7 @@ not introduce general browsing of private chats. Refresh updates the queue; retu
 to the browser refreshes it too. Overlapping section loads cannot display stale
 rows under another section's actions. Sign-out clears proof URLs and evidence.
 
-Keep the current verification-email worker in place during cutover. Once the
-operator has signed in and verified the dashboard, retire email delivery separately
-if desired; do not remove the submission trigger or review queue.
+Redeploy notify-verification and review-verification during this update and set ADMIN_CONSOLE_URL. Email alerts remain optional dashboard reminders; do not remove the submission trigger or review queue. Account and proof views are audited before private results are returned.
 
 ## Validation
 

@@ -585,7 +585,7 @@ test("Google address canonicalization is accepted only when the server binds it 
   await assert.rejects(resolvePlace(prediction), /Could not read/);
 });
 
-test("external meeting spots are saved, reloaded, moved and removed without pretending to be registered venues", async () => {
+test("external meeting spots are saved and moved; edits cannot strip the required place", async () => {
   let row: any = {
     id: "location-post",
     author_id: "host",
@@ -619,12 +619,11 @@ test("external meeting spots are saved, reloaded, moved and removed without pret
     location: { source: "manual", latitude: 11, longitude: 77 },
   });
   assert.equal(moved.location?.latitude, 11);
-  const removed = await posts.updatePost(created.id, {
-    location: null,
-    venueName: null,
-  });
-  assert.equal(removed.location, undefined);
-  assert.equal(removed.venueName, undefined);
+  await assert.rejects(
+    posts.updatePost(created.id, { location: null, venueName: null }),
+    /Select a meeting place/,
+  );
+  assert.equal(row.location_lat, 11);
 });
 
 test("nearby plans query coordinates even when no registered venues exist and preserve RPC distance", async () => {
@@ -660,32 +659,26 @@ test("nearby plans query coordinates even when no registered venues exist and pr
   );
 });
 
-test("nearby plans send p_host_gender only when a host filter is set", async () => {
-  handler = () => [];
-  await posts.listPosts({
-    nearby: {
-      latitude: 10,
-      longitude: 76,
-      radiusM: 5000,
-      hostGender: "female",
-    },
+test("discovery pages send hostGender only when a host filter is set", async () => {
+  handler = () => ({ items: [], cursor: null });
+  await posts.listPostsPage({
+    nearby: { latitude: 10, longitude: 76, radiusM: 5000 },
+    hostGender: "female",
   });
-  const withFilter = calls.filter((c) =>
-    c.url.pathname.endsWith("/nearby_post_cards"),
-  );
-  assert.deepEqual(withFilter[withFilter.length - 1].body, {
-    p_lat: 10,
-    p_lng: 76,
-    p_radius_m: 5000,
-    p_host_gender: "female",
-  });
-  await posts.listPosts({
+  const pages = () =>
+    calls.filter((c) => c.url.pathname.endsWith("/discover_posts"));
+  const withFilter = pages()[pages().length - 1].body as {
+    p_filters: Record<string, unknown>;
+  };
+  assert.equal(withFilter.p_filters.hostGender, "female");
+  assert.equal(withFilter.p_filters.radiusM, 5000);
+  await posts.listPostsPage({
     nearby: { latitude: 10, longitude: 76, radiusM: 5000 },
   });
-  const plain = calls.filter((c) =>
-    c.url.pathname.endsWith("/nearby_post_cards"),
-  );
-  assert.ok(!("p_host_gender" in (plain[plain.length - 1].body as object)));
+  const plain = pages()[pages().length - 1].body as {
+    p_filters: Record<string, unknown>;
+  };
+  assert.ok(!("hostGender" in plain.p_filters));
 });
 
 test("publishing without a confirmed meeting place is rejected before any network request", async () => {

@@ -1,5 +1,5 @@
 import {
-  EmailCodeCooldowns,
+  emailCodeCooldowns,
   normalizeEmail,
   normalizeEmailCode,
 } from "../../utils/emailSignIn";
@@ -58,7 +58,7 @@ export function AuthScreen({
   );
   const actionLock = useRef(false);
   const version = useRef(0);
-  const cooldowns = useRef(new EmailCodeCooldowns());
+  const cooldowns = useRef(emailCodeCooldowns);
   const busy = loading || pendingAction !== null;
   const [resendAt, setResendAt] = useState(0);
   const [resendSeconds, setResendSeconds] = useState(0);
@@ -131,7 +131,10 @@ export function AuthScreen({
       );
       // RootNavigator routes on session+profile automatically.
     } catch (e) {
-      if (run === version.current) fail(e);
+      if (run === version.current) {
+        setCode("");
+        fail(e);
+      }
     } finally {
       actionLock.current = false;
       if (run === version.current) setPendingAction(null);

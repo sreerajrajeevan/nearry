@@ -190,7 +190,11 @@ export function PostEditor({
         setTitle(post.title);
         setDescription(post.description);
         setStartsAtDate(new Date(post.startsAt));
-        setExpiresAtDate(post.expiresAt ? new Date(post.expiresAt) : null);
+        setExpiresAtDate(
+          post.expiresAt && new Date(post.expiresAt).getTime() > Date.now()
+            ? new Date(post.expiresAt)
+            : null,
+        );
         setVacancies(post.vacancies);
         setCost(
           post.planDetails?.costMode === "split"
@@ -331,7 +335,6 @@ export function PostEditor({
     }
     if (
       !savedPostId &&
-      !postId &&
       (unfinishedLocation ||
         !hasPostMeetingPlace({
           venueId: venue?.venueId,
@@ -526,7 +529,6 @@ export function PostEditor({
   };
   const chooseActivity = (item: (typeof PLAN_ACTIVITIES)[number]) => {
     const previous = PLAN_ACTIVITIES.find((x) => x.id === activity);
-    if (!title.trim() || title === previous?.title) setTitle(item.title);
     setActivity(item.id);
     if (!planAsksLevel(item.id)) setLevel("any");
     if (!planBookingLabel(item.id)) setVenueBooked(false);
@@ -543,6 +545,13 @@ export function PostEditor({
       0,
       0,
     );
+    if (next.getTime() <= Date.now()) {
+      const soon = new Date(
+        Math.ceil((Date.now() + 30 * 60_000) / (15 * 60_000)) * 15 * 60_000,
+      );
+      if (soon.toDateString() === date.toDateString())
+        next.setTime(soon.getTime());
+    }
     setStartsAtDate(next);
   };
   return (
@@ -639,7 +648,11 @@ export function PostEditor({
         >
           <Input
             label="Title"
-            placeholder="Pick an activity for a suggestion"
+            placeholder={
+              PLAN_ACTIVITIES.find((item) => item.id === activity)?.title ||
+              "Give your plan a title"
+            }
+            clearable
             value={title}
             maxLength={80}
             onChangeText={setTitle}

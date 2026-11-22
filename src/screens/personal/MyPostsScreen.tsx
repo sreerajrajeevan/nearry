@@ -20,7 +20,8 @@ import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
 import { Icon } from "../../components/Icon";
 import { useAuth } from "../../store/AuthContext";
-import { listPosts, subscribeToPosts } from "../../services/posts";
+import { usePagedQuery } from "../../hooks/usePagedQuery";
+import { listPostsPage, subscribeToPosts } from "../../services/posts";
 import { NeedPost } from "../../services/mappers";
 import { formatWhen } from "../../utils/format";
 import { colors, typography, spacing, surfaces } from "../../theme";
@@ -50,49 +51,36 @@ function statusLabel(post: NeedPost, now: number) {
 export function MyPostsScreen({ navigation }: Props) {
   const { profile } = useAuth();
   const myId = profile?.id;
-  const [posts, setPosts] = useState<NeedPost[]>([]);
-  const [filter, setFilter] = useState<Filter>("all");
-  const [state, setState] = useState<"loading" | "ready" | "error">("loading");
-  const [refreshing, setRefreshing] = useState(false);
-  const [now, setNow] = useState(Date.now);
-  const version = useRef(0);
-  const focused = useRef(false);
-
-  const load = useCallback(
-    async (refresh = false) => {
-      const ticket = ++version.current;
-      if (refresh) setRefreshing(true);
-      else setState("loading");
-      try {
-        // Never fall back to an unfiltered feed while a profile is unavailable.
-        const rows = myId
-          ? await listPosts({ authorId: myId, status: "all" })
-          : [];
-        if (!focused.current || ticket !== version.current) return;
-        setPosts(rows.sort((a, b) => b.createdAt.localeCompare(a.createdAt)));
-        setNow(Date.now());
-        setState("ready");
-      } catch {
-        if (focused.current && ticket === version.current) setState("error");
-      } finally {
-        if (focused.current && ticket === version.current) setRefreshing(false);
-      }
-    },
-    [myId],
-  );
-
-  useFocusEffect(
-    useCallback(() => {
-      focused.current = true;
-      setPosts([]);
-      void load();
-      const unsubscribe = subscribeToPosts(() => void load(true));
-      return () => {
-        focused.current = false;
-        ++version.current;
-        unsubscribe();
-      };
-    }, [load]),
+  const [filter, setFilter] = useState<Filter>("all"),
+    [now, setNow] = useState(Date.now);
+  const {
+    items: posts,
+    state,
+    refreshing,
+    refresh: load,
+    cursor,
+    loadMore,
+    loadingMore,
+    moreError,
+  } = usePagedQuery(
+    `my-posts:${myId}:${filter}`,
+    (cursor) =>
+      myId
+        ? listPostsPage(
+            {
+              authorId: myId,
+              status: filter === "cancelled" ? "cancelled" : "all",
+              sort: "newest",
+              ...(filter === "upcoming"
+                ? { from: new Date().toISOString(), excludeCancelled: true }
+                : filter === "past"
+                  ? { until: new Date().toISOString(), excludeCancelled: true }
+                  : {}),
+            },
+            cursor,
+          )
+        : Promise.resolve({ items: [], cursor: null }),
+    subscribeToPosts,
   );
 
   useEffect(() => {
@@ -166,6 +154,20 @@ export function MyPostsScreen({ navigation }: Props) {
               }
             />
           )
+        }
+        ListFooterComponent={
+          <>
+            {moreError ? (
+              <Text style={{ color: colors.textDim }}>{moreError}</Text>
+            ) : null}
+            {cursor && (
+              <Button
+                title="More posts"
+                loading={loadingMore}
+                onPress={() => void loadMore()}
+              />
+            )}
+          </>
         }
         renderItem={({ item: post }) => (
           <TouchableOpacity

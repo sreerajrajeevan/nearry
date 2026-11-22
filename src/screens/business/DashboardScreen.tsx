@@ -1,3 +1,4 @@
+import { businessDaySummary } from "../../services/bookings";
 import { Alert } from "../../services/appAlert";
 import { haptic } from "../../services/haptics";
 import { LoadingState } from "../../components/LoadingState";
@@ -51,12 +52,13 @@ export function DashboardScreen({ navigation }: Props) {
   } = useLiveQuery(
     `dashboard:${profile?.id}`,
     async () => {
-      if (!profile) return { offers: [], bookings: [] };
-      const [offers, bookings] = await Promise.all([
+      if (!profile) return { offers: [], bookings: [], summary: null };
+      const [offers, bookings, summary] = await Promise.all([
         listMyOffers(profile.id),
         listBookingsForBusiness(profile.id),
+        businessDaySummary(),
       ]);
-      return { offers, bookings };
+      return { offers, bookings, summary };
     },
     subscribeToBookings,
   );
@@ -124,9 +126,18 @@ export function DashboardScreen({ navigation }: Props) {
           <>
             <View style={styles.statsRow}>
               {[
-                { value: today.length, label: "Bookings today" },
-                { value: waiting, label: "To confirm" },
-                { value: liveOffers.length, label: "Live offers" },
+                {
+                  value: data?.summary?.today ?? today.length,
+                  label: "Bookings today",
+                },
+                {
+                  value: data?.summary?.waiting ?? waiting,
+                  label: "To confirm",
+                },
+                {
+                  value: data?.summary?.liveOffers ?? liveOffers.length,
+                  label: "Live offers",
+                },
               ].map((stat) => (
                 <View key={stat.label} style={styles.stat}>
                   <Text style={styles.value}>{stat.value}</Text>
@@ -153,7 +164,7 @@ export function DashboardScreen({ navigation }: Props) {
                 <Icon name="chevron-right" size={18} color={colors.ink} />
               </MotionPressable>
             ) : (
-              drafts.length > 0 && (
+              (data?.summary?.drafts ?? drafts.length) > 0 && (
                 <MotionPressable
                   accessibilityRole="button"
                   onPress={() => navigation.navigate("MyOffers")}
@@ -164,8 +175,10 @@ export function DashboardScreen({ navigation }: Props) {
                   </View>
                   <View style={styles.flex}>
                     <Text style={styles.nudgeTitle}>
-                      {drafts.length} draft offer
-                      {drafts.length === 1 ? "" : "s"}
+                      {data?.summary?.drafts ?? drafts.length} draft offer
+                      {(data?.summary?.drafts ?? drafts.length) === 1
+                        ? ""
+                        : "s"}
                     </Text>
                     <Text style={styles.nudgeDescription}>
                       Finish and publish to fill your quiet slots.

@@ -106,22 +106,20 @@ A webhook is a message RevenueCat sends us when someone subscribes or cancels.
 
 1. See which migrations are already applied: Supabase dashboard → **Database →
    Migrations**.
-2. Apply any earlier migrations not yet applied (for example `00044` and
-   `00045`), in number order, in the **SQL editor**.
+2. Apply any earlier migrations not yet applied (for example `00044` to
+   `00054`), in number order, in the **SQL editor**. `00056` needs `00052`.
 3. Wait until the Premium build has reached your users (the rollout is live and
    people have updated). Only then run
-   `supabase/migrations/00046_premium_limits.sql`, then
-   `supabase/migrations/00047_hosted_by_filter.sql`. 00046 turns on the daily
+   `supabase/migrations/00055_premium_limits.sql`, then
+   `supabase/migrations/00056_hosted_by_filter.sql`. 00055 turns on the daily
    limits; older builds don't know about them and would show people the raw
    text `daily_plan_limit` instead of the Premium sheet.
 
 ### Before going live
 
-Run the external-database test suite once against a staging database. Create a
-disposable database named `nearry_test` with the PostGIS extension, then run
-the tests with `TEST_DATABASE_URL` pointing at it. The normal test run skips
-the checks for `nearby_post_cards` and the daily-limit concurrency lock because
-they need a real PostGIS database.
+The PostGIS checks (the Nearby feed with the Hosted by filter, and the
+daily-limit concurrency lock) run automatically in GitHub's checks on every
+pull request, so there is nothing extra to run by hand.
 
 ## 8. Privacy page and Play forms
 

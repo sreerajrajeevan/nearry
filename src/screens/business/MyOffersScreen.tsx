@@ -10,7 +10,7 @@ import {
   View,
 } from "react-native";
 import { Image } from "expo-image";
-import { useLiveQuery } from "../../hooks/useLiveQuery";
+import { usePagedQuery } from "../../hooks/usePagedQuery";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { BusinessStackParamList } from "../../navigation/types";
 import { Screen } from "../../components/Screen";
@@ -22,13 +22,14 @@ import { EmptyState } from "../../components/EmptyState";
 import { Icon } from "../../components/Icon";
 import { useAuth } from "../../store/AuthContext";
 import {
-  listMyOffers,
+  listMyOffersPage,
   cancelOffer,
   deleteOffer,
   subscribeToOffers,
 } from "../../services/offers";
 import { Offer } from "../../services/mappers";
 import { formatWhen } from "../../utils/format";
+import { offerPriceLabel } from "../../utils/offerPrice";
 import { colors, typography, spacing, weight } from "../../theme";
 
 type Props = NativeStackScreenProps<BusinessStackParamList, "MyOffers">;
@@ -59,13 +60,20 @@ export function MyOffersScreen({ navigation }: Props) {
   const [filter, setFilter] = useState<Filter>("all");
   const [busy, setBusy] = useState<string | null>(null);
   const {
-    data: offers = [],
+    items: offers,
+    cursor,
+    loadMore,
+    loadingMore,
+    moreError,
     state,
     refreshing,
     refresh: load,
-  } = useLiveQuery(
-    `my-offers:${profile?.id}`,
-    async () => (profile ? listMyOffers(profile.id) : []),
+  } = usePagedQuery(
+    `my-offers:${profile?.id}:${filter}`,
+    async (c) =>
+      profile
+        ? listMyOffersPage(profile.id, filter, c)
+        : { items: [], cursor: null },
     subscribeToOffers,
   );
 
@@ -201,14 +209,25 @@ export function MyOffersScreen({ navigation }: Props) {
             />
           )
         }
+        ListFooterComponent={
+          <>
+            {!!moreError && <Text accessibilityRole="alert">{moreError}</Text>}
+            {cursor && (
+              <Button
+                title="More offers"
+                variant="ghost"
+                loading={loadingMore}
+                onPress={() => void loadMore()}
+              />
+            )}
+          </>
+        }
         renderItem={({ item: offer }) => {
           const deal = [
             typeof offer.discountPct === "number"
               ? `${offer.discountPct}% off`
               : "",
-            offer.priceCents != null
-              ? `₹${(offer.priceCents / 100).toFixed(2).replace(/\.00$/, "")}`
-              : "",
+            offer.priceCents != null ? offerPriceLabel(offer.priceCents)! : "",
           ]
             .filter(Boolean)
             .join(" · ");
@@ -234,7 +253,7 @@ export function MyOffersScreen({ navigation }: Props) {
                     </Text>
                     <Badge
                       label={statusLabel(offer)}
-                      tone={offer.status === "live" ? "green" : "neutral"}
+                      tone={statusLabel(offer) === "Live" ? "green" : "neutral"}
                     />
                   </View>
                   {!!deal && <Text style={styles.deal}>{deal}</Text>}
@@ -247,8 +266,10 @@ export function MyOffersScreen({ navigation }: Props) {
                 <View style={styles.count}>
                   <Icon name="calendar" size={13} color={colors.ink} />
                   <Text style={styles.countText}>
-                    {offer.redemptions} booking
-                    {offer.redemptions === 1 ? "" : "s"}
+                    {offer.activeBookings ?? offer.redemptions} booking
+                    {(offer.activeBookings ?? offer.redemptions) === 1
+                      ? ""
+                      : "s"}
                   </Text>
                 </View>
                 <View style={styles.actions}>

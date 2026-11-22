@@ -144,6 +144,7 @@ export function PostPhotoGallery({
               </Text>
             ) : (
               <LoadingImage
+                fullSize
                 source={{ uri: selected }}
                 resizeMode="contain"
                 style={styles.fullPhoto}

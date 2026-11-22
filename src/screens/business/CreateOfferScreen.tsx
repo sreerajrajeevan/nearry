@@ -95,7 +95,7 @@ export function CreateOfferScreen({ navigation }: Props) {
   const [capacity, setCapacity] = useState("10");
   const [duration, setDuration] = useState("60");
   // One shared calendar per offer; businesses no longer name a staff member.
-  const resource = "Main";
+  const [resource, setResource] = useState("Main");
   const [coverPhotoUrl, setCoverPhotoUrl] = useState<string | null>(null);
   const [isSpotlight, setIsSpotlight] = useState(false);
   const [uploadingCover, setUploadingCover] = useState(false);
@@ -326,7 +326,10 @@ export function CreateOfferScreen({ navigation }: Props) {
             </TouchableOpacity>
           )}
         </FormSection>
-        <FormSection title="The deal" hint="Add a discount, a price, or both.">
+        <FormSection
+          title="The deal"
+          hint="Add a discount, a price, or both. The price is per person, paid to you at the venue; Nearry doesn't take payment. With a discount, enter the price after it."
+        >
           <View style={styles.row}>
             <View style={styles.half}>
               <Input
@@ -341,7 +344,7 @@ export function CreateOfferScreen({ navigation }: Props) {
             </View>
             <View style={styles.half}>
               <Input
-                label="Price (₹)"
+                label="Price per person (₹)"
                 placeholder="499"
                 value={price}
                 onChangeText={(t: string) =>
@@ -406,6 +409,16 @@ export function CreateOfferScreen({ navigation }: Props) {
           />
         )}
         <FormSection title="Slots">
+          <Input
+            label="Court or service name"
+            value={resource}
+            onChangeText={setResource}
+            placeholder="Main, Court 1, or a separate service"
+            maxLength={80}
+          />
+          <Text style={{ ...typography.caption, color: colors.textDim }}>
+            Use a different name only for separately available capacity.
+          </Text>
           <SlotFields
             capacity={capacity}
             onCapacity={setCapacity}

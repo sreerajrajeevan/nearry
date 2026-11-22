@@ -1,3 +1,15 @@
+import {
+  parsePage,
+  type Cursor,
+  type Page,
+  pageSize,
+} from "../utils/pagination";
+import {
+  discoveryPlans,
+  planDateBounds,
+  type PlanDateFilter,
+  type PlanOptions,
+} from "../utils/planDiscovery";
 import { assertLive } from "./demoGuard";
 import {
   PostLocation,
@@ -57,8 +69,6 @@ export type PostFilter = {
     latitude: number;
     longitude: number;
     radiusM: number;
-    /** Premium. Ignored in mock and demo mode. */
-    hostGender?: "female" | "male" | "other";
   };
   search?: string;
   tag?: string;
@@ -122,7 +132,7 @@ export async function listPosts(filter: PostFilter = {}): Promise<NeedPost[]> {
   }
   const supabase = getSupabase()!;
   if (filter.nearby) {
-    const { latitude, longitude, radiusM, hostGender } = filter.nearby;
+    const { latitude, longitude, radiusM } = filter.nearby;
     if (
       !validPostLocation({ latitude, longitude, source: "manual" }) ||
       !Number.isFinite(radiusM) ||
@@ -134,7 +144,6 @@ export async function listPosts(filter: PostFilter = {}): Promise<NeedPost[]> {
       p_lat: latitude,
       p_lng: longitude,
       p_radius_m: radiusM,
-      ...(hostGender ? { p_host_gender: hostGender } : {}),
     });
     if (error) throw new Error(error.message);
     return withPhotoCovers(
@@ -144,7 +153,9 @@ export async function listPosts(filter: PostFilter = {}): Promise<NeedPost[]> {
   let req = supabase
     .from("post_cards")
     .select("*")
-    .order("starts_at", { ascending: true });
+    .order("starts_at", { ascending: true })
+    .order("id", { ascending: true })
+    .limit(80);
   if (filter.status && filter.status !== "all")
     req = req.eq("status", filter.status);
   else if (!filter.status) req = req.eq("status", "open");
@@ -174,6 +185,80 @@ export async function listPosts(filter: PostFilter = {}): Promise<NeedPost[]> {
   return withPhotoCovers(
     ((data ?? []) as Record<string, unknown>[]).map(toCard),
   );
+}
+
+export type PostPageFilter = PostFilter &
+  Partial<Pick<PlanOptions, "category" | "freeOnly" | "audience" | "sort">> & {
+    date?: PlanDateFilter;
+    excludeAuthorId?: string;
+    from?: string;
+    until?: string;
+    excludeCancelled?: boolean;
+    /** Premium "Hosted by" filter. Ignored in mock and demo mode. */
+    hostGender?: "female" | "male" | "other";
+  };
+export async function listPostsPage(
+  filter: PostPageFilter = {},
+  cursor: Cursor | null = null,
+  limit = 30,
+): Promise<Page<NeedPost>> {
+  if (filter.venueIds?.length === 0) return { items: [], cursor: null };
+  if (useMock()) {
+    let items = (await listPosts(filter)).filter(
+      (p) =>
+        (!filter.excludeAuthorId || p.authorId !== filter.excludeAuthorId) &&
+        (!filter.from || p.startsAt >= filter.from) &&
+        (!filter.until || p.startsAt < filter.until) &&
+        (!filter.excludeCancelled || p.status !== "cancelled"),
+    );
+    if (!filter.status || filter.status === "open")
+      items = discoveryPlans(items, {
+        ...filter,
+        date: filter.date ?? "all",
+        category: filter.category ?? null,
+        freeOnly: !!filter.freeOnly,
+      });
+    else if (filter.sort === "newest")
+      items.sort(
+        (a, b) =>
+          b.createdAt.localeCompare(a.createdAt) || a.id.localeCompare(b.id),
+      );
+    const start = cursor ? items.findIndex((x) => x.id === cursor.id) + 1 : 0,
+      rows = items.slice(start, start + pageSize(limit)),
+      last = rows.at(-1);
+    return {
+      items: rows,
+      cursor:
+        start + rows.length < items.length && last
+          ? {
+              at: filter.sort === "newest" ? last.createdAt : last.startsAt,
+              id: last.id,
+            }
+          : null,
+    };
+  }
+  const { nearby, date, ...rest } = filter;
+  const { data, error } = await getSupabase()!.rpc("discover_posts", {
+    p_filters: {
+      ...rest,
+      ...(nearby
+        ? {
+            latitude: nearby.latitude,
+            longitude: nearby.longitude,
+            radiusM: nearby.radiusM,
+          }
+        : {}),
+      ...planDateBounds(date ?? "all"),
+    },
+    p_cursor: cursor,
+    p_limit: pageSize(limit),
+  });
+  if (error) throw new Error(error.message);
+  const page = parsePage(data);
+  return {
+    items: await withPhotoCovers(page.items.map(toCard)),
+    cursor: page.cursor,
+  };
 }
 
 export async function getPost(id: string): Promise<NeedPost | null> {
@@ -270,6 +355,22 @@ export async function updatePost(
   patch: PostPatch,
 ): Promise<NeedPost> {
   assertLive("edit plans");
+  if (patch.location !== undefined || patch.venueId !== undefined) {
+    const original = await getPost(postId);
+    if (!original) throw new Error("Plan not found.");
+    if (
+      !hasPostMeetingPlace({
+        venueName:
+          patch.venueName === undefined ? original.venueName : patch.venueName,
+        venueId: patch.venueId === undefined ? original.venueId : patch.venueId,
+        location:
+          patch.location === undefined ? original.location : patch.location,
+      })
+    )
+      throw new Error(requiredMeetingPlaceMessage);
+    if (patch.location && !validPostLocation(patch.location))
+      throw new Error("Choose a valid meeting location.");
+  }
   const dbPatch: Record<string, unknown> = {};
   if (patch.location !== undefined)
     Object.assign(dbPatch, postLocationPatch(patch.location));

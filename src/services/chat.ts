@@ -1,3 +1,4 @@
+import { Cursor, Page } from "../utils/pagination";
 import { assertLive } from "./demoGuard";
 import { demoUserBlocked, conversationSafety } from "./safety";
 import { getSupabase, isSupabaseConfigured, isDemoMode } from "./supabase";
@@ -152,17 +153,95 @@ export async function listMessages(
     .map((m) => toChatMessage(m, myId));
 }
 
+export type MessagePage = Page<ChatMessage> & { clearedAt: string | null };
+export async function listMessagesPage(
+  conversationId: string,
+  myId: string,
+  cursor: Cursor | null = null,
+): Promise<MessagePage> {
+  if (useMock()) {
+    const all = (await listMessages(conversationId, myId)).sort(
+      (a, b) =>
+        b.createdAt.localeCompare(a.createdAt) || b.id.localeCompare(a.id),
+    );
+    const start = cursor ? all.findIndex((m) => m.id === cursor.id) + 1 : 0,
+      rows = all.slice(start, start + 60),
+      last = rows.at(-1);
+    return {
+      items: rows.reverse(),
+      cursor:
+        start + rows.length < all.length && last
+          ? { at: last.createdAt, id: last.id }
+          : null,
+      clearedAt:
+        [...(demoClears.get(conversationId) ?? [])].sort().join(",") || null,
+    };
+  }
+  const db = getSupabase()!;
+  let req = db
+    .from("messages")
+    .select("*, sender:profiles!messages_sender_id_fkey(display_name)")
+    .eq("conversation_id", conversationId)
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
+    .limit(61);
+  if (cursor) {
+    if (
+      !/^[0-9a-f-]{36}$/i.test(cursor.id) ||
+      !Number.isFinite(Date.parse(cursor.at))
+    )
+      throw new Error("Please reopen this chat.");
+    req = req.or(
+      `created_at.lt.${cursor.at},and(created_at.eq.${cursor.at},id.lt.${cursor.id})`,
+    );
+  }
+  const [{ data, error }, clear] = await Promise.all([
+    req,
+    db
+      .from("conversation_clears")
+      .select("cleared_at")
+      .eq("conversation_id", conversationId)
+      .eq("user_id", myId)
+      .maybeSingle(),
+  ]);
+  if (error || clear.error)
+    throw new Error("Could not load messages. Please retry.");
+  const clearedAt = clear.data?.cleared_at ?? null;
+  const rows = ((data ?? []) as DbMessage[])
+      .filter((m) => !clearedAt || m.created_at > clearedAt)
+      .slice(0, 60),
+    last = rows.at(-1);
+  return {
+    items: rows.reverse().map((m) => toChatMessage(m, myId)),
+    cursor:
+      (data?.length ?? 0) > 60 && last
+        ? { at: last.created_at, id: last.id }
+        : null,
+    clearedAt,
+  };
+}
+const demoRetries = new Map<string, ChatMessage>();
+
 /** Send a message; the server queues its notification and push delivery. */
 export async function sendMessage(
   conversationId: string,
   myId: string,
   body: string,
+  clientKey?: string,
 ): Promise<ChatMessage> {
   assertLive("send messages");
   const err = validateMessageBody(body);
   if (err) throw new Error(err);
   const text = body.trim();
   if (useMock()) {
+    const previous = clientKey
+      ? demoRetries.get(conversationId + ":" + myId + ":" + clientKey)
+      : undefined;
+    if (previous) {
+      if (previous.body !== text)
+        throw new Error("Retry must use the same message.");
+      return previous;
+    }
     if (!(await conversationSafety(conversationId))?.canMessage)
       throw new Error("Messaging is unavailable.");
     const msg: ChatMessage = {
@@ -175,6 +254,8 @@ export async function sendMessage(
       mine: true,
     };
     mockMessages.push(msg);
+    if (clientKey)
+      demoRetries.set(conversationId + ":" + myId + ":" + clientKey, msg);
     const conv = mockConversations.find((c) => c.id === conversationId);
     if (conv) {
       conv.lastBody = text;
@@ -184,11 +265,12 @@ export async function sendMessage(
     return msg;
   }
   const supabase = getSupabase()!;
-  const { data, error } = await supabase
-    .from("messages")
-    .insert({ conversation_id: conversationId, sender_id: myId, body: text })
-    .select("*, sender:profiles!messages_sender_id_fkey(display_name)")
-    .single();
+  if (!clientKey) throw new Error("Please retry sending from the chat.");
+  const { data, error } = await supabase.rpc("send_direct_message", {
+    p_conversation: conversationId,
+    p_body: text,
+    p_client_key: clientKey,
+  });
   if (error) throw new Error(error.message);
   const msg = toChatMessage(data as DbMessage, myId);
   return msg;

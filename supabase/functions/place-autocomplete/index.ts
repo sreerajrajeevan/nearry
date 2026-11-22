@@ -1,3 +1,4 @@
+import { deadlineFetch } from "../_shared/workerFetch.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { createGooglePlacesProvider } from "../_shared/googlePlaces.ts";
@@ -10,7 +11,10 @@ const url = Deno.env.get("SUPABASE_URL"),
   serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 const db =
   url && serviceKey
-    ? createClient(url, serviceKey, { auth: { persistSession: false } })
+    ? createClient(url, serviceKey, {
+        auth: { persistSession: false },
+        global: { fetch: deadlineFetch() },
+      })
     : null;
 const googleKey = Deno.env.get("GOOGLE_PLACES_API_KEY"),
   geoKey = Deno.env.get("GEOAPIFY_API_KEY");
@@ -44,7 +48,18 @@ serve(
     async authenticate(authorization) {
       if (!db) return null;
       const { data, error } = await db.auth.getUser(authorization.slice(7));
-      return error ? null : (data.user?.id ?? null);
+      if (error || !data.user) return null;
+      const { data: profile, error: profileError } = await db
+        .from("profiles")
+        .select("suspended_at,deletion_requested_at")
+        .eq("id", data.user.id)
+        .maybeSingle();
+      return !profileError &&
+        profile &&
+        !profile.suspended_at &&
+        !profile.deletion_requested_at
+        ? data.user.id
+        : null;
     },
     async reserve(userId) {
       if (!db) return false;

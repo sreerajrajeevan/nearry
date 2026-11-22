@@ -68,6 +68,7 @@ export async function processPush(
   let sent = 0,
     failed = 0,
     receipts = 0;
+  const receiptStart = Date.now();
   const due = check(await db.rpc("claim_push_receipts")) ?? [];
   if (due.length) {
     try {
@@ -80,6 +81,7 @@ export async function processPush(
       if (!statuses || typeof statuses !== "object" || Array.isArray(statuses))
         throw new Error("Invalid receipt response");
       for (const delivery of due) {
+        if (Date.now() - receiptStart > 10_000) break;
         const receipt = statuses[delivery.ticket_id];
         if (!receipt) {
           if (
@@ -125,121 +127,143 @@ export async function processPush(
       failed++; /* claims retain a bounded next-check time for retry */
     }
   }
-  const jobs = check(await db.rpc("claim_push_jobs")) ?? [];
-  for (const job of jobs) {
-    try {
-      // Recheck current settings: a token may have moved accounts after the claim.
-      const allowed = check(
-        await db.rpc("notification_allowed", {
-          p_user: job.user_id,
-          p_kind: job.kind,
-          p_ref: job.ref_id,
-        }),
-      );
-      const pref = check(
-        await db
-          .from("profiles")
-          .select("push_enabled")
-          .eq("id", job.user_id)
-          .maybeSingle(),
-      );
-      if (allowed && pref?.push_enabled) {
-        const tokens =
-          check(
-            await db
-              .from("push_tokens")
-              .select("token,updated_at")
-              .eq("user_id", job.user_id),
-          ) ?? [];
-        const recorded =
-          check(
-            await db
-              .from("push_deliveries")
-              .select("token,status")
-              .eq("job_id", job.id),
-          ) ?? [];
-        const accepted = new Set(
-          recorded
-            .filter((r: any) =>
-              ["ticket", "delivered", "dead"].includes(r.status),
-            )
-            .map((r: any) => r.token),
+  const started = Date.now(),
+    visited = new Set<string>();
+  batches: for (let round = 0; round < 4; round++) {
+    if (Date.now() - started > 20_000) break;
+    const claimed = check(await db.rpc("claim_push_jobs")) ?? [];
+    if (!Array.isArray(claimed)) throw new Error("Invalid push queue response");
+    const jobs = claimed.filter((job: any) => !visited.has(job.id));
+    if (!jobs.length) break;
+    for (let index = 0; index < jobs.length; index++) {
+      if (Date.now() - started > 20_000) {
+        check(
+          await db.rpc("release_push_jobs", {
+            p_ids: jobs.slice(index).map((j: any) => j.id),
+          }),
         );
-        const pending = tokens.filter((t: any) => !accepted.has(t.token));
-        for (let start = 0; start < pending.length; start += 100) {
-          const batch = pending.slice(start, start + 100);
-          const tickets = await expo(
-            "send",
-            batch.map((t: any) => ({
-              to: t.token,
-              ...pushContent(job),
-              sound: "default",
-              channelId: "default",
-              data: { notificationId: job.notification_id, kind: job.kind },
-            })),
-            send,
-            accessToken,
-          );
-          if (!Array.isArray(tickets) || tickets.length !== batch.length)
-            throw new Error("Invalid Expo response");
-          let rejected = false;
-          for (let i = 0; i < tickets.length; i++) {
-            const ticket = tickets[i],
-              t = batch[i];
-            if (ticket.status === "ok" && typeof ticket.id === "string") {
-              check(
-                await db.from("push_deliveries").upsert(
-                  {
-                    job_id: job.id,
-                    token: t.token,
-                    registered_at: t.updated_at,
-                    ticket_id: ticket.id,
-                    status: "ticket",
-                    last_error: null,
-                  },
-                  { onConflict: "job_id,token" },
-                ),
-              );
-            } else if (ticket.details?.error === "DeviceNotRegistered") {
-              await removeStaleToken(db, t.token, t.updated_at);
-              check(
-                await db.from("push_deliveries").upsert(
-                  {
-                    job_id: job.id,
-                    token: t.token,
-                    registered_at: t.updated_at,
-                    status: "dead",
-                    last_error: "DeviceNotRegistered",
-                  },
-                  { onConflict: "job_id,token" },
-                ),
-              );
-            } else rejected = true;
-          }
-          if (rejected)
-            throw new Error(
-              "Some push deliveries were rejected; accepted devices are retained",
-            );
-        }
+        break batches;
       }
-      check(
+      const job = jobs[index];
+      visited.add(job.id);
+      try {
+        // Recheck current settings: a token may have moved accounts after the claim.
+        const allowed = check(
+          await db.rpc("notification_allowed", {
+            p_user: job.user_id,
+            p_kind: job.kind,
+            p_ref: job.ref_id,
+          }),
+        );
+        const pref = check(
+          await db
+            .from("profiles")
+            .select("push_enabled")
+            .eq("id", job.user_id)
+            .maybeSingle(),
+        );
+        if (allowed && pref?.push_enabled) {
+          const tokens =
+            check(
+              await db
+                .from("push_tokens")
+                .select("token,updated_at")
+                .eq("user_id", job.user_id),
+            ) ?? [];
+          const recorded =
+            check(
+              await db
+                .from("push_deliveries")
+                .select("token,status")
+                .eq("job_id", job.id),
+            ) ?? [];
+          const accepted = new Set(
+            recorded
+              .filter((r: any) =>
+                ["ticket", "delivered", "dead"].includes(r.status),
+              )
+              .map((r: any) => r.token),
+          );
+          const pending = tokens.filter((t: any) => !accepted.has(t.token));
+          for (let start = 0; start < pending.length; start += 100) {
+            const batch = pending.slice(start, start + 100);
+            const tickets = await expo(
+              "send",
+              batch.map((t: any) => ({
+                to: t.token,
+                ...pushContent(job),
+                sound: "default",
+                channelId: "default",
+                data: {
+                  notificationId: job.notification_id,
+                  kind: job.kind,
+                  threadId: job.thread_key ?? undefined,
+                },
+              })),
+              send,
+              accessToken,
+            );
+            if (!Array.isArray(tickets) || tickets.length !== batch.length)
+              throw new Error("Invalid Expo response");
+            let rejected = false;
+            for (let i = 0; i < tickets.length; i++) {
+              const ticket = tickets[i],
+                t = batch[i];
+              if (ticket.status === "ok" && typeof ticket.id === "string") {
+                check(
+                  await db.from("push_deliveries").upsert(
+                    {
+                      job_id: job.id,
+                      token: t.token,
+                      registered_at: t.updated_at,
+                      ticket_id: ticket.id,
+                      status: "ticket",
+                      last_error: null,
+                    },
+                    { onConflict: "job_id,token" },
+                  ),
+                );
+              } else if (ticket.details?.error === "DeviceNotRegistered") {
+                await removeStaleToken(db, t.token, t.updated_at);
+                check(
+                  await db.from("push_deliveries").upsert(
+                    {
+                      job_id: job.id,
+                      token: t.token,
+                      registered_at: t.updated_at,
+                      status: "dead",
+                      last_error: "DeviceNotRegistered",
+                    },
+                    { onConflict: "job_id,token" },
+                  ),
+                );
+              } else rejected = true;
+            }
+            if (rejected)
+              throw new Error(
+                "Some push deliveries were rejected; accepted devices are retained",
+              );
+          }
+        }
+        check(
+          await db
+            .from("push_jobs")
+            .update({ sent_at: new Date().toISOString(), last_error: null })
+            .eq("id", job.id),
+        );
+        sent++;
+      } catch (e) {
+        failed++;
         await db
           .from("push_jobs")
-          .update({ sent_at: new Date().toISOString(), last_error: null })
-          .eq("id", job.id),
-      );
-      sent++;
-    } catch (e) {
-      failed++;
-      await db
-        .from("push_jobs")
-        .update({
-          last_error:
-            e instanceof Error
-              ? e.message.slice(0, 200)
-              : "Push delivery failed",
-        })
-        .eq("id", job.id);
+          .update({
+            last_error:
+              e instanceof Error
+                ? e.message.slice(0, 200)
+                : "Push delivery failed",
+          })
+          .eq("id", job.id);
+      }
     }
   }
   return { sent, failed, receipts };

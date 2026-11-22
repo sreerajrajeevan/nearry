@@ -2,17 +2,17 @@ import { RowListSkeleton } from "../../components/Skeletons";
 import { Alert } from "../../services/appAlert";
 import { haptic } from "../../services/haptics";
 import { PageHeading } from "../../components/PageHeading";
-import { formatWhen } from "../../utils/format";
+import { formatTime, formatWhen } from "../../utils/format";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
+  FlatList,
   RefreshControl,
   TouchableOpacity,
 } from "react-native";
-import { useLiveQuery } from "../../hooks/useLiveQuery";
+import { usePagedQuery } from "../../hooks/usePagedQuery";
 import { bookingState } from "../../utils/flowState";
 import { Screen } from "../../components/Screen";
 import { Button } from "../../components/Button";
@@ -22,7 +22,7 @@ import { EmptyState } from "../../components/EmptyState";
 import { colors, typography, spacing, surfaces, weight } from "../../theme";
 import { useAuth } from "../../store/AuthContext";
 import {
-  listBookingsForBusiness,
+  listBusinessBookingsPage,
   confirmBooking,
   cancelBooking,
   subscribeToBookings,
@@ -31,6 +31,7 @@ import { Booking, isHoldExpired, isBookingStale } from "../../services/mappers";
 import { getOrCreateConversation } from "../../services/chat";
 
 const FILTERS = [
+  "UPCOMING",
   "ALL",
   "PENDING",
   "CONFIRMED",
@@ -54,22 +55,27 @@ type Props = {
 /** Business bookings view — real records, confirm/cancel, realtime-synced. */
 export function BookingsScreen({ navigation }: Props) {
   const { profile } = useAuth();
-  const [filter, setFilter] = useState<Filter>("ALL");
+  const [filter, setFilter] = useState<Filter>("UPCOMING");
   const [busy, setBusy] = useState<string | null>(null);
   const {
-    data: bookings = [],
+    items: bookings,
+    cursor,
+    loadMore,
+    loadingMore,
+    moreError,
     state,
     refreshing,
     refresh: load,
-  } = useLiveQuery(
-    `business-bookings:${profile?.id}`,
-    () => (profile ? listBookingsForBusiness(profile.id) : Promise.resolve([])),
+  } = usePagedQuery(
+    `business-bookings:${profile?.id}:${filter}`,
+    (c) =>
+      profile
+        ? listBusinessBookingsPage(profile.id, filter, c)
+        : Promise.resolve({ items: [], cursor: null }),
     subscribeToBookings,
   );
 
-  const visible = bookings.filter(
-    (b) => filter === "ALL" || bookingState(b).label.toUpperCase() === filter,
-  );
+  const visible = bookings;
 
   const openChat = async (booking: Booking) => {
     setBusy(`m${booking.id}`);
@@ -109,7 +115,9 @@ export function BookingsScreen({ navigation }: Props) {
 
   return (
     <Screen>
-      <ScrollView
+      <FlatList
+        data={visible}
+        keyExtractor={(b) => b.id}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scroll}
         refreshControl={
@@ -120,144 +128,176 @@ export function BookingsScreen({ navigation }: Props) {
             }}
           />
         }
-      >
-        <PageHeading
-          compact
-          title="Bookings"
-          subtitle="Manage incoming requests"
-        />
+        ListHeaderComponent={
+          <>
+            <PageHeading
+              compact
+              title="Bookings"
+              subtitle="Manage incoming requests"
+            />
 
-        <View style={styles.filterRow}>
-          {FILTERS.map((f) => {
-            const active = f === filter;
-            return (
+            <View style={styles.filterRow}>
+              {FILTERS.map((f) => {
+                const active = f === filter;
+                return (
+                  <TouchableOpacity
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: active }}
+                    key={f}
+                    onPress={() => setFilter(f)}
+                    activeOpacity={0.8}
+                    style={[styles.chip, active && styles.chipSelected]}
+                  >
+                    <Text
+                      style={[
+                        styles.chipText,
+                        active && styles.chipTextSelected,
+                      ]}
+                    >
+                      {f.charAt(0) + f.slice(1).toLowerCase()}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </>
+        }
+        ListEmptyComponent={
+          state === "loading" ? (
+            <RowListSkeleton label="Loading bookings" />
+          ) : state === "error" ? (
+            <View>
+              <EmptyState
+                title="Couldn't load bookings"
+                hint="Check your connection and retry."
+              />
+              <Button title="Retry" onPress={() => void load()} />
+            </View>
+          ) : (
+            <EmptyState
+              title="No bookings"
+              hint="New booking requests will appear here."
+            />
+          )
+        }
+        renderItem={({ item: b }) => (
+          <View key={b.id} style={styles.row}>
+            <View style={styles.topRow}>
+              <Avatar name={b.customerName} size={36} />
+              <View style={styles.topText}>
+                <Text style={styles.customer}>{b.customerName}</Text>
+                <Text style={styles.offer}>{b.offerTitle}</Text>
+              </View>
+              <Badge
+                label={bookingState(b).label}
+                tone={statusTone(b.status)}
+              />
+            </View>
+            <Text style={styles.meta}>
+              {formatWhen(b.slot)} · {b.partySize}{" "}
+              {b.partySize === 1 ? "person" : "people"}
+              {b.status === "pending" && b.holdExpiresAt && !isBookingStale(b)
+                ? ` · confirm by ${formatTime(b.holdExpiresAt)}`
+                : ""}
+            </Text>
+            <View style={styles.actions}>
               <TouchableOpacity
-                key={f}
-                onPress={() => setFilter(f)}
-                activeOpacity={0.8}
-                style={[styles.chip, active && styles.chipSelected]}
+                activeOpacity={0.7}
+                disabled={busy === `m${b.id}`}
+                onPress={() => openChat(b)}
               >
-                <Text
-                  style={[styles.chipText, active && styles.chipTextSelected]}
-                >
-                  {f.charAt(0) + f.slice(1).toLowerCase()}
+                <Text style={styles.actionLink}>
+                  {busy === `m${b.id}` ? "…" : "Message"}
                 </Text>
               </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        {state === "loading" ? (
-          <RowListSkeleton label="Loading bookings" />
-        ) : state === "error" ? (
-          <View>
-            <EmptyState
-              title="Couldn't load bookings"
-              hint="Check your connection and retry."
-            />
-            <Button title="Retry" onPress={() => void load()} />
-          </View>
-        ) : visible.length === 0 ? (
-          <EmptyState
-            title="No bookings"
-            hint={
-              filter === "ALL"
-                ? "New booking requests will appear here."
-                : `No ${filter.toLowerCase()} bookings.`
-            }
-          />
-        ) : (
-          visible.map((b) => (
-            <View key={b.id} style={styles.row}>
-              <View style={styles.topRow}>
-                <Avatar name={b.customerName} size={36} />
-                <View style={styles.topText}>
-                  <Text style={styles.customer}>{b.customerName}</Text>
-                  <Text style={styles.offer}>{b.offerTitle}</Text>
-                </View>
-                <Badge
-                  label={bookingState(b).label}
-                  tone={statusTone(b.status)}
-                />
-              </View>
-              <Text style={styles.meta}>
-                {formatWhen(b.slot)} · {b.partySize}{" "}
-                {b.partySize === 1 ? "person" : "people"}
-              </Text>
-              <View style={styles.actions}>
-                <TouchableOpacity
-                  activeOpacity={0.7}
-                  disabled={busy === `m${b.id}`}
-                  onPress={() => openChat(b)}
-                >
-                  <Text style={styles.actionLink}>
-                    {busy === `m${b.id}` ? "…" : "Message"}
+              {b.status === "pending" &&
+                (isBookingStale(b) ? (
+                  <Text style={styles.expiredNote}>
+                    {isHoldExpired(b)
+                      ? "Hold expired — seats released"
+                      : "Slot passed — no longer confirmable"}
                   </Text>
-                </TouchableOpacity>
-                {b.status === "pending" &&
-                  (isBookingStale(b) ? (
-                    <Text style={styles.expiredNote}>
-                      {isHoldExpired(b)
-                        ? "Hold expired — seats released"
-                        : "Slot passed — no longer confirmable"}
-                    </Text>
-                  ) : (
-                    <>
-                      <TouchableOpacity
-                        activeOpacity={0.7}
-                        disabled={busy === `x${b.id}`}
-                        onPress={() =>
-                          run(`x${b.id}`, () => cancelBooking(b.id))
-                        }
-                      >
-                        <Text style={styles.actionLink}>
-                          {busy === `x${b.id}` ? "…" : "Decline"}
-                        </Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        accessibilityRole="button"
-                        activeOpacity={0.7}
-                        disabled={busy === `c${b.id}`}
-                        onPress={() =>
-                          run(`c${b.id}`, () =>
-                            confirmBooking(b.id).then(() => haptic("success")),
-                          )
-                        }
-                        style={styles.confirmPill}
-                      >
-                        <Text style={styles.confirmText}>
-                          {busy === `c${b.id}` ? "…" : "Confirm"}
-                        </Text>
-                      </TouchableOpacity>
-                    </>
-                  ))}
-                {b.status === "confirmed" && bookingState(b).canCancel && (
-                  <Button
-                    title="Cancel booking"
-                    variant="danger"
-                    disabled={busy !== null}
-                    onPress={() =>
-                      Alert.alert(
-                        "Cancel this booking?",
-                        "The customer will be notified and the places released.",
-                        [
-                          { text: "Keep booking", style: "cancel" },
-                          {
-                            text: "Cancel booking",
-                            style: "destructive",
-                            onPress: () =>
-                              void run(`x${b.id}`, () => cancelBooking(b.id)),
-                          },
-                        ],
-                      )
-                    }
-                  />
-                )}
-              </View>
+                ) : (
+                  <>
+                    <TouchableOpacity
+                      activeOpacity={0.7}
+                      disabled={busy === `x${b.id}`}
+                      onPress={() =>
+                        Alert.alert(
+                          `Decline ${b.customerName}'s request?`,
+                          "They'll be notified and the places released.",
+                          [
+                            { text: "Keep it", style: "cancel" },
+                            {
+                              text: "Decline",
+                              style: "destructive",
+                              onPress: () =>
+                                void run(`x${b.id}`, () => cancelBooking(b.id)),
+                            },
+                          ],
+                        )
+                      }
+                    >
+                      <Text style={styles.actionLink}>
+                        {busy === `x${b.id}` ? "…" : "Decline"}
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      accessibilityRole="button"
+                      activeOpacity={0.7}
+                      disabled={busy === `c${b.id}`}
+                      onPress={() =>
+                        run(`c${b.id}`, () =>
+                          confirmBooking(b.id).then(() => haptic("success")),
+                        )
+                      }
+                      style={styles.confirmPill}
+                    >
+                      <Text style={styles.confirmText}>
+                        {busy === `c${b.id}` ? "…" : "Confirm"}
+                      </Text>
+                    </TouchableOpacity>
+                  </>
+                ))}
+              {b.status === "confirmed" && bookingState(b).canCancel && (
+                <Button
+                  title="Cancel booking"
+                  variant="danger"
+                  disabled={busy !== null}
+                  onPress={() =>
+                    Alert.alert(
+                      "Cancel this booking?",
+                      "The customer will be notified and the places released.",
+                      [
+                        { text: "Keep booking", style: "cancel" },
+                        {
+                          text: "Cancel booking",
+                          style: "destructive",
+                          onPress: () =>
+                            void run(`x${b.id}`, () => cancelBooking(b.id)),
+                        },
+                      ],
+                    )
+                  }
+                />
+              )}
             </View>
-          ))
+          </View>
         )}
-      </ScrollView>
+        ListFooterComponent={
+          <>
+            {!!moreError && <Text accessibilityRole="alert">{moreError}</Text>}
+            {cursor && (
+              <Button
+                title="More bookings"
+                variant="ghost"
+                loading={loadingMore}
+                onPress={() => void loadMore()}
+              />
+            )}
+          </>
+        }
+      />
     </Screen>
   );
 }
@@ -310,7 +350,13 @@ const styles = StyleSheet.create({
     gap: spacing.lg,
     marginTop: spacing.md,
   },
-  actionLink: { ...typography.bodySmall, color: colors.textDim },
+  actionLink: {
+    ...typography.bodySmall,
+    color: colors.textDim,
+    minHeight: 44,
+    textAlignVertical: "center",
+    paddingVertical: 12,
+  },
   confirmPill: {
     marginLeft: "auto",
     height: 44,

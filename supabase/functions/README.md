@@ -1,21 +1,21 @@
 # Server workers and business review
 
-Apply migrations through `00018` before deploying these functions. These are server processes; their secrets must never be included in Expo environment variables or app code.
+Apply all current forward migrations (including 00050 and 00052–00054) before deploying these functions. These are server processes; their secrets must never be included in Expo environment variables or app code.
 
 ## Configuration
 
 Hosted Supabase provides `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` to functions. Set these additional secrets in the Supabase dashboard or CLI:
 
-| Secret                         | Used by                     | Value                                                                                   |
-| ------------------------------ | --------------------------- | --------------------------------------------------------------------------------------- |
-| `PUSH_DISPATCH_SECRET`         | send-push                   | Random server-only dispatch secret                                                      |
-| `VERIFICATION_DISPATCH_SECRET` | notify-verification         | A separate random dispatch secret                                                       |
-| `REVIEW_SECRET`                | both verification functions | Strong random signing secret (at least 32 bytes)                                        |
-| `RESEND_API_KEY`               | notify-verification         | Resend email API key                                                                    |
-| `ADMIN_EMAIL`                  | notify-verification         | The reviewer recipient                                                                  |
-| `VERIFICATION_FROM_EMAIL`      | notify-verification         | A sender allowed by your Resend account, e.g. `Nearry <review@your-verified-domain>`    |
-| `REVENUECAT_WEBHOOK_SECRET`    | revenuecat-webhook          | Random secret; configure RevenueCat's webhook Authorization header as `Bearer <secret>` |
-| `REVENUECAT_API_KEY`           | revenuecat-webhook          | RevenueCat secret (server-side) REST API key                                            |
+| Secret                         | Used by                                   | Value                                                                                   |
+| ------------------------------ | ----------------------------------------- | --------------------------------------------------------------------------------------- |
+| `PUSH_DISPATCH_SECRET`         | send-push                                 | Random server-only dispatch secret                                                      |
+| `VERIFICATION_DISPATCH_SECRET` | notify-verification                       | A separate random dispatch secret                                                       |
+| `ADMIN_CONSOLE_URL`            | notify-verification / review-verification | HTTPS hosted admin dashboard; no bearer proof tokens                                    |
+| `RESEND_API_KEY`               | notify-verification                       | Resend email API key                                                                    |
+| `ADMIN_EMAIL`                  | notify-verification                       | The reviewer recipient                                                                  |
+| `VERIFICATION_FROM_EMAIL`      | notify-verification                       | A sender allowed by your Resend account, e.g. `Nearry <review@your-verified-domain>`    |
+| `REVENUECAT_WEBHOOK_SECRET`    | revenuecat-webhook                        | Random secret; configure RevenueCat's webhook Authorization header as `Bearer <secret>` |
+| `REVENUECAT_API_KEY`           | revenuecat-webhook                        | RevenueCat secret (server-side) REST API key                                            |
 
 Deploy from the project root:
 
@@ -26,7 +26,7 @@ supabase functions deploy review-verification --no-verify-jwt
 supabase functions deploy revenuecat-webhook --no-verify-jwt
 ```
 
-JWT verification is disabled because schedulers and emailed links do not carry a user's JWT. The two workers require their exact `x-dispatch-secret` header. The review endpoint requires a signed, expiring token tied to a private review job and document. Do not disable these application checks.
+JWT verification is disabled because schedulers and emailed links do not carry a user's JWT. The two workers require their exact `x-dispatch-secret` header. The old public review endpoint is a static dashboard handoff; it performs no database reads, proof signing or decisions. Admin actions require the dashboard's authenticated allowlist and MFA checks. Do not disable these application checks.
 
 ## Scheduler
 
@@ -37,17 +37,15 @@ Configure a trusted scheduler to POST every minute to:
 
 Store headers in the scheduler's secret store. Neither endpoint accepts client-supplied recipients or proof paths. Separately run `close_expired_posts()` and `expire_booking_holds()` every minute with a trusted service role. This repository does not enable or change production schedules automatically.
 
-The verification worker claims at most 10 jobs per run, leases for five minutes, and retries up to eight claims within seven days. Inspect `verification_review_jobs.last_error`, `attempts`, and `sent_at` when mail fails; exhausted or expired jobs require operator attention. Investigate the error before manually resetting attempts/next_attempt_at. Email delivery is at least once: if sending succeeds but saving the acknowledgement fails, a later retry may send the same review link again. A decision itself is single-use and atomic.
+The verification worker claims at most 10 jobs per run, leases for five minutes, and retries up to eight claims within seven days. Inspect `verification_review_jobs.last_error`, `attempts`, and `sent_at` when mail fails; exhausted or expired jobs require operator attention. Investigate the error before manually resetting attempts/next_attempt_at. Email delivery is at least once: if sending succeeds but saving the acknowledgement fails, a later retry may send the same review link again. A dashboard decision itself is single-use and atomic.
 
 ## Review lifecycle
 
 1. Owner uploads a JPEG, PNG, or WebP image to private `verification_docs`, then calls `submit_verification`.
 2. The transaction queues a private review job. No HTTP call or `pg_net` extension is needed; a mail outage does not undo submission.
-3. Worker emails a link, without copying the private proof into an attachment. The review page creates a five-minute document URL.
-4. GET only displays the review. An explicit form POST calls the service-only `review_verification` RPC, which changes status and creates the in-app notification in one transaction.
-5. Replays, expired links, and superseded submissions are rejected. Old tokens from the pre-`00018` email function are deliberately invalid. Pending submissions are backfilled for new delivery on upgrade.
-
-Rotate `REVIEW_SECRET` to invalidate emailed links if necessary. Access to a valid review link grants approval authority; keep the review mailbox private. An administrator still associates a reviewed venue with `venues.business_id`; newly created offers inherit the business's first associated venue, or accept another venue owned by that business. The email review does not claim arbitrary venues.
+3. Worker emails a link, without copying the private proof into an attachment. The link opens the admin dashboard, where a reviewer signs in with MFA. Proof URLs are minted for 60 seconds after authorization and an audit write.
+4. Only an authorized dashboard decision changes status. Approval requires checking the submitted business location and map pin; rejection requires a reason. The decision and in-app notification commit atomically.
+5. Replayed decisions and superseded submissions are rejected. Old email URLs remain safe handoffs and confer no authority.
 
 ## Release verification
 
@@ -60,3 +58,5 @@ The new authenticated `place-autocomplete` function supports Google Places sugge
 ## Account maintenance and push receipts
 
 For the account-safety release, apply migrations 00024 and 00025 before deploying the updated `send-push` and new `account-maintenance` functions. Account maintenance requires its own server-only `ACCOUNT_MAINTENANCE_SECRET` and trusted POST schedule with that `x-dispatch-secret`. Push uses the existing `PUSH_DISPATCH_SECRET`; optionally set server-only `EXPO_ACCESS_TOKEN` when Expo enhanced push security is enabled. Neither endpoint accepts a client-selected user, recipient, message or deletion target. See [full rollout, moderation and deletion monitoring](../../docs/account-safety-rollout.md).
+
+November reliability update: redeploy send-push, account-maintenance, place-search, place-autocomplete, admin-console, notify-verification and review-verification after migrations 00050 and 00052–00054. Set ADMIN_CONSOLE_URL to the HTTPS hosted dashboard. Old review emails no longer grant access or decisions; the reviewer signs in with MFA. Sender/message push previews match the in-app notices; this is an intentional product choice, not generic push content. Review existing schedules using ../ops/verify-maintenance.sql; missing hosted setup can use ../ops/setup-maintenance.sql after matching Vault secrets are configured.

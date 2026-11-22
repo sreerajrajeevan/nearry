@@ -315,3 +315,48 @@ test("push text falls back when a notice is blank and is clipped when long", () 
   assert.equal(long.body.length, 180);
   assert.ok(long.body.endsWith("…"));
 });
+
+test("push worker drains multiple bounded batches and leaves the remainder for the next run", async () => {
+  const f = fakeDb(),
+    rpc = f.db.rpc.bind(f.db);
+  let claims = 0,
+    tickets = 0;
+  f.tables.profiles.push({ id: "person", push_enabled: true });
+  f.tables.push_tokens.push({
+    user_id: "person",
+    token: "device",
+    updated_at: "2026-10-19",
+  });
+  f.tables.push_jobs.push(
+    ...Array.from({ length: 130 }, (_, i) => ({
+      id: "job-" + i,
+      notification_id: "notice-" + i,
+      user_id: "person",
+      kind: "booking",
+      title: "Booking update",
+      body: "Your booking is confirmed",
+    })),
+  );
+  f.db.rpc = async (name: string, args: any) => {
+    if (name === "claim_push_jobs") {
+      claims++;
+      return {
+        data: f.tables.push_jobs.filter((r) => !r.sent_at).slice(0, 25),
+        error: null,
+      };
+    }
+    return rpc(name, args);
+  };
+  const send = (async (_url: any, init: any) =>
+    Response.json({
+      data: JSON.parse(init.body).map(() => ({
+        status: "ok",
+        id: "ticket-" + ++tickets,
+      })),
+    })) as typeof fetch;
+  assert.equal((await processPush(f.db, send)).sent, 100);
+  assert.equal(claims, 4);
+  assert.equal(f.tables.push_jobs.filter((r) => !r.sent_at).length, 30);
+  assert.equal((await processPush(f.db, send)).sent, 30);
+  assert.equal(tickets, 130);
+});

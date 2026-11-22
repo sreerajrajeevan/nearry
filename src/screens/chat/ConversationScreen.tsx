@@ -22,16 +22,21 @@ import {
 import { useFocusEffect } from "@react-navigation/native";
 import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
-import { Avatar } from "../../components/Avatar";
+import { ChatAvatar } from "../../components/ChatAvatar";
+import { LinkedText } from "../../components/LinkedText";
+import { chatIdentity } from "../../utils/chatIdentity";
 import { Icon } from "../../components/Icon";
-import { colors, typography, spacing } from "../../theme";
+import { colors, typography, spacing, weight } from "../../theme";
 import { useAuth } from "../../store/AuthContext";
 import {
-  listMessages,
+  listMessagesPage,
   sendMessage,
   markConversationRead,
   subscribeToConversation,
 } from "../../services/chat";
+import * as Crypto from "expo-crypto";
+import { Cursor } from "../../utils/pagination";
+import { setActiveChat } from "../../services/activeChat";
 import { mergeMessages } from "../../utils/chatMessages";
 import { ChatMessage } from "../../services/mappers";
 
@@ -64,9 +69,12 @@ function Bubble({
         }
         style={[styles.bubble, msg.mine && styles.bubbleMine]}
       >
-        <Text style={[styles.body, msg.mine && styles.bodyMine]}>
+        <LinkedText
+          style={[styles.body, msg.mine && styles.bodyMine]}
+          linkStyle={msg.mine ? styles.linkMine : styles.link}
+        >
           {msg.body}
-        </Text>
+        </LinkedText>
         <Text style={[styles.time, msg.mine && styles.timeMine]}>
           {new Date(msg.createdAt).toLocaleTimeString([], {
             hour: "2-digit",
@@ -85,6 +93,16 @@ export function ConversationScreen({ route, navigation }: Props) {
   const myId = profile?.id ?? "";
   const [peer, setPeer] = useState<ConversationSafety | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [olderCursor, setOlderCursor] = useState<Cursor | null>(null),
+    [olderBusy, setOlderBusy] = useState(false),
+    [olderError, setOlderError] = useState("");
+  const clearBoundary = useRef<string | null>(null),
+    messagesRef = useRef<ChatMessage[]>([]),
+    olderLock = useRef(false);
+  messagesRef.current = messages;
+  const retry = useRef<{ room: string; body: string; key: string } | null>(
+    null,
+  );
   const [draft, setDraft] = useState("");
   const [state, setState] = useState<"loading" | "error" | "ready">("loading");
   const [sending, setSending] = useState(false);
@@ -124,21 +142,27 @@ export function ConversationScreen({ route, navigation }: Props) {
     const ticket = ++generation.current;
     try {
       const [msgs, safety] = await Promise.all([
-        listMessages(conversationId, myId),
+        listMessagesPage(conversationId, myId),
         conversationSafety(conversationId),
       ]);
       if (!focused.current || ticket !== generation.current) return;
       setPeer(safety);
-      // Use the authoritative snapshot: a clear on another device must remove old bubbles.
-      setMessages(msgs);
+      const sameBoundary = clearBoundary.current === msgs.clearedAt;
+      clearBoundary.current = msgs.clearedAt;
+      setMessages((previous) =>
+        sameBoundary ? mergeMessages(previous, msgs.items) : msgs.items,
+      );
+      setOlderCursor((old) =>
+        sameBoundary && messagesRef.current.length > 60 ? old : msgs.cursor,
+      );
       setState("ready");
-      // Only acknowledge the messages in this displayed snapshot.
-      void markConversationRead(
-        conversationId,
-        msgs[msgs.length - 1]?.id,
-      ).catch(() => {});
     } catch {
-      if (focused.current && ticket === generation.current) setState("error");
+      if (
+        focused.current &&
+        ticket === generation.current &&
+        !messagesRef.current.length
+      )
+        setState("error");
     }
   }, [conversationId, myId]);
 
@@ -147,6 +171,10 @@ export function ConversationScreen({ route, navigation }: Props) {
       focused.current = true;
       ++visit.current;
       setDraft("");
+      clearBoundary.current = null;
+      setOlderCursor(null);
+      setOlderError("");
+      const stopActive = setActiveChat(conversationId);
       setSending(false);
       setPeer(null);
       setSendError("");
@@ -164,6 +192,7 @@ export function ConversationScreen({ route, navigation }: Props) {
       });
       const timer = setInterval(() => void load(), 30_000);
       return () => {
+        stopActive();
         app.remove();
         clearInterval(timer);
         focused.current = false;
@@ -185,13 +214,25 @@ export function ConversationScreen({ route, navigation }: Props) {
     setSendError("");
     setSending(true);
     try {
-      const msg = await sendMessage(conversationId, myId, text);
+      if (retry.current?.room !== sendingRoom || retry.current.body !== text)
+        retry.current = {
+          room: sendingRoom,
+          body: text,
+          key: Crypto.randomUUID(),
+        };
+      const msg = await sendMessage(
+        conversationId,
+        myId,
+        text,
+        retry.current.key,
+      );
       if (
         room.current !== sendingRoom ||
         visit.current !== sendingVisit ||
         !focused.current
       )
         return;
+      retry.current = null;
       ++generation.current; // Discard a reload started before this send committed.
       // Keep anything typed while the send was in flight.
       setDraft((current) => (current === sentDraft ? "" : current));
@@ -225,6 +266,69 @@ export function ConversationScreen({ route, navigation }: Props) {
     }
   };
 
+  const loadOlder = async () => {
+    if (!olderCursor || olderLock.current) return;
+    olderLock.current = true;
+    setOlderBusy(true);
+    setOlderError("");
+    const scope = room.current,
+      visitId = visit.current,
+      boundary = clearBoundary.current;
+    try {
+      const page = await listMessagesPage(conversationId, myId, olderCursor);
+      if (
+        room.current !== scope ||
+        visit.current !== visitId ||
+        !focused.current
+      )
+        return;
+      if (page.clearedAt !== boundary) {
+        void load();
+        return;
+      }
+      stickToBottom.current = false;
+      setMessages((previous) => mergeMessages(page.items, previous));
+      setOlderCursor(page.cursor);
+    } catch {
+      if (room.current === scope && visit.current === visitId)
+        setOlderError("Could not load older messages.");
+    } finally {
+      olderLock.current = false;
+      if (room.current === scope && visit.current === visitId)
+        setOlderBusy(false);
+    }
+  };
+  const visibleRead = useRef(
+    ({
+      viewableItems,
+    }: {
+      viewableItems: Array<{ item: ChatMessage; isViewable: boolean }>;
+    }) => {
+      const last = viewableItems
+        .filter((i) => i.isViewable)
+        .map((i) => i.item)
+        .at(-1);
+      if (last && focused.current && isForeground())
+        void markConversationRead(last.conversationId, last.id).catch(() => {});
+    },
+  ).current;
+
+  // Business chats: business name on top, the person running it underneath.
+  const who = peer
+    ? chatIdentity({
+        name: peer.name,
+        isBusiness: peer.isBusiness,
+        businessName: peer.businessName,
+        booking: peer.kind === "booking",
+        contextTitle: peer.contextTitle,
+      })
+    : {
+        kind: "plan" as const,
+        title: title ?? "Conversation",
+        subtitle: "",
+        tag: "",
+      };
+
   return (
     // The keyboard owner fills the window, outside safe-area padding. Android
     // edge-to-edge does not resize this window; an undefined behavior covers the input.
@@ -239,18 +343,16 @@ export function ConversationScreen({ route, navigation }: Props) {
           >
             <Icon name="arrow-left" size={22} color={colors.text} />
           </TouchableOpacity>
-          <Avatar
-            name={peer?.name ?? title ?? "Conversation"}
-            size={40}
-            tone="clay"
-          />
+          <ChatAvatar name={who.title} kind={who.kind} size={40} />
           <View style={styles.headingText}>
             <Text style={styles.title} numberOfLines={1}>
-              {peer?.name ?? title ?? "Conversation"}
+              {who.title}
             </Text>
-            <Text style={styles.subtitle} numberOfLines={1}>
-              About your plans & bookings
-            </Text>
+            {!!who.subtitle && (
+              <Text style={styles.subtitle} numberOfLines={1}>
+                {who.subtitle}
+              </Text>
+            )}
           </View>
           <TouchableOpacity
             accessibilityRole="button"
@@ -294,6 +396,29 @@ export function ConversationScreen({ route, navigation }: Props) {
                   listRef.current?.scrollToEnd({ animated: false });
               }}
               data={messages}
+              maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
+              onViewableItemsChanged={visibleRead}
+              viewabilityConfig={{
+                itemVisiblePercentThreshold: 80,
+                minimumViewTime: 500,
+              }}
+              ListHeaderComponent={
+                <>
+                  {!!olderError && (
+                    <Text accessibilityRole="alert" style={styles.sendError}>
+                      {olderError}
+                    </Text>
+                  )}
+                  {olderCursor && (
+                    <Button
+                      title="Older messages"
+                      variant="ghost"
+                      loading={olderBusy}
+                      onPress={() => void loadOlder()}
+                    />
+                  )}
+                </>
+              }
               keyExtractor={(m: ChatMessage) => m.id}
               renderItem={({ item }: { item: ChatMessage }) => (
                 <Bubble
@@ -470,6 +595,8 @@ const styles = StyleSheet.create({
   },
   body: { ...typography.body, color: colors.text },
   bodyMine: { color: colors.night },
+  link: { color: colors.amberDeep, ...weight("600") },
+  linkMine: { color: colors.night, ...weight("700") },
   time: {
     ...typography.caption,
     color: colors.textFaint,

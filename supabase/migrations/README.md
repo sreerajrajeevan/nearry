@@ -2,7 +2,7 @@
 
 Never run `run-all.sql` against an existing project. It is generated, fresh-install-only and protected by a transaction and existing-schema guard.
 
-For a fresh database, run `run-all.sql`, or apply `00001` through `00025` once in order. For an existing project, inspect its migration history and apply **only missing** numbered migrations in order. Back up the project first. Do not replay old migrations.
+For a fresh database, run `run-all.sql`, or apply every current .sql file once in lexicographic filename order. For an existing project, inspect its migration history and apply **only missing** numbered migrations in order. Back up the project first. Do not replay old migrations.
 
 For a project already on `00010`, apply `00011` through `00018` in order. These are forward migrations. Existing posts, profiles, offers and bookings are preserved. New columns and grants require deploying the matching app build together with these migrations.
 
@@ -42,14 +42,13 @@ For projects already on `00016`, apply only `00017` and `00018` after taking a b
 
 Existing projects at 00023 apply only `00024_account_safety.sql` and `00025_push_delivery_receipts.sql`, in order, before distributing the matching client. These add report/block rules, account deactivation/deletion queues, terms acknowledgement, notification preferences and delivery receipts. Deploy/redeploy `account-maintenance` and `send-push`, configure trusted schedules, and set public legal/EAS configuration. See [rollout and operator instructions](../../docs/account-safety-rollout.md). Existing future commitments are not cancelled by migration installation; cancellation happens only after an explicit deletion request or a trusted moderation action.
 
-
 ## Admin operations console (00029)
 
 `00029_admin_console.sql` creates private admin membership, audit records and
 service-only overview, business queue and moderation functions. Apply after
 00028; allowlist confirmed operator UUIDs separately and deploy `admin-console`.
 See [admin setup](../../admin/README.md). The old unmerged admin migration 00027
-was renumbered. Existing email review remains unchanged. Never grant ordinary
+was renumbered. After the November reliability update, email review links hand off to this authenticated MFA dashboard. Never grant ordinary
 clients access to admin tables or let users add themselves as administrators.
 
 - **00030_personal_selfie_verification.sql** — optional private camera selfie reviews, versioned admin decisions, current-avatar binding and cleanup. Requires 00029. See [selfie setup](../../docs/personal-selfie-verification.md). New camera and immutable avatar paths require a fresh phone build.
@@ -61,3 +60,19 @@ clients access to admin tables or let users add themselves as administrators.
 `00041`: fair-use limits on offer bookings in `book_offer_slot`: at most 2 people per booking, one active booking per person per offer per day (India time), and at most 3 waiting (unconfirmed) requests per person. A retry of the same slot still returns the existing booking. Apply it before or with the matching app build.
 
 `00042`: plan-group notification previews show `Sender: message` under the existing group title. Backfills previews from retained messages while preserving read state and timestamps; does not resend pushes or alter chat messages. Device push text stays generic. Apply this migration to an existing project; no app rebuild is required.
+
+`00048`: clearer booking notifications. "Booking confirmed" now names the business, the slot time (India time) and party size, and says to pay at the venue: the total for the party plus the per-person price (offer prices are per person), or "It's free". Business requests and cancellations also show the slot time. Only the text changes: kinds, recipients and the offer reference are the same, so older app builds are unaffected and existing notifications are not rewritten. It does not depend on any other open branch.
+
+`00049`: business chats show the business name. `list_my_conversations()` adds `other_is_business` and `other_business_name`; `conversation_safety()` adds `isBusiness`, `businessName`, `kind` and `contextTitle`; message notifications from a business read "Message from <business name>". Additive only, so older builds keep working; the new chat header, list tags and tappable links need the matching app build. It does not depend on any other open branch.
+
+## November reliability update (00050, 00052–00054)
+
+See [rollout instructions and validation](../../docs/review-fix-tracker.md). Apply the four new forward files before the matching app/worker release. Existing content and history are retained. The stale milestone schema.sql has been removed; run-all.sql is the only generated fresh-install bundle.
+
+Historical duplicate numeric prefixes (00021 and 00025) are ordered by the full filename in this repository. Do not rename or replay applied files. Record the full filename when applying manually, and inspect the target database's actual objects and migration history before importing it into a migration tool that requires unique numeric versions. Reserved numbers for independent branches are not missing dependencies.
+
+## Nearry Premium (00055–00056)
+
+`00055`: `premium_entitlements` (written only by the `revenuecat-webhook` function with the service role; users read their own row), `has_premium()`, and `daily_usage` with triggers enforcing the free daily limits: 3 new plans and 10 join requests per India day (`daily_plan_limit` / `daily_join_limit`). Server and admin inserts are never limited. Apply after the Premium app build has reached users, or older builds show the raw limit text.
+
+`00056`: the Premium "Hosted by" filter. `hosts_matching_gender()` (security definer, Premium-only, honours blocks and visibility) and an optional `hostGender` key in `discover_posts` (requires 00052). Without the key results are unchanged, so older builds and `nearby_post_cards` keep working.

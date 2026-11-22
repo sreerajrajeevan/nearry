@@ -1,3 +1,4 @@
+import { usePagedQuery } from "../../hooks/usePagedQuery";
 import React from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -14,7 +15,7 @@ import { SafetyActions } from "../../components/SafetyActions";
 import { useLiveQuery } from "../../hooks/useLiveQuery";
 import { getPublicProfile } from "../../services/profile";
 import { isPersonalSelfieChecked } from "../../services/selfieVerification";
-import { listPosts, subscribeToPosts } from "../../services/posts";
+import { listPostsPage, subscribeToPosts } from "../../services/posts";
 import { useAuth } from "../../store/AuthContext";
 import { colors, typography, weight } from "../../theme";
 
@@ -32,19 +33,23 @@ export function HostProfileScreen({
   const { data, state, error, refresh } = useLiveQuery(
     `host:${userId}`,
     async () => {
-      const [host, selfieChecked, plans] = await Promise.all([
+      const [host, selfieChecked] = await Promise.all([
         getPublicProfile(userId, name),
         isPersonalSelfieChecked(userId).catch(() => false),
-        listPosts({ authorId: userId }).catch(() => []),
       ]);
-      return { host, selfieChecked, plans };
+      return { host, selfieChecked };
     },
     subscribeToPosts,
   );
   const host = data?.host;
   const displayName = host?.displayName ?? name ?? "Someone";
   const firstName = displayName.split(" ")[0];
-  const plans = data?.plans ?? [];
+  const planPages = usePagedQuery(
+    `host-plans:${userId}`,
+    (cursor) => listPostsPage({ authorId: userId }, cursor),
+    subscribeToPosts,
+  );
+  const plans = planPages.items;
   return (
     <Screen>
       <ScrollView
@@ -124,6 +129,16 @@ export function HostProfileScreen({
               />
             )}
           </>
+        )}
+        {planPages.moreError ? (
+          <Text style={{ color: colors.textDim }}>{planPages.moreError}</Text>
+        ) : null}
+        {planPages.cursor && (
+          <Button
+            title="More plans"
+            loading={planPages.loadingMore}
+            onPress={() => void planPages.loadMore()}
+          />
         )}
       </ScrollView>
     </Screen>

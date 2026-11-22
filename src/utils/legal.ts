@@ -113,7 +113,7 @@ export function legalSections(
     },
     {
       title: "Crash reports",
-      body: "When the app crashes or hits an unexpected error, it sends a crash report to Sentry so we can fix it: the error and where in the app it happened, the app version, device model and operating system, and the screens visited just before. Reports do not include your name, email, account ID, messages, typed text, location or photos, and anything resembling an email address, phone number or coordinates is removed on your phone before sending. Reports are kept for up to 90 days.",
+      body: "When the app crashes or hits an unexpected error, it sends a crash report to Sentry when crash reporting is configured in that build so we can fix it: the error and where in the app it happened, the app version, device model and operating system, and the screens visited just before. Reports do not include your name, email, account ID, messages, typed text, location or photos, and anything resembling an email address, phone number or coordinates is removed on your phone before sending. Reports are kept for up to 90 days.",
     },
     {
       title: "Purchases",
@@ -121,7 +121,7 @@ export function legalSections(
     },
     {
       title: "Service providers",
-      body: "Supabase provides authentication, database, file storage and server functions. Google Maps Platform or Geoapify provides searched-place suggestions, depending on the configured search provider. Expo and the phone platform’s Apple/Google push services deliver notifications. Resend delivers email sign-in codes through Supabase Auth when email sign-in is enabled, and business-review links to authorised reviewers. Google is used when you choose Google sign-in. Sentry receives crash reports. RevenueCat manages subscription status. These providers process relevant data to deliver those services; processing locations depend on the configured provider infrastructure.",
+      body: "Supabase provides authentication, database, file storage and server functions. Google Maps Platform or Geoapify provides searched-place suggestions, depending on the configured search provider. Expo and the phone platform’s Apple/Google push services deliver notifications. Resend delivers email sign-in codes through Supabase Auth when email sign-in is enabled, and business-review links to authorised reviewers. Google is used when you choose Google sign-in. Sentry receives crash reports when reporting is configured in the installed build. RevenueCat manages subscription status. These providers process relevant data to deliver those services; processing locations depend on the configured provider infrastructure.",
     },
     {
       title: "Retention and account deletion",

@@ -17,7 +17,8 @@ import {
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { Screen } from "../../components/Screen";
-import { Avatar } from "../../components/Avatar";
+import { ChatAvatar } from "../../components/ChatAvatar";
+import { chatIdentity, ChatKind } from "../../utils/chatIdentity";
 import { Icon } from "../../components/Icon";
 import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
@@ -69,6 +70,39 @@ function chatTime(iso: string | undefined, now: number) {
     : date.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
 }
 
+/** Small label that says what kind of chat a row is. */
+function ChatTag({
+  kind,
+  label,
+  spaced,
+}: {
+  kind: ChatKind | "group";
+  label: string;
+  spaced?: boolean;
+}) {
+  const business = kind === "business";
+  return (
+    <View
+      style={[
+        styles.tag,
+        business && styles.tagBusiness,
+        spaced && styles.tagSpaced,
+      ]}
+    >
+      <Icon
+        name={
+          business ? "shopping-bag" : kind === "customer" ? "calendar" : "users"
+        }
+        size={11}
+        color={business ? colors.onAmber : colors.textDim}
+      />
+      <Text style={[styles.tagText, business && styles.tagTextBusiness]}>
+        {label}
+      </Text>
+    </View>
+  );
+}
+
 /** One card per plan group. Booking messages and private older history stay separate. */
 export function ChatListScreen({ navigation }: Props) {
   const { profile } = useAuth(),
@@ -95,6 +129,18 @@ export function ChatListScreen({ navigation }: Props) {
     if (tab === "requests") tabsRef.current?.scrollToEnd({ animated: false });
     else tabsRef.current?.scrollTo({ x: 0, animated: false });
   }, [tab]);
+  useEffect(() => {
+    ++version.current;
+    setSelected(null);
+    setConversations([]);
+    setGroups([]);
+    setRequests([]);
+    setTab("all");
+    setQuery("");
+    setSearching(false);
+    setHistory(false);
+    setLoading(true);
+  }, [profile?.id]);
   const load = useCallback(
     async (silent = false) => {
       const ticket = ++version.current;
@@ -123,12 +169,6 @@ export function ChatListScreen({ navigation }: Props) {
     useCallback(() => {
       focused.current = true;
       setSelected(null);
-      setConversations([]);
-      setGroups([]);
-      setRequests([]);
-      setHistory(false);
-      setQuery("");
-      setTab("all");
       setNow(Date.now());
       void load();
       const refresh = () => {
@@ -182,10 +222,13 @@ export function ChatListScreen({ navigation }: Props) {
     now,
   );
   const bookings = conversations.filter(
-    (c) => !!c.bookingId && matches(c.otherName, c.contextTitle),
+    (c) =>
+      !!c.bookingId &&
+      matches(c.otherName, c.otherBusinessName, c.contextTitle),
   );
   const olderChats = conversations.filter(
-    (c) => !c.bookingId && matches(c.otherName, c.contextTitle),
+    (c) =>
+      !c.bookingId && matches(c.otherName, c.otherBusinessName, c.contextTitle),
   );
   const visibleRequests = requests.filter((r) =>
     matches(r.requesterName, r.postTitle, r.postVenueName),
@@ -194,59 +237,78 @@ export function ChatListScreen({ navigation }: Props) {
   const tabs: { key: TabKey; label: string }[] = [
     { key: "all", label: "All" },
     ...(personal ? [{ key: "plans" as const, label: "Plans" }] : []),
-    { key: "bookings", label: "Bookings" },
+    { key: "bookings", label: personal ? "Businesses" : "Bookings" },
     ...(personal ? [{ key: "requests" as const, label: "Requests" }] : []),
   ];
-  const renderConversation = (c: Conversation) => (
-    <View key={c.id} style={styles.chatCard}>
-      <TouchableOpacity
-        accessibilityRole="button"
-        style={styles.chatOpen}
-        accessibilityLabel={`${c.otherName}. ${c.contextTitle}${c.unreadCount ? `. ${c.unreadCount} unread` : ""}`}
-        accessibilityHint="Open conversation. Hold for options."
-        onLongPress={() => setSelected(c)}
-        onPress={() =>
-          navigation.navigate("Conversation", {
-            conversationId: c.id,
-            title: c.otherName,
-          })
-        }
-      >
-        <Avatar name={c.otherName} size={44} tone="clay" />
-        <View style={styles.copy}>
-          <View style={styles.topRow}>
-            <Text style={styles.name} numberOfLines={1}>
-              {c.otherName}
-            </Text>
-            <Text style={styles.time}>{chatTime(c.lastAt, now)}</Text>
-          </View>
-          <Text style={styles.meta} numberOfLines={2}>
-            {c.contextTitle}
-          </Text>
-          <View style={styles.topRow}>
-            <Text style={styles.preview} numberOfLines={1}>
-              {c.lastBody ?? "Say hello…"}
-            </Text>
-            {c.unreadCount > 0 && (
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>
-                  {c.unreadCount > 99 ? "99+" : c.unreadCount}
+  const renderConversation = (c: Conversation) => {
+    const who = chatIdentity({
+      name: c.otherName,
+      isBusiness: c.otherIsBusiness,
+      businessName: c.otherBusinessName,
+      booking: !!c.bookingId,
+      contextTitle: c.contextTitle,
+    });
+    // Business rows: "Renil · Sip More, Pay Less!"; others: what it's about.
+    const about =
+      who.kind === "business"
+        ? [who.subtitle !== "Business" && who.subtitle, c.contextTitle]
+            .filter(Boolean)
+            .join(" · ")
+        : c.contextTitle;
+    return (
+      <View key={c.id} style={styles.chatCard}>
+        <TouchableOpacity
+          accessibilityRole="button"
+          style={styles.chatOpen}
+          accessibilityLabel={`${who.tag} chat with ${who.title}. ${about}${c.unreadCount ? `. ${c.unreadCount} unread` : ""}`}
+          accessibilityHint="Open conversation. Hold for options."
+          onLongPress={() => setSelected(c)}
+          onPress={() =>
+            navigation.navigate("Conversation", {
+              conversationId: c.id,
+              title: who.title,
+            })
+          }
+        >
+          <ChatAvatar name={who.title} kind={who.kind} size={44} />
+          <View style={styles.copy}>
+            <View style={styles.topRow}>
+              <View style={styles.nameRow}>
+                <Text style={styles.name} numberOfLines={1}>
+                  {who.title}
                 </Text>
+                <ChatTag kind={who.kind} label={who.tag} />
               </View>
-            )}
+              <Text style={styles.time}>{chatTime(c.lastAt, now)}</Text>
+            </View>
+            <Text style={styles.meta} numberOfLines={2}>
+              {about}
+            </Text>
+            <View style={styles.topRow}>
+              <Text style={styles.preview} numberOfLines={1}>
+                {c.lastBody ?? "Say hello…"}
+              </Text>
+              {c.unreadCount > 0 && (
+                <View style={styles.badge}>
+                  <Text style={styles.badgeText}>
+                    {c.unreadCount > 99 ? "99+" : c.unreadCount}
+                  </Text>
+                </View>
+              )}
+            </View>
           </View>
-        </View>
-      </TouchableOpacity>
-      <TouchableOpacity
-        accessibilityRole="button"
-        accessibilityLabel={`Options for ${c.otherName}`}
-        style={styles.more}
-        onPress={() => setSelected(c)}
-      >
-        <Icon name="more-vertical" size={19} />
-      </TouchableOpacity>
-    </View>
-  );
+        </TouchableOpacity>
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel={`Options for ${who.title}`}
+          style={styles.more}
+          onPress={() => setSelected(c)}
+        >
+          <Icon name="more-vertical" size={19} />
+        </TouchableOpacity>
+      </View>
+    );
+  };
   return (
     <Screen>
       <ScrollView
@@ -504,6 +566,11 @@ export function ChatListScreen({ navigation }: Props) {
                                   />
                                 </View>
                                 <View style={styles.copy}>
+                                  <ChatTag
+                                    kind="group"
+                                    label="Plan group"
+                                    spaced
+                                  />
                                   <Text style={styles.name} numberOfLines={2}>
                                     {g.name}
                                   </Text>
@@ -564,13 +631,13 @@ export function ChatListScreen({ navigation }: Props) {
               <>
                 {(bookings.length > 0 || tab === "bookings" || !personal) && (
                   <Text accessibilityRole="header" style={styles.sectionLabel}>
-                    Booking messages
+                    {personal ? "Business chats" : "Customer chats"}
                   </Text>
                 )}
                 {chatError && (
                   <View style={styles.errorBox}>
                     <Text style={styles.meta}>
-                      Couldn’t refresh booking messages.
+                      Couldn’t refresh these chats.
                     </Text>
                     <Button
                       title="Retry messages"
@@ -584,9 +651,17 @@ export function ChatListScreen({ navigation }: Props) {
                   (tab === "bookings" || !personal) && (
                     <EmptyState
                       title={
-                        q ? "No matching bookings" : "No booking messages yet"
+                        q
+                          ? "No matching chats"
+                          : personal
+                            ? "No business chats yet"
+                            : "No customer chats yet"
                       }
-                      hint="Confirmed bookings can start a conversation with the business."
+                      hint={
+                        personal
+                          ? "Book an offer, then message the business from the offer page."
+                          : "Customers who book your offers can message you here."
+                      }
                     />
                   )}
                 {bookings.map(renderConversation)}
@@ -628,7 +703,7 @@ export function ChatListScreen({ navigation }: Props) {
           key={selected.id}
           conversationId={selected.id}
           otherUserId={selected.otherUserId}
-          name={selected.otherName}
+          name={selected.otherBusinessName ?? selected.otherName}
           onClose={() => setSelected(null)}
           onReport={() => {
             setSelected(null);
@@ -766,6 +841,33 @@ const styles = StyleSheet.create({
   },
   copy: { flex: 1, minWidth: 0 },
   name: { ...typography.heading, color: colors.text, flexShrink: 1 },
+  nameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    flexShrink: 1,
+    minWidth: 0,
+  },
+  tag: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: 3,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 999,
+    backgroundColor: colors.surfaceRaised,
+  },
+  tagBusiness: { backgroundColor: colors.amberBright },
+  tagSpaced: { marginBottom: 4 },
+  tagText: {
+    fontSize: 10,
+    lineHeight: 14,
+    letterSpacing: 0.3,
+    color: colors.textDim,
+    ...weight("700"),
+  },
+  tagTextBusiness: { color: colors.onAmber },
   planDate: {
     ...typography.bodySmall,
     ...weight("600"),
