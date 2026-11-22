@@ -850,7 +850,7 @@ export function PostEditor({
                 }
                 style={styles.stepValue}
               />
-              <Text style={styles.help}>
+              <Text style={[styles.help, { textAlign: "center" }]}>
                 more {vacancies === 1 ? "person" : "people"}
               </Text>
             </View>
@@ -1438,14 +1438,19 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   stepText: { fontSize: 24, color: colors.text },
+  // A visible white box so people see they can tap and type a number.
   stepValue: {
-    minWidth: 80,
-    minHeight: 48,
+    width: 88,
+    minHeight: 52,
     paddingVertical: 4,
     fontSize: 26,
     ...weight("700"),
     color: colors.ink,
     textAlign: "center",
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.lineStrong,
+    borderRadius: 14,
   },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   chip: {
