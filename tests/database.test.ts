@@ -6237,3 +6237,55 @@ test(
     );
   },
 );
+
+test("plan chats log who joined and who left, visible only to members", async () => {
+  const pid = await post(3);
+  const approve = async (who: string) => {
+    const id = await request(who, pid);
+    await asUser(host, (tx) =>
+      tx.query("select approve_join_request($1)", [id]),
+    );
+  };
+  await approve(b);
+  await approve(c);
+  const group = (
+    await db.query("select id from plan_groups where post_id=$1", [pid])
+  ).rows[0].id;
+  await asUser(b, (tx) => tx.query("select leave_plan_group($1)", [group]));
+  const events = (actor: string) =>
+    asUser(actor, (tx) =>
+      tx.query(
+        "select user_id,kind from plan_group_events where post_id=$1 order by created_at,id",
+        [pid],
+      ),
+    );
+  const seen = (await events(c)).rows;
+  assert.deepEqual(
+    seen.map((r: any) => [r.user_id, r.kind]),
+    [
+      [b, "joined"],
+      [c, "joined"],
+      [b, "left"],
+    ],
+  );
+  assert.equal((await events(host)).rows.length, 3);
+  // Someone who left, and anyone outside the plan, can't read its log.
+  assert.equal((await events(b)).rows.length, 0);
+  assert.equal((await events(outsider)).rows.length, 0);
+  // Only the database writes the log.
+  await assert.rejects(
+    asUser(c, (tx) =>
+      tx.query(
+        "insert into plan_group_events(post_id,user_id,kind) values($1,$2,'left')",
+        [pid, c],
+      ),
+    ),
+    /permission denied/,
+  );
+  // A request that is declined or withdrawn before approval leaves no line.
+  const pending = await request(outsider, pid);
+  await asUser(host, (tx) =>
+    tx.query("select decline_join_request($1)", [pending]),
+  );
+  assert.equal((await events(c)).rows.length, 3);
+});
