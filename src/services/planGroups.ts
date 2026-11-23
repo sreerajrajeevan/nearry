@@ -10,6 +10,7 @@ import { subscribeToPosts } from "./posts";
 import { multiplexSubscribe } from "./realtime";
 import { notifyUnreadChanged } from "./unreadEvents";
 import { validateMessageBody } from "./chat";
+import type { MembershipEvent } from "../utils/chatTimeline";
 export type PlanGroup = {
   id: string;
   postId: string;
@@ -166,7 +167,8 @@ export async function listPlanGroupMessages(
   pageSize = 60,
 ): Promise<PlanGroupMessage[]> {
   if (isDemoMode()) {
-    await getPlanGroup({ groupId: id }, myId);
+    const group = await getPlanGroup({ groupId: id }, myId);
+    seedDemoChat(group, myId);
     return (demoMessages.get(id) ?? [])
       .filter((m) => beforeSeq == null || m.seq < beforeSeq)
       .slice(-pageSize)
@@ -184,6 +186,78 @@ export async function listPlanGroupMessages(
   const { data, error } = await query;
   if (error) throw new Error(error.message);
   return (data ?? []).reverse().map((row) => message(row, myId));
+}
+/** A short sample conversation so the demo chat isn't empty. */
+function seedDemoChat(group: PlanGroup, myId: string) {
+  if (demoMessages.has(group.id)) return;
+  const others = (group.members ?? []).filter((m) => m.id !== myId);
+  if (!others.length) return;
+  const ago = (minutes: number) =>
+    new Date(Date.now() - minutes * 60_000).toISOString();
+  const other = others[0];
+  const lines: [string, string, number][] = [
+    [other.id, "Hey all! Looking forward to this 😄", 26 * 60],
+    [myId, "Same here!", 26 * 60 - 2],
+    [myId, "Bring water, it gets hot", 26 * 60 - 3],
+    [other.id, "👍👍", 26 * 60 - 4],
+    [other.id, "Can we meet 10 minutes early?", 45],
+    [other.id, "Near the main gate", 44],
+    [myId, "Works for me", 30],
+  ];
+  demoMessages.set(
+    group.id,
+    lines.map(([senderId, body, minutes], i) => ({
+      id: `${group.id}-seed-${i}`,
+      seq: i + 1,
+      senderId,
+      senderName:
+        senderId === myId
+          ? "You"
+          : (group.members?.find((m) => m.id === senderId)?.name ?? "Member"),
+      body,
+      createdAt: ago(minutes),
+      mine: senderId === myId,
+    })),
+  );
+}
+/** "Anu joined" / "Rahul left" lines for a plan chat, oldest first. */
+export async function listPlanGroupEvents(
+  group: PlanGroup,
+  since?: string,
+): Promise<MembershipEvent[]> {
+  if (isDemoMode())
+    return (group.members ?? [])
+      .filter((m) => !m.host)
+      .map((m, i) => ({
+        id: `${group.id}-joined-${m.id}`,
+        userId: m.id,
+        name: m.name,
+        kind: "joined" as const,
+        createdAt: new Date(
+          Date.now() - (27 * 60 - i * 10) * 60_000,
+        ).toISOString(),
+      }));
+  let query = requireSupabase()
+    .from("plan_group_events")
+    .select(
+      "id,user_id,kind,created_at,person:profiles!plan_group_events_user_id_fkey(display_name)",
+    )
+    .eq("post_id", group.postId)
+    .order("created_at", { ascending: false })
+    .limit(200);
+  if (since) query = query.gte("created_at", since);
+  const { data, error } = await query;
+  // The lines are secondary: if they can't load (an older backend without
+  // the log, or a network blip) the chat still opens, and the next refresh
+  // tries again.
+  if (error) return [];
+  return (data ?? []).reverse().map((row: any) => ({
+    id: row.id,
+    userId: row.user_id,
+    name: row.person?.display_name ?? "A member",
+    kind: row.kind,
+    createdAt: row.created_at,
+  }));
 }
 export async function sendPlanGroupMessage(
   id: string,
@@ -274,8 +348,26 @@ export function subscribeToPlanGroup(
         onChange,
       )
     : () => {};
+  const events = postId
+    ? multiplexSubscribe(
+        "plan-events-" + postId,
+        (ch, fire) =>
+          ch.on(
+            "postgres_changes",
+            {
+              event: "INSERT",
+              schema: "public",
+              table: "plan_group_events",
+              filter: "post_id=eq." + postId,
+            },
+            () => fire(),
+          ),
+        onChange,
+      )
+    : () => {};
   return () => {
     messages();
     members();
+    events();
   };
 }
