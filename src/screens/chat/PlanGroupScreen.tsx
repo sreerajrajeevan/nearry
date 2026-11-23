@@ -1,7 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { LinkedText } from "../../components/LinkedText";
 import {
-  ActivityIndicator,
   AppState,
   FlatList,
   Keyboard,
@@ -12,7 +10,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -28,6 +25,7 @@ import { Alert } from "../../services/appAlert";
 import {
   getPlanGroup,
   leavePlanGroup,
+  listPlanGroupEvents,
   listPlanGroupMessages,
   markPlanGroupRead,
   renamePlanGroup,
@@ -46,6 +44,19 @@ import { setActiveChat } from "../../services/activeChat";
 import { LoadingState } from "../../components/LoadingState";
 import { colors, weight } from "../../theme";
 import { planChatReminder, planChatTime } from "../../utils/planChatSchedule";
+import {
+  buildTimeline,
+  type MembershipEvent,
+  type TimelineItem,
+} from "../../utils/chatTimeline";
+import {
+  ChatComposer,
+  chatColors,
+  DayChip,
+  EventLine,
+  MessageRow,
+  PlanChatCard,
+} from "../../components/chat/ChatParts";
 import { useReducedMotion } from "../../store/MotionContext";
 
 type Props = NativeStackScreenProps<PersonalStackParamList, "PlanGroup">;
@@ -57,7 +68,8 @@ export function PlanGroupScreen({ route, navigation }: Props) {
   const address = route.params,
     roomKey = JSON.stringify(address) + myId;
   const [group, setGroup] = useState<PlanGroup | null>(null),
-    [messages, setMessages] = useState<PlanGroupMessage[]>([]);
+    [messages, setMessages] = useState<PlanGroupMessage[]>([]),
+    [events, setEvents] = useState<MembershipEvent[]>([]);
   const [state, setState] = useState<"loading" | "error" | "ready">("loading"),
     [error, setError] = useState("");
   const [draft, setDraft] = useState(""),
@@ -80,13 +92,14 @@ export function PlanGroupScreen({ route, navigation }: Props) {
   messagesRef.current = messages;
   const detailsRef = useRef(details);
   detailsRef.current = details;
-  const list = useRef<FlatList<PlanGroupMessage>>(null),
+  const list = useRef<FlatList<TimelineItem<PlanGroupMessage>>>(null),
     stick = useRef(true);
   const insets = useSafeAreaInsets(),
     [keyboard, setKeyboard] = useState(Keyboard.isVisible());
   useEffect(() => {
     setGroup(null);
     setMessages([]);
+    setEvents([]);
     setDraft("");
     setSendError("");
     setDetails(false);
@@ -120,6 +133,13 @@ export function PlanGroupScreen({ route, navigation }: Props) {
         undefined,
         pageSize,
       );
+      const full = page.length === pageSize && page.length < 500;
+      // Join/leave lines for the loaded window (all of them when it's the
+      // whole chat), so lines never appear above the oldest loaded message.
+      const lines = await listPlanGroupEvents(
+        next,
+        full ? page[0]?.createdAt : undefined,
+      );
       if (
         !focused.current ||
         ticket !== generation.current ||
@@ -131,7 +151,8 @@ export function PlanGroupScreen({ route, navigation }: Props) {
       if (!detailsRef.current) setName(next.name);
       // Refresh an authoritative window: removed/blocked messages must disappear.
       setMessages(page);
-      setHasOlder(page.length === pageSize && page.length < 500);
+      setEvents(lines);
+      setHasOlder(full);
       setState("ready");
       setError("");
       if (page.length && stick.current)
@@ -296,7 +317,14 @@ export function PlanGroupScreen({ route, navigation }: Props) {
     try {
       const page = await listPlanGroupMessages(group.id, myId, messages[0].seq);
       if (!focused.current || currentRoom.current !== room) return;
-      setHasOlder(page.length === 60 && messages.length + page.length < 500);
+      const more = page.length === 60 && messages.length + page.length < 500;
+      const lines = await listPlanGroupEvents(
+        group,
+        more ? page[0]?.createdAt : undefined,
+      );
+      if (!focused.current || currentRoom.current !== room) return;
+      setEvents(lines);
+      setHasOlder(more);
       setMessages((current) =>
         [...page, ...current].filter(
           (m, i, a) => a.findIndex((x) => x.id === m.id) === i,
@@ -312,6 +340,10 @@ export function PlanGroupScreen({ route, navigation }: Props) {
     }
   };
   const reminder = group ? planChatReminder(group, group.planTitle, now) : null;
+  const timeline = buildTimeline(messages, events, {
+    now: new Date(now),
+    myId,
+  });
   return (
     <KeyboardAvoidingView style={styles.flex} behavior="padding">
       <SafeAreaView style={styles.flex} edges={["top", "left", "right"]}>
@@ -360,38 +392,23 @@ export function PlanGroupScreen({ route, navigation }: Props) {
           </TouchableOpacity>
         </View>
         {group && !group.cancelled && (
-          <TouchableOpacity
-            accessibilityRole="button"
-            accessibilityLabel={`${reminder?.text ?? planChatTime(group, now)} View plan`}
-            style={[styles.planBanner, reminder && styles.soonBanner]}
-            onPress={() =>
-              navigation.navigate("PostDetails", { postId: group.postId })
-            }
-          >
-            <Icon
-              name={reminder ? "clock" : "calendar"}
-              size={18}
-              color={reminder ? colors.red : colors.textDim}
+          <View style={styles.cardBand}>
+            <PlanChatCard
+              startsAt={group.startsAt}
+              title={group.planTitle}
+              place={group.venueName}
+              going={group.memberCount}
+              soon={!!reminder}
+              whenText={
+                reminder
+                  ? `${planChatTime(group, now)} · ${reminder.short}`
+                  : planChatTime(group, now)
+              }
+              onPress={() =>
+                navigation.navigate("PostDetails", { postId: group.postId })
+              }
             />
-            <View style={{ flex: 1 }}>
-              <Text
-                style={[
-                  styles.planBannerText,
-                  reminder && { color: colors.red, ...weight("700") },
-                ]}
-              >
-                {reminder?.text ?? planChatTime(group, now)}
-              </Text>
-              {!!reminder && (
-                <Text style={styles.help}>{planChatTime(group, now)}</Text>
-              )}
-            </View>
-            <Icon
-              name="chevron-right"
-              size={17}
-              color={reminder ? colors.red : colors.textDim}
-            />
-          </TouchableOpacity>
+          </View>
         )}
         {group?.cancelled && (
           <Text style={styles.notice}>
@@ -422,9 +439,9 @@ export function PlanGroupScreen({ route, navigation }: Props) {
           ) : (
             <FlatList
               ref={list}
-              data={messages}
-              keyExtractor={(m) => m.id}
-              style={styles.flex}
+              data={timeline}
+              keyExtractor={(item) => item.key}
+              style={styles.listView}
               keyboardShouldPersistTaps="handled"
               keyboardDismissMode={
                 Platform.OS === "ios" ? "interactive" : "on-drag"
@@ -465,42 +482,35 @@ export function PlanGroupScreen({ route, navigation }: Props) {
                   hint="Say hello. Approved members will join this group automatically."
                 />
               }
-              renderItem={({ item }) => (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={`${item.senderName}: ${item.body}${item.mine ? "" : ". Hold to report this message"}`}
-                  onLongPress={() => {
-                    if (!item.mine)
-                      navigation.navigate("Report", {
-                        target: {
-                          kind: "plan_message",
-                          id: item.id,
-                          name: "Group message",
-                        },
-                      });
-                  }}
-                  style={[
-                    styles.bubble,
-                    item.mine ? styles.mine : styles.theirs,
-                  ]}
-                >
-                  {!item.mine && (
-                    <Text style={styles.sender}>{item.senderName}</Text>
-                  )}
-                  <LinkedText
-                    style={[styles.body, item.mine && styles.mineText]}
-                    linkStyle={item.mine ? styles.linkMine : styles.link}
-                  >
-                    {item.body}
-                  </LinkedText>
-                  <Text style={[styles.time, item.mine && styles.mineText]}>
-                    {new Date(item.createdAt).toLocaleTimeString("en-IN", {
-                      hour: "numeric",
-                      minute: "2-digit",
-                    })}
-                  </Text>
-                </Pressable>
-              )}
+              renderItem={({ item }) =>
+                item.type === "day" ? (
+                  <DayChip label={item.label} />
+                ) : item.type === "event" ? (
+                  <EventLine text={item.text} />
+                ) : (
+                  <MessageRow
+                    item={item}
+                    group
+                    hint={
+                      item.message.mine
+                        ? undefined
+                        : "Hold to report this message"
+                    }
+                    onLongPress={
+                      item.message.mine
+                        ? undefined
+                        : () =>
+                            navigation.navigate("Report", {
+                              target: {
+                                kind: "plan_message",
+                                id: item.message.id,
+                                name: "Group message",
+                              },
+                            })
+                    }
+                  />
+                )
+              }
             />
           )}
         </View>
@@ -509,47 +519,17 @@ export function PlanGroupScreen({ route, navigation }: Props) {
             {sendError} Your message is still here; tap Send to retry.
           </Text>
         )}
-        <View
-          style={[
-            styles.composer,
-            { paddingBottom: keyboard ? 8 : Math.max(insets.bottom, 8) },
-          ]}
-        >
-          <TextInput
-            accessibilityLabel="Group message"
-            multiline
-            maxLength={2000}
-            submitBehavior="newline"
-            style={styles.input}
-            value={draft}
-            onChangeText={setDraft}
-            editable={!!group && !group.cancelled}
-            placeholder="Message your group…"
-            placeholderTextColor={colors.textDim}
-          />
-          <TouchableOpacity
-            accessibilityRole="button"
-            accessibilityLabel="Send group message"
-            accessibilityState={{
-              disabled: !draft.trim() || sending || !group || group.cancelled,
-              busy: sending,
-            }}
-            style={[
-              styles.send,
-              (!draft.trim() || sending || !group || group.cancelled) && {
-                opacity: 0.4,
-              },
-            ]}
-            disabled={!draft.trim() || sending || !group || group.cancelled}
-            onPress={() => void send()}
-          >
-            {sending ? (
-              <ActivityIndicator color={colors.night} />
-            ) : (
-              <Icon name="arrow-up" size={22} color={colors.night} />
-            )}
-          </TouchableOpacity>
-        </View>
+        <ChatComposer
+          value={draft}
+          onChangeText={setDraft}
+          onSend={() => void send()}
+          sending={sending}
+          disabled={!group || group.cancelled}
+          placeholder="Message your group…"
+          label="Group message"
+          sendLabel="Send group message"
+          bottomInset={keyboard ? 8 : Math.max(insets.bottom, 8)}
+        />
         <Modal
           visible={details && !!group}
           transparent
@@ -713,27 +693,18 @@ export function PlanGroupScreen({ route, navigation }: Props) {
   );
 }
 const styles = StyleSheet.create({
-  planBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    marginHorizontal: 16,
-    marginBottom: 8,
-    padding: 12,
-    borderRadius: 14,
-    backgroundColor: colors.surfaceRaised,
-  },
-  soonBanner: { backgroundColor: colors.dangerSoft },
-  planBannerText: { fontSize: 13, lineHeight: 19, color: colors.text },
-  flex: { flex: 1, backgroundColor: colors.background },
+  cardBand: { backgroundColor: chatColors.canvas },
+  listView: { flex: 1, minHeight: 0 },
+  flex: { flex: 1, backgroundColor: colors.surface },
   heading: {
     flexDirection: "row",
     gap: 9,
     alignItems: "center",
     paddingHorizontal: 8,
     paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
+    borderBottomWidth: 1,
+    borderColor: chatColors.theirsBorder,
+    backgroundColor: colors.surface,
   },
   iconButton: {
     width: 44,
@@ -755,73 +726,9 @@ const styles = StyleSheet.create({
     color: colors.textDim,
     backgroundColor: colors.amberSoft,
   },
-  transcript: { flex: 1, minHeight: 0 },
-  list: { padding: 15, gap: 10, flexGrow: 1 },
-  bubble: {
-    maxWidth: "87%",
-    borderRadius: 17,
-    paddingHorizontal: 13,
-    paddingVertical: 10,
-  },
-  mine: {
-    alignSelf: "flex-end",
-    backgroundColor: colors.amberBright,
-    borderBottomRightRadius: 4,
-  },
-  theirs: {
-    alignSelf: "flex-start",
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderBottomLeftRadius: 4,
-  },
+  transcript: { flex: 1, minHeight: 0, backgroundColor: chatColors.canvas },
+  list: { paddingHorizontal: 12, paddingBottom: 12, flexGrow: 1 },
   body: { fontSize: 14, lineHeight: 21, color: colors.text },
-  link: { color: colors.amberDeep, ...weight("600") },
-  linkMine: { color: colors.night, ...weight("700") },
-  mineText: { color: colors.night },
-  sender: {
-    fontSize: 11,
-    ...weight("700"),
-    color: colors.amberDeep,
-    marginBottom: 4,
-  },
-  time: {
-    fontSize: 9,
-    color: colors.textDim,
-    textAlign: "right",
-    marginTop: 4,
-  },
-  composer: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    gap: 10,
-    paddingTop: 9,
-    paddingHorizontal: 14,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-  },
-  input: {
-    flex: 1,
-    minHeight: 46,
-    maxHeight: 120,
-    fontSize: 15,
-    lineHeight: 21,
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingTop: 12,
-    paddingBottom: 12,
-    backgroundColor: colors.background,
-    color: colors.text,
-  },
-  send: {
-    width: 46,
-    height: 46,
-    borderRadius: 23,
-    backgroundColor: colors.amber,
-    alignItems: "center",
-    justifyContent: "center",
-  },
   error: { color: colors.red, fontSize: 12, padding: 12 },
   scrim: { flex: 1, backgroundColor: "#0008", justifyContent: "flex-end" },
   sheet: {

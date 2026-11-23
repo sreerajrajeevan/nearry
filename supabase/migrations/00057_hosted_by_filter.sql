@@ -1,10 +1,10 @@
--- 00056 — Nearry Premium: server-side "Hosted by" filter.
+-- 00057 — Nearry Premium: server-side "Hosted by" filter.
 -- Gender is never readable across profiles; the filter runs only inside this
 -- security-definer function, which returns host ids (open, upcoming plans
 -- only, honouring blocks, suspended accounts and removed plans) and is
 -- Premium-gated. discover_posts (00052) accepts an optional "hostGender"
 -- filter key; without it results are unchanged, so older builds and the
--- nearby_post_cards wrapper keep working. Requires 00052 and 00055.
+-- nearby_post_cards wrapper keep working. Requires 00052 and 00056.
 begin;
 
 create function public.hosts_matching_gender(p_gender text) returns setof uuid as $$

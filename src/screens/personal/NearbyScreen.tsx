@@ -885,14 +885,14 @@ export function NearbyScreen() {
                   {reach.widened && chosenKm != null && (
                     <MotionPressable
                       accessibilityRole="button"
+                      accessibilityLabel={`Nothing within ${chosenKm} km of ${nearWhat}, so showing plans within ${shownKm} km. Change`}
                       accessibilityHint="Change location or distance"
                       onPress={openLocation}
                       style={styles.widened}
                     >
                       <Icon name="compass" size={16} color={colors.amberDeep} />
-                      <Text style={styles.widenedText}>
-                        Nothing within {chosenKm} km of {nearWhat}, so we’re
-                        showing plans within {shownKm} km.{" "}
+                      <Text style={styles.widenedText} numberOfLines={1}>
+                        Showing plans within {shownKm} km.{" "}
                         <Text style={styles.widenedLink}>Change</Text>
                       </Text>
                     </MotionPressable>
@@ -1093,7 +1093,7 @@ const styles = StyleSheet.create({
   emptyActions: { gap: 4 },
   widened: {
     flexDirection: "row",
-    alignItems: "flex-start",
+    alignItems: "center",
     gap: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,

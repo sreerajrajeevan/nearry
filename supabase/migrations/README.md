@@ -71,8 +71,12 @@ See [rollout instructions and validation](../../docs/review-fix-tracker.md). App
 
 Historical duplicate numeric prefixes (00021 and 00025) are ordered by the full filename in this repository. Do not rename or replay applied files. Record the full filename when applying manually, and inspect the target database's actual objects and migration history before importing it into a migration tool that requires unique numeric versions. Reserved numbers for independent branches are not missing dependencies.
 
-## Nearry Premium (00055–00056)
+## Plan chat join and leave lines (00055)
 
-`00055`: `premium_entitlements` (written only by the `revenuecat-webhook` function with the service role; users read their own row), `has_premium()`, and `daily_usage` with triggers enforcing the free daily limits: 3 new plans and 10 join requests per India day (`daily_plan_limit` / `daily_join_limit`). Server and admin inserts are never limited. Apply after the Premium app build has reached users, or older builds show the raw limit text.
+Adds `plan_group_events`, written by a trigger on `join_requests` whenever someone becomes an approved member (`joined`) or stops being one (`left` when they withdraw, `removed` otherwise). Members of the plan's group can read it; nobody can write to it directly. Lines start from the moment this file is applied; earlier joins are not back-filled.
 
-`00056`: the Premium "Hosted by" filter. `hosts_matching_gender()` (security definer, Premium-only, honours blocks and visibility) and an optional `hostGender` key in `discover_posts` (requires 00052). Without the key results are unchanged, so older builds and `nearby_post_cards` keep working.
+## Nearry Premium (00056–00057)
+
+`00056`: `premium_entitlements` (written only by the `revenuecat-webhook` function with the service role; users read their own row), `has_premium()`, and `daily_usage` with triggers enforcing the free daily limits: 3 new plans and 10 join requests per India day (`daily_plan_limit` / `daily_join_limit`). Server and admin inserts are never limited. Apply after the Premium app build has reached users, or older builds show the raw limit text.
+
+`00057`: the Premium "Hosted by" filter. `hosts_matching_gender()` (security definer, Premium-only, honours blocks and visibility) and an optional `hostGender` key in `discover_posts` (requires 00052). Without the key results are unchanged, so older builds and `nearby_post_cards` keep working.

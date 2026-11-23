@@ -61,14 +61,19 @@ export function tabOptions(
 }
 const LIGHT_BAR_HEIGHT = 72;
 
-/** Personal navigation keeps labels in the familiar dark floating pill. */
+/**
+ * Personal navigation: a light bar anchored to the bottom (Material 3 style)
+ * with a label on every tab. It sits in the normal layout, so it never covers
+ * the feed; the phone's gesture area is added below it as padding.
+ */
 export function useLightTabBarLayout(): BottomTabNavigationOptions {
   const { bottom } = useSafeAreaInsets();
+  const inset = Math.max(bottom, 8);
   return {
     tabBarShowLabel: true,
     tabBarStyle: [
-      styles.bar,
-      { height: LIGHT_BAR_HEIGHT, marginBottom: Math.max(bottom, 12) },
+      styles.lightBar,
+      { height: LIGHT_BAR_HEIGHT + inset, paddingBottom: inset },
     ],
   };
 }
@@ -83,12 +88,14 @@ export function lightTabOptions(
     headerShown: false,
     tabBarHideOnKeyboard: true,
     tabBarAccessibilityLabel: title,
-    tabBarActiveTintColor: colors.amberBright,
-    tabBarInactiveTintColor: "#C5CBD4",
+    tabBarActiveTintColor: colors.ink,
+    tabBarInactiveTintColor: colors.lineStrong,
     tabBarActiveBackgroundColor: "transparent",
     tabBarLabelPosition: "below-icon",
     tabBarItemStyle: styles.lightItem,
     tabBarLabelStyle: styles.lightLabel,
+    // Create is the big yellow button; its label would only crowd it.
+    ...(prominent ? { tabBarLabel: () => null } : {}),
     tabBarButton: ({ style, disabled, href: _href, ...props }) => (
       <MotionPressable
         {...props}
@@ -119,28 +126,46 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  lightLabel: { fontSize: 10, lineHeight: 14, marginBottom: 7, ...weight("600") },
-  lightTabButton: { borderRadius: 28 },
+  lightBar: {
+    position: "relative",
+    backgroundColor: colors.surface,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.hairline,
+    paddingTop: 0,
+    paddingHorizontal: 4,
+    elevation: 0,
+    shadowOpacity: 0,
+  },
+  lightLabel: {
+    fontSize: 11,
+    lineHeight: 14,
+    marginBottom: 8,
+    ...weight("700"),
+  },
+  lightTabButton: { borderRadius: 16 },
   lightIconWrap: {
-    width: 52,
+    width: 56,
     height: 30,
     borderRadius: 15,
     alignItems: "center",
     justifyContent: "center",
   },
-  lightIconWrapActive: { backgroundColor: "rgba(255,255,255,0.08)" },
+  // The active tab gets a soft yellow pill behind its icon.
+  lightIconWrapActive: { backgroundColor: colors.amberSoft },
   lightCreate: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 46,
+    height: 46,
+    borderRadius: 14,
+    // Labelled tabs sit higher; this centres Create in the bar instead.
+    marginTop: 16,
     backgroundColor: colors.amberBright,
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: "#000000",
-    shadowOpacity: 0.18,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 4,
+    shadowColor: colors.amberDeep,
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 5,
   },
   bar: {
     position: "relative",
