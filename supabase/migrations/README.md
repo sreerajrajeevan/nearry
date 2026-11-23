@@ -76,3 +76,7 @@ Historical duplicate numeric prefixes (00021 and 00025) are ordered by the full 
 ## Plan chat join and leave lines (00055)
 
 Adds `plan_group_events`, written by a trigger on `join_requests` whenever someone becomes an approved member (`joined`) or stops being one (`left` when they withdraw, `removed` otherwise). Members of the plan's group can read it; nobody can write to it directly. Lines start from the moment this file is applied; earlier joins are not back-filled.
+
+## Abuse limits (00056)
+
+Database-enforced spam limits that also hold for direct API calls: 10 plans a day, 40 join requests an hour, 30 chat messages a minute, 30 offers a day (signed-in writers only; workers and admins are not limited, and new plan timestamps are stamped by the server). Adds length limits on profile name (100), business name (120) and bio (500); restricts the avatars, photos and verification_docs buckets to JPEG/PNG/WebP up to 10 MB; revokes signed-out access to internal helper functions and push tokens, and the unused update grant on messages.
