@@ -72,3 +72,7 @@ clients access to admin tables or let users add themselves as administrators.
 See [rollout instructions and validation](../../docs/review-fix-tracker.md). Apply the four new forward files before the matching app/worker release. Existing content and history are retained. The stale milestone schema.sql has been removed; run-all.sql is the only generated fresh-install bundle.
 
 Historical duplicate numeric prefixes (00021 and 00025) are ordered by the full filename in this repository. Do not rename or replay applied files. Record the full filename when applying manually, and inspect the target database's actual objects and migration history before importing it into a migration tool that requires unique numeric versions. Reserved numbers for independent branches are not missing dependencies.
+
+## Plan chat join and leave lines (00055)
+
+Adds `plan_group_events`, written by a trigger on `join_requests` whenever someone becomes an approved member (`joined`) or stops being one (`left` when they withdraw, `removed` otherwise). Members of the plan's group can read it; nobody can write to it directly. Lines start from the moment this file is applied; earlier joins are not back-filled.
