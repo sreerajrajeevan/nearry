@@ -6423,6 +6423,8 @@ test("signed-out visitors can't call internal helper functions or read push toke
     "select account_active('00000000-0000-0000-0000-000000000001')",
     "select approved_join_count(gen_random_uuid())",
     "select token from push_tokens limit 1",
+    // The app never reads while signed out, so plans can't be scraped anonymously.
+    "select count(*) from posts",
   ])
     await assert.rejects(
       asUser(null, (tx) => tx.query(sql), "anon"),
