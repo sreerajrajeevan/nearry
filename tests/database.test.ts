@@ -111,7 +111,7 @@ before(async () => {
           /create function public.nearby_post_cards[\s\S]*?grant execute on function public.nearby_post_cards[^;]+;/,
           "",
         );
-      if (file === "00057_hosted_by_filter.sql")
+      if (file === "00058_hosted_by_filter.sql")
         // discover_posts (00052, PostGIS) is skipped here; PostGIS CI runs it.
         sql = sql.replace(
           /create or replace function public.discover_posts[\s\S]*?grant execute on function public.discover_posts[^;]+;/,
@@ -3795,32 +3795,34 @@ test(
 );
 
 test("new posts require a selected venue or confirmed coordinates, while legacy posts remain readable", async () => {
+  // A fresh author: the shared host has already used up its daily plan limit.
+  const author = await corePersonal();
   for (const label of [null, "", "  ", "Typed name only"]) {
     await assert.rejects(
       () =>
-        asUser(host, (tx) =>
+        asUser(author, (tx) =>
           tx.query(
             `insert into posts(author_id,title,description,starts_at,vacancies,venue_id,venue_name)
       values($1,'A meeting plan','Friendly meeting with neighbours',now()+interval '4 hours',2,null,$2)`,
-            [host, label],
+            [author, label],
           ),
         ),
       /Select a meeting place/,
     );
   }
-  const selected = await asUser(host, (tx) =>
+  const selected = await asUser(author, (tx) =>
     tx.query(
       `insert into posts(author_id,title,description,starts_at,vacancies,venue_id)
     values($1,'Registered venue','Meet at the selected venue',now()+interval '4 hours',2,'10000000-0000-0000-0000-000000000032') returning id`,
-      [host],
+      [author],
     ),
   );
   assert.ok(selected.rows[0].id);
-  const manual = await asUser(host, (tx) =>
+  const manual = await asUser(author, (tx) =>
     tx.query(
       `insert into posts(author_id,title,description,starts_at,vacancies,venue_name,location_lat,location_lng,location_source)
     values($1,'Manual meeting spot','Meet at my confirmed meeting spot',now()+interval '4 hours',2,'Courtyard entrance',10,76,'manual') returning id`,
-      [host],
+      [author],
     ),
   );
   assert.ok(manual.rows[0].id);
@@ -6569,4 +6571,193 @@ test("plan chats log who joined and who left, visible only to members", async ()
     tx.query("select decline_join_request($1)", [pending]),
   );
   assert.equal((await events(c)).rows.length, 3);
+});
+
+test("spam limits: plans per day, join requests per hour, messages per minute, offers per day", async () => {
+  const insertPlan = (who: string, title = "Evening walk") =>
+    asUser(who, (tx) =>
+      tx.query(
+        "insert into posts(author_id,title,description,starts_at,vacancies,venue_id) values($1,$2,'A friendly evening walk',now()+interval '4 hours',2,'10000000-0000-0000-0000-000000000032') returning id",
+        [who, title],
+      ),
+    );
+  // Plans: 10 a day for one person. Premium lifts the free 3-a-day limit
+  // (00057) but never these spam caps.
+  const premium = (id: string) =>
+    db.query(
+      "insert into premium_entitlements(user_id,expires_at) values($1,now()+interval '1 day')",
+      [id],
+    );
+  const poster = await corePersonal();
+  await premium(poster);
+  for (let i = 0; i < 10; i++) await insertPlan(poster);
+  await assert.rejects(insertPlan(poster), /up to 10 plans a day/);
+
+  // Join requests: 40 an hour for one person.
+  const joiner = await corePersonal();
+  await premium(joiner);
+  const hostIds: string[] = [];
+  for (let i = 0; i < 41; i++)
+    hostIds.push(
+      (
+        await db.query(
+          "insert into posts(author_id,title,description,starts_at,expires_at,vacancies,venue_id) values($1,'Football tonight','Friendly football game',now()+interval '4 hours',now()+interval '3 hours',5,'10000000-0000-0000-0000-000000000032') returning id",
+          [host],
+        )
+      ).rows[0].id,
+    );
+  for (let i = 0; i < 40; i++) await request(joiner, hostIds[i]);
+  await assert.rejects(request(joiner, hostIds[40]), /join requests/);
+
+  // Chat messages: 30 a minute for one sender.
+  const owner = await corePersonal(),
+    guest = await corePersonal();
+  const plan = (
+    await db.query(
+      "insert into posts(author_id,title,description,starts_at,vacancies,venue_id) values($1,'Chai walk','A friendly chai walk',now()+interval '4 hours',2,'10000000-0000-0000-0000-000000000032') returning id",
+      [owner],
+    )
+  ).rows[0].id;
+  const r = await request(guest, plan);
+  await asUser(owner, (tx) => tx.query("select approve_join_request($1)", [r]));
+  const conv = (
+    await asUser(guest, (tx) =>
+      tx.query("select get_or_create_conversation($1,$2,null) id", [
+        owner,
+        plan,
+      ]),
+    )
+  ).rows[0].id;
+  const say = () =>
+    asUser(guest, (tx) =>
+      tx.query(
+        "insert into messages(conversation_id,sender_id,body) values($1,$2,'hello')",
+        [conv, guest],
+      ),
+    );
+  for (let i = 0; i < 30; i++) await say();
+  await assert.rejects(say(), /slow down/i);
+
+  // Offers: 30 a day for one business.
+  const shop = await auditBusiness();
+  const offer = () =>
+    asUser(shop, (tx) =>
+      tx.query(
+        "insert into offers(business_id,title,description,starts_at,ends_at,status) values($1,'Haircut deal','A friendly haircut offer',now()+interval '2 hours',now()+interval '4 hours','draft')",
+        [shop],
+      ),
+    );
+  for (let i = 0; i < 30; i++) await offer();
+  await assert.rejects(offer(), /up to 30 offers a day/);
+});
+
+test("text fields have server-side length limits, so the API can't be used to post walls of text", async () => {
+  const who = await corePersonal();
+  await assert.rejects(
+    asUser(who, (tx) =>
+      tx.query(
+        "insert into posts(author_id,title,description,starts_at,vacancies,venue_id) values($1,$2,'A friendly evening walk',now()+interval '4 hours',2,'10000000-0000-0000-0000-000000000032')",
+        [who, "x".repeat(81)],
+      ),
+    ),
+    // Already guarded by the plan trigger; kept here so it stays guarded.
+    /invalid post details/,
+  );
+  await assert.rejects(
+    asUser(who, (tx) =>
+      tx.query("update profiles set bio=$2 where id=$1", [
+        who,
+        "x".repeat(501),
+      ]),
+    ),
+    /check constraint/,
+  );
+  await assert.rejects(
+    asUser(who, (tx) =>
+      tx.query("update profiles set display_name=$2 where id=$1", [
+        who,
+        "x".repeat(101),
+      ]),
+    ),
+    /check constraint/,
+  );
+  // Normal values still pass.
+  await asUser(who, (tx) =>
+    tx.query("update profiles set bio=$2 where id=$1", [who, "x".repeat(500)]),
+  );
+});
+
+test("upload buckets only take images up to 10 MB", async () => {
+  const rows = (
+    await db.query(
+      "select id,file_size_limit,allowed_mime_types from storage.buckets where id in ('avatars','photos','verification_docs') order by id",
+    )
+  ).rows;
+  assert.deepEqual(
+    rows.map((r: any) => [
+      r.id,
+      Number(r.file_size_limit),
+      r.allowed_mime_types,
+    ]),
+    ["avatars", "photos", "verification_docs"].map((id) => [
+      id,
+      10485760,
+      ["image/jpeg", "image/png", "image/webp"],
+    ]),
+  );
+});
+
+test("signed-out visitors can't call internal helper functions or read push tokens", async () => {
+  for (const sql of [
+    "select account_active('00000000-0000-0000-0000-000000000001')",
+    "select approved_join_count(gen_random_uuid())",
+    "select token from push_tokens limit 1",
+    // The app never reads while signed out, so plans can't be scraped anonymously.
+    "select count(*) from posts",
+  ])
+    await assert.rejects(
+      asUser(null, (tx) => tx.query(sql), "anon"),
+      /permission denied/,
+    );
+});
+
+test("00053 pins search_path only on our own trigger functions, never on extension ones", async () => {
+  const sql = await readFile(
+    new URL(
+      "../supabase/migrations/00053_media_write_safety.sql",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+  const loop = sql.match(
+    /do \$\$ declare f record;begin[\s\S]*?end \$\$;/,
+  )?.[0];
+  assert.ok(loop, "00053 still has its search_path loop");
+  // Supabase's PostGIS ships trigger functions in public that only its own
+  // role may alter; a stand-in extension member reproduces that here.
+  await db.exec(`
+    create function public.ext_owned_trigger() returns trigger language plpgsql as $f$begin return new;end$f$;
+    alter extension plpgsql add function public.ext_owned_trigger();
+    create function public.own_unpinned_trigger() returns trigger language plpgsql as $f$begin return new;end$f$;
+  `);
+  try {
+    await db.exec(loop);
+    const config = async (name: string) =>
+      (
+        await db.query(
+          "select proconfig from pg_proc where proname=$1 and pronamespace='public'::regnamespace",
+          [name],
+        )
+      ).rows[0].proconfig;
+    assert.equal(await config("ext_owned_trigger"), null);
+    assert.deepEqual(await config("own_unpinned_trigger"), [
+      "search_path=public, pg_temp",
+    ]);
+  } finally {
+    await db.exec(`
+      alter extension plpgsql drop function public.ext_owned_trigger();
+      drop function public.ext_owned_trigger();
+      drop function public.own_unpinned_trigger();
+    `);
+  }
 });

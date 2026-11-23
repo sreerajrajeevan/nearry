@@ -159,11 +159,17 @@ export function EditProfileScreen({ navigation }: Props) {
           </Text>
         </TouchableOpacity>
 
-        <Input label="Your name" value={name} onChangeText={setName} />
+        <Input
+          label="Your name"
+          value={name}
+          onChangeText={setName}
+          maxLength={40}
+        />
         <Input
           label="Bio"
           value={bio}
           onChangeText={setBio}
+          maxLength={500}
           multiline
           numberOfLines={3}
           style={styles.multiline}
