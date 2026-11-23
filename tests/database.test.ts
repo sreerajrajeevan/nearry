@@ -6289,3 +6289,39 @@ test("plan chats log who joined and who left, visible only to members", async ()
   );
   assert.equal((await events(c)).rows.length, 3);
 });
+
+test("00053 pins search_path only on our own trigger functions, never on extension ones", async () => {
+  const sql = await readFile(
+    new URL("../supabase/migrations/00053_media_write_safety.sql", import.meta.url),
+    "utf8",
+  );
+  const loop = sql.match(/do \$\$ declare f record;begin[\s\S]*?end \$\$;/)?.[0];
+  assert.ok(loop, "00053 still has its search_path loop");
+  // Supabase's PostGIS ships trigger functions in public that only its own
+  // role may alter; a stand-in extension member reproduces that here.
+  await db.exec(`
+    create function public.ext_owned_trigger() returns trigger language plpgsql as $f$begin return new;end$f$;
+    alter extension plpgsql add function public.ext_owned_trigger();
+    create function public.own_unpinned_trigger() returns trigger language plpgsql as $f$begin return new;end$f$;
+  `);
+  try {
+    await db.exec(loop);
+    const config = async (name: string) =>
+      (
+        await db.query(
+          "select proconfig from pg_proc where proname=$1 and pronamespace='public'::regnamespace",
+          [name],
+        )
+      ).rows[0].proconfig;
+    assert.equal(await config("ext_owned_trigger"), null);
+    assert.deepEqual(await config("own_unpinned_trigger"), [
+      "search_path=public, pg_temp",
+    ]);
+  } finally {
+    await db.exec(`
+      alter extension plpgsql drop function public.ext_owned_trigger();
+      drop function public.ext_owned_trigger();
+      drop function public.own_unpinned_trigger();
+    `);
+  }
+});
