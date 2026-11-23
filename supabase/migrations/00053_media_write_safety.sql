@@ -88,9 +88,12 @@ end;
 $$ language plpgsql security definer set search_path=public,pg_temp;
 
 -- Historical trigger functions keep their behavior with a pinned lookup path.
+-- Fixed 23 Nov 2026 before its first live run: the loop stopped at PostGIS's own trigger functions.
 do $$ declare f record;begin
  for f in select p.oid::regprocedure signature from pg_proc p join pg_namespace n on n.oid=p.pronamespace
  where n.nspname='public' and p.prorettype='trigger'::regtype and not exists(select 1 from unnest(coalesce(p.proconfig,'{}')) c where c like 'search_path=%')
+ -- Skip functions owned by extensions (PostGIS ships trigger functions in public that only supabase_admin may alter).
+ and not exists(select 1 from pg_depend d where d.classid='pg_proc'::regclass and d.objid=p.oid and d.deptype='e')
  loop execute format('alter function %s set search_path=public,pg_temp',f.signature);end loop;
 end $$;
 notify pgrst,'reload schema';
