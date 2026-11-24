@@ -6552,6 +6552,70 @@ test("daily cleanup removes photos of plans that ended a week ago, old notificat
   // Users can't run it.
   await assert.rejects(
     asUser(b, (tx) => tx.query("select public.daily_cleanup()")),
+    /permission denied/,
+  );
+});
+
+test("daily cleanup queues stored photos nothing uses any more, but keeps used ones, their thumbnails and fresh uploads", async () => {
+  const dir = host + "/unused-test/";
+  const pid = await post();
+  await db.query(
+    "insert into post_photos(post_id,photo_url,sort_order) values($1,$2,0)",
+    [
+      pid,
+      "https://photos.test/storage/v1/object/public/photos/" +
+        dir +
+        "used-full.jpg",
+    ],
+  );
+  await db.query(
+    `insert into storage.objects(bucket_id,name,created_at) values
+      ('photos',$1,now()-interval '3 days'),
+      ('photos',$2,now()-interval '3 days'),
+      ('photos',$3,now()-interval '3 days'),
+      ('photos',$4,now()-interval '1 hour'),
+      ('avatars',$5,now()-interval '3 days')`,
+    [
+      dir + "orphan.png",
+      dir + "used-full.jpg",
+      dir + "used-thumb.jpg",
+      dir + "uploading.jpg",
+      host + "/avatar-old.jpg",
+    ],
+  );
+  await db.query("select public.daily_cleanup()");
+  const queued = (
+    await db.query(
+      "select bucket,path from media_cleanup_jobs where path like $1 or path like $2 order by path",
+      [dir + "%", host + "/avatar%"],
+    )
+  ).rows.map((r: any) => r.bucket + ":" + r.path);
+  assert.deepEqual(queued, ["photos:" + dir + "orphan.png"]);
+});
+
+test("row-security rules read the signed-in user once per query, not once per row", async () => {
+  const perRow = (
+    await db.query(`
+      select tablename||'.'||policyname p from pg_policies
+      where schemaname='public'
+        and regexp_replace(coalesce(qual,'')||' '||coalesce(with_check,''), '\\(\\s*select\\s+auth\\.uid\\(\\)(\\s+as\\s+uid)?\\s*\\)', '', 'gi') ~ 'auth\\.uid\\(\\)'
+      order by 1`)
+  ).rows.map((r: any) => r.p);
+  assert.deepEqual(perRow, []);
+});
+
+test("every foreign key used for lookups and account removal has an index", async () => {
+  const missing = (
+    await db.query(`
+      select c.conrelid::regclass||'.'||a.attname col
+      from pg_constraint c
+      join pg_attribute a on a.attrelid=c.conrelid and a.attnum=c.conkey[1]
+      where c.contype='f' and c.connamespace='public'::regnamespace and array_length(c.conkey,1)=1
+        and not exists(select 1 from pg_index i where i.indrelid=c.conrelid and i.indkey[0]=c.conkey[1])
+      order by 1`)
+  ).rows.map((r: any) => r.col);
+  assert.deepEqual(missing, []);
+});
 
 // Plan reminders: times are fixed in India time so the tests never depend on
 // when they run. `istAt(days, "HH:MM")` is that clock time N days from today.
@@ -6714,67 +6778,6 @@ test("members answer Going / Not going; the host sees the count; outsiders can't
     ),
     /permission denied/,
   );
-});
-
-test("daily cleanup queues stored photos nothing uses any more, but keeps used ones, their thumbnails and fresh uploads", async () => {
-  const dir = host + "/unused-test/";
-  const pid = await post();
-  await db.query(
-    "insert into post_photos(post_id,photo_url,sort_order) values($1,$2,0)",
-    [
-      pid,
-      "https://photos.test/storage/v1/object/public/photos/" +
-        dir +
-        "used-full.jpg",
-    ],
-  );
-  await db.query(
-    `insert into storage.objects(bucket_id,name,created_at) values
-      ('photos',$1,now()-interval '3 days'),
-      ('photos',$2,now()-interval '3 days'),
-      ('photos',$3,now()-interval '3 days'),
-      ('photos',$4,now()-interval '1 hour'),
-      ('avatars',$5,now()-interval '3 days')`,
-    [
-      dir + "orphan.png",
-      dir + "used-full.jpg",
-      dir + "used-thumb.jpg",
-      dir + "uploading.jpg",
-      host + "/avatar-old.jpg",
-    ],
-  );
-  await db.query("select public.daily_cleanup()");
-  const queued = (
-    await db.query(
-      "select bucket,path from media_cleanup_jobs where path like $1 or path like $2 order by path",
-      [dir + "%", host + "/avatar%"],
-    )
-  ).rows.map((r: any) => r.bucket + ":" + r.path);
-  assert.deepEqual(queued, ["photos:" + dir + "orphan.png"]);
-});
-
-test("row-security rules read the signed-in user once per query, not once per row", async () => {
-  const perRow = (
-    await db.query(`
-      select tablename||'.'||policyname p from pg_policies
-      where schemaname='public'
-        and regexp_replace(coalesce(qual,'')||' '||coalesce(with_check,''), '\\(\\s*select\\s+auth\\.uid\\(\\)(\\s+as\\s+uid)?\\s*\\)', '', 'gi') ~ 'auth\\.uid\\(\\)'
-      order by 1`)
-  ).rows.map((r: any) => r.p);
-  assert.deepEqual(perRow, []);
-});
-
-test("every foreign key used for lookups and account removal has an index", async () => {
-  const missing = (
-    await db.query(`
-      select c.conrelid::regclass||'.'||a.attname col
-      from pg_constraint c
-      join pg_attribute a on a.attrelid=c.conrelid and a.attnum=c.conkey[1]
-      where c.contype='f' and c.connamespace='public'::regnamespace and array_length(c.conkey,1)=1
-        and not exists(select 1 from pg_index i where i.indrelid=c.conrelid and i.indkey[0]=c.conkey[1])
-      order by 1`)
-  ).rows.map((r: any) => r.col);
-  assert.deepEqual(missing, []);
 });
 
 test("today's plans list shows the person's upcoming plans for the day with their answer", async () => {
