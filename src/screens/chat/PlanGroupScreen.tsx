@@ -58,6 +58,7 @@ import {
   PlanChatCard,
 } from "../../components/chat/ChatParts";
 import { useReducedMotion } from "../../store/MotionContext";
+import { mergeRefreshed, refreshWindow } from "../../utils/chatWindow";
 
 type Props = NativeStackScreenProps<PersonalStackParamList, "PlanGroup">;
 export function PlanGroupScreen({ route, navigation }: Props) {
@@ -126,19 +127,23 @@ export function PlanGroupScreen({ route, navigation }: Props) {
     const ticket = ++generation.current;
     try {
       const next = await getPlanGroup(address, myId);
-      const pageSize = Math.min(500, Math.max(60, messagesRef.current.length));
+      const pageSize = refreshWindow(messagesRef.current.length);
       const page = await listPlanGroupMessages(
         next.id,
         myId,
         undefined,
         pageSize,
       );
-      const full = page.length === pageSize && page.length < 500;
-      // Join/leave lines for the loaded window (all of them when it's the
+      // The newest window is authoritative; older pages already loaded with
+      // "Load earlier" stay on screen.
+      const merged = mergeRefreshed(messagesRef.current, page, pageSize);
+      const keptOlder = merged.length > page.length;
+      const full = page.length === pageSize;
+      // Join/leave lines for the loaded span (all of them when it's the
       // whole chat), so lines never appear above the oldest loaded message.
       const lines = await listPlanGroupEvents(
         next,
-        full ? page[0]?.createdAt : undefined,
+        full ? merged[0]?.createdAt : undefined,
       );
       if (
         !focused.current ||
@@ -150,9 +155,9 @@ export function PlanGroupScreen({ route, navigation }: Props) {
       leaveTarget.current = { id: next.id, hostId: next.hostId };
       if (!detailsRef.current) setName(next.name);
       // Refresh an authoritative window: removed/blocked messages must disappear.
-      setMessages(page);
+      setMessages(merged);
       setEvents(lines);
-      setHasOlder(full);
+      setHasOlder((before) => (keptOlder ? before : full));
       setState("ready");
       setError("");
       if (page.length && stick.current)
@@ -311,13 +316,13 @@ export function PlanGroupScreen({ route, navigation }: Props) {
     }
   };
   const loadOlder = async () => {
-    if (!group || older || !messages.length || messages.length >= 500) return;
+    if (!group || older || !messages.length) return;
     setOlder(true);
     const room = roomKey;
     try {
       const page = await listPlanGroupMessages(group.id, myId, messages[0].seq);
       if (!focused.current || currentRoom.current !== room) return;
-      const more = page.length === 60 && messages.length + page.length < 500;
+      const more = page.length === 60;
       const lines = await listPlanGroupEvents(
         group,
         more ? page[0]?.createdAt : undefined,
