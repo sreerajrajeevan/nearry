@@ -6,7 +6,15 @@ import {
 import { BackButton } from "../../components/BackButton";
 import { LoadingState } from "../../components/LoadingState";
 import React, { useRef, useState } from "react";
-import { Linking, StyleSheet, Switch, Text, View } from "react-native";
+import {
+  Linking,
+  Modal,
+  Pressable,
+  StyleSheet,
+  Switch,
+  Text,
+  View,
+} from "react-native";
 import { Screen } from "../../components/Screen";
 import { Button } from "../../components/Button";
 import { Input } from "../../components/Input";
@@ -14,7 +22,7 @@ import { PageHeading } from "../../components/PageHeading";
 import { useAuth } from "../../store/AuthContext";
 import { usePremium } from "../../store/PremiumContext";
 import { useLiveQuery } from "../../hooks/useLiveQuery";
-import { colors, typography } from "../../theme";
+import { colors, typography, weight } from "../../theme";
 import {
   blockUser,
   listBlockedUsers,
@@ -24,8 +32,17 @@ import {
   reportContent,
   ReportTarget,
   requestAccountDeletion,
+  setAlertArea,
+  setNotificationCategory,
   setPushEnabled,
+  type NotificationCategory,
 } from "../../services/safety";
+import { switchesFor } from "../../utils/notificationSettings";
+import { OnboardingLocation } from "../../components/onboarding/OnboardingLocation";
+import {
+  onboardingPreferences,
+  type OnboardingPreferences,
+} from "../../utils/onboarding";
 import { enablePushNotifications } from "../../services/notifications";
 import {
   legalSections,
@@ -379,20 +396,24 @@ export function NotificationSettingsScreen({
 }: {
   navigation: Nav;
 }) {
-  const { profile, demoMode } = useAuth();
+  const { profile, demoMode, accountType } = useAuth();
   const { data, state, refresh } = useLiveQuery(
     "notification-preferences",
     notificationPreferences,
   );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const toggle = async (enabled: boolean) => {
+  const [picking, setPicking] = useState(false);
+  const [pick, setPick] = useState<OnboardingPreferences>(() =>
+    onboardingPreferences(null),
+  );
+  const [pickLabel, setPickLabel] = useState("");
+  const change = async (work: () => Promise<void>) => {
     if (busy || !profile) return;
     setBusy(true);
     setError("");
     try {
-      if (enabled && !demoMode) await enablePushNotifications(profile.id);
-      await setPushEnabled(enabled);
+      await work();
       await refresh();
     } catch (e) {
       setError(errorText(e));
@@ -400,6 +421,17 @@ export function NotificationSettingsScreen({
       setBusy(false);
     }
   };
+  const toggle = (enabled: boolean) =>
+    change(async () => {
+      if (enabled && !demoMode) await enablePushNotifications(profile!.id);
+      await setPushEnabled(enabled);
+    });
+  const toggleCategory = (key: NotificationCategory, enabled: boolean) =>
+    change(() => setNotificationCategory(key, enabled));
+  const switches = switchesFor(
+    accountType === "business" ? "business" : "personal",
+  );
+  const pushOn = !!data?.pushEnabled;
   return (
     <Screen scroll style={styles.page}>
       <Back navigation={navigation} />
@@ -408,8 +440,8 @@ export function NotificationSettingsScreen({
         title="Notifications"
       />
       <Text style={styles.copy}>
-        Choose whether Nearry sends push alerts for messages, requests and
-        bookings. In-app activity stays available when push is off.
+        Choose which push alerts Nearry sends. In-app activity stays available
+        when push is off.
       </Text>
       {state === "error" ? (
         <Button title="Retry" onPress={() => void refresh()} />
@@ -419,17 +451,102 @@ export function NotificationSettingsScreen({
           layout="compact"
         />
       ) : (
-        <View style={styles.row}>
-          <Text style={styles.name}>Push notifications</Text>
-          <Switch
-            accessibilityLabel="Push notifications"
-            value={!!data?.pushEnabled}
-            disabled={busy}
-            onValueChange={(value) => void toggle(value)}
-            trackColor={{ true: colors.accent }}
-          />
-        </View>
+        <>
+          <View style={styles.row}>
+            <Text style={styles.name}>Push notifications</Text>
+            <Switch
+              accessibilityLabel="Push notifications"
+              value={pushOn}
+              disabled={busy}
+              onValueChange={(value) => void toggle(value)}
+              trackColor={{ true: colors.accent }}
+            />
+          </View>
+          {switches.map((item) => (
+            <View key={item.key}>
+              <View style={[styles.row, !pushOn && styles.off]}>
+                <View style={styles.flex}>
+                  <Text style={styles.name}>{item.label}</Text>
+                  <Text style={styles.hint}>{item.hint}</Text>
+                </View>
+                <Switch
+                  accessibilityLabel={item.label}
+                  value={pushOn && !!data?.[item.key]}
+                  disabled={busy || !pushOn}
+                  onValueChange={(value) =>
+                    void toggleCategory(item.key, value)
+                  }
+                  trackColor={{ true: colors.accent }}
+                />
+              </View>
+              {item.key === "nearby" && (
+                <View style={styles.areaRow}>
+                  <Text style={[styles.hint, styles.flex]}>
+                    {data?.alertArea
+                      ? `Alerts near ${data.alertArea.label}`
+                      : "No area yet: you won't get nearby alerts."}
+                  </Text>
+                  <Pressable
+                    accessibilityRole="button"
+                    disabled={busy}
+                    onPress={() => {
+                      setPick(onboardingPreferences(null));
+                      setPickLabel("");
+                      setPicking(true);
+                    }}
+                  >
+                    <Text style={styles.link}>
+                      {data?.alertArea ? "Change" : "Add your area"}
+                    </Text>
+                  </Pressable>
+                  {!!data?.alertArea && (
+                    <Pressable
+                      accessibilityRole="button"
+                      disabled={busy}
+                      onPress={() => void change(() => setAlertArea(null))}
+                    >
+                      <Text style={styles.link}>Remove</Text>
+                    </Pressable>
+                  )}
+                </View>
+              )}
+            </View>
+          ))}
+        </>
       )}
+      <Modal
+        visible={picking}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setPicking(false)}
+      >
+        <View style={styles.sheetBackdrop}>
+          <View style={styles.sheet}>
+            <OnboardingLocation
+              value={pick}
+              onChange={setPick}
+              manualArea={pickLabel}
+              onManualArea={setPickLabel}
+              busy={busy}
+            />
+            <Button
+              title="Save area"
+              disabled={!pick.area || busy}
+              onPress={() => {
+                const area = pick.area;
+                if (!area) return;
+                setPicking(false);
+                void change(() => setAlertArea(area));
+              }}
+            />
+            <Button
+              title="Cancel"
+              variant="secondary"
+              onPress={() => setPicking(false)}
+            />
+          </View>
+        </View>
+      </Modal>
       {!!error && (
         <Text accessibilityRole="alert" style={styles.error}>
           {error}
@@ -503,6 +620,29 @@ const styles = StyleSheet.create({
   },
   section: { marginVertical: 12 },
   error: { ...typography.body, color: colors.red, marginVertical: 12 },
+  flex: { flex: 1 },
+  off: { opacity: 0.5 },
+  hint: { ...typography.caption, color: colors.textDim, marginTop: 2 },
+  areaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 16,
+    paddingVertical: 10,
+  },
+  link: { ...typography.body, ...weight("700"), color: colors.amberDeep },
+  sheetBackdrop: {
+    flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(10,14,30,0.45)",
+  },
+  sheet: {
+    backgroundColor: colors.paper,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    gap: 12,
+    maxHeight: "85%",
+  },
 });
 
 export function RestrictedAccountScreen() {

@@ -7,6 +7,8 @@ import { BackButton } from "../../components/BackButton";
 import { Alert } from "../../services/appAlert";
 import { ActivityArt } from "../../components/ActivityArt";
 import React, { useEffect, useRef, useState } from "react";
+import { urgentAllowed } from "../../utils/urgentPlan";
+import { getVenue } from "../../services/venues";
 import {
   PLAN_ACTIVITIES,
   composerDays,
@@ -30,6 +32,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   AccessibilityInfo,
+  Switch,
 } from "react-native";
 import { PostPhotosField } from "../../components/PostPhotosField";
 import { LoadingState } from "../../components/LoadingState";
@@ -111,10 +114,16 @@ export function PostEditor({
   postId,
   onSaved,
   onCancel,
+  initialVenueId,
+  initialUrgent = false,
 }: {
   postId?: string;
   onSaved: (id: string) => void;
   onCancel?: () => void;
+  /** Opened from a venue's "players short?" link: start the plan there. */
+  initialVenueId?: string;
+  /** Preselect "Players needed now". */
+  initialUrgent?: boolean;
 }) {
   const { profile, demoMode } = useAuth();
   const premium = usePremium();
@@ -127,7 +136,31 @@ export function PostEditor({
   const [description, setDescription] = useState("");
   const [venue, setVenue] = useState<PostMeetingSpot | null>(null);
   const [unfinishedLocation, setUnfinishedLocation] = useState(false);
-  const [startsAtDate, setStartsAtDate] = useState<Date | null>(null);
+  const [startsAtDate, setStartsAtDate] = useState<Date | null>(() => {
+    if (postId || !(initialVenueId || initialUrgent)) return null;
+    // Short of players: today, at the next full hour.
+    const next = new Date();
+    next.setHours(next.getHours() + 1, 0, 0, 0);
+    return next;
+  });
+  const [urgent, setUrgent] = useState(!postId && initialUrgent);
+  const [autoAccept, setAutoAccept] = useState(false);
+  const canUrgent = !postId && urgentAllowed(startsAtDate);
+  useEffect(() => {
+    if (urgent && !canUrgent) setUrgent(false);
+  }, [urgent, canUrgent]);
+  useEffect(() => {
+    if (postId || !initialVenueId) return;
+    let live = true;
+    void getVenue(initialVenueId)
+      .then((v) => {
+        if (live && v) setVenue({ name: v.name, venueId: v.id });
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [postId, initialVenueId]);
   const [expiresAtDate, setExpiresAtDate] = useState<Date | null>(null);
   const [picker, setPicker] = useState<{
     field: "startsAt" | "expiresAt";
@@ -420,7 +453,13 @@ export function PostEditor({
                 costCents: costCents ?? null,
               })
             ).id
-          : (await createPost(authorId, details)).id);
+          : (
+              await createPost(authorId, {
+                ...details,
+                urgent: urgent && urgentAllowed(startsAt),
+                autoAccept,
+              })
+            ).id);
       setSavedPostId(id);
       const result = await savePhotoSelection(id, photos, (uri) =>
         uploadPhoto(authorId, uri, "posts"),
@@ -962,6 +1001,43 @@ export function PostEditor({
               Your preferences must include the people already approved.
             </Text>
           )}
+          {!postId && (
+            <>
+              {canUrgent && (
+                <View style={styles.switchRow}>
+                  <View style={styles.switchText}>
+                    <Text style={styles.label}>Players needed now</Text>
+                    <Text style={styles.switchHint}>
+                      Alert people nearby who turned this on.
+                    </Text>
+                  </View>
+                  <Switch
+                    accessibilityLabel="Players needed now — alert people nearby"
+                    value={urgent}
+                    onValueChange={setUrgent}
+                    disabled={publishing}
+                    trackColor={{ true: colors.amber }}
+                  />
+                </View>
+              )}
+              <View style={styles.switchRow}>
+                <View style={styles.switchText}>
+                  <Text style={styles.label}>Accept people automatically</Text>
+                  <Text style={styles.switchHint}>
+                    Until the plan is full. Age, audience and blocks still
+                    apply.
+                  </Text>
+                </View>
+                <Switch
+                  accessibilityLabel="Accept people automatically until full"
+                  value={autoAccept}
+                  onValueChange={setAutoAccept}
+                  disabled={publishing}
+                  trackColor={{ true: colors.amber }}
+                />
+              </View>
+            </>
+          )}
         </PlanSection>
         <PlanSection
           number={6}
@@ -1016,9 +1092,15 @@ export function PostEditor({
           <View style={styles.settingRow}>
             <Icon name="shield" size={22} />
             <View style={styles.flex}>
-              <Text style={styles.label}>You approve each request</Text>
+              <Text style={styles.label}>
+                {autoAccept
+                  ? "People who fit join straight away"
+                  : "You approve each request"}
+              </Text>
               <Text style={styles.help}>
-                Only approved people join your private plan group.
+                {autoAccept
+                  ? "Until the plan is full, then the plan closes to new people."
+                  : "Only approved people join your private plan group."}
               </Text>
             </View>
           </View>
@@ -1321,6 +1403,14 @@ const styles = StyleSheet.create({
     lineHeight: 25,
   },
   sectionTitle: { fontSize: 17, ...weight("700"), color: colors.ink, flex: 1 },
+  switchRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginTop: 16,
+  },
+  switchText: { flex: 1 },
+  switchHint: { fontSize: 13, lineHeight: 18, color: colors.textDim },
   activities: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   activity: {
     width: "31%",

@@ -87,8 +87,16 @@ Database-enforced spam limits that also hold for direct API calls: 10 plans a da
 
 Rewrites every `public` row-security rule so `auth.uid()` is read once per query (`(select auth.uid())`) instead of once per row; the rules mean the same thing. Adds indexes for the foreign keys the Supabase advisor flagged (and, where they exist, the legacy tables from the first schema). Applied live on 24 Nov 2026.
 
-## Nearry Premium (00059–00060)
+## Plan reminders (00059)
 
-`00059`: `premium_entitlements` (written only by the `revenuecat-webhook` function with the service role; users read their own row), `has_premium()`, and `daily_usage` with triggers enforcing the free daily limits: 3 new plans and 10 join requests per India day (`daily_plan_limit` / `daily_join_limit`). Server and admin inserts are never limited. Apply after the Premium app build has reached users, or older builds show the raw limit text.
+Same-day reminders for plans: `send_plan_reminders()` (every 10 minutes via `supabase/ops/setup-maintenance.sql`, job `nearry-plan-reminders`) notifies the host and approved members at 8:00 am India time, or 2 hours before an earlier start, once per person per plan, through the normal push pipeline (`plan_reminder` kind). Members answer with `set_plan_attendance` (stored in `plan_attendance`); hosts read `plan_attendance_summary`; the app's "Plans for today" pop-up reads `plans_for_day`. Design: `docs/superpowers/specs/2026-11-24-plan-reminders-design.md`.
 
-`00060`: the Premium "Hosted by" filter. `hosts_matching_gender()` (security definer, Premium-only, honours blocks and visibility) and an optional `hostGender` key in `discover_posts` (requires 00052). Without the key results are unchanged, so older builds and `nearby_post_cards` keep working. Separate from the abuse limits in 00056, which cap everyone (Premium included); the free-tier triggers run first, so free users see the upgrade prompt.
+## Players needed (00060)
+
+Numbered 00060 so it applies after 00055–00059. Adds per-person notification switches (messages, plan requests and updates, bookings, nearby players needed) that gate push, keeps the area chosen at sign-up or in settings until the person removes it (GPS areas rounded to about 1 km, including ones already saved), urgent plans that alert eligible people nearby, and auto-accept. Additive: old builds keep working. Rollout: apply after the matching app build is released (older builds are unaffected), then turn on GitHub Pages for the `gh-pages` branch so venue QR cards open.
+
+## Nearry Premium (00061–00062)
+
+`00061`: `premium_entitlements` (written only by the `revenuecat-webhook` function with the service role; users read their own row), `has_premium()`, and `daily_usage` with triggers enforcing the free daily limits: 3 new plans and 10 join requests per India day (`daily_plan_limit` / `daily_join_limit`). Server and admin inserts are never limited. Apply after the Premium app build has reached users, or older builds show the raw limit text.
+
+`00062`: the Premium "Hosted by" filter. `hosts_matching_gender()` (security definer, Premium-only, honours blocks and visibility) and an optional `hostGender` key in `discover_posts` (requires 00052). Without the key results are unchanged, so older builds and `nearby_post_cards` keep working. Separate from the abuse limits in 00056, which cap everyone (Premium included); the free-tier triggers run first, so free users see the upgrade prompt.

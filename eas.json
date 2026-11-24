@@ -9,6 +9,9 @@
       "environment": "preview",
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_SHARE_URL": "https://sreerajrajeevan.github.io/nearry/open.html"
       }
     },
     "production": {
@@ -18,13 +21,17 @@
       "credentialsSource": "remote",
       "android": {
         "buildType": "app-bundle"
+      },
+      "env": {
+        "EXPO_PUBLIC_SHARE_URL": "https://sreerajrajeevan.github.io/nearry/open.html"
       }
     },
     "play-test": {
       "extends": "production",
       "env": {
         "EXPO_PUBLIC_EMAIL_OTP_ENABLED": "false",
-        "EXPO_PUBLIC_REVIEWER_LOGIN_ENABLED": "true"
+        "EXPO_PUBLIC_REVIEWER_LOGIN_ENABLED": "true",
+        "EXPO_PUBLIC_SHARE_URL": "https://sreerajrajeevan.github.io/nearry/open.html"
       },
       "credentialsSource": "local"
     }

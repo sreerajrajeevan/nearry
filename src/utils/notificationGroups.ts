@@ -12,10 +12,12 @@ export type NotificationFilter =
 
 const CATEGORY: Record<string, NotificationCategory> = {
   join_request: "plans",
+  nearby_plan: "plans",
   request_approved: "plans",
   request_declined: "plans",
   request_full: "plans",
   post_cancelled: "plans",
+  plan_reminder: "plans",
   booking: "bookings",
   booking_confirmed: "bookings",
   booking_cancelled: "bookings",
@@ -39,10 +41,12 @@ const BLUE = { fg: "#1D4ED8", bg: "#DBEAFE" };
 const VIOLET = { fg: "#6D28D9", bg: "#EDE9FE" };
 const LOOK: Record<string, Look> = {
   join_request: { icon: "user-plus", ...AMBER },
+  nearby_plan: { icon: "map-pin", ...AMBER },
   request_approved: { icon: "check-circle", ...GREEN },
   request_declined: { icon: "x-circle", ...RED },
   request_full: { icon: "users", ...AMBER },
   post_cancelled: { icon: "slash", ...RED },
+  plan_reminder: { icon: "calendar", ...BLUE },
   booking: { icon: "calendar", ...AMBER },
   booking_confirmed: { icon: "calendar", ...GREEN },
   booking_cancelled: { icon: "calendar", ...RED },

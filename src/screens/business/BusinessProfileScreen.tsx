@@ -379,6 +379,12 @@ export function BusinessProfileScreen({
             hint="Your live offers, drafts and past offers"
             onPress={() => navigation.navigate("MyOffers")}
           />
+          <AccountMenuRow
+            icon="maximize"
+            title="Players-short QR card"
+            hint="Players scan it to post a game and alert people nearby"
+            onPress={() => navigation.navigate("PlayersCard")}
+          />
         </AccountMenuGroup>
 
         <Text style={styles.sectionTitle}>My venue</Text>
