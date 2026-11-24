@@ -7,6 +7,7 @@ import { Image, Platform } from "react-native";
 import { getSupabase, isDemoMode } from "./supabase";
 import { imageBytesFromBase64 } from "../utils/imageBytes";
 import { MAX_PHOTO_BYTES, uploadPhotoBytes } from "./photoStorage";
+import { IMAGE_SIZES, shrinkToFit } from "../utils/imageSizes";
 import type { PhotoRef } from "./postPhotos";
 export { listPostPhotos, addPostPhoto, deletePostPhoto } from "./postPhotos";
 export type { PhotoRef } from "./postPhotos";
@@ -99,20 +100,15 @@ export async function uploadPhoto(
     10_000,
     "Could not read this photo. Please choose it again.",
   );
-  const resize = (max: number) =>
-    Math.max(size.width, size.height) > max
-      ? [
-          {
-            resize:
-              size.width >= size.height ? { width: max } : { height: max },
-          },
-        ]
-      : [];
   const normalized = await withDeadline(
-    ImageManipulator.manipulateAsync(localUri, resize(1600), {
-      compress: 0.82,
-      format: ImageManipulator.SaveFormat.JPEG,
-    }),
+    ImageManipulator.manipulateAsync(
+      localUri,
+      shrinkToFit(size.width, size.height, IMAGE_SIZES.photo.max),
+      {
+        compress: IMAGE_SIZES.photo.quality,
+        format: ImageManipulator.SaveFormat.JPEG,
+      },
+    ),
     30_000,
     "Could not prepare this photo. Try a smaller image.",
   );
@@ -150,15 +146,15 @@ export async function uploadPhoto(
     thumbnail = await withDeadline(
       ImageManipulator.manipulateAsync(
         normalized.uri,
-        [
-          {
-            resize:
-              normalized.width >= normalized.height
-                ? { width: Math.min(640, normalized.width) }
-                : { height: Math.min(640, normalized.height) },
-          },
-        ],
-        { compress: 0.76, format: ImageManipulator.SaveFormat.JPEG },
+        shrinkToFit(
+          normalized.width,
+          normalized.height,
+          IMAGE_SIZES.thumbnail.max,
+        ),
+        {
+          compress: IMAGE_SIZES.thumbnail.quality,
+          format: ImageManipulator.SaveFormat.JPEG,
+        },
       ),
       20_000,
       "Could not prepare this photo.",

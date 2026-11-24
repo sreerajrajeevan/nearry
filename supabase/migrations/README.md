@@ -106,3 +106,10 @@ Numbered 00060 so it applies after 00055–00059. Adds per-person notification s
 
 Numbered 00061 so it applies after 00057–00060. Safe to apply before the app
 update: older apps still cap bookings at 2 people.
+
+## Smaller image limits (00062)
+
+Profile photos are capped at 2 MB and plan/venue photos at 5 MB (were 10 MB).
+The app now uploads profile photos at 512 px and plan photos at 1280 px with a
+480 px thumbnail, about 70% JPEG quality. Older app versions stay well under
+the caps.
