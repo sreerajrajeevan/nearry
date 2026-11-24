@@ -94,6 +94,16 @@ test("an ongoing live offer can edit its description without pretending its star
   );
 });
 
+test("a players-needed alert opens the plan", () => {
+  assert.deepEqual(
+    notificationTarget(
+      { kind: "nearby_plan", refId: "p1" } as AppNotification,
+      "personal",
+    ),
+    { screen: "PostDetails", params: { postId: "p1" } },
+  );
+});
+
 test("group-message notifications open the authenticated personal group context", () => {
   assert.deepEqual(
     notificationTarget(

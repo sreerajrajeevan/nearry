@@ -1,7 +1,7 @@
 export type LegalPage = "privacy" | "terms" | "child-safety";
 export const POLICY_VERSION = "2026-10-19";
 export function legalUpdated(page: LegalPage): string {
-  return page === "terms" ? "19 October 2026" : "16 November 2026";
+  return page === "terms" ? "19 October 2026" : "24 November 2026";
 }
 export function legalTitle(page: LegalPage): string {
   return page === "privacy"
@@ -93,7 +93,7 @@ export function legalSections(
     },
     {
       title: "Location and permissions",
-      body: "Location access is optional. With permission, coordinates are used to find nearby results and may be sent to our place-search service and its configured provider, Google Maps Platform or Geoapify. Search text and the selected place are sent to that provider to return suggestions and coordinates. Manual area selection is available. We do not continuously track your background location. Photo selection provides access to the image you choose. Push notifications require separate phone permission and a device push token.",
+      body: "Location access is optional. With permission, coordinates are used to find nearby results and may be sent to our place-search service and its configured provider, Google Maps Platform or Geoapify. Search text and the selected place are sent to that provider to return suggestions and coordinates. Manual area selection is available. The area you choose at sign-up or in Notification preferences is kept until you remove it or delete your account; areas taken from GPS are rounded to about 1 km. It is used to show nearby plans and, if you turn them on, to send “players needed” alerts for plans near you. We do not continuously track your background location. Photo selection provides access to the image you choose. Push notifications require separate phone permission and a device push token.",
     },
     {
       title: "Google Maps place search",

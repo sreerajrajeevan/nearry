@@ -16,6 +16,7 @@ import { BusinessStackParamList } from "./types";
 import { BusinessTabs } from "./BusinessTabs";
 import { ConversationScreen } from "../screens/chat/ConversationScreen";
 import { NotificationCenterScreen } from "../screens/NotificationCenterScreen";
+import { PlayersCardScreen } from "../screens/business/PlayersCardScreen";
 import { MyOffersScreen } from "../screens/business/MyOffersScreen";
 import { EditOfferScreen } from "../screens/business/EditOfferScreen";
 import { EditBusinessProfileScreen } from "../screens/business/EditBusinessProfileScreen";
@@ -53,6 +54,7 @@ export function BusinessStack() {
         component={EditBusinessProfileScreen}
       />
       <Stack.Screen name="ManageVenue" component={ManageVenueScreen} />
+      <Stack.Screen name="PlayersCard" component={PlayersCardScreen} />
       <Stack.Screen name="SafetyPrivacy" component={SafetyPrivacyScreen} />
       <Stack.Screen name="BlockedUsers" component={BlockedUsersScreen} />
       <Stack.Screen name="MyReports" component={MyReportsScreen} />

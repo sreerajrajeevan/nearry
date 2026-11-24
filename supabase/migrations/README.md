@@ -42,7 +42,6 @@ For projects already on `00016`, apply only `00017` and `00018` after taking a b
 
 Existing projects at 00023 apply only `00024_account_safety.sql` and `00025_push_delivery_receipts.sql`, in order, before distributing the matching client. These add report/block rules, account deactivation/deletion queues, terms acknowledgement, notification preferences and delivery receipts. Deploy/redeploy `account-maintenance` and `send-push`, configure trusted schedules, and set public legal/EAS configuration. See [rollout and operator instructions](../../docs/account-safety-rollout.md). Existing future commitments are not cancelled by migration installation; cancellation happens only after an explicit deletion request or a trusted moderation action.
 
-
 ## Admin operations console (00029)
 
 `00029_admin_console.sql` creates private admin membership, audit records and
@@ -65,7 +64,6 @@ clients access to admin tables or let users add themselves as administrators.
 `00048`: clearer booking notifications. "Booking confirmed" now names the business, the slot time (India time) and party size, and says to pay at the venue: the total for the party plus the per-person price (offer prices are per person), or "It's free". Business requests and cancellations also show the slot time. Only the text changes: kinds, recipients and the offer reference are the same, so older app builds are unaffected and existing notifications are not rewritten. Numbered 00048 because the unmerged `feat/premium` branch already uses 00046–00047; it does not depend on them.
 
 `00049`: business chats show the business name. `list_my_conversations()` adds `other_is_business` and `other_business_name`; `conversation_safety()` adds `isBusiness`, `businessName`, `kind` and `contextTitle`; message notifications from a business read "Message from <business name>". Additive only, so older builds keep working; the new chat header, list tags and tappable links need the matching app build. Numbered 00049 because open branches use 00046–00048; it does not depend on them.
-
 
 ## November reliability update (00050, 00052–00054)
 
@@ -92,3 +90,7 @@ Rewrites every `public` row-security rule so `auth.uid()` is read once per query
 ## Plan reminders (00059)
 
 Same-day reminders for plans: `send_plan_reminders()` (every 10 minutes via `supabase/ops/setup-maintenance.sql`, job `nearry-plan-reminders`) notifies the host and approved members at 8:00 am India time, or 2 hours before an earlier start, once per person per plan, through the normal push pipeline (`plan_reminder` kind). Members answer with `set_plan_attendance` (stored in `plan_attendance`); hosts read `plan_attendance_summary`; the app's "Plans for today" pop-up reads `plans_for_day`. Design: `docs/superpowers/specs/2026-11-24-plan-reminders-design.md`.
+
+## Players needed (00060)
+
+Numbered 00060 so it applies after 00055–00059. Adds per-person notification switches (messages, plan requests and updates, bookings, nearby players needed) that gate push, keeps the area chosen at sign-up or in settings until the person removes it (GPS areas rounded to about 1 km, including ones already saved), urgent plans that alert eligible people nearby, and auto-accept. Additive: old builds keep working. Rollout: apply after the matching app build is released (older builds are unaffected), then turn on GitHub Pages for the `gh-pages` branch so venue QR cards open.

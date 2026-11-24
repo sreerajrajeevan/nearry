@@ -37,7 +37,8 @@ export type RootStackParamList = {
 export type PersonalTabParamList = {
   Nearby: { place?: Place } | undefined;
   Search: undefined;
-  CreatePost: undefined;
+  /** venueId: opened from a venue's "short of players?" link. */
+  CreatePost: { venueId?: string; urgent?: boolean } | undefined;
   Activity: undefined;
   Messages: undefined;
   /** `celebrate` carries the notification that opened the profile. */
@@ -83,6 +84,7 @@ export type BusinessStackParamList = SafetyStackParamList & {
   EditBusinessProfile: undefined;
   BusinessVerification: undefined;
   ManageVenue: undefined;
+  PlayersCard: undefined;
 };
 
 export type BusinessTabNav = CompositeNavigationProp<

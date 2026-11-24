@@ -1,5 +1,10 @@
 import React, { useCallback, useState } from "react";
-import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import {
+  useFocusEffect,
+  useNavigation,
+  useRoute,
+  type RouteProp,
+} from "@react-navigation/native";
 import { PostEditor } from "./PostEditor";
 import { ProfileRequired } from "../../components/ProfileRequired";
 import { Screen } from "../../components/Screen";
@@ -7,10 +12,12 @@ import { Button } from "../../components/Button";
 import { PageHeading } from "../../components/PageHeading";
 import { useAuth } from "../../store/AuthContext";
 import { personalProfileReady } from "../../utils/profileReadiness";
-import { PersonalTabNav } from "../../navigation/types";
+import { PersonalTabNav, PersonalTabParamList } from "../../navigation/types";
 export function CreatePostScreen() {
   const { profile } = useAuth();
   const navigation = useNavigation<PersonalTabNav>();
+  const params =
+    useRoute<RouteProp<PersonalTabParamList, "CreatePost">>().params;
   const [prompt, setPrompt] = useState(false);
   const ready = personalProfileReady(profile);
   useFocusEffect(
@@ -44,6 +51,10 @@ export function CreatePostScreen() {
     );
   return (
     <PostEditor
+      // A new link opens a fresh editor with that venue.
+      key={params?.venueId ?? "new"}
+      initialVenueId={params?.venueId}
+      initialUrgent={!!params?.urgent}
       onSaved={(id) => navigation.navigate("PostDetails", { postId: id })}
     />
   );

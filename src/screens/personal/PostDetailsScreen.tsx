@@ -380,10 +380,15 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
         <View style={styles.sheetTop}>
           <View style={styles.categoryRow}>
             <Text style={styles.category}>{postCategory(post)}</Text>
-            <Badge
-              label={spotsBadge}
-              tone={flow.accepting ? "green" : "neutral"}
-            />
+            <View style={styles.badges}>
+              {post.urgent && flow.accepting && (
+                <Badge label="Players needed" tone="red" />
+              )}
+              <Badge
+                label={spotsBadge}
+                tone={flow.accepting ? "green" : "neutral"}
+              />
+            </View>
           </View>
           <Text accessibilityRole="header" style={styles.title}>
             {post.title}
@@ -985,6 +990,7 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: colors.surface,
   },
+  badges: { flexDirection: "row", gap: 6 },
   categoryRow: {
     flexDirection: "row",
     alignItems: "center",
