@@ -83,4 +83,4 @@ Database-enforced spam limits that also hold for direct API calls: 10 plans a da
 
 ## Players needed (00060)
 
-Numbered 00060 so it applies after 00055–00059. Adds per-person notification switches (messages, plan requests and updates, bookings, nearby players needed) that gate push, keeps the area chosen at sign-up or in settings until the person removes it (GPS areas rounded to about 1 km, including ones already saved), urgent plans that alert eligible people nearby, and auto-accept. Additive: old builds keep working. Apply with or after the matching app build.
+Numbered 00060 so it applies after 00055–00059. Adds per-person notification switches (messages, plan requests and updates, bookings, nearby players needed) that gate push, keeps the area chosen at sign-up or in settings until the person removes it (GPS areas rounded to about 1 km, including ones already saved), urgent plans that alert eligible people nearby, and auto-accept. Additive: old builds keep working. Rollout: apply after the matching app build is released (older builds are unaffected), then turn on GitHub Pages for the `gh-pages` branch so venue QR cards open.

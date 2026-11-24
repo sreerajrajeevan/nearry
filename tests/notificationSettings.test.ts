@@ -66,12 +66,16 @@ test("older servers without the new keys read as everything on", async () => {
 });
 
 test("settings list the four switches in order; businesses only see two", async () => {
-  const { NOTIFICATION_SWITCHES, switchesFor, AREA_SIGNUP_HINT } = await import(
-    "../src/utils/notificationSettings"
-  );
+  const { NOTIFICATION_SWITCHES, switchesFor, AREA_SIGNUP_HINT } =
+    await import("../src/utils/notificationSettings");
   assert.deepEqual(
     NOTIFICATION_SWITCHES.map((s: { label: string }) => s.label),
-    ["Messages", "Plan requests and updates", "Bookings", "Nearby players needed"],
+    [
+      "Messages",
+      "Plan requests and updates",
+      "Bookings",
+      "Nearby players needed",
+    ],
   );
   assert.deepEqual(
     switchesFor("business").map((s: { key: string }) => s.key),
