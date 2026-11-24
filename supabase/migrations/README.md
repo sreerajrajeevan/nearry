@@ -95,8 +95,20 @@ Same-day reminders for plans: `send_plan_reminders()` (every 10 minutes via `sup
 
 Numbered 00060 so it applies after 00055–00059. Adds per-person notification switches (messages, plan requests and updates, bookings, nearby players needed) that gate push, keeps the area chosen at sign-up or in settings until the person removes it (GPS areas rounded to about 1 km, including ones already saved), urgent plans that alert eligible people nearby, and auto-accept. Additive: old builds keep working. Rollout: apply after the matching app build is released (older builds are unaffected), then turn on GitHub Pages for the `gh-pages` branch so venue QR cards open.
 
-## Nearry Premium (00061–00062)
+## Offer duplicates and party size (00061)
 
-`00061`: `premium_entitlements` (written only by the `revenuecat-webhook` function with the service role; users read their own row), `has_premium()`, and `daily_usage` with triggers enforcing the free daily limits: 3 new plans and 10 join requests per India day (`daily_plan_limit` / `daily_join_limit`). Server and admin inserts are never limited. Apply after the Premium app build has reached users, or older builds show the raw limit text.
+- A business can publish different offers at the same time. Publishing is
+  blocked only for a duplicate: same title (ignoring case and spaces) on the
+  same court or service name at overlapping times.
+- Offers that only share the default court name ("Main") no longer block each
+  other's bookings; offers that name the same court still share it.
+- A booking can be for 1 to 4 people (was 1 or 2).
 
-`00062`: the Premium "Hosted by" filter. `hosts_matching_gender()` (security definer, Premium-only, honours blocks and visibility) and an optional `hostGender` key in `discover_posts` (requires 00052). Without the key results are unchanged, so older builds and `nearby_post_cards` keep working. Separate from the abuse limits in 00056, which cap everyone (Premium included); the free-tier triggers run first, so free users see the upgrade prompt.
+Numbered 00061 so it applies after 00057–00060. Safe to apply before the app
+update: older apps still cap bookings at 2 people.
+
+## Nearry Premium (00062–00063)
+
+`00062`: `premium_entitlements` (written only by the `revenuecat-webhook` function with the service role; users read their own row), `has_premium()`, and `daily_usage` with triggers enforcing the free daily limits: 3 new plans and 10 join requests per India day (`daily_plan_limit` / `daily_join_limit`). Server and admin inserts are never limited. Apply after the Premium app build has reached users, or older builds show the raw limit text.
+
+`00063`: the Premium "Hosted by" filter. `hosts_matching_gender()` (security definer, Premium-only, honours blocks and visibility) and an optional `hostGender` key in `discover_posts` (requires 00052). Without the key results are unchanged, so older builds and `nearby_post_cards` keep working. Separate from the abuse limits in 00056, which cap everyone (Premium included); the free-tier triggers run first, so free users see the upgrade prompt.

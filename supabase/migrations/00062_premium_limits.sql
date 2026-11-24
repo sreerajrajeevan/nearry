@@ -1,4 +1,4 @@
--- 00061 — Nearry Premium: entitlements and daily plan / join limits.
+-- 00062 — Nearry Premium: entitlements and daily plan / join limits.
 -- premium_entitlements is written only by the service role (store webhook /
 -- verify edge function); users read their own row. Free accounts get 3 plans
 -- and 10 join requests per India day; Premium is unlimited but still counted.

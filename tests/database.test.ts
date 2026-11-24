@@ -111,7 +111,7 @@ before(async () => {
           /create function public.nearby_post_cards[\s\S]*?grant execute on function public.nearby_post_cards[^;]+;/,
           "",
         );
-      if (file === "00062_hosted_by_filter.sql")
+      if (file === "00063_hosted_by_filter.sql")
         // discover_posts (00052, PostGIS) is skipped here; PostGIS CI runs it.
         sql = sql.replace(
           /create or replace function public.discover_posts[\s\S]*?grant execute on function public.discover_posts[^;]+;/,
@@ -4998,7 +4998,7 @@ test("selfie poses: older app builds can still submit without a pose, shown to t
   assert.equal(queue.pose_label, null);
 });
 
-test("booking limits: up to 2 people, one booking per offer per day, at most 3 waiting requests", async () => {
+test("booking limits: up to 4 people, one booking per offer per day, at most 3 waiting requests", async () => {
   const business = await auditBusiness(),
     customer = await corePersonal();
   // Slots every hour from 10:00 India time two days ahead to 12:00 the day after.
@@ -5027,10 +5027,11 @@ test("booking limits: up to 2 people, one booking per offer per day, at most 3 w
         (await tx.query("select book_offer_slot($1,$2) r", [slot, party]))
           .rows[0].r,
     );
-  await assert.rejects(book(dayOne10, 3), /2 people/);
-  const first = await book(dayOne10, 2);
+  await assert.rejects(book(dayOne10, 5), /1 to 4 people/);
+  await assert.rejects(book(dayOne10, 0), /1 to 4 people/);
+  const first = await book(dayOne10, 4);
   // A retry of the same slot still returns the same booking.
-  assert.equal((await book(dayOne10, 2)).booking_id, first.booking_id);
+  assert.equal((await book(dayOne10, 4)).booking_id, first.booking_id);
   await assert.rejects(
     book(dayOne11),
     /one booking for this offer on that day/,
@@ -6909,7 +6910,7 @@ test("spam limits: plans per day, join requests per hour, messages per minute, o
       ),
     );
   // Plans: 10 a day for one person. Premium lifts the free 3-a-day limit
-  // (00061) but never these spam caps.
+  // (00062) but never these spam caps.
   const premium = (id: string) =>
     db.query(
       "insert into premium_entitlements(user_id,expires_at) values($1,now()+interval '1 day')",
@@ -7432,4 +7433,67 @@ test("today's plans list shows the person's upcoming plans for the day with thei
       ["Evening football", true, 1, 1],
     ],
   );
+});
+
+test("offers: different offers can run at the same time; only a duplicate title on the same court is blocked", async () => {
+  const business = await auditBusiness();
+  const offer = (
+    title: string,
+    startH: number,
+    endH: number,
+    resource = "Main",
+  ) =>
+    db
+      .query(
+        `insert into offers(business_id,title,description,starts_at,ends_at,slot_capacity,slot_minutes,resource_key,status)
+         values($1,$2,'A friendly test session',date_trunc('hour',now())+make_interval(hours=>$3::int),
+           date_trunc('hour',now())+make_interval(hours=>$4::int),2,60,$5,'live') returning id`,
+        [business, title, startH, endH, resource],
+      )
+      .then((r) => r.rows[0].id as string);
+  const yoga = await offer("Morning yoga", 3, 6);
+  // Same time, same default court name, different offer: fine.
+  const gym = await offer("Gym session", 3, 6);
+  await assert.rejects(
+    offer("  morning YOGA ", 4, 7),
+    /already have a live offer called "Morning yoga" at these times/,
+  );
+  // Same title at a time that doesn't overlap: fine.
+  await offer("Morning yoga", 30, 33);
+  // Same title on a different court: fine.
+  await offer("Morning yoga", 3, 6, "Court 2");
+  // A draft can be saved; publishing it is what's blocked.
+  const draft = (
+    await db.query(
+      `insert into offers(business_id,title,description,starts_at,ends_at,slot_capacity,slot_minutes,resource_key,status)
+       values($1,'Morning yoga','A friendly test session',date_trunc('hour',now())+interval '4 hours',
+         date_trunc('hour',now())+interval '5 hours',2,60,'Main','draft') returning id`,
+      [business],
+    )
+  ).rows[0].id;
+  await assert.rejects(
+    db.query("update offers set status='live' where id=$1", [draft]),
+    /already have a live offer called/,
+  );
+
+  // Bookings on two offers that only share the default court name don't block each other.
+  const slotAt = async (o: string) =>
+    (
+      await db.query(
+        "select id from offer_slots where offer_id=$1 order by starts_at limit 1",
+        [o],
+      )
+    ).rows[0].id;
+  const a = await corePersonal(),
+    b = await corePersonal();
+  const book = (who: string, slot: string) =>
+    asUser(who, (tx) => tx.query("select book_offer_slot($1,1) r", [slot]));
+  await book(a, await slotAt(yoga));
+  await book(b, await slotAt(gym));
+
+  // Offers that name the same court still share it.
+  const c1 = await offer("Badminton singles", 50, 52, "Court 1");
+  const c2 = await offer("Badminton doubles", 50, 52, "court 1 ");
+  await book(a, await slotAt(c1));
+  await assert.rejects(book(b, await slotAt(c2)), /resource already booked/);
 });
