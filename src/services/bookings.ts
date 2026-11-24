@@ -20,8 +20,8 @@ function fromView(row: Record<string, unknown>): Booking {
   });
 }
 
-/** Most people one booking can cover (also enforced by the database). */
-export const MAX_PARTY_SIZE = 2;
+import { MAX_PARTY_SIZE } from "../utils/partySize";
+export { MAX_PARTY_SIZE };
 /** Waiting (unconfirmed) requests one person may hold at a time. */
 export const MAX_WAITING_REQUESTS = 3;
 
@@ -127,7 +127,7 @@ export async function bookOffer(
     partySize < 1 ||
     partySize > MAX_PARTY_SIZE
   )
-    throw new Error(`A booking can be for 1 or ${MAX_PARTY_SIZE} people.`);
+    throw new Error(`A booking can be for 1 to ${MAX_PARTY_SIZE} people.`);
   if (useMock()) {
     const offer = mockOffers.find((o) => o.id === offerId);
     const slot = (await listOfferSlots(offerId)).find((s) => s.id === slotId);

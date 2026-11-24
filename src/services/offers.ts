@@ -445,8 +445,8 @@ export async function cancelOffer(offerId: string): Promise<void> {
 }
 
 export function friendlyOfferError(message: string): string {
-  if (/overlap|resource already booked/i.test(message))
-    return "This court or service already has an offer during these times. Choose another time or separately available capacity.";
+  if (/resource already booked/i.test(message))
+    return "That court or room is already booked at this time by another offer.";
   if (message.toLowerCase().includes("verified"))
     return "Only verified businesses can publish offers. Submit your verification documents first.";
   return message;

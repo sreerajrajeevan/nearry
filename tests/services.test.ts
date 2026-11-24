@@ -436,7 +436,7 @@ test("clearing offer price/discount sends null; oversized booking groups never r
     discount_pct: null,
   });
   calls.length = 0;
-  await assert.rejects(bookings.bookOffer("offer", "slot", 3), /1 or 2 people/);
+  await assert.rejects(bookings.bookOffer("offer", "slot", 5), /1 to 4 people/);
   assert.equal(calls.length, 0);
 });
 

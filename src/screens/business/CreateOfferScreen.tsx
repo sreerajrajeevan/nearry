@@ -236,8 +236,9 @@ export function CreateOfferScreen({ navigation }: Props) {
       setDuration("60");
       navigation.navigate("Dashboard");
     } catch (e) {
+      const reason = (e instanceof Error ? e.message : "Please retry.").trim();
       setFormError(
-        (e instanceof Error ? e.message : "Please retry.") +
+        (/[.!?]$/.test(reason) ? reason : `${reason}.`) +
           (publish && draftId.current
             ? " Your draft is saved; retry here or open My offers."
             : ""),
@@ -417,7 +418,9 @@ export function CreateOfferScreen({ navigation }: Props) {
             maxLength={80}
           />
           <Text style={{ ...typography.caption, color: colors.textDim }}>
-            Use a different name only for separately available capacity.
+            Offers with the same court or room name share it, so a booking on
+            one blocks the others at that time. Leave it as Main if this offer
+            doesn't share space.
           </Text>
           <SlotFields
             capacity={capacity}

@@ -80,3 +80,15 @@ Adds `plan_group_events`, written by a trigger on `join_requests` whenever someo
 ## Abuse limits (00056)
 
 Database-enforced spam limits that also hold for direct API calls: 10 plans a day, 40 join requests an hour, 30 chat messages a minute, 30 offers a day (signed-in writers only; workers and admins are not limited, and new plan timestamps are stamped by the server). Adds length limits on profile name (100), business name (120) and bio (500); restricts the avatars, photos and verification_docs buckets to JPEG/PNG/WebP up to 10 MB; revokes signed-out access to internal helper functions and push tokens, and the unused update grant on messages.
+
+## Offer duplicates and party size (00061)
+
+- A business can publish different offers at the same time. Publishing is
+  blocked only for a duplicate: same title (ignoring case and spaces) on the
+  same court or service name at overlapping times.
+- Offers that only share the default court name ("Main") no longer block each
+  other's bookings; offers that name the same court still share it.
+- A booking can be for 1 to 4 people (was 1 or 2).
+
+Numbered 00061 so it applies after 00057–00060. Safe to apply before the app
+update: older apps still cap bookings at 2 people.
