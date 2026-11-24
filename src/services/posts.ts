@@ -21,7 +21,7 @@ import {
 import { distanceKm } from "./locationDistance";
 import { demoUserBlocked } from "./safety";
 import { getSupabase, isSupabaseConfigured, isDemoMode } from "./supabase";
-import { LIVE_FEED_CALM, multiplexSubscribe } from "./realtime";
+import { calmFeed } from "./realtime";
 import { mockPosts, mockVenues } from "../data/mock";
 import {
   DbPost,
@@ -485,23 +485,7 @@ export async function deletePost(postId: string): Promise<void> {
  */
 export function subscribeToPosts(onChange: () => void): () => void {
   if (useMock()) return () => {};
-  // Multiplexed: Nearby, Activity and PostDetails can all be mounted at once.
-  return multiplexSubscribe(
-    "posts-feed",
-    (ch, fire) =>
-      ch
-        .on(
-          "postgres_changes",
-          { event: "*", schema: "public", table: "posts" },
-          () => fire(),
-        )
-        .on(
-          "postgres_changes",
-          { event: "*", schema: "public", table: "join_requests" },
-          () => fire(),
-        ),
-    onChange,
-    // Every plan/offer change in every city arrives here: refresh calmly.
-    LIVE_FEED_CALM,
-  );
+  // Shared by Nearby, Activity, PostDetails and others. Calm refresh instead
+  // of listening to every plan change in every city.
+  return calmFeed("posts-feed", onChange);
 }

@@ -107,11 +107,11 @@ A webhook is a message RevenueCat sends us when someone subscribes or cancels.
 1. See which migrations are already applied: Supabase dashboard → **Database →
    Migrations**.
 2. Apply any earlier migrations not yet applied (for example `00044` to
-   `00057`), in number order, in the **SQL editor**. `00059` needs `00052`.
+   `00058`), in number order, in the **SQL editor**. `00060` needs `00052`.
 3. Wait until the Premium build has reached your users (the rollout is live and
    people have updated). Only then run
-   `supabase/migrations/00058_premium_limits.sql`, then
-   `supabase/migrations/00059_hosted_by_filter.sql`. 00058 turns on the daily
+   `supabase/migrations/00059_premium_limits.sql`, then
+   `supabase/migrations/00060_hosted_by_filter.sql`. 00059 turns on the daily
    limits; older builds don't know about them and would show people the raw
    text `daily_plan_limit` instead of the Premium sheet.
 

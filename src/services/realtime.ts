@@ -91,3 +91,93 @@ export function multiplexSubscribe(
     if (original.callbacks.size === 0) original.remove();
   };
 }
+
+type CalmEntry = { callbacks: Set<() => void>; remove: () => void };
+const calmFeeds = new Map<string, CalmEntry>();
+/** Busy shared lists refresh at this pace while the app is open. */
+export const CALM_FEED_INTERVAL_MS = 60_000;
+
+/**
+ * A shared list (plans, offers, bookings) that refreshes calmly instead of
+ * listening to every row change in every city: every minute while the app
+ * is open, on return to the foreground when stale, and at once when this
+ * user gets a notification (join request, approval, booking...). Each phone
+ * then only receives its own events. Returns unsubscribe.
+ */
+export function calmFeed(topic: string, onChange: () => void): () => void {
+  let entry = calmFeeds.get(topic);
+  if (!entry) {
+    const callbacks = new Set<() => void>();
+    const notify = () =>
+      callbacks.forEach((cb) => {
+        try {
+          cb();
+        } catch {
+          /* one bad listener must not break the others */
+        }
+      });
+    const { AppState } =
+      require("react-native") as typeof import("react-native");
+    const { createFeedPoller } =
+      require("../utils/feedPoller") as typeof import("../utils/feedPoller");
+    const poller = createFeedPoller(notify, {
+      intervalMs: CALM_FEED_INTERVAL_MS,
+      staleMs: CALM_FEED_INTERVAL_MS / 2,
+      now: Date.now,
+      setInterval: (fn, ms) => setInterval(fn, ms),
+      clearInterval: (h) => clearInterval(h as ReturnType<typeof setInterval>),
+      isActive: () => AppState.currentState === "active",
+    });
+    poller.start();
+    const app = AppState.addEventListener("change", (state) => {
+      if (state === "active") poller.resume();
+    });
+    // The user's own notifications are the instant signal.
+    let stopNudge: (() => void) | null = null,
+      closed = false;
+    void getSupabase()!
+      .auth.getSession()
+      .then(({ data }) => {
+        const uid = data.session?.user.id;
+        if (!uid || closed) return;
+        stopNudge = multiplexSubscribe(
+          "my-notifications-" + uid,
+          (ch, fire) =>
+            ch.on(
+              "postgres_changes",
+              {
+                event: "INSERT",
+                schema: "public",
+                table: "notifications",
+                filter: `user_id=eq.${uid}`,
+              },
+              () => fire(),
+            ),
+          () => poller.nudge(),
+        );
+      })
+      .catch(() => {});
+    const e: CalmEntry = {
+      callbacks,
+      remove: () => {
+        closed = true;
+        calmFeeds.delete(topic);
+        poller.stop();
+        app.remove();
+        stopNudge?.();
+      },
+    };
+    calmFeeds.set(topic, e);
+    entry = e;
+  }
+  entry.callbacks.add(onChange);
+  const original = entry;
+  let subscribed = true;
+  return () => {
+    if (!subscribed) return;
+    subscribed = false;
+    if (calmFeeds.get(topic) !== original) return;
+    original.callbacks.delete(onChange);
+    if (original.callbacks.size === 0) original.remove();
+  };
+}

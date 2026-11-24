@@ -1,4 +1,4 @@
--- 00058 — Nearry Premium: entitlements and daily plan / join limits.
+-- 00059 — Nearry Premium: entitlements and daily plan / join limits.
 -- premium_entitlements is written only by the service role (store webhook /
 -- verify edge function); users read their own row. Free accounts get 3 plans
 -- and 10 join requests per India day; Premium is unlimited but still counted.
@@ -15,7 +15,7 @@ create table public.premium_entitlements (
 );
 alter table public.premium_entitlements enable row level security;
 create policy "premium read own" on public.premium_entitlements
-  for select using (user_id = auth.uid());
+  for select using (user_id = (select auth.uid()));
 revoke all on public.premium_entitlements from public, anon, authenticated;
 grant select on public.premium_entitlements to authenticated;
 grant select, insert, update, delete on public.premium_entitlements to service_role;

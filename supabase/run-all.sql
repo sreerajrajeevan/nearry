@@ -5625,8 +5625,57 @@ revoke all on function public.daily_cleanup() from public,anon,authenticated;
 grant execute on function public.daily_cleanup() to service_role;
 
 
--- 00058_premium_limits.sql
--- 00058 — Nearry Premium: entitlements and daily plan / join limits.
+-- 00058_policy_and_index_tidy.sql
+
+-- Performance tidy-up from the Supabase advisor.
+
+-- 1) Row-security rules: wrap auth.uid() in a sub-select so Postgres reads the
+--    signed-in user once per query instead of once per row. Same meaning;
+--    already-wrapped calls are left alone.
+do $$
+declare p record; using_expr text; check_expr text; stmt text;
+begin
+ for p in select schemaname, tablename, policyname, qual, with_check from pg_policies
+  where schemaname = 'public'
+ loop
+  using_expr = regexp_replace(p.qual, '(?<!select )auth\.uid\(\)', '(select auth.uid())', 'gi');
+  check_expr = regexp_replace(p.with_check, '(?<!select )auth\.uid\(\)', '(select auth.uid())', 'gi');
+  if using_expr is not distinct from p.qual and check_expr is not distinct from p.with_check then continue; end if;
+  stmt = format('alter policy %I on %I.%I', p.policyname, p.schemaname, p.tablename);
+  if p.qual is not null then stmt = stmt || format(' using (%s)', using_expr); end if;
+  if p.with_check is not null then stmt = stmt || format(' with check (%s)', check_expr); end if;
+  execute stmt;
+ end loop;
+end $$;
+
+-- 2) Foreign keys used for lookups and for account removal.
+create index if not exists admin_console_audit_actor on public.admin_console_audit(actor_id);
+create index if not exists content_reports_subject_user on public.content_reports(subject_user_id);
+create index if not exists conversation_clears_user on public.conversation_clears(user_id);
+create index if not exists conversation_reads_user on public.conversation_reads(user_id);
+create index if not exists notifications_message on public.notifications(message_id);
+create index if not exists offers_venue on public.offers(venue_id);
+create index if not exists plan_group_reads_user on public.plan_group_reads(user_id);
+create index if not exists posts_venue on public.posts(venue_id);
+create index if not exists venues_business on public.venues(business_id);
+create index if not exists verification_review_jobs_user on public.verification_review_jobs(user_id);
+-- Tables that only exist on projects upgraded from the first schema.
+do $$begin
+ if to_regclass('public.legacy_messages') is not null then
+  create index if not exists legacy_messages_sender on public.legacy_messages(sender_id);
+  create index if not exists legacy_messages_thread on public.legacy_messages(thread_id);
+ end if;
+ if to_regclass('public.legacy_notifications') is not null then
+  create index if not exists legacy_notifications_user on public.legacy_notifications(user_id);
+ end if;
+ if to_regclass('public.legacy_threads') is not null then
+  create index if not exists legacy_threads_booking on public.legacy_threads(booking_id);
+ end if;
+end$$;
+
+
+-- 00059_premium_limits.sql
+-- 00059 — Nearry Premium: entitlements and daily plan / join limits.
 -- premium_entitlements is written only by the service role (store webhook /
 -- verify edge function); users read their own row. Free accounts get 3 plans
 -- and 10 join requests per India day; Premium is unlimited but still counted.
@@ -5642,7 +5691,7 @@ create table public.premium_entitlements (
 );
 alter table public.premium_entitlements enable row level security;
 create policy "premium read own" on public.premium_entitlements
-  for select using (user_id = auth.uid());
+  for select using (user_id = (select auth.uid()));
 revoke all on public.premium_entitlements from public, anon, authenticated;
 grant select on public.premium_entitlements to authenticated;
 grant select, insert, update, delete on public.premium_entitlements to service_role;
@@ -5708,14 +5757,14 @@ create trigger a_daily_join_limit before insert on public.join_requests
 notify pgrst, 'reload schema';
 
 
--- 00059_hosted_by_filter.sql
--- 00059 — Nearry Premium: server-side "Hosted by" filter.
+-- 00060_hosted_by_filter.sql
+-- 00060 — Nearry Premium: server-side "Hosted by" filter.
 -- Gender is never readable across profiles; the filter runs only inside this
 -- security-definer function, which returns host ids (open, upcoming plans
 -- only, honouring blocks, suspended accounts and removed plans) and is
 -- Premium-gated. discover_posts (00052) accepts an optional "hostGender"
 -- filter key; without it results are unchanged, so older builds and the
--- nearby_post_cards wrapper keep working. Requires 00052 and 00058.
+-- nearby_post_cards wrapper keep working. Requires 00052 and 00059.
 
 create function public.hosts_matching_gender(p_gender text) returns setof uuid as $$
 begin

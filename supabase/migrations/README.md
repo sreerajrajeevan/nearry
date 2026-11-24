@@ -83,8 +83,12 @@ Database-enforced spam limits that also hold for direct API calls: 10 plans a da
 
 `daily_cleanup()` removes photos of plans that started more than 7 days ago (the files and thumbnails are queued for the storage worker; the plans stay), notifications older than 90 days, and pg_cron run history older than 7 days. Schedule it once a day with `supabase/ops/setup-maintenance.sql` (`nearry-daily-cleanup`, 21:30 UTC = 3:00 am India time).
 
-## Nearry Premium (00058–00059)
+## Policy and index tidy-up (00058)
 
-`00058`: `premium_entitlements` (written only by the `revenuecat-webhook` function with the service role; users read their own row), `has_premium()`, and `daily_usage` with triggers enforcing the free daily limits: 3 new plans and 10 join requests per India day (`daily_plan_limit` / `daily_join_limit`). Server and admin inserts are never limited. Apply after the Premium app build has reached users, or older builds show the raw limit text.
+Rewrites every `public` row-security rule so `auth.uid()` is read once per query (`(select auth.uid())`) instead of once per row; the rules mean the same thing. Adds indexes for the foreign keys the Supabase advisor flagged (and, where they exist, the legacy tables from the first schema). Applied live on 24 Nov 2026.
 
-`00059`: the Premium "Hosted by" filter. `hosts_matching_gender()` (security definer, Premium-only, honours blocks and visibility) and an optional `hostGender` key in `discover_posts` (requires 00052). Without the key results are unchanged, so older builds and `nearby_post_cards` keep working. Separate from the abuse limits in 00056, which cap everyone (Premium included); the free-tier triggers run first, so free users see the upgrade prompt.
+## Nearry Premium (00059–00060)
+
+`00059`: `premium_entitlements` (written only by the `revenuecat-webhook` function with the service role; users read their own row), `has_premium()`, and `daily_usage` with triggers enforcing the free daily limits: 3 new plans and 10 join requests per India day (`daily_plan_limit` / `daily_join_limit`). Server and admin inserts are never limited. Apply after the Premium app build has reached users, or older builds show the raw limit text.
+
+`00060`: the Premium "Hosted by" filter. `hosts_matching_gender()` (security definer, Premium-only, honours blocks and visibility) and an optional `hostGender` key in `discover_posts` (requires 00052). Without the key results are unchanged, so older builds and `nearby_post_cards` keep working. Separate from the abuse limits in 00056, which cap everyone (Premium included); the free-tier triggers run first, so free users see the upgrade prompt.
