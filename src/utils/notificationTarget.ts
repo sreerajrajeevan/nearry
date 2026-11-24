@@ -31,7 +31,9 @@ export function notificationTarget(notice: AppNotification, role: AccountType) {
     // Booking notices carry the offer id: open the offer, where the booking,
     // what to pay at the venue and the chat with the business all live.
     if (
-      ["booking_confirmed", "booking_cancelled"].includes(notice.kind) &&
+      ["booking_confirmed", "booking_cancelled", "booking_reminder"].includes(
+        notice.kind,
+      ) &&
       notice.refId
     )
       return { screen: "OfferDetails", params: { offerId: notice.refId } };

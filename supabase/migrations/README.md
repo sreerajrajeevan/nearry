@@ -113,3 +113,13 @@ Profile photos are capped at 2 MB and plan/venue photos at 5 MB (were 10 MB).
 The app now uploads profile photos at 512 px and plan photos at 1280 px with a
 480 px thumbnail, about 70% JPEG quality. Older app versions stay well under
 the caps.
+
+## Booking reminders (00063)
+
+On the day of a confirmed offer booking, the customer gets one push at 8:00 am
+India time, or 2 hours before an earlier slot: "Today: <offer> · 6:00 pm at
+<venue> · 2 people. Can't make it? Cancel it in the app…". Pending and
+cancelled bookings get none. New notification kind `booking_reminder` under the
+Bookings switch; `booking_reminder_log` records each booking reminded.
+Schedule `nearry-booking-reminders` (every 10 minutes) from
+`ops/setup-maintenance.sql`.
