@@ -108,7 +108,7 @@ See the [core journey changes and phone checklist](docs/core-journey-checklist.m
 
 ## Backend audit
 
-See [audit scope, fixes, and remaining live checks](docs/backend-audit.md). Offer editing/publishing/cancellation now uses `update_offer`; cancelling an offer also cancels its future reservations. Customers keep the offer context in booking history. Chat loads the newest 200 visible messages, discards stale reloads after sends, and acknowledges only displayed messages while the conversation is focused. Older-message pagination remains future work.
+See [audit scope, fixes, and remaining live checks](docs/backend-audit.md). Offer editing/publishing/cancellation now uses `update_offer`; cancelling an offer also cancels its future reservations. Customers keep the offer context in booking history. Chats open on the newest messages and load earlier ones on request (business and plan chats alike, with no limit on how far back), discard stale reloads after sends, and acknowledge only displayed messages while the conversation is focused.
 
 Search treats punctuation and pattern characters as literal text, and keeps expiry and text conditions together. Optional post fields can be explicitly cleared; edits must retain a valid meeting place. Badges refresh after local read actions; chat and notification lists refresh on incoming events and app resume. Remote push is owned by the server worker, avoiding duplicate local banners from the same database event.
 
