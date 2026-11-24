@@ -6592,3 +6592,27 @@ test("daily cleanup queues stored photos nothing uses any more, but keeps used o
   ).rows.map((r: any) => r.bucket + ":" + r.path);
   assert.deepEqual(queued, ["photos:" + dir + "orphan.png"]);
 });
+
+test("row-security rules read the signed-in user once per query, not once per row", async () => {
+  const perRow = (
+    await db.query(`
+      select tablename||'.'||policyname p from pg_policies
+      where schemaname='public'
+        and regexp_replace(coalesce(qual,'')||' '||coalesce(with_check,''), '\\(\\s*select\\s+auth\\.uid\\(\\)(\\s+as\\s+uid)?\\s*\\)', '', 'gi') ~ 'auth\\.uid\\(\\)'
+      order by 1`)
+  ).rows.map((r: any) => r.p);
+  assert.deepEqual(perRow, []);
+});
+
+test("every foreign key used for lookups and account removal has an index", async () => {
+  const missing = (
+    await db.query(`
+      select c.conrelid::regclass||'.'||a.attname col
+      from pg_constraint c
+      join pg_attribute a on a.attrelid=c.conrelid and a.attnum=c.conkey[1]
+      where c.contype='f' and c.connamespace='public'::regnamespace and array_length(c.conkey,1)=1
+        and not exists(select 1 from pg_index i where i.indrelid=c.conrelid and i.indkey[0]=c.conkey[1])
+      order by 1`)
+  ).rows.map((r: any) => r.col);
+  assert.deepEqual(missing, []);
+});

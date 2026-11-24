@@ -84,3 +84,7 @@ Database-enforced spam limits that also hold for direct API calls: 10 plans a da
 ## Daily cleanup (00057)
 
 `daily_cleanup()` removes photos of plans that started more than 7 days ago (the files and thumbnails are queued for the storage worker; the plans stay), notifications older than 90 days, and pg_cron run history older than 7 days. Schedule it once a day with `supabase/ops/setup-maintenance.sql` (`nearry-daily-cleanup`, 21:30 UTC = 3:00 am India time).
+
+## Policy and index tidy-up (00058)
+
+Rewrites every `public` row-security rule so `auth.uid()` is read once per query (`(select auth.uid())`) instead of once per row; the rules mean the same thing. Adds indexes for the foreign keys the Supabase advisor flagged (and, where they exist, the legacy tables from the first schema). Applied live on 24 Nov 2026.

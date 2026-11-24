@@ -13,7 +13,7 @@ import type { DiscoveryCategory } from "../utils/discovery";
 import { assertLive } from "./demoGuard";
 import { demoUserBlocked } from "./safety";
 import { getSupabase, isSupabaseConfigured, isDemoMode } from "./supabase";
-import { LIVE_FEED_CALM, multiplexSubscribe } from "./realtime";
+import { calmFeed } from "./realtime";
 import { mockBookings, mockOffers } from "../data/mock";
 import { DbOffer, Offer, toOffer } from "./mappers";
 import { OfferDraft, validateOfferInput } from "../utils/validation";
@@ -455,20 +455,5 @@ export function friendlyOfferError(message: string): string {
 /** Live discovery changes shared by mounted consumers. */
 export function subscribeToOffers(onChange: () => void): () => void {
   if (useMock()) return () => {};
-  return multiplexSubscribe(
-    "offers-feed",
-    (channel, fire) =>
-      channel.on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "offers",
-        },
-        () => fire(),
-      ),
-    onChange,
-    // Every plan/offer change in every city arrives here: refresh calmly.
-    LIVE_FEED_CALM,
-  );
+  return calmFeed("offers-feed", onChange);
 }
