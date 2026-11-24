@@ -1,10 +1,17 @@
 import React from "react";
-import { Pressable, StyleSheet, Switch, Text, View } from "react-native";
+import {
+  Pressable,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+import { MAX_PLACES, settledPlaces, typedPlaces } from "../utils/slotPlaces";
 import { colors, typography, weight } from "../theme";
 import { Icon } from "./Icon";
 
 export const SLOT_MINUTES = [30, 45, 60, 90, 120] as const;
-const MAX_PLACES = 500;
 
 /** A titled card that groups related offer fields. */
 export function FormSection({
@@ -63,13 +70,17 @@ export function SlotFields({
           >
             <Icon name="minus" size={18} color={colors.ink} />
           </Pressable>
-          <Text
-            accessibilityLiveRegion="polite"
-            accessibilityLabel={`${places} per slot`}
-            style={styles.stepValue}
-          >
-            {places}
-          </Text>
+          <TextInput
+            accessibilityLabel="People per slot"
+            value={capacity}
+            onChangeText={(text) => onCapacity(typedPlaces(text))}
+            onBlur={() => onCapacity(settledPlaces(capacity))}
+            keyboardType="number-pad"
+            inputMode="numeric"
+            maxLength={3}
+            selectTextOnFocus
+            style={styles.stepInput}
+          />
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="More people per slot"
@@ -186,12 +197,17 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   disabled: { opacity: 0.35 },
-  stepValue: {
-    minWidth: 32,
+  stepInput: {
+    width: 72,
+    height: 44,
+    paddingVertical: 0,
+    paddingHorizontal: 4,
     textAlign: "center",
     ...typography.title,
     color: colors.ink,
     ...weight("800"),
+    borderBottomWidth: 1.5,
+    borderBottomColor: colors.hairline,
   },
   chips: { flexDirection: "row", gap: 6 },
   chip: {
