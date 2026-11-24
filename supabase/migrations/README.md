@@ -80,3 +80,7 @@ Adds `plan_group_events`, written by a trigger on `join_requests` whenever someo
 ## Abuse limits (00056)
 
 Database-enforced spam limits that also hold for direct API calls: 10 plans a day, 40 join requests an hour, 30 chat messages a minute, 30 offers a day (signed-in writers only; workers and admins are not limited, and new plan timestamps are stamped by the server). Adds length limits on profile name (100), business name (120) and bio (500); restricts the avatars, photos and verification_docs buckets to JPEG/PNG/WebP up to 10 MB; revokes signed-out access to internal helper functions and push tokens, and the unused update grant on messages.
+
+## Plan reminders (00059)
+
+Same-day reminders for plans: `send_plan_reminders()` (every 10 minutes via `supabase/ops/setup-maintenance.sql`, job `nearry-plan-reminders`) notifies the host and approved members at 8:00 am India time, or 2 hours before an earlier start, once per person per plan, through the normal push pipeline (`plan_reminder` kind). Members answer with `set_plan_attendance` (stored in `plan_attendance`); hosts read `plan_attendance_summary`; the app's "Plans for today" pop-up reads `plans_for_day`. Design: `docs/superpowers/specs/2026-11-24-plan-reminders-design.md`.

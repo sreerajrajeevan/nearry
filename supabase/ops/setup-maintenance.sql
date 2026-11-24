@@ -17,6 +17,10 @@ begin
  if not exists(select 1 from cron.job where command ilike '%expire_booking_holds%') then
   perform cron.schedule('nearry-expire-holds','* * * * *','select public.expire_booking_holds();');
  end if;
+ -- Same-day plan reminders (8 am India time, or 2 hours before an earlier plan).
+ if not exists(select 1 from cron.job where command ilike '%send_plan_reminders%') then
+  perform cron.schedule('nearry-plan-reminders','*/10 * * * *','select public.send_plan_reminders();');
+ end if;
  select decrypted_secret into backend from vault.decrypted_secrets where name='nearry_backend_url' limit 1;
  if backend is null or backend !~ '^https://[a-zA-Z0-9.-]+$' then raise exception 'Set a valid nearry_backend_url in Vault';end if;
  for task in select * from (values

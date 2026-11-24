@@ -21,7 +21,7 @@ import {
   isProfileCompletionError,
 } from "../../utils/profileReadiness";
 import { SafetyActions } from "../../components/SafetyActions";
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -74,6 +74,11 @@ import { getVenue } from "../../services/venues";
 import { publicAvatars } from "../../services/profile";
 import { useReducedMotion } from "../../store/MotionContext";
 import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  planAttendanceSummary,
+  type AttendanceSummary,
+} from "../../services/planReminders";
+import { indiaDayKey } from "../../utils/planReminders";
 
 /**
  * Post details: host manages requests, participants request/withdraw.
@@ -228,6 +233,44 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
       ],
     );
   };
+
+  // Opened from "Not going" in the day's reminder: offer to leave, once.
+  const askedLeave = useRef(false);
+  const wantsLeave = !!route.params.confirmLeave;
+  const canLeaveNow =
+    !!post && myRequest?.status === "approved" && postState(post).canLeave;
+  useEffect(() => {
+    if (!wantsLeave || askedLeave.current || !canLeaveNow || !myRequest) return;
+    askedLeave.current = true;
+    Alert.alert(
+      "Leave this plan?",
+      "The host will see a spot open up so someone else can join.",
+      [
+        { text: "Stay in", style: "cancel" },
+        {
+          text: "Leave plan",
+          style: "destructive",
+          onPress: () =>
+            void run("lv", () => cancelParticipation(myRequest.id)),
+        },
+      ],
+    );
+  }, [wantsLeave, canLeaveNow, myRequest]);
+
+  // Host on the day: how many members confirmed in the reminder.
+  const [attendance, setAttendance] = useState<AttendanceSummary | null>(null);
+  const startsToday =
+    !!post && indiaDayKey(new Date(post.startsAt)) === indiaDayKey(new Date());
+  useEffect(() => {
+    if (!isHost || !post || !startsToday) return;
+    let live = true;
+    void planAttendanceSummary(post.id).then((s) => {
+      if (live) setAttendance(s);
+    });
+    return () => {
+      live = false;
+    };
+  }, [isHost, post?.id, startsToday]);
 
   if (state === "loading") {
     return (
@@ -447,6 +490,11 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
               {isHost ? "You’re hosting" : "Hosted by"}
             </Text>
             <Text style={styles.authorName}>{post.authorName}</Text>
+            {isHost && attendance && attendance.members > 0 && (
+              <Text style={styles.confirmed}>
+                {attendance.going} of {attendance.members} confirmed for today
+              </Text>
+            )}
           </View>
           {data?.selfieChecked && <Badge label="Selfie checked" tone="green" />}
           {!isHost && (
@@ -845,6 +893,12 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
 }
 
 const styles = StyleSheet.create({
+  confirmed: {
+    ...typography.caption,
+    ...weight("700"),
+    color: colors.amberDeep,
+    marginTop: 2,
+  },
   flex: { flex: 1 },
   scroll: { paddingHorizontal: 20, paddingBottom: 28 },
   hero: { marginHorizontal: -20, position: "relative" },

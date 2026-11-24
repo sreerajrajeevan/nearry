@@ -6472,3 +6472,204 @@ test("00053 pins search_path only on our own trigger functions, never on extensi
     `);
   }
 });
+
+// Plan reminders: times are fixed in India time so the tests never depend on
+// when they run. `istAt(days, "HH:MM")` is that clock time N days from today.
+const istAt = async (days: number, hhmm: string) =>
+  (
+    await db.query(
+      "select ((timezone('Asia/Kolkata',now())::date + $1::int + $2::time) at time zone 'Asia/Kolkata') t",
+      [days, hhmm],
+    )
+  ).rows[0].t as Date;
+
+async function planOn(
+  author: string,
+  startsAt: Date,
+  title = "Evening football",
+) {
+  const id = (
+    await db.query(
+      "insert into posts(author_id,title,description,starts_at,vacancies,venue_id) values($1,$2,'Friendly game',now()+interval '1 day',5,'10000000-0000-0000-0000-000000000032') returning id",
+      [author, title],
+    )
+  ).rows[0].id;
+  // Start times further than the guards allow are set directly for the test.
+  await db.transaction(async (tx: any) => {
+    await tx.exec("set local session_replication_role = replica");
+    await tx.query(
+      "update posts set starts_at=$2, expires_at=null where id=$1",
+      [id, startsAt],
+    );
+  });
+  return id;
+}
+
+test("plan reminders go out at 8 am India time, or 2 hours before an earlier plan, once each", async () => {
+  const hostId = await corePersonal(),
+    member = await corePersonal(),
+    pending = await corePersonal();
+  const evening = await planOn(
+    hostId,
+    await istAt(2, "18:00"),
+    "Evening football",
+  );
+  const early = await planOn(hostId, await istAt(2, "07:00"), "Sunrise run");
+  for (const pid of [evening, early]) {
+    const r = await request(member, pid);
+    await asUser(hostId, (tx) =>
+      tx.query("select approve_join_request($1)", [r]),
+    );
+  }
+  await request(pending, evening); // not approved: no reminder
+  const reminders = async () =>
+    (
+      await db.query(
+        "select user_id, ref_id, title, body from notifications where kind='plan_reminder' and ref_id in ($1,$2) order by ref_id, user_id",
+        [evening, early],
+      )
+    ).rows;
+  // Other tests' plans can fall on the same day, so count only this test's.
+  let seen = 0;
+  const run = async (at: Date) => {
+    await db.query("select public.send_plan_reminders($1)", [at]);
+    const now = (await reminders()).length;
+    const added = now - seen;
+    seen = now;
+    return added;
+  };
+
+  assert.equal(await run(await istAt(2, "04:59")), 0);
+  // 5:00 am: the 7 am plan is due (2 hours before); the 6 pm one isn't yet.
+  assert.equal(await run(await istAt(2, "05:00")), 2);
+  assert.equal(await run(await istAt(2, "07:59")), 0);
+  // 8:00 am: the evening plan is due; nobody gets a second reminder.
+  assert.equal(await run(await istAt(2, "08:00")), 2);
+  assert.equal(await run(await istAt(2, "12:00")), 0);
+  const sent = await reminders();
+  assert.equal(sent.length, 4);
+  const toMember = sent.find(
+    (n: any) => n.user_id === member && n.ref_id === evening,
+  );
+  assert.equal(toMember.title, "Today: Evening football");
+  assert.match(toMember.body, /^6:00 pm at .+\. Still going\?$/);
+  const toHost = sent.find(
+    (n: any) => n.user_id === hostId && n.ref_id === evening,
+  );
+  assert.equal(toHost.title, "You're hosting today: Evening football");
+  assert.match(toHost.body, /0 of 1 confirmed so far\.$/);
+  assert.ok(!sent.some((n: any) => n.user_id === pending));
+});
+
+test("cancelled plans and plans on other days get no reminder", async () => {
+  const hostId = await corePersonal();
+  const tomorrow = await planOn(hostId, await istAt(3, "18:00"));
+  const cancelled = await planOn(hostId, await istAt(2, "18:00"));
+  await db.query("update posts set status='cancelled' where id=$1", [
+    cancelled,
+  ]);
+  await db.query("select public.send_plan_reminders($1)", [
+    await istAt(2, "09:00"),
+  ]);
+  const n = (
+    await db.query(
+      "select count(*)::int n from notifications where kind='plan_reminder' and ref_id in ($1,$2)",
+      [tomorrow, cancelled],
+    )
+  ).rows[0].n;
+  assert.equal(n, 0);
+});
+
+test("members answer Going / Not going; the host sees the count; outsiders can't answer", async () => {
+  const hostId = await corePersonal(),
+    a = await corePersonal(),
+    bb = await corePersonal(),
+    stranger = await corePersonal();
+  const pid = await planOn(hostId, await istAt(2, "18:00"));
+  for (const who of [a, bb]) {
+    const r = await request(who, pid);
+    await asUser(hostId, (tx) =>
+      tx.query("select approve_join_request($1)", [r]),
+    );
+  }
+  await asUser(a, (tx) =>
+    tx.query("select set_plan_attendance($1,true)", [pid]),
+  );
+  await asUser(bb, (tx) =>
+    tx.query("select set_plan_attendance($1,false)", [pid]),
+  );
+  // Changing your mind updates the same answer.
+  await asUser(bb, (tx) =>
+    tx.query("select set_plan_attendance($1,true)", [pid]),
+  );
+  await assert.rejects(
+    asUser(stranger, (tx) =>
+      tx.query("select set_plan_attendance($1,true)", [pid]),
+    ),
+    /Only people in this plan/,
+  );
+  await assert.rejects(
+    asUser(hostId, (tx) =>
+      tx.query("select set_plan_attendance($1,true)", [pid]),
+    ),
+    /Only people in this plan/,
+  );
+  const summary = (
+    await asUser(hostId, (tx) =>
+      tx.query("select plan_attendance_summary($1) s", [pid]),
+    )
+  ).rows[0].s;
+  assert.deepEqual(summary, { going: 2, notGoing: 0, members: 2 });
+  await assert.rejects(
+    asUser(a, (tx) => tx.query("select plan_attendance_summary($1)", [pid])),
+    /Only the host/,
+  );
+  // Nobody writes answers directly.
+  await assert.rejects(
+    asUser(a, (tx) =>
+      tx.query(
+        "insert into plan_attendance(post_id,user_id,status) values($1,$2,'going')",
+        [pid, stranger],
+      ),
+    ),
+    /permission denied/,
+  );
+});
+
+test("today's plans list shows the person's upcoming plans for the day with their answer", async () => {
+  const hostId = await corePersonal(),
+    member = await corePersonal();
+  const morning = await planOn(hostId, await istAt(2, "07:00"), "Sunrise run");
+  const evening = await planOn(
+    hostId,
+    await istAt(2, "18:00"),
+    "Evening football",
+  );
+  const otherDay = await planOn(hostId, await istAt(3, "18:00"), "Next day");
+  for (const pid of [morning, evening, otherDay]) {
+    const r = await request(member, pid);
+    await asUser(hostId, (tx) =>
+      tx.query("select approve_join_request($1)", [r]),
+    );
+  }
+  await asUser(member, (tx) =>
+    tx.query("select set_plan_attendance($1,true)", [evening]),
+  );
+  const list = async (who: string, at: Date) =>
+    (await asUser(who, (tx) => tx.query("select plans_for_day($1) l", [at])))
+      .rows[0].l;
+  // At 9 am the 7 am plan has started, so only the evening plan remains.
+  const mine = await list(member, await istAt(2, "09:00"));
+  assert.deepEqual(
+    mine.map((p: any) => [p.title, p.host, p.myStatus]),
+    [["Evening football", false, "going"]],
+  );
+  const hosting = await list(hostId, await istAt(2, "06:00"));
+  assert.deepEqual(
+    hosting.map((p: any) => [p.title, p.host, p.going, p.members]),
+    [
+      ["Sunrise run", true, 0, 1],
+      ["Evening football", true, 1, 1],
+    ],
+  );
+});
