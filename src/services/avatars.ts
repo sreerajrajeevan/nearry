@@ -1,6 +1,8 @@
 import { createSignInFetch } from "./signInTransport";
 import { assertLive } from "./demoGuard";
+import { Image } from "react-native";
 import * as ImagePicker from "expo-image-picker";
+import { IMAGE_SIZES, shrinkToFit } from "../utils/imageSizes";
 import * as ImageManipulator from "expo-image-manipulator";
 import * as Crypto from "expo-crypto";
 import * as FileSystem from "expo-file-system/legacy";
@@ -38,10 +40,24 @@ export async function uploadAvatar(
     data: { session },
   } = await supabase.auth.getSession();
   if (!session || session.user.id !== userId) throw new Error("Not signed in.");
+  // Read the size first so a small photo is never enlarged.
+  const size = await new Promise<{ width: number; height: number } | null>(
+    (resolve) =>
+      Image.getSize(
+        localUri,
+        (width, height) => resolve({ width, height }),
+        () => resolve(null),
+      ),
+  );
   const normalized = await ImageManipulator.manipulateAsync(
     localUri,
-    [{ resize: { width: 1024 } }],
-    { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG },
+    size
+      ? shrinkToFit(size.width, size.height, IMAGE_SIZES.avatar.max)
+      : [{ resize: { width: IMAGE_SIZES.avatar.max } }],
+    {
+      compress: IMAGE_SIZES.avatar.quality,
+      format: ImageManipulator.SaveFormat.JPEG,
+    },
   );
 
   try {

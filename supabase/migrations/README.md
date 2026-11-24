@@ -107,8 +107,15 @@ Numbered 00060 so it applies after 00055–00059. Adds per-person notification s
 Numbered 00061 so it applies after 00057–00060. Safe to apply before the app
 update: older apps still cap bookings at 2 people.
 
-## Nearry Premium (00062–00063)
+## Smaller image limits (00062)
 
-`00062`: `premium_entitlements` (written only by the `revenuecat-webhook` function with the service role; users read their own row), `has_premium()`, and `daily_usage` with triggers enforcing the free daily limits: 3 new plans and 10 join requests per India day (`daily_plan_limit` / `daily_join_limit`). Server and admin inserts are never limited. Apply after the Premium app build has reached users, or older builds show the raw limit text.
+Profile photos are capped at 2 MB and plan/venue photos at 5 MB (were 10 MB).
+The app now uploads profile photos at 512 px and plan photos at 1280 px with a
+480 px thumbnail, about 70% JPEG quality. Older app versions stay well under
+the caps.
 
-`00063`: the Premium "Hosted by" filter. `hosts_matching_gender()` (security definer, Premium-only, honours blocks and visibility) and an optional `hostGender` key in `discover_posts` (requires 00052). Without the key results are unchanged, so older builds and `nearby_post_cards` keep working. Separate from the abuse limits in 00056, which cap everyone (Premium included); the free-tier triggers run first, so free users see the upgrade prompt.
+## Nearry Premium (00063–00064)
+
+`00063`: `premium_entitlements` (written only by the `revenuecat-webhook` function with the service role; users read their own row), `has_premium()`, and `daily_usage` with triggers enforcing the free daily limits: 3 new plans and 10 join requests per India day (`daily_plan_limit` / `daily_join_limit`). Server and admin inserts are never limited. Apply after the Premium app build has reached users, or older builds show the raw limit text.
+
+`00064`: the Premium "Hosted by" filter. `hosts_matching_gender()` (security definer, Premium-only, honours blocks and visibility) and an optional `hostGender` key in `discover_posts` (requires 00052). Without the key results are unchanged, so older builds and `nearby_post_cards` keep working. Separate from the abuse limits in 00056, which cap everyone (Premium included); the free-tier triggers run first, so free users see the upgrade prompt.

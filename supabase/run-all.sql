@@ -6273,8 +6273,17 @@ $$ language plpgsql security definer set search_path=public,pg_temp;
 notify pgrst,'reload schema';
 
 
--- 00062_premium_limits.sql
--- 00062 — Nearry Premium: entitlements and daily plan / join limits.
+-- 00062_smaller_image_limits.sql
+-- Smaller storage caps now that the app shrinks pictures before upload:
+-- profile photos are ~40 KB at 512 px and plan photos a few hundred KB at
+-- 1280 px. The caps leave room for older app versions (1024 / 1600 px).
+
+update storage.buckets set file_size_limit = 2097152 where id = 'avatars';
+update storage.buckets set file_size_limit = 5242880 where id = 'photos';
+
+
+-- 00063_premium_limits.sql
+-- 00063 — Nearry Premium: entitlements and daily plan / join limits.
 -- premium_entitlements is written only by the service role (store webhook /
 -- verify edge function); users read their own row. Free accounts get 3 plans
 -- and 10 join requests per India day; Premium is unlimited but still counted.
@@ -6356,14 +6365,14 @@ create trigger a_daily_join_limit before insert on public.join_requests
 notify pgrst, 'reload schema';
 
 
--- 00063_hosted_by_filter.sql
--- 00063 — Nearry Premium: server-side "Hosted by" filter.
+-- 00064_hosted_by_filter.sql
+-- 00064 — Nearry Premium: server-side "Hosted by" filter.
 -- Gender is never readable across profiles; the filter runs only inside this
 -- security-definer function, which returns host ids (open, upcoming plans
 -- only, honouring blocks, suspended accounts and removed plans) and is
 -- Premium-gated. discover_posts (00052) accepts an optional "hostGender"
 -- filter key; without it results are unchanged, so older builds and the
--- nearby_post_cards wrapper keep working. Requires 00052 and 00062.
+-- nearby_post_cards wrapper keep working. Requires 00052 and 00063.
 
 create function public.hosts_matching_gender(p_gender text) returns setof uuid as $$
 begin
