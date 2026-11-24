@@ -1,3 +1,4 @@
+import { partyLimit, partyLimitNote } from "../../utils/partySize";
 import { LoadingState } from "../../components/LoadingState";
 import { haptic } from "../../services/haptics";
 import { useToast } from "../../store/ToastContext";
@@ -152,9 +153,7 @@ export function OfferDetailsScreen({ route, navigation }: Props) {
     setSlotId(selected?.id ?? "");
     if (selected) {
       setDaySel(dayKey(selected.starts_at));
-      setPartySize((size) =>
-        Math.max(1, Math.min(size, selected.seats_left, MAX_PARTY_SIZE)),
-      );
+      setPartySize((size) => Math.min(size, partyLimit(selected.seats_left)));
     }
   }, [data, bookedDays]);
 
@@ -265,6 +264,9 @@ export function OfferDetailsScreen({ route, navigation }: Props) {
   });
   const payment = offerPayment(offer.priceCents, partySize);
   const selectedSlot = slots.find((s) => s.id === slotId);
+  const seatsLeft = selectedSlot?.seats_left ?? offer.slotCapacity;
+  const maxParty = partyLimit(seatsLeft);
+  const partyNote = partyLimitNote(partySize, seatsLeft);
   const headline =
     typeof offer.discountPct === "number" && offer.discountPct > 0
       ? `${offer.discountPct}% OFF`
@@ -565,7 +567,9 @@ export function OfferDetailsScreen({ route, navigation }: Props) {
                 <TouchableOpacity
                   accessibilityRole="button"
                   accessibilityLabel="Fewer people"
-                  style={styles.stepBtn}
+                  accessibilityState={{ disabled: partySize <= 1 }}
+                  disabled={partySize <= 1}
+                  style={[styles.stepBtn, partySize <= 1 && styles.stepOff]}
                   activeOpacity={0.8}
                   onPress={() => setPartySize((v) => Math.max(1, v - 1))}
                 >
@@ -575,22 +579,22 @@ export function OfferDetailsScreen({ route, navigation }: Props) {
                 <TouchableOpacity
                   accessibilityRole="button"
                   accessibilityLabel="More people"
-                  style={[styles.stepBtn, styles.stepBtnPlus]}
+                  accessibilityState={{ disabled: partySize >= maxParty }}
+                  disabled={partySize >= maxParty}
+                  style={[
+                    styles.stepBtn,
+                    styles.stepBtnPlus,
+                    partySize >= maxParty && styles.stepOff,
+                  ]}
                   activeOpacity={0.8}
-                  onPress={() =>
-                    setPartySize((v) =>
-                      Math.min(
-                        MAX_PARTY_SIZE,
-                        slots.find((s) => s.id === slotId)?.seats_left ??
-                          offer.slotCapacity,
-                        v + 1,
-                      ),
-                    )
-                  }
+                  onPress={() => setPartySize((v) => Math.min(maxParty, v + 1))}
                 >
                   <Icon name="plus" size={18} color={colors.onAccent} />
                 </TouchableOpacity>
               </View>
+              {partyNote ? (
+                <Text style={styles.stepNote}>{partyNote}</Text>
+              ) : null}
               {formError ? (
                 <Text style={styles.formError}>{formError}</Text>
               ) : null}
@@ -841,6 +845,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   stepBtnPlus: { backgroundColor: colors.night, borderColor: colors.night },
+  stepOff: { opacity: 0.35 },
+  stepNote: { ...typography.caption, color: colors.textDim, marginTop: 8 },
   stepText: { ...typography.title, color: colors.text },
   stepValue: {
     ...typography.title,

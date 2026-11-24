@@ -94,3 +94,15 @@ Same-day reminders for plans: `send_plan_reminders()` (every 10 minutes via `sup
 ## Players needed (00060)
 
 Numbered 00060 so it applies after 00055–00059. Adds per-person notification switches (messages, plan requests and updates, bookings, nearby players needed) that gate push, keeps the area chosen at sign-up or in settings until the person removes it (GPS areas rounded to about 1 km, including ones already saved), urgent plans that alert eligible people nearby, and auto-accept. Additive: old builds keep working. Rollout: apply after the matching app build is released (older builds are unaffected), then turn on GitHub Pages for the `gh-pages` branch so venue QR cards open.
+
+## Offer duplicates and party size (00061)
+
+- A business can publish different offers at the same time. Publishing is
+  blocked only for a duplicate: same title (ignoring case and spaces) on the
+  same court or service name at overlapping times.
+- Offers that only share the default court name ("Main") no longer block each
+  other's bookings; offers that name the same court still share it.
+- A booking can be for 1 to 4 people (was 1 or 2).
+
+Numbered 00061 so it applies after 00057–00060. Safe to apply before the app
+update: older apps still cap bookings at 2 people.
