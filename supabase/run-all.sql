@@ -5572,6 +5572,108 @@ revoke update on public.messages from authenticated;
 notify pgrst,'reload schema';
 
 
+-- 00057_daily_cleanup.sql
+
+-- Daily cleanup to keep the database and photo storage small.
+-- Scheduled once a day by supabase/ops/setup-maintenance.sql.
+-- Applied live on 23 Nov 2026 (the unused-files step a few minutes after the rest).
+create function public.daily_cleanup() returns jsonb as $$
+declare
+ photos int;
+ orphans int;
+ notices int;
+ cron_rows int = 0;
+begin
+ -- Photos of plans that started more than 7 days ago (finished or cancelled).
+ -- Removing the rows queues the stored files (and thumbnails) for the
+ -- storage worker through queue_removed_public_photo; the plan itself stays.
+ with gone as (
+  delete from post_photos ph using posts p
+  where p.id = ph.post_id and p.starts_at < now() - interval '7 days'
+  returning ph.id
+ ) select count(*) into photos from gone;
+
+ -- Stored plan/offer photos that nothing points to any more (old orphans,
+ -- abandoned uploads). Two days' grace covers uploads still being attached;
+ -- a thumbnail is kept while its full-size photo is in use. The storage worker
+ -- deletes the files; a photo reattached before then is kept.
+ with queued as (
+  insert into media_cleanup_jobs(bucket,path,next_attempt_at)
+  select 'photos', o.name, now() from storage.objects o
+  where o.bucket_id = 'photos' and o.created_at < now() - interval '2 days'
+   and not public_photo_referenced(o.name)
+   and not public_photo_referenced(regexp_replace(o.name, '-thumb\.jpg$', '-full.jpg'))
+  on conflict (path) do nothing
+  returning 1
+ ) select count(*) into orphans from queued;
+
+ -- Notifications older than 90 days.
+ with gone as (
+  delete from notifications where created_at < now() - interval '90 days' returning id
+ ) select count(*) into notices from gone;
+
+ -- pg_cron keeps a row for every run (about 3,500 a day); keep one week.
+ if to_regclass('cron.job_run_details') is not null then
+  execute 'with gone as (delete from cron.job_run_details where start_time < now() - interval ''7 days'' returning 1) select count(*) from gone'
+   into cron_rows;
+ end if;
+
+ return jsonb_build_object('planPhotos', photos, 'unusedFiles', orphans, 'notifications', notices, 'cronHistory', cron_rows);
+end;
+$$ language plpgsql security definer set search_path=public,pg_temp;
+revoke all on function public.daily_cleanup() from public,anon,authenticated;
+grant execute on function public.daily_cleanup() to service_role;
+
+
+-- 00058_policy_and_index_tidy.sql
+
+-- Performance tidy-up from the Supabase advisor.
+
+-- 1) Row-security rules: wrap auth.uid() in a sub-select so Postgres reads the
+--    signed-in user once per query instead of once per row. Same meaning;
+--    already-wrapped calls are left alone.
+do $$
+declare p record; using_expr text; check_expr text; stmt text;
+begin
+ for p in select schemaname, tablename, policyname, qual, with_check from pg_policies
+  where schemaname = 'public'
+ loop
+  using_expr = regexp_replace(p.qual, '(?<!select )auth\.uid\(\)', '(select auth.uid())', 'gi');
+  check_expr = regexp_replace(p.with_check, '(?<!select )auth\.uid\(\)', '(select auth.uid())', 'gi');
+  if using_expr is not distinct from p.qual and check_expr is not distinct from p.with_check then continue; end if;
+  stmt = format('alter policy %I on %I.%I', p.policyname, p.schemaname, p.tablename);
+  if p.qual is not null then stmt = stmt || format(' using (%s)', using_expr); end if;
+  if p.with_check is not null then stmt = stmt || format(' with check (%s)', check_expr); end if;
+  execute stmt;
+ end loop;
+end $$;
+
+-- 2) Foreign keys used for lookups and for account removal.
+create index if not exists admin_console_audit_actor on public.admin_console_audit(actor_id);
+create index if not exists content_reports_subject_user on public.content_reports(subject_user_id);
+create index if not exists conversation_clears_user on public.conversation_clears(user_id);
+create index if not exists conversation_reads_user on public.conversation_reads(user_id);
+create index if not exists notifications_message on public.notifications(message_id);
+create index if not exists offers_venue on public.offers(venue_id);
+create index if not exists plan_group_reads_user on public.plan_group_reads(user_id);
+create index if not exists posts_venue on public.posts(venue_id);
+create index if not exists venues_business on public.venues(business_id);
+create index if not exists verification_review_jobs_user on public.verification_review_jobs(user_id);
+-- Tables that only exist on projects upgraded from the first schema.
+do $$begin
+ if to_regclass('public.legacy_messages') is not null then
+  create index if not exists legacy_messages_sender on public.legacy_messages(sender_id);
+  create index if not exists legacy_messages_thread on public.legacy_messages(thread_id);
+ end if;
+ if to_regclass('public.legacy_notifications') is not null then
+  create index if not exists legacy_notifications_user on public.legacy_notifications(user_id);
+ end if;
+ if to_regclass('public.legacy_threads') is not null then
+  create index if not exists legacy_threads_booking on public.legacy_threads(booking_id);
+ end if;
+end$$;
+
+
 -- 00059_plan_reminders.sql
 
 -- Plan reminders: a same-day push to the host and members, "Going / Not

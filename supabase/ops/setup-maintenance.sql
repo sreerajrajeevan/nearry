@@ -17,6 +17,10 @@ begin
  if not exists(select 1 from cron.job where command ilike '%expire_booking_holds%') then
   perform cron.schedule('nearry-expire-holds','* * * * *','select public.expire_booking_holds();');
  end if;
+ -- 3:00 am India time (21:30 UTC): plan photos, old notifications, cron history.
+ if not exists(select 1 from cron.job where command ilike '%daily_cleanup%') then
+  perform cron.schedule('nearry-daily-cleanup','30 21 * * *','select public.daily_cleanup();');
+
  -- Same-day plan reminders (8 am India time, or 2 hours before an earlier plan).
  if not exists(select 1 from cron.job where command ilike '%send_plan_reminders%') then
   perform cron.schedule('nearry-plan-reminders','*/10 * * * *','select public.send_plan_reminders();');

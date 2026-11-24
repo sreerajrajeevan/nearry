@@ -6473,6 +6473,86 @@ test("00053 pins search_path only on our own trigger functions, never on extensi
   }
 });
 
+test("daily cleanup removes photos of plans that ended a week ago, old notifications and old cron history", async () => {
+  await db.exec(
+    "create schema if not exists cron; create table if not exists cron.job_run_details(runid bigserial primary key, start_time timestamptz)",
+  );
+  await db.query(
+    "insert into cron.job_run_details(start_time) values(now()-interval '8 days'),(now()-interval '1 hour')",
+  );
+  const photoUrl = (name: string) =>
+    "https://photos.test/storage/v1/object/public/photos/" +
+    host +
+    "/posts/" +
+    name;
+  const oldPlan = await post(),
+    recentPlan = await post();
+  // Start times can't be moved into the past through the guards; setup skips them.
+  await db.transaction(async (tx: any) => {
+    await tx.exec("set local session_replication_role = replica");
+    await tx.query(
+      "update posts set starts_at=now()-interval '8 days', expires_at=null where id=$1",
+      [oldPlan],
+    );
+    await tx.query(
+      "update posts set starts_at=now()-interval '2 days', expires_at=null where id=$1",
+      [recentPlan],
+    );
+  });
+  await db.query(
+    "insert into post_photos(post_id,photo_url,sort_order) values($1,$2,0),($3,$4,0)",
+    [
+      oldPlan,
+      photoUrl("old-full.jpg"),
+      recentPlan,
+      photoUrl("recent-full.jpg"),
+    ],
+  );
+  await db.query(
+    "insert into notifications(user_id,kind,title,body,created_at) values($1,'message','Old','Old notice',now()-interval '91 days'),($1,'message','New','New notice',now()-interval '1 day')",
+    [b],
+  );
+
+  const result = (await db.query("select public.daily_cleanup() r")).rows[0].r;
+  assert.equal(result.planPhotos, 1);
+
+  const photos = (
+    await db.query("select post_id from post_photos where post_id in ($1,$2)", [
+      oldPlan,
+      recentPlan,
+    ])
+  ).rows.map((r: any) => r.post_id);
+  assert.deepEqual(photos, [recentPlan]);
+  // The stored files are queued for the storage worker (full size + thumbnail).
+  const queued = (
+    await db.query(
+      "select path from media_cleanup_jobs where path like $1 order by path",
+      [host + "/posts/old-%"],
+    )
+  ).rows.map((r: any) => r.path);
+  assert.deepEqual(queued, [
+    host + "/posts/old-full.jpg",
+    host + "/posts/old-thumb.jpg",
+  ]);
+  const notices = (
+    await db.query(
+      "select title from notifications where user_id=$1 and title in ('Old','New')",
+      [b],
+    )
+  ).rows.map((r: any) => r.title);
+  assert.deepEqual(notices, ["New"]);
+  assert.equal(
+    (
+      await db.query(
+        "select count(*)::int n from cron.job_run_details where start_time<now()-interval '7 days'",
+      )
+    ).rows[0].n,
+    0,
+  );
+  // Users can't run it.
+  await assert.rejects(
+    asUser(b, (tx) => tx.query("select public.daily_cleanup()")),
+
 // Plan reminders: times are fixed in India time so the tests never depend on
 // when they run. `istAt(days, "HH:MM")` is that clock time N days from today.
 const istAt = async (days: number, hhmm: string) =>
@@ -6634,6 +6714,67 @@ test("members answer Going / Not going; the host sees the count; outsiders can't
     ),
     /permission denied/,
   );
+});
+
+test("daily cleanup queues stored photos nothing uses any more, but keeps used ones, their thumbnails and fresh uploads", async () => {
+  const dir = host + "/unused-test/";
+  const pid = await post();
+  await db.query(
+    "insert into post_photos(post_id,photo_url,sort_order) values($1,$2,0)",
+    [
+      pid,
+      "https://photos.test/storage/v1/object/public/photos/" +
+        dir +
+        "used-full.jpg",
+    ],
+  );
+  await db.query(
+    `insert into storage.objects(bucket_id,name,created_at) values
+      ('photos',$1,now()-interval '3 days'),
+      ('photos',$2,now()-interval '3 days'),
+      ('photos',$3,now()-interval '3 days'),
+      ('photos',$4,now()-interval '1 hour'),
+      ('avatars',$5,now()-interval '3 days')`,
+    [
+      dir + "orphan.png",
+      dir + "used-full.jpg",
+      dir + "used-thumb.jpg",
+      dir + "uploading.jpg",
+      host + "/avatar-old.jpg",
+    ],
+  );
+  await db.query("select public.daily_cleanup()");
+  const queued = (
+    await db.query(
+      "select bucket,path from media_cleanup_jobs where path like $1 or path like $2 order by path",
+      [dir + "%", host + "/avatar%"],
+    )
+  ).rows.map((r: any) => r.bucket + ":" + r.path);
+  assert.deepEqual(queued, ["photos:" + dir + "orphan.png"]);
+});
+
+test("row-security rules read the signed-in user once per query, not once per row", async () => {
+  const perRow = (
+    await db.query(`
+      select tablename||'.'||policyname p from pg_policies
+      where schemaname='public'
+        and regexp_replace(coalesce(qual,'')||' '||coalesce(with_check,''), '\\(\\s*select\\s+auth\\.uid\\(\\)(\\s+as\\s+uid)?\\s*\\)', '', 'gi') ~ 'auth\\.uid\\(\\)'
+      order by 1`)
+  ).rows.map((r: any) => r.p);
+  assert.deepEqual(perRow, []);
+});
+
+test("every foreign key used for lookups and account removal has an index", async () => {
+  const missing = (
+    await db.query(`
+      select c.conrelid::regclass||'.'||a.attname col
+      from pg_constraint c
+      join pg_attribute a on a.attrelid=c.conrelid and a.attnum=c.conkey[1]
+      where c.contype='f' and c.connamespace='public'::regnamespace and array_length(c.conkey,1)=1
+        and not exists(select 1 from pg_index i where i.indrelid=c.conrelid and i.indkey[0]=c.conkey[1])
+      order by 1`)
+  ).rows.map((r: any) => r.col);
+  assert.deepEqual(missing, []);
 });
 
 test("today's plans list shows the person's upcoming plans for the day with their answer", async () => {
