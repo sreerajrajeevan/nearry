@@ -76,9 +76,11 @@ function PostRowView({
         HOST_TONES.length
     ];
   const badge = status.accepting
-    ? post.spotsLeft === 1
-      ? "Last spot"
-      : `${post.spotsLeft} spots left`
+    ? post.urgent
+      ? "Players needed"
+      : post.spotsLeft === 1
+        ? "Last spot"
+        : `${post.spotsLeft} spots left`
     : status.label;
   const distance = useCardDistance(post.venueId, post.location, {
     km: distanceKm,

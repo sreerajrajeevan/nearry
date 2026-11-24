@@ -1,6 +1,6 @@
 import { assertLive } from "./demoGuard";
 import { getSupabase, isSupabaseConfigured, isDemoMode } from "./supabase";
-import { multiplexSubscribe } from "./realtime";
+import { calmFeed } from "./realtime";
 import { mockBookings, mockOffers } from "../data/mock";
 import { Booking, DbBooking, toBooking } from "./mappers";
 import { Cursor, Page } from "../utils/pagination";
@@ -280,23 +280,9 @@ export async function cancelBooking(bookingId: string): Promise<void> {
 /** Realtime subscription for booking changes. No-op in demo mode. */
 export function subscribeToBookings(onChange: () => void): () => void {
   if (useMock()) return () => {};
-  // Multiplexed: Activity, Dashboard and Bookings screens share this topic.
-  return multiplexSubscribe(
-    "bookings-feed",
-    (ch, fire) =>
-      ch
-        .on(
-          "postgres_changes",
-          { event: "*", schema: "public", table: "bookings" },
-          () => fire(),
-        )
-        .on(
-          "postgres_changes",
-          { event: "*", schema: "public", table: "offers" },
-          () => fire(),
-        ),
-    onChange,
-  );
+  // Activity, Dashboard and Bookings share this. New bookings, confirmations
+  // and cancellations all notify the people involved, which refreshes at once.
+  return calmFeed("bookings-feed", onChange);
 }
 
 function friendlyBookingError(message: string): string {

@@ -37,7 +37,8 @@ export type RootStackParamList = {
 export type PersonalTabParamList = {
   Nearby: { place?: Place } | undefined;
   Search: undefined;
-  CreatePost: undefined;
+  /** venueId: opened from a venue's "short of players?" link. */
+  CreatePost: { venueId?: string; urgent?: boolean } | undefined;
   Activity: undefined;
   Messages: undefined;
   /** `celebrate` carries the notification that opened the profile. */
@@ -48,7 +49,8 @@ export type PersonalTabParamList = {
 export type PersonalStackParamList = SafetyStackParamList & {
   PersonalTabs: NavigatorScreenParams<PersonalTabParamList> | undefined;
   PlaceDetails: { place: Place };
-  PostDetails: { postId: string };
+  /** confirmLeave: opened from "Not going", so ask whether to leave the plan. */
+  PostDetails: { postId: string; confirmLeave?: boolean };
   /** Anyone's public profile: a host, or someone asking to join your plan. */
   HostProfile: { userId: string; name?: string; requestNote?: string };
   VenueDetails: { venueId: string };
@@ -82,6 +84,7 @@ export type BusinessStackParamList = SafetyStackParamList & {
   EditBusinessProfile: undefined;
   BusinessVerification: undefined;
   ManageVenue: undefined;
+  PlayersCard: undefined;
 };
 
 export type BusinessTabNav = CompositeNavigationProp<

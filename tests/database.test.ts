@@ -4151,7 +4151,8 @@ test("bright onboarding saves private preferences and profile atomically without
       user,
     ])
   ).rows[0].onboarding_preferences;
-  assert.equal(retained.area, undefined);
+  // Since 00060 the area is kept until the person removes it (nearby alerts).
+  assert.equal(retained.area.label, "Kakkanad");
   assert.deepEqual(retained.days, ["Sat", "Sun"]);
   const businessDetails = (
     await db.query("select business_details from profiles where id=$1", [biz])
@@ -5621,6 +5622,332 @@ test("booking notices say when, where and to pay at the venue, and point at the 
   assert.equal(cancelled.body, `"Audit haircut" · ${when} was cancelled.`);
 });
 
+test("notification switches gate push per category; account notices always push", async () => {
+  const u = await corePersonal();
+  const pushed = async (kind: string) => {
+    const n = (
+      await db.query(
+        "insert into notifications(user_id,kind,title,body,ref_id) values($1,$2,'t','b',gen_random_uuid()) returning id",
+        [u, kind],
+      )
+    ).rows[0].id;
+    return (
+      await db.query(
+        "select count(*)::int c from push_jobs where notification_id=$1",
+        [n],
+      )
+    ).rows[0].c;
+  };
+  const prefs = async () =>
+    (
+      await asUser(u, (tx) =>
+        tx.query("select get_notification_preferences() p"),
+      )
+    ).rows[0].p;
+  assert.deepEqual(
+    {
+      messages: (await prefs()).messages,
+      plans: (await prefs()).plans,
+      bookings: (await prefs()).bookings,
+      nearby: (await prefs()).nearby,
+    },
+    { messages: true, plans: true, bookings: true, nearby: true },
+  );
+  assert.equal(await pushed("request_approved"), 1);
+  await asUser(u, (tx) =>
+    tx.query("select set_notification_category('plans',false)"),
+  );
+  assert.equal((await prefs()).plans, false);
+  assert.equal(await pushed("request_approved"), 0);
+  assert.equal(await pushed("booking_confirmed"), 1);
+  for (const c of ["messages", "bookings", "nearby"])
+    await asUser(u, (tx) =>
+      tx.query("select set_notification_category($1,false)", [c]),
+    );
+  assert.equal(await pushed("booking_confirmed"), 0);
+  assert.equal(await pushed("verification_approved"), 1);
+  await assert.rejects(
+    asUser(u, (tx) =>
+      tx.query("select set_notification_category('nope',false)"),
+    ),
+    /unknown notification category/,
+  );
+});
+
+test("alert area is kept, rounded when from GPS, and removable", async () => {
+  const u = await corePersonal();
+  const old = new Date(Date.now() - 40 * 86400000).toISOString();
+  const area = (o: any) =>
+    asUser(u, (tx) => tx.query("select set_alert_area($1::jsonb)", [o]));
+  const stored = async () =>
+    (
+      await db.query(
+        "select onboarding_preferences->'area' a from profiles where id=$1",
+        [u],
+      )
+    ).rows[0].a;
+  await area(
+    JSON.stringify({
+      label: "Kakkanad",
+      latitude: 10.016789,
+      longitude: 76.341234,
+      source: "device",
+      acquiredAt: old,
+    }),
+  );
+  assert.equal((await stored()).latitude, 10.02);
+  assert.equal((await stored()).longitude, 76.34);
+  await db.query("select maintenance_retention_cleanup()");
+  assert.equal((await stored()).label, "Kakkanad");
+  assert.equal(
+    (
+      await asUser(u, (tx) =>
+        tx.query("select get_notification_preferences() p"),
+      )
+    ).rows[0].p.alertArea.label,
+    "Kakkanad",
+  );
+  await area(
+    JSON.stringify({
+      label: "Edappally",
+      latitude: 10.025678,
+      longitude: 76.308912,
+      source: "google",
+      acquiredAt: old,
+    }),
+  );
+  assert.equal((await stored()).latitude, 10.025678);
+  await area(null);
+  assert.equal(await stored(), null);
+  await assert.rejects(area(JSON.stringify({ label: "x" })), /invalid area/i);
+});
+
+// ── Players needed (00060) ────────────────────────────────────────────
+const KM_LAT = 1 / 111.195; // degrees of latitude per km
+async function nearbyPerson(
+  latKm: number | null,
+  opts: { radiusKm?: number; gender?: string; age?: number; area?: any } = {},
+) {
+  const id = await corePersonal();
+  const area =
+    opts.area ??
+    (latKm === null
+      ? undefined
+      : {
+          label: "Near the turf",
+          latitude: 10 + latKm * KM_LAT,
+          longitude: 76,
+          source: "google",
+          acquiredAt: new Date().toISOString(),
+        });
+  await db.query(
+    "update profiles set gender=$2,age=$3,onboarding_preferences=$4 where id=$1",
+    [
+      id,
+      opts.gender ?? "male",
+      opts.age ?? 25,
+      JSON.stringify({
+        ...(opts.radiusKm ? { radiusKm: opts.radiusKm } : {}),
+        ...(area ? { area } : {}),
+      }),
+    ],
+  );
+  return id;
+}
+async function urgentPlan(
+  host: string,
+  opts: {
+    urgent?: boolean;
+    autoAccept?: boolean;
+    startsIn?: string;
+    vacancies?: number;
+    gender?: string;
+    ageMin?: number;
+    venueId?: string;
+  } = {},
+) {
+  const common = [
+    host,
+    opts.startsIn ?? "2 hours",
+    opts.vacancies ?? 2,
+    opts.urgent ?? true,
+    opts.autoAccept ?? false,
+    opts.gender ?? null,
+    JSON.stringify(opts.ageMin ? { ageMin: opts.ageMin } : {}),
+  ];
+  const place = opts.venueId
+    ? { cols: "venue_id", vals: "$8", params: [opts.venueId] }
+    : {
+        cols: "venue_name,location_lat,location_lng,location_source",
+        vals: "'Unity Turf',10,76,'manual'",
+        params: [],
+      };
+  return (
+    await asUser(host, (tx) =>
+      tx.query(
+        `insert into posts(author_id,title,description,starts_at,vacancies,urgent,auto_accept,gender_preference,plan_details,${place.cols})
+         values($1,'Football tonight','Need players for five-a-side',now()+$2::interval,$3,$4,$5,$6,$7,${place.vals}) returning id,starts_at`,
+        [...common, ...place.params],
+      ),
+    )
+  ).rows[0];
+}
+const alerts = async (user: string, postId?: string) =>
+  (
+    await db.query(
+      "select title,body,ref_id from notifications where user_id=$1 and kind='nearby_plan'" +
+        (postId ? " and ref_id=$2" : ""),
+      postId ? [user, postId] : [user],
+    )
+  ).rows;
+
+test("urgent plans alert eligible people nearby, nearest first, within limits", async () => {
+  const host = await nearbyPerson(0);
+  const near = await nearbyPerson(3); // radius defaults to 5 km
+  const far = await nearbyPerson(8);
+  const wide = await nearbyPerson(8, { radiusKm: 10 });
+  const noCoords = await nearbyPerson(null, {
+    area: {
+      label: "Kakkanad",
+      latitude: "x",
+    },
+  }).catch(() => null);
+  const noArea = await nearbyPerson(null);
+  const woman = await nearbyPerson(1, { gender: "female" });
+  const young = await nearbyPerson(1, { age: 19 });
+  const blocked = await nearbyPerson(1);
+  await db.query(
+    "insert into user_blocks(blocker_id,blocked_id) values($1,$2)",
+    [blocked, host],
+  );
+  const muted = await nearbyPerson(1);
+  await asUser(muted, (tx) =>
+    tx.query("select set_notification_category('nearby',false)"),
+  );
+  const plan = await urgentPlan(host, { gender: "male", ageMin: 21 });
+  const [alert] = await alerts(near, plan.id);
+  const time = (
+    await db.query(
+      "select to_char($1::timestamptz at time zone 'Asia/Kolkata','FMHH12:MI AM') t",
+      [plan.starts_at],
+    )
+  ).rows[0].t;
+  assert.equal(alert.title, "Players needed nearby");
+  assert.equal(
+    alert.body,
+    `"Football tonight" at Unity Turf · ${time} · 2 spots · 3.0 km`,
+  );
+  assert.equal((await alerts(wide, plan.id)).length, 1);
+  for (const user of [host, far, noArea, woman, young, blocked, muted])
+    assert.equal((await alerts(user, plan.id)).length, 0, user);
+  if (noCoords) assert.equal((await alerts(noCoords)).length, 0);
+  // Not urgent: nobody is alerted.
+  const calm = await urgentPlan(host, { urgent: false });
+  assert.equal((await alerts(near, calm.id)).length, 0);
+  // A plan at a Nearry venue uses the venue's location.
+  const venue = (
+    await db.query(
+      "insert into venues(name,category,area,location_lat,location_lng) values('Smash Arena','Sports','Kakkanad',10.009,76) returning id",
+    )
+  ).rows[0].id;
+  const otherHost = await nearbyPerson(0);
+  const atVenue = await urgentPlan(otherHost, { venueId: venue });
+  const [venueAlert] = await alerts(near, atVenue.id);
+  assert.match(
+    venueAlert.body,
+    /^"Football tonight" at Smash Arena · .* · 2\.0 km$/,
+  );
+  // Third alert of the day is the last one.
+  const thirdHost = await nearbyPerson(0);
+  await urgentPlan(thirdHost);
+  await urgentPlan(thirdHost);
+  assert.equal((await alerts(near)).length, 3);
+  // A notice for a plan the person can no longer see is hidden.
+  assert.equal(
+    (
+      await asUser(blocked, (tx) =>
+        tx.query("select my_notification_visible('nearby_plan',$1) v", [
+          plan.id,
+        ]),
+      )
+    ).rows[0].v,
+    false,
+  );
+});
+
+test("urgent plan rules: 6 hours, 2 a day, cannot change after posting", async () => {
+  const host = await nearbyPerson(0);
+  await assert.rejects(
+    urgentPlan(host, { startsIn: "7 hours" }),
+    /only for plans starting within 6 hours/,
+  );
+  const first = await urgentPlan(host);
+  await urgentPlan(host, { startsIn: "5 hours" });
+  await assert.rejects(urgentPlan(host), /2 urgent plans a day/);
+  await urgentPlan(host, { urgent: false, startsIn: "9 hours" });
+  await assert.rejects(
+    asUser(host, (tx) =>
+      tx.query("update posts set urgent=false where id=$1", [first.id]),
+    ),
+    /can.t be changed after posting|permission denied/,
+  );
+  await assert.rejects(
+    asUser(host, (tx) =>
+      tx.query("update posts set auto_accept=true where id=$1", [first.id]),
+    ),
+    /can.t be changed after posting|permission denied/,
+  );
+});
+
+test("auto-accept joins instantly, respects audience and capacity, tells the host", async () => {
+  const host = await nearbyPerson(0);
+  const one = await nearbyPerson(1);
+  const two = await nearbyPerson(1);
+  const plan = await urgentPlan(host, { autoAccept: true, vacancies: 1 });
+  const joined = (
+    await asUser(one, (tx) => tx.query("select request_join($1) r", [plan.id]))
+  ).rows[0].r;
+  assert.equal(joined.status, "approved");
+  const notes = (
+    await db.query(
+      "select user_id,kind,title,body from notifications where ref_id=$1 and kind in ('join_request','request_approved') order by created_at",
+      [plan.id],
+    )
+  ).rows;
+  const byKind = (k: string) => notes.filter((n: any) => n.kind === k);
+  assert.deepEqual(
+    byKind("request_approved").map((n: any) => [n.user_id, n.title]),
+    [[one, "Request approved"]],
+  );
+  // The host hears once, that someone joined (no "wants to join" request).
+  assert.deepEqual(
+    byKind("join_request").map((n: any) => [n.user_id, n.title, n.body]),
+    [[host, "New player joined", 'Neighbour joined "Football tonight"']],
+  );
+  await assert.rejects(
+    asUser(two, (tx) => tx.query("select request_join($1)", [plan.id])),
+    /post is full|closed/,
+  );
+  const womenOnly = await urgentPlan(host, {
+    autoAccept: true,
+    gender: "female",
+    urgent: false,
+  });
+  await assert.rejects(
+    asUser(two, (tx) => tx.query("select request_join($1)", [womenOnly.id])),
+    /females only/,
+  );
+  // Without auto-accept the host still approves by hand.
+  const manual = await urgentPlan(host, { urgent: false });
+  assert.equal(
+    (
+      await asUser(two, (tx) =>
+        tx.query("select request_join($1) r", [manual.id]),
+      )
+    ).rows[0].r.status,
+    "pending",
+  );
+});
 test("review: edited meeting places, direct retry keys and cross-account messaging stay protected", async () => {
   const h = "00000000-0000-0000-0000-000000005001",
     m = "00000000-0000-0000-0000-000000005002",
@@ -6472,6 +6799,351 @@ test("00053 pins search_path only on our own trigger functions, never on extensi
       drop function public.own_unpinned_trigger();
     `);
   }
+});
+
+test("daily cleanup removes photos of plans that ended a week ago, old notifications and old cron history", async () => {
+  await db.exec(
+    "create schema if not exists cron; create table if not exists cron.job_run_details(runid bigserial primary key, start_time timestamptz)",
+  );
+  await db.query(
+    "insert into cron.job_run_details(start_time) values(now()-interval '8 days'),(now()-interval '1 hour')",
+  );
+  const photoUrl = (name: string) =>
+    "https://photos.test/storage/v1/object/public/photos/" +
+    host +
+    "/posts/" +
+    name;
+  const oldPlan = await post(),
+    recentPlan = await post();
+  // Start times can't be moved into the past through the guards; setup skips them.
+  await db.transaction(async (tx: any) => {
+    await tx.exec("set local session_replication_role = replica");
+    await tx.query(
+      "update posts set starts_at=now()-interval '8 days', expires_at=null where id=$1",
+      [oldPlan],
+    );
+    await tx.query(
+      "update posts set starts_at=now()-interval '2 days', expires_at=null where id=$1",
+      [recentPlan],
+    );
+  });
+  await db.query(
+    "insert into post_photos(post_id,photo_url,sort_order) values($1,$2,0),($3,$4,0)",
+    [
+      oldPlan,
+      photoUrl("old-full.jpg"),
+      recentPlan,
+      photoUrl("recent-full.jpg"),
+    ],
+  );
+  await db.query(
+    "insert into notifications(user_id,kind,title,body,created_at) values($1,'message','Old','Old notice',now()-interval '91 days'),($1,'message','New','New notice',now()-interval '1 day')",
+    [b],
+  );
+
+  const result = (await db.query("select public.daily_cleanup() r")).rows[0].r;
+  assert.equal(result.planPhotos, 1);
+
+  const photos = (
+    await db.query("select post_id from post_photos where post_id in ($1,$2)", [
+      oldPlan,
+      recentPlan,
+    ])
+  ).rows.map((r: any) => r.post_id);
+  assert.deepEqual(photos, [recentPlan]);
+  // The stored files are queued for the storage worker (full size + thumbnail).
+  const queued = (
+    await db.query(
+      "select path from media_cleanup_jobs where path like $1 order by path",
+      [host + "/posts/old-%"],
+    )
+  ).rows.map((r: any) => r.path);
+  assert.deepEqual(queued, [
+    host + "/posts/old-full.jpg",
+    host + "/posts/old-thumb.jpg",
+  ]);
+  const notices = (
+    await db.query(
+      "select title from notifications where user_id=$1 and title in ('Old','New')",
+      [b],
+    )
+  ).rows.map((r: any) => r.title);
+  assert.deepEqual(notices, ["New"]);
+  assert.equal(
+    (
+      await db.query(
+        "select count(*)::int n from cron.job_run_details where start_time<now()-interval '7 days'",
+      )
+    ).rows[0].n,
+    0,
+  );
+  // Users can't run it.
+  await assert.rejects(
+    asUser(b, (tx) => tx.query("select public.daily_cleanup()")),
+    /permission denied/,
+  );
+});
+
+test("daily cleanup queues stored photos nothing uses any more, but keeps used ones, their thumbnails and fresh uploads", async () => {
+  const dir = host + "/unused-test/";
+  const pid = await post();
+  await db.query(
+    "insert into post_photos(post_id,photo_url,sort_order) values($1,$2,0)",
+    [
+      pid,
+      "https://photos.test/storage/v1/object/public/photos/" +
+        dir +
+        "used-full.jpg",
+    ],
+  );
+  await db.query(
+    `insert into storage.objects(bucket_id,name,created_at) values
+      ('photos',$1,now()-interval '3 days'),
+      ('photos',$2,now()-interval '3 days'),
+      ('photos',$3,now()-interval '3 days'),
+      ('photos',$4,now()-interval '1 hour'),
+      ('avatars',$5,now()-interval '3 days')`,
+    [
+      dir + "orphan.png",
+      dir + "used-full.jpg",
+      dir + "used-thumb.jpg",
+      dir + "uploading.jpg",
+      host + "/avatar-old.jpg",
+    ],
+  );
+  await db.query("select public.daily_cleanup()");
+  const queued = (
+    await db.query(
+      "select bucket,path from media_cleanup_jobs where path like $1 or path like $2 order by path",
+      [dir + "%", host + "/avatar%"],
+    )
+  ).rows.map((r: any) => r.bucket + ":" + r.path);
+  assert.deepEqual(queued, ["photos:" + dir + "orphan.png"]);
+});
+
+test("row-security rules read the signed-in user once per query, not once per row", async () => {
+  const perRow = (
+    await db.query(`
+      select tablename||'.'||policyname p from pg_policies
+      where schemaname='public'
+        and regexp_replace(coalesce(qual,'')||' '||coalesce(with_check,''), '\\(\\s*select\\s+auth\\.uid\\(\\)(\\s+as\\s+uid)?\\s*\\)', '', 'gi') ~ 'auth\\.uid\\(\\)'
+      order by 1`)
+  ).rows.map((r: any) => r.p);
+  assert.deepEqual(perRow, []);
+});
+
+test("every foreign key used for lookups and account removal has an index", async () => {
+  const missing = (
+    await db.query(`
+      select c.conrelid::regclass||'.'||a.attname col
+      from pg_constraint c
+      join pg_attribute a on a.attrelid=c.conrelid and a.attnum=c.conkey[1]
+      where c.contype='f' and c.connamespace='public'::regnamespace and array_length(c.conkey,1)=1
+        and not exists(select 1 from pg_index i where i.indrelid=c.conrelid and i.indkey[0]=c.conkey[1])
+      order by 1`)
+  ).rows.map((r: any) => r.col);
+  assert.deepEqual(missing, []);
+});
+
+// Plan reminders: times are fixed in India time so the tests never depend on
+// when they run. `istAt(days, "HH:MM")` is that clock time N days from today.
+const istAt = async (days: number, hhmm: string) =>
+  (
+    await db.query(
+      "select ((timezone('Asia/Kolkata',now())::date + $1::int + $2::time) at time zone 'Asia/Kolkata') t",
+      [days, hhmm],
+    )
+  ).rows[0].t as Date;
+
+async function planOn(
+  author: string,
+  startsAt: Date,
+  title = "Evening football",
+) {
+  const id = (
+    await db.query(
+      "insert into posts(author_id,title,description,starts_at,vacancies,venue_id) values($1,$2,'Friendly game',now()+interval '1 day',5,'10000000-0000-0000-0000-000000000032') returning id",
+      [author, title],
+    )
+  ).rows[0].id;
+  // Start times further than the guards allow are set directly for the test.
+  await db.transaction(async (tx: any) => {
+    await tx.exec("set local session_replication_role = replica");
+    await tx.query(
+      "update posts set starts_at=$2, expires_at=null where id=$1",
+      [id, startsAt],
+    );
+  });
+  return id;
+}
+
+test("plan reminders go out at 8 am India time, or 2 hours before an earlier plan, once each", async () => {
+  const hostId = await corePersonal(),
+    member = await corePersonal(),
+    pending = await corePersonal();
+  const evening = await planOn(
+    hostId,
+    await istAt(2, "18:00"),
+    "Evening football",
+  );
+  const early = await planOn(hostId, await istAt(2, "07:00"), "Sunrise run");
+  for (const pid of [evening, early]) {
+    const r = await request(member, pid);
+    await asUser(hostId, (tx) =>
+      tx.query("select approve_join_request($1)", [r]),
+    );
+  }
+  await request(pending, evening); // not approved: no reminder
+  const reminders = async () =>
+    (
+      await db.query(
+        "select user_id, ref_id, title, body from notifications where kind='plan_reminder' and ref_id in ($1,$2) order by ref_id, user_id",
+        [evening, early],
+      )
+    ).rows;
+  // Other tests' plans can fall on the same day, so count only this test's.
+  let seen = 0;
+  const run = async (at: Date) => {
+    await db.query("select public.send_plan_reminders($1)", [at]);
+    const now = (await reminders()).length;
+    const added = now - seen;
+    seen = now;
+    return added;
+  };
+
+  assert.equal(await run(await istAt(2, "04:59")), 0);
+  // 5:00 am: the 7 am plan is due (2 hours before); the 6 pm one isn't yet.
+  assert.equal(await run(await istAt(2, "05:00")), 2);
+  assert.equal(await run(await istAt(2, "07:59")), 0);
+  // 8:00 am: the evening plan is due; nobody gets a second reminder.
+  assert.equal(await run(await istAt(2, "08:00")), 2);
+  assert.equal(await run(await istAt(2, "12:00")), 0);
+  const sent = await reminders();
+  assert.equal(sent.length, 4);
+  const toMember = sent.find(
+    (n: any) => n.user_id === member && n.ref_id === evening,
+  );
+  assert.equal(toMember.title, "Today: Evening football");
+  assert.match(toMember.body, /^6:00 pm at .+\. Still going\?$/);
+  const toHost = sent.find(
+    (n: any) => n.user_id === hostId && n.ref_id === evening,
+  );
+  assert.equal(toHost.title, "You're hosting today: Evening football");
+  assert.match(toHost.body, /0 of 1 confirmed so far\.$/);
+  assert.ok(!sent.some((n: any) => n.user_id === pending));
+});
+
+test("cancelled plans and plans on other days get no reminder", async () => {
+  const hostId = await corePersonal();
+  const tomorrow = await planOn(hostId, await istAt(3, "18:00"));
+  const cancelled = await planOn(hostId, await istAt(2, "18:00"));
+  await db.query("update posts set status='cancelled' where id=$1", [
+    cancelled,
+  ]);
+  await db.query("select public.send_plan_reminders($1)", [
+    await istAt(2, "09:00"),
+  ]);
+  const n = (
+    await db.query(
+      "select count(*)::int n from notifications where kind='plan_reminder' and ref_id in ($1,$2)",
+      [tomorrow, cancelled],
+    )
+  ).rows[0].n;
+  assert.equal(n, 0);
+});
+
+test("members answer Going / Not going; the host sees the count; outsiders can't answer", async () => {
+  const hostId = await corePersonal(),
+    a = await corePersonal(),
+    bb = await corePersonal(),
+    stranger = await corePersonal();
+  const pid = await planOn(hostId, await istAt(2, "18:00"));
+  for (const who of [a, bb]) {
+    const r = await request(who, pid);
+    await asUser(hostId, (tx) =>
+      tx.query("select approve_join_request($1)", [r]),
+    );
+  }
+  await asUser(a, (tx) =>
+    tx.query("select set_plan_attendance($1,true)", [pid]),
+  );
+  await asUser(bb, (tx) =>
+    tx.query("select set_plan_attendance($1,false)", [pid]),
+  );
+  // Changing your mind updates the same answer.
+  await asUser(bb, (tx) =>
+    tx.query("select set_plan_attendance($1,true)", [pid]),
+  );
+  await assert.rejects(
+    asUser(stranger, (tx) =>
+      tx.query("select set_plan_attendance($1,true)", [pid]),
+    ),
+    /Only people in this plan/,
+  );
+  await assert.rejects(
+    asUser(hostId, (tx) =>
+      tx.query("select set_plan_attendance($1,true)", [pid]),
+    ),
+    /Only people in this plan/,
+  );
+  const summary = (
+    await asUser(hostId, (tx) =>
+      tx.query("select plan_attendance_summary($1) s", [pid]),
+    )
+  ).rows[0].s;
+  assert.deepEqual(summary, { going: 2, notGoing: 0, members: 2 });
+  await assert.rejects(
+    asUser(a, (tx) => tx.query("select plan_attendance_summary($1)", [pid])),
+    /Only the host/,
+  );
+  // Nobody writes answers directly.
+  await assert.rejects(
+    asUser(a, (tx) =>
+      tx.query(
+        "insert into plan_attendance(post_id,user_id,status) values($1,$2,'going')",
+        [pid, stranger],
+      ),
+    ),
+    /permission denied/,
+  );
+});
+
+test("today's plans list shows the person's upcoming plans for the day with their answer", async () => {
+  const hostId = await corePersonal(),
+    member = await corePersonal();
+  const morning = await planOn(hostId, await istAt(2, "07:00"), "Sunrise run");
+  const evening = await planOn(
+    hostId,
+    await istAt(2, "18:00"),
+    "Evening football",
+  );
+  const otherDay = await planOn(hostId, await istAt(3, "18:00"), "Next day");
+  for (const pid of [morning, evening, otherDay]) {
+    const r = await request(member, pid);
+    await asUser(hostId, (tx) =>
+      tx.query("select approve_join_request($1)", [r]),
+    );
+  }
+  await asUser(member, (tx) =>
+    tx.query("select set_plan_attendance($1,true)", [evening]),
+  );
+  const list = async (who: string, at: Date) =>
+    (await asUser(who, (tx) => tx.query("select plans_for_day($1) l", [at])))
+      .rows[0].l;
+  // At 9 am the 7 am plan has started, so only the evening plan remains.
+  const mine = await list(member, await istAt(2, "09:00"));
+  assert.deepEqual(
+    mine.map((p: any) => [p.title, p.host, p.myStatus]),
+    [["Evening football", false, "going"]],
+  );
+  const hosting = await list(hostId, await istAt(2, "06:00"));
+  assert.deepEqual(
+    hosting.map((p: any) => [p.title, p.host, p.going, p.members]),
+    [
+      ["Sunrise run", true, 0, 1],
+      ["Evening football", true, 1, 1],
+    ],
+  );
 });
 
 test("offers: different offers can run at the same time; only a duplicate title on the same court is blocked", async () => {

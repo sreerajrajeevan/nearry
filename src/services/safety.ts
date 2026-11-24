@@ -2,6 +2,7 @@ import { assertLive } from "./demoGuard";
 import { getSupabase, isDemoMode } from "./supabase";
 import { notifyUnreadChanged } from "./unreadEvents";
 import { mockConversations } from "../data/mock";
+import type { OnboardingArea } from "../utils/onboarding";
 
 export type ReportKind =
   | "post"
@@ -129,12 +130,62 @@ export async function conversationSafety(
   }
   return rpc("conversation_safety", { p_conversation: id });
 }
-export async function notificationPreferences(): Promise<{
-  pushEnabled: boolean;
-}> {
-  return isDemoMode()
-    ? { pushEnabled: demoPush }
-    : ((await rpc("get_notification_preferences")) ?? { pushEnabled: false });
+export type NotificationCategory = "messages" | "plans" | "bookings" | "nearby";
+export type NotificationPreferences = { pushEnabled: boolean } & Record<
+  NotificationCategory,
+  boolean
+> & { alertArea: { label: string } | null };
+
+let demoCategories: Record<NotificationCategory, boolean> = {
+  messages: true,
+  plans: true,
+  bookings: true,
+  nearby: true,
+};
+let demoAlertArea: { label: string } | null = { label: "Kakkanad" };
+
+/** Missing keys (older servers) mean "on"; a missing area means none. */
+export function normalizeNotificationPreferences(
+  raw: Record<string, unknown> | null | undefined,
+): NotificationPreferences {
+  const on = (key: string) => raw?.[key] !== false;
+  const area = raw?.alertArea as { label?: unknown } | null | undefined;
+  return {
+    pushEnabled: raw?.pushEnabled === true,
+    messages: on("messages"),
+    plans: on("plans"),
+    bookings: on("bookings"),
+    nearby: on("nearby"),
+    alertArea:
+      area && typeof area.label === "string" ? { label: area.label } : null,
+  };
+}
+export async function notificationPreferences(): Promise<NotificationPreferences> {
+  if (isDemoMode())
+    return {
+      pushEnabled: demoPush,
+      ...demoCategories,
+      alertArea: demoAlertArea,
+    };
+  return normalizeNotificationPreferences(
+    await rpc("get_notification_preferences"),
+  );
+}
+export async function setNotificationCategory(
+  category: NotificationCategory,
+  enabled: boolean,
+): Promise<void> {
+  if (isDemoMode()) demoCategories = { ...demoCategories, [category]: enabled };
+  else
+    await rpc("set_notification_category", {
+      p_category: category,
+      p_enabled: enabled,
+    });
+}
+/** Where "players needed" alerts are aimed; null removes it. */
+export async function setAlertArea(area: OnboardingArea | null): Promise<void> {
+  if (isDemoMode()) demoAlertArea = area ? { label: area.label } : null;
+  else await rpc("set_alert_area", { p_area: area });
 }
 export async function setPushEnabled(enabled: boolean): Promise<void> {
   if (isDemoMode()) demoPush = enabled;

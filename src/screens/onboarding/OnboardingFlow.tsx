@@ -23,6 +23,7 @@ import { Icon, IconName } from "../../components/Icon";
 import { ActivityArt } from "../../components/ActivityArt";
 import type { ActivityArtwork } from "../../utils/activityArtwork";
 import { OnboardingLocation } from "../../components/onboarding/OnboardingLocation";
+import { AREA_SIGNUP_HINT } from "../../utils/notificationSettings";
 import { BirthdayField } from "../../components/onboarding/BirthdayField";
 import {
   OnboardingLayout,
@@ -727,6 +728,9 @@ export function OnboardingFlow({
               onBusyChange={setLocationBusy}
             />
           )}
+          {!business && step === 3 && (
+            <Text style={styles.areaHint}>{AREA_SIGNUP_HINT}</Text>
+          )}
           {step === review && (
             <>
               <OnboardingHeading
@@ -812,6 +816,7 @@ export function OnboardingFlow({
   );
 }
 const styles = StyleSheet.create({
+  areaHint: { fontSize: 13, lineHeight: 19, color: c.muted, marginTop: 12 },
   photo: {
     width: 74,
     height: 74,

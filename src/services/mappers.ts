@@ -154,6 +154,8 @@ export type DbPost = {
   created_at: string;
   // Joined aggregates (optional, present when selected):
   author?: { display_name: string } | null;
+  urgent?: boolean | null;
+  auto_accept?: boolean | null;
   approved_count?: number;
 };
 
@@ -186,6 +188,10 @@ export type NeedPost = {
   genderPreference?: "male" | "female" | "any";
   status: "open" | "closed" | "cancelled";
   createdAt: string;
+  /** "Players needed now": nearby people were alerted when it was posted. */
+  urgent?: boolean;
+  /** Requests are accepted automatically until the plan is full. */
+  autoAccept?: boolean;
 };
 
 export function toNeedPost(row: DbPost): NeedPost {
@@ -226,6 +232,8 @@ export function toNeedPost(row: DbPost): NeedPost {
     costCents: row.cost_cents ?? undefined,
     tags: row.tags ?? [],
     genderPreference: row.gender_preference ?? undefined,
+    ...(row.urgent ? { urgent: true } : {}),
+    ...(row.auto_accept ? { autoAccept: true } : {}),
     status: row.status,
     createdAt: row.created_at,
   };
@@ -244,6 +252,8 @@ export type NewPostInput = {
   costCents?: number;
   tags: string[];
   genderPreference?: "male" | "female" | "any";
+  urgent?: boolean;
+  autoAccept?: boolean;
 };
 
 export function toDbNewPost(
@@ -265,6 +275,9 @@ export function toDbNewPost(
     tags: input.tags,
     gender_preference: input.genderPreference ?? null,
     status: "open",
+    // Only sent when on, so servers without these columns still accept plans.
+    ...(input.urgent ? { urgent: true } : {}),
+    ...(input.autoAccept ? { auto_accept: true } : {}),
   };
 }
 
