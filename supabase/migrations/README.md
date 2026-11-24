@@ -81,6 +81,10 @@ Adds `plan_group_events`, written by a trigger on `join_requests` whenever someo
 
 Database-enforced spam limits that also hold for direct API calls: 10 plans a day, 40 join requests an hour, 30 chat messages a minute, 30 offers a day (signed-in writers only; workers and admins are not limited, and new plan timestamps are stamped by the server). Adds length limits on profile name (100), business name (120) and bio (500); restricts the avatars, photos and verification_docs buckets to JPEG/PNG/WebP up to 10 MB; revokes signed-out access to internal helper functions and push tokens, and the unused update grant on messages.
 
+## Daily cleanup (00057)
+
+`daily_cleanup()` removes photos of plans that started more than 7 days ago (the files and thumbnails are queued for the storage worker; the plans stay), notifications older than 90 days, and pg_cron run history older than 7 days. Schedule it once a day with `supabase/ops/setup-maintenance.sql` (`nearry-daily-cleanup`, 21:30 UTC = 3:00 am India time).
+
 ## Policy and index tidy-up (00058)
 
 Rewrites every `public` row-security rule so `auth.uid()` is read once per query (`(select auth.uid())`) instead of once per row; the rules mean the same thing. Adds indexes for the foreign keys the Supabase advisor flagged (and, where they exist, the legacy tables from the first schema). Applied live on 24 Nov 2026.
