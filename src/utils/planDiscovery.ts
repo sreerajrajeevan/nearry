@@ -98,6 +98,27 @@ export function discoveryPlans(
   });
 }
 
+/** UTC instants for the device's selected local calendar range, including DST. */
+export function planDateBounds(
+  filter: PlanDateFilter,
+  now = new Date(),
+): { from?: string; until?: string } {
+  if (filter === "all") return {};
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  if (filter === "week")
+    start.setDate(start.getDate() - ((start.getDay() + 6) % 7));
+  if (filter === "weekend")
+    start.setDate(
+      start.getDate() +
+        (start.getDay() === 0 ? -1 : (6 - start.getDay() + 7) % 7),
+    );
+  const end = new Date(start);
+  end.setDate(
+    end.getDate() + (filter === "week" ? 7 : filter === "weekend" ? 2 : 1),
+  );
+  return { from: start.toISOString(), until: end.toISOString() };
+}
+
 /** Local calendar boundaries, including this weekend when it is already Saturday/Sunday. */
 export function matchesPlanDate(
   startsAt: string,

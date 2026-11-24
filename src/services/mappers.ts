@@ -350,6 +350,8 @@ export type DbOffer = {
 };
 
 export type Offer = {
+  distanceKm?: number;
+  activeBookings?: number;
   id: string;
   businessId: string;
   businessName: string;
@@ -373,6 +375,9 @@ export type Offer = {
 
 export function toOffer(row: DbOffer): Offer {
   return {
+    distanceKm: Number.isFinite((row as any).distance_km)
+      ? (row as any).distance_km
+      : undefined,
     id: row.id,
     businessId: row.business_id,
     businessName: row.business?.display_name ?? "Business",
@@ -529,6 +534,8 @@ export function toChatMessage(row: DbMessage, myId: string): ChatMessage {
 // ── Notifications ─────────────────────────────────────────
 
 export type DbNotification = {
+  thread_key?: string | null;
+  unread_count?: number;
   id: string;
   user_id: string;
   kind: string;
@@ -540,6 +547,8 @@ export type DbNotification = {
 };
 
 export type AppNotification = {
+  threadKey?: string;
+  unreadCount?: number;
   id: string;
   kind: string;
   title: string;
@@ -551,12 +560,15 @@ export type AppNotification = {
 
 export function toAppNotification(row: DbNotification): AppNotification {
   return {
+    threadKey: row.thread_key ?? undefined,
+    unreadCount: row.unread_count,
     id: row.id,
     kind: row.kind,
     title: row.title,
     body: row.body,
     refId: row.ref_id ?? undefined,
-    read: row.read_at !== null,
+    read:
+      row.unread_count == null ? row.read_at !== null : row.unread_count === 0,
     createdAt: row.created_at,
   };
 }

@@ -16,6 +16,16 @@ export const isSupabaseConfigured = url.length > 0 && anonKey.length > 0;
 
 let client: SupabaseClient | null = null;
 let authStorage: SupportedStorage | undefined;
+export const authStorageKey = `sb-${url ? new URL(url).hostname.split(".")[0] : "nearry"}-auth-token`;
+export async function clearPersistedAuth() {
+  if (!authStorage) throw new Error("Sign-in storage is unavailable.");
+  for (const key of [
+    authStorageKey,
+    `${authStorageKey}-code-verifier`,
+    `${authStorageKey}-user`,
+  ])
+    await authStorage.removeItem(key);
+}
 /** Set the platform storage adapter before the first auth/data operation. */
 export function configureAuthStorage(storage: SupportedStorage) {
   if (authStorage === storage) return;
@@ -47,6 +57,7 @@ export function getSupabase(): SupabaseClient | null {
       global: { fetch: createSignInFetch(url) },
       auth: {
         storage: authStorage,
+        storageKey: authStorageKey,
         persistSession: true,
         autoRefreshToken: true,
         // In React Native the OAuth redirect is handled manually via

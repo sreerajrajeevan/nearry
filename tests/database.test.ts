@@ -26,6 +26,9 @@ async function asUser<T>(
 ) {
   return db.transaction(async (tx) => {
     await tx.exec(`set local role ${role}`);
+    await tx.query("select set_config('request.jwt.claims',$1,true)", [
+      JSON.stringify({ iss: "https://photos.test/auth/v1" }),
+    ]);
     await tx.query("select set_config('request.jwt.claim.sub',$1,true)", [
       id ?? "",
     ]);
@@ -91,6 +94,7 @@ before(async () => {
     .filter((f) => f.endsWith(".sql"))
     .sort();
   for (const file of files) {
+    if (!external && file === "00052_discovery_pagination.sql") continue; // Spatial migration is exercised unchanged by PostGIS CI.
     let sql = await readFile(`supabase/migrations/${file}`, "utf8");
     // Only PostGIS is stubbed; all production authorization/functions/triggers run unchanged.
     if (!external) {
@@ -170,7 +174,7 @@ before(async () => {
       }
     } catch (e) {
       throw new Error(
-        `Migration ${file}: ${e instanceof Error ? e.message : e}`,
+        `Migration ${file}: ${e instanceof Error ? e.message + " " + JSON.stringify({ position: (e as any).position, where: (e as any).where, internalQuery: (e as any).internalQuery }) : e}`,
       );
     }
   }
@@ -333,18 +337,32 @@ test("all migrations preserve legacy data tables", async () => {
 });
 test("post photo ownership permits host attachments and rejects another user's writes", async () => {
   const pid = await post();
+  await db.query(
+    "insert into storage.objects(bucket_id,name) values('photos',$1)",
+    [host + "/posts/plan.png"],
+  );
   const photo = (
     await asUser(host, (tx) =>
       tx.query(
-        "insert into post_photos(post_id,photo_url,sort_order) values($1,'https://photos.test/plan.png',0) returning id",
-        [pid],
+        "insert into post_photos(post_id,photo_url,sort_order) values($1,$2,0) returning id",
+        [
+          pid,
+          "https://photos.test/storage/v1/object/public/photos/" +
+            host +
+            "/posts/plan.png",
+        ],
       ),
     )
   ).rows[0];
   const gallery = await asUser(b, (tx) =>
     tx.query("select photo_url from post_photos where post_id=$1", [pid]),
   );
-  assert.equal(gallery.rows[0].photo_url, "https://photos.test/plan.png");
+  assert.equal(
+    gallery.rows[0].photo_url,
+    "https://photos.test/storage/v1/object/public/photos/" +
+      host +
+      "/posts/plan.png",
+  );
   await assert.rejects(
     asUser(b, (tx) =>
       tx.query(
@@ -352,7 +370,7 @@ test("post photo ownership permits host attachments and rejects another user's w
         [pid],
       ),
     ),
-    /row-level security/,
+    /row-level security|active owner/,
   );
   await asUser(b, (tx) =>
     tx.query("delete from post_photos where id=$1", [photo.id]),
@@ -2171,14 +2189,15 @@ test("notifications: disabling push keeps in-app events while suppressing push j
 test("moderation: removing a reported photo hides metadata and queues its owned storage object", async () => {
   const pid = await post();
   const path = `${host}/posts/reported.png`;
+  await db.query(
+    "insert into storage.objects(bucket_id,name) values('photos',$1)",
+    [path],
+  );
   const photo = (
     await asUser(host, (tx) =>
       tx.query(
         "insert into post_photos(post_id,photo_url) values($1,$2) returning id",
-        [
-          pid,
-          `https://project.example/storage/v1/object/public/photos/${path}`,
-        ],
+        [pid, `https://photos.test/storage/v1/object/public/photos/${path}`],
       ),
     )
   ).rows[0];
@@ -3733,32 +3752,34 @@ test(
 );
 
 test("new posts require a selected venue or confirmed coordinates, while legacy posts remain readable", async () => {
+  // A fresh author: the shared host has already used up its daily plan limit.
+  const author = await corePersonal();
   for (const label of [null, "", "  ", "Typed name only"]) {
     await assert.rejects(
       () =>
-        asUser(host, (tx) =>
+        asUser(author, (tx) =>
           tx.query(
             `insert into posts(author_id,title,description,starts_at,vacancies,venue_id,venue_name)
       values($1,'A meeting plan','Friendly meeting with neighbours',now()+interval '4 hours',2,null,$2)`,
-            [host, label],
+            [author, label],
           ),
         ),
       /Select a meeting place/,
     );
   }
-  const selected = await asUser(host, (tx) =>
+  const selected = await asUser(author, (tx) =>
     tx.query(
       `insert into posts(author_id,title,description,starts_at,vacancies,venue_id)
     values($1,'Registered venue','Meet at the selected venue',now()+interval '4 hours',2,'10000000-0000-0000-0000-000000000032') returning id`,
-      [host],
+      [author],
     ),
   );
   assert.ok(selected.rows[0].id);
-  const manual = await asUser(host, (tx) =>
+  const manual = await asUser(author, (tx) =>
     tx.query(
       `insert into posts(author_id,title,description,starts_at,vacancies,venue_name,location_lat,location_lng,location_source)
     values($1,'Manual meeting spot','Meet at my confirmed meeting spot',now()+interval '4 hours',2,'Courtyard entrance',10,76,'manual') returning id`,
-      [host],
+      [author],
     ),
   );
   assert.ok(manual.rows[0].id);
@@ -4130,7 +4151,7 @@ test("bright onboarding saves private preferences and profile atomically without
       user,
     ])
   ).rows[0].onboarding_preferences;
-  // Since 00050 the area is kept until the person removes it (nearby alerts).
+  // Since 00060 the area is kept until the person removes it (nearby alerts).
   assert.equal(retained.area.label, "Kakkanad");
   assert.deepEqual(retained.days, ["Sat", "Sun"]);
   const businessDetails = (
@@ -5700,7 +5721,7 @@ test("alert area is kept, rounded when from GPS, and removable", async () => {
   await assert.rejects(area(JSON.stringify({ label: "x" })), /invalid area/i);
 });
 
-// ── Players needed (00050) ────────────────────────────────────────────
+// ── Players needed (00060) ────────────────────────────────────────────
 const KM_LAT = 1 / 111.195; // degrees of latitude per km
 async function nearbyPerson(
   latKm: number | null,
@@ -5925,4 +5946,856 @@ test("auto-accept joins instantly, respects audience and capacity, tells the hos
     ).rows[0].r.status,
     "pending",
   );
+});
+test("review: edited meeting places, direct retry keys and cross-account messaging stay protected", async () => {
+  const h = "00000000-0000-0000-0000-000000005001",
+    m = "00000000-0000-0000-0000-000000005002",
+    x = "00000000-0000-0000-0000-000000005003";
+  await db.query(
+    "insert into auth.users(id,email,raw_user_meta_data) values($1,'review-host@test.example','{\"account_type\":\"personal\"}'),($2,'review-member@test.example','{\"account_type\":\"personal\"}'),($3,'review-other@test.example','{\"account_type\":\"personal\"}')",
+    [h, m, x],
+  );
+  await db.query(
+    "update profiles set display_name='Review tester',role_selected=true,onboarding_completed=true,age=25,gender='female',terms_version='2026-10-19' where id=any($1::uuid[])",
+    [[h, m, x]],
+  );
+  const pid = await asUser(
+    h,
+    async (tx) =>
+      (
+        await tx.query(
+          "insert into posts(author_id,title,description,starts_at,vacancies,venue_name,location_lat,location_lng,location_source) values($1,'Review game','A new review game',now()+interval '3 days',4,'Review ground',10,76,'manual') returning id",
+          [h],
+        )
+      ).rows[0].id,
+  );
+  await assert.rejects(
+    asUser(h, (tx) =>
+      tx.query(
+        "update posts set venue_id=null,venue_name=null,location_lat=null,location_lng=null,location_source=null where id=$1",
+        [pid],
+      ),
+    ),
+    /meeting place/i,
+  );
+  await asUser(h, (tx) =>
+    tx.query("update posts set title='Updated review game' where id=$1", [pid]),
+  );
+  const r = await request(m, pid);
+  await asUser(h, (tx) => tx.query("select approve_join_request($1)", [r]));
+  const conversation = await asUser(
+    h,
+    async (tx) =>
+      (
+        await tx.query("select get_or_create_conversation($1,$2,null) id", [
+          m,
+          pid,
+        ])
+      ).rows[0].id,
+  );
+  const first = await asUser(
+    h,
+    async (tx) =>
+      (
+        await tx.query(
+          "select send_direct_message($1,'Retry-safe hello','review-send-001') item",
+          [conversation],
+        )
+      ).rows[0].item,
+  );
+  const retry = await asUser(
+    h,
+    async (tx) =>
+      (
+        await tx.query(
+          "select send_direct_message($1,'Retry-safe hello','review-send-001') item",
+          [conversation],
+        )
+      ).rows[0].item,
+  );
+  assert.equal(first.id, retry.id);
+  await assert.rejects(
+    asUser(h, (tx) =>
+      tx.query(
+        "select send_direct_message($1,'Changed body','review-send-001')",
+        [conversation],
+      ),
+    ),
+    /already used/,
+  );
+  await assert.rejects(
+    asUser(x, (tx) =>
+      tx.query(
+        "select send_direct_message($1,'Not a member','review-send-002')",
+        [conversation],
+      ),
+    ),
+    /policy|allowed|member/i,
+  );
+});
+
+test("review: grouped notification pages retain actionable rows, enforce boundaries and remain private", async () => {
+  const h = "00000000-0000-0000-0000-000000005001",
+    m = "00000000-0000-0000-0000-000000005002",
+    x = "00000000-0000-0000-0000-000000005003";
+  const conversation = (
+    await db.query(
+      "select id from conversations where user_a=least($1::uuid,$2::uuid) and user_b=greatest($1::uuid,$2::uuid) limit 1",
+      [h, m],
+    )
+  ).rows[0].id;
+  for (let i = 0; i < 4; i++)
+    await db.query(
+      "insert into messages(conversation_id,sender_id,body) values($1,$2,$3)",
+      [conversation, h, "Burst " + i],
+    );
+  const page = await asUser(
+    m,
+    async (tx) =>
+      (await tx.query("select notification_cards(1,null,false) page")).rows[0]
+        .page,
+  );
+  assert.equal(page.items.length, 1);
+  assert.ok(page.cursor);
+  assert.equal(page.items[0].thread_key, conversation);
+  assert.ok(page.items[0].unread_count >= 4);
+  const next = await asUser(
+    m,
+    async (tx) =>
+      (
+        await tx.query("select notification_cards(1,$1,false) page", [
+          page.cursor,
+        ])
+      ).rows[0].page,
+  );
+  assert.notEqual(next.items[0]?.id, page.items[0].id);
+  const updates = await asUser(
+    m,
+    async (tx) =>
+      (await tx.query("select notification_cards(80,null,true) page")).rows[0]
+        .page,
+  );
+  assert.ok(
+    updates.items.every(
+      (n: any) => !["message", "plan_group_message"].includes(n.kind),
+    ),
+  );
+  const other = await asUser(
+    x,
+    async (tx) =>
+      (await tx.query("select notification_cards(80,null,false) page")).rows[0]
+        .page,
+  );
+  assert.equal(other.items.length, 0);
+  const before = (
+    await db.query(
+      "select count(*)::int n from notifications where user_id=$1 and kind='message' and read_at is null",
+      [m],
+    )
+  ).rows[0].n;
+  await asUser(x, (tx) =>
+    tx.query("select change_notice_thread($1,'delete')", [page.items[0].id]),
+  );
+  assert.equal(
+    (
+      await db.query(
+        "select count(*)::int n from notifications where user_id=$1 and kind='message' and read_at is null",
+        [m],
+      )
+    ).rows[0].n,
+    before,
+  );
+  await asUser(m, (tx) =>
+    tx.query("select change_notice_thread($1,'read')", [page.items[0].id]),
+  );
+  assert.equal(
+    (
+      await db.query(
+        "select count(*)::int n from notifications where user_id=$1 and kind='message' and read_at is null",
+        [m],
+      )
+    ).rows[0].n,
+    0,
+  );
+});
+
+test("review: a device revocation capability removes only its own push installation after logout", async () => {
+  const h = "00000000-0000-0000-0000-000000005001",
+    m = "00000000-0000-0000-0000-000000005002",
+    token = "ExpoPushToken[review-device-5001]",
+    secret = "ab".repeat(32);
+  await asUser(h, (tx) =>
+    tx.query("select register_push_installation($1,'android',$2)", [
+      token,
+      secret,
+    ]),
+  );
+  await asUser(
+    null,
+    (tx) =>
+      tx.query("select revoke_push_installation($1,$2)", [
+        token,
+        "cd".repeat(32),
+      ]),
+    "anon",
+  );
+  assert.equal(
+    (
+      await db.query("select count(*)::int n from push_tokens where token=$1", [
+        token,
+      ])
+    ).rows[0].n,
+    1,
+  );
+  await asUser(
+    null,
+    (tx) => tx.query("select revoke_push_installation($1,$2)", [token, secret]),
+    "anon",
+  );
+  assert.equal(
+    (
+      await db.query("select count(*)::int n from push_tokens where token=$1", [
+        token,
+      ])
+    ).rows[0].n,
+    0,
+  );
+  await assert.rejects(
+    asUser(m, (tx) =>
+      tx.query("select register_push_installation($1,'android','bad')", [
+        token,
+      ]),
+    ),
+    /Invalid installation/,
+  );
+  await assert.rejects(
+    asUser(
+      null,
+      (tx) =>
+        tx.query("select register_push_installation($1,'android',$2)", [
+          token,
+          secret,
+        ]),
+      "anon",
+    ),
+    /permission denied/,
+  );
+});
+
+test("review: direct photo writes enforce ownership, origin and cap; safe removal queues both renditions", async () => {
+  const owner = await corePersonal(),
+    pid = (
+      await db.query(
+        "insert into posts(author_id,title,description,starts_at,vacancies,venue_id) values($1,'Photo guard','Direct writes stay safe',now()+interval '2 days',2,'10000000-0000-0000-0000-000000000032') returning id",
+        [owner],
+      )
+    ).rows[0].id;
+  const path = (i: number) => owner + "/posts/review-" + i + "-full.jpg",
+    url = (i: number) =>
+      "https://photos.test/storage/v1/object/public/photos/" + path(i);
+  for (let i = 0; i < 6; i++)
+    await db.query(
+      "insert into storage.objects(bucket_id,name) values('photos',$1)",
+      [path(i)],
+    );
+  await assert.rejects(
+    asUser(owner, (tx) =>
+      tx.query("insert into post_photos(post_id,photo_url)values($1,$2)", [
+        pid,
+        url(0).replace("photos.test", "evil.test"),
+      ]),
+    ),
+    /Upload your own/,
+  );
+  for (let i = 0; i < 5; i++)
+    await asUser(owner, (tx) =>
+      tx.query(
+        "insert into post_photos(post_id,photo_url,sort_order)values($1,$2,$3)",
+        [pid, url(i), i],
+      ),
+    );
+  await assert.rejects(
+    asUser(owner, (tx) =>
+      tx.query("insert into post_photos(post_id,photo_url)values($1,$2)", [
+        pid,
+        url(5),
+      ]),
+    ),
+    /maximum 5/,
+  );
+  await asUser(owner, (tx) =>
+    tx.query("delete from post_photos where post_id=$1 and photo_url=$2", [
+      pid,
+      url(0),
+    ]),
+  );
+  const jobs = (
+    await db.query(
+      "select path from media_cleanup_jobs where bucket='photos' and path like $1 order by path",
+      [owner + "/%"],
+    )
+  ).rows;
+  assert.deepEqual(
+    jobs.map((r: any) => r.path),
+    [path(0), path(0).replace("-full", "-thumb")].sort(),
+  );
+  // Reattaching before the lease removes both pending deletions.
+  await asUser(owner, (tx) =>
+    tx.query("insert into post_photos(post_id,photo_url)values($1,$2)", [
+      pid,
+      url(0),
+    ]),
+  );
+  assert.equal(
+    (
+      await db.query(
+        "select count(*)::int n from media_cleanup_jobs where bucket='photos' and path like $1",
+        [owner + "/%"],
+      )
+    ).rows[0].n,
+    0,
+  );
+});
+
+test("review: old push registrations invalidate the previous user's revocation capability", async () => {
+  const a = await corePersonal(),
+    b = await corePersonal(),
+    token = "ExpoPushToken[legacy-reassign]",
+    secret = "ef".repeat(32);
+  await asUser(a, (tx) =>
+    tx.query("select register_push_installation($1,'android',$2)", [
+      token,
+      secret,
+    ]),
+  );
+  await asUser(b, (tx) =>
+    tx.query("select register_push_token($1,'android')", [token]),
+  );
+  await asUser(
+    null,
+    (tx) => tx.query("select revoke_push_installation($1,$2)", [token, secret]),
+    "anon",
+  );
+  assert.equal(
+    (await db.query("select user_id from push_tokens where token=$1", [token]))
+      .rows[0].user_id,
+    b,
+  );
+});
+
+test("review: paged Activity is private and host requests do not require one query per post", async () => {
+  const owner = await corePersonal(),
+    member = await corePersonal(),
+    stranger = await corePersonal();
+  const pid = (
+    await db.query(
+      "insert into posts(author_id,title,description,starts_at,vacancies,venue_id) values($1,'Activity page','A future activity page',now()+interval '2 days',4,'10000000-0000-0000-0000-000000000032') returning id",
+      [owner],
+    )
+  ).rows[0].id;
+  await request(member, pid);
+  const mine = (
+    await asUser(member, (tx) =>
+      tx.query("select activity_requests(false,null,1) page"),
+    )
+  ).rows[0].page;
+  assert.equal(mine.items.length, 1);
+  assert.equal(mine.items[0].post_title, "Activity page");
+  const incoming = (
+    await asUser(owner, (tx) =>
+      tx.query("select host_request_page(null,1) page"),
+    )
+  ).rows[0].page;
+  assert.equal(incoming.items.length, 1);
+  assert.equal(incoming.items[0].post.id, pid);
+  assert.equal(
+    (
+      await asUser(stranger, (tx) =>
+        tx.query("select host_request_page(null,1) page"),
+      )
+    ).rows[0].page.items.length,
+    0,
+  );
+  assert.equal(
+    (
+      await asUser(member, (tx) =>
+        tx.query("select activity_requests(true,null,1) page"),
+      )
+    ).rows[0].page.items.length,
+    0,
+  );
+});
+
+test(
+  "review PostGIS: 10k plans have bounded stable filtered pages, current locations and RLS",
+  { skip: !process.env.TEST_DATABASE_URL },
+  async (t) => {
+    const owner = await corePersonal(),
+      viewer = await corePersonal();
+    try {
+      await db.query(
+        `insert into posts(author_id,title,description,starts_at,vacancies,cost_cents,gender_preference,tags,venue_name,location_lat,location_lng,location_source)
+   select $1,'Badminton review '||n,'A disposable bounded-load regression',now()+interval '2 days'+n*interval '1 minute',4,0,'female',array['review-bulk'],'Review court',10.007+(n%20)*0.0001,76.363,'manual' from generate_series(1,10000)n`,
+        [owner],
+      );
+      const filter = {
+        latitude: 10.007,
+        longitude: 76.363,
+        radiusM: 5000,
+        authorId: owner,
+        category: "Play",
+        audience: "female",
+        freeOnly: true,
+        sort: "nearest",
+      };
+      const page = async (f = filter, cursor: any = null, limit = 30) =>
+        (
+          await asUser(viewer, (tx) =>
+            tx.query("select discover_posts($1,$2,$3) page", [
+              f,
+              cursor,
+              limit,
+            ]),
+          )
+        ).rows[0].page;
+      const a = await page(),
+        b = await page(filter, a.cursor);
+      assert.equal(a.items.length, 30);
+      assert.equal(b.items.length, 30);
+      assert.ok(a.cursor);
+      assert.equal(
+        new Set([...a.items, ...b.items].map((p: any) => p.id)).size,
+        60,
+      );
+      assert.ok(
+        a.items.every(
+          (p: any) =>
+            p.distance_km >= 0 &&
+            p.distance_km < 5 &&
+            p.gender_preference === "female",
+        ),
+      );
+      assert.equal(
+        (await page({ ...filter, audience: "male" })).items.length,
+        0,
+      );
+      assert.equal(
+        (await page({ ...filter, excludeAuthorId: owner } as any)).items.length,
+        0,
+      );
+      assert.equal(
+        (await page({ ...filter, search: "' OR 1=1 --" } as any)).items.length,
+        0,
+      );
+      assert.equal((await page(filter, null, 500)).items.length, 80);
+      const newest = await page({ ...filter, sort: "newest" });
+      assert.equal(
+        new Set(
+          [
+            ...newest.items,
+            ...(await page({ ...filter, sort: "newest" }, newest.cursor)).items,
+          ].map((p: any) => p.id),
+        ).size,
+        60,
+      );
+      const start = Date.now();
+      await Promise.all(Array.from({ length: 12 }, () => page()));
+      t.diagnostic(
+        "12 concurrent 30-card pages across 10,000 fixtures: " +
+          (Date.now() - start) +
+          " ms (disposable CI database, not production capacity)",
+      );
+      const gid = (
+        await db.query("select id from posts where author_id=$1 limit 1", [
+          owner,
+        ])
+      ).rows[0].id;
+      await db.query(
+        "update posts set location_source='google',location_place_id='review-google' where id=$1",
+        [gid],
+      );
+      // Simulate time passing without a maintenance/write trigger refreshing or removing the cache.
+      // Only this disposable database's test fixture disables triggers, within a transaction.
+      await db.transaction(async (tx: any) => {
+        await tx.exec(
+          "alter table posts disable trigger guard_post_location;alter table posts disable trigger sync_post_location_index;",
+        );
+        await tx.query(
+          "update posts set location_cached_at=now()-interval '30 days' where id=$1",
+          [gid],
+        );
+        await tx.exec(
+          "alter table posts enable trigger guard_post_location;alter table posts enable trigger sync_post_location_index;",
+        );
+      });
+      assert.equal(
+        (await db.query("select * from post_locations where post_id=$1", [gid]))
+          .rows.length,
+        1,
+      );
+      assert.equal(
+        (
+          await asUser(viewer, (tx) =>
+            tx.query("select * from post_locations where post_id=$1", [gid]),
+          )
+        ).rows.length,
+        0,
+      );
+      await asUser(viewer, (tx) =>
+        tx.query("select set_user_block($1,true)", [owner]),
+      );
+      assert.equal((await page()).items.length, 0);
+    } finally {
+      await db.query("delete from posts where author_id=$1", [owner]);
+    }
+  },
+);
+
+test(
+  "review PostGIS: offer filters and cursors retain ordinary offers and private booking totals",
+  { skip: !process.env.TEST_DATABASE_URL },
+  async () => {
+    const owner = await auditBusiness(),
+      viewer = await corePersonal();
+    await db.query(
+      "update venues set location=st_setsrid(st_makepoint(76.363,10.007),4326)::geography where business_id=$1",
+      [owner],
+    );
+    const a = await auditOffer(owner),
+      b = await auditOffer(owner);
+    await db.query(
+      "update offers set title='Gym membership',is_spotlight=true where id=$1",
+      [a.id],
+    );
+    await db.query(
+      "update offers set title='Coffee break',is_spotlight=false where id=$1",
+      [b.id],
+    );
+    const venue = (
+      await db.query("select id from venues where business_id=$1", [owner])
+    ).rows[0].id;
+    const filter = {
+      latitude: 10.007,
+      longitude: 76.363,
+      radiusM: 5000,
+      venueIds: [venue],
+    };
+    const page = async (f: any, cursor: any = null) =>
+      (
+        await asUser(viewer, (tx) =>
+          tx.query("select discover_offers($1,$2,1) page", [f, cursor]),
+        )
+      ).rows[0].page;
+    const first = await page(filter),
+      second = await page(filter, first.cursor);
+    assert.equal(first.items[0].id, a.id);
+    assert.equal(second.items[0].id, b.id);
+    assert.equal(second.cursor, null);
+    assert.ok(first.items[0].distance_km < 0.01);
+    assert.equal(
+      (await page({ ...filter, category: "food" })).items[0].id,
+      b.id,
+    );
+    assert.equal(
+      (await page({ ...filter, discoveryCategory: "Play" })).items[0].id,
+      a.id,
+    );
+    assert.equal(
+      (await page({ ...filter, search: "Coffee" })).items[0].id,
+      b.id,
+    );
+    assert.equal((await page({ ...filter, spotlight: true })).cursor, null);
+    assert.equal(
+      (await page({ ...filter, latitude: 12.97, longitude: 77.64 })).items
+        .length,
+      0,
+    );
+    await asUser(viewer, (tx) =>
+      tx.query("select book_offer_slot($1,1)", [a.slot]),
+    );
+    assert.equal(
+      (
+        await asUser(owner, (tx) =>
+          tx.query("select offer_booking_counts($1) counts", [[a.id, b.id]]),
+        )
+      ).rows[0].counts[a.id],
+      1,
+    );
+    assert.deepEqual(
+      (
+        await asUser(viewer, (tx) =>
+          tx.query("select offer_booking_counts($1) counts", [[a.id]]),
+        )
+      ).rows[0].counts,
+      {},
+    );
+  },
+);
+
+test(
+  "review PostgreSQL: concurrent retries publish a direct message exactly once",
+  { skip: !process.env.TEST_DATABASE_URL },
+  async () => {
+    const h = "00000000-0000-0000-0000-000000005001",
+      m = "00000000-0000-0000-0000-000000005002";
+    const cid = (
+      await db.query(
+        "select id from conversations where user_a=least($1::uuid,$2::uuid) and user_b=greatest($1::uuid,$2::uuid) limit 1",
+        [h, m],
+      )
+    ).rows[0].id;
+    const results = await Promise.all(
+      Array.from({ length: 12 }, () =>
+        asUser(h, (tx) =>
+          tx.query(
+            "select send_direct_message($1,'A concurrent retry','review-concurrent-send') item",
+            [cid],
+          ),
+        ),
+      ),
+    );
+    assert.equal(new Set(results.map((r) => r.rows[0].item.id)).size, 1);
+    assert.equal(
+      (
+        await db.query(
+          "select count(*)::int n from messages where conversation_id=$1 and client_key='review-concurrent-send'",
+          [cid],
+        )
+      ).rows[0].n,
+      1,
+    );
+  },
+);
+
+test("plan chats log who joined and who left, visible only to members", async () => {
+  const pid = await post(3);
+  const approve = async (who: string) => {
+    const id = await request(who, pid);
+    await asUser(host, (tx) =>
+      tx.query("select approve_join_request($1)", [id]),
+    );
+  };
+  await approve(b);
+  await approve(c);
+  const group = (
+    await db.query("select id from plan_groups where post_id=$1", [pid])
+  ).rows[0].id;
+  await asUser(b, (tx) => tx.query("select leave_plan_group($1)", [group]));
+  const events = (actor: string) =>
+    asUser(actor, (tx) =>
+      tx.query(
+        "select user_id,kind from plan_group_events where post_id=$1 order by created_at,id",
+        [pid],
+      ),
+    );
+  const seen = (await events(c)).rows;
+  assert.deepEqual(
+    seen.map((r: any) => [r.user_id, r.kind]),
+    [
+      [b, "joined"],
+      [c, "joined"],
+      [b, "left"],
+    ],
+  );
+  assert.equal((await events(host)).rows.length, 3);
+  // Someone who left, and anyone outside the plan, can't read its log.
+  assert.equal((await events(b)).rows.length, 0);
+  assert.equal((await events(outsider)).rows.length, 0);
+  // Only the database writes the log.
+  await assert.rejects(
+    asUser(c, (tx) =>
+      tx.query(
+        "insert into plan_group_events(post_id,user_id,kind) values($1,$2,'left')",
+        [pid, c],
+      ),
+    ),
+    /permission denied/,
+  );
+  // A request that is declined or withdrawn before approval leaves no line.
+  const pending = await request(outsider, pid);
+  await asUser(host, (tx) =>
+    tx.query("select decline_join_request($1)", [pending]),
+  );
+  assert.equal((await events(c)).rows.length, 3);
+});
+
+test("spam limits: plans per day, join requests per hour, messages per minute, offers per day", async () => {
+  const insertPlan = (who: string, title = "Evening walk") =>
+    asUser(who, (tx) =>
+      tx.query(
+        "insert into posts(author_id,title,description,starts_at,vacancies,venue_id) values($1,$2,'A friendly evening walk',now()+interval '4 hours',2,'10000000-0000-0000-0000-000000000032') returning id",
+        [who, title],
+      ),
+    );
+  // Plans: 10 a day for one person.
+  const poster = await corePersonal();
+  for (let i = 0; i < 10; i++) await insertPlan(poster);
+  await assert.rejects(insertPlan(poster), /up to 10 plans a day/);
+
+  // Join requests: 40 an hour for one person.
+  const joiner = await corePersonal();
+  const hostIds: string[] = [];
+  for (let i = 0; i < 41; i++)
+    hostIds.push(
+      (
+        await db.query(
+          "insert into posts(author_id,title,description,starts_at,expires_at,vacancies,venue_id) values($1,'Football tonight','Friendly football game',now()+interval '4 hours',now()+interval '3 hours',5,'10000000-0000-0000-0000-000000000032') returning id",
+          [host],
+        )
+      ).rows[0].id,
+    );
+  for (let i = 0; i < 40; i++) await request(joiner, hostIds[i]);
+  await assert.rejects(request(joiner, hostIds[40]), /join requests/);
+
+  // Chat messages: 30 a minute for one sender.
+  const owner = await corePersonal(),
+    guest = await corePersonal();
+  const plan = (
+    await db.query(
+      "insert into posts(author_id,title,description,starts_at,vacancies,venue_id) values($1,'Chai walk','A friendly chai walk',now()+interval '4 hours',2,'10000000-0000-0000-0000-000000000032') returning id",
+      [owner],
+    )
+  ).rows[0].id;
+  const r = await request(guest, plan);
+  await asUser(owner, (tx) => tx.query("select approve_join_request($1)", [r]));
+  const conv = (
+    await asUser(guest, (tx) =>
+      tx.query("select get_or_create_conversation($1,$2,null) id", [
+        owner,
+        plan,
+      ]),
+    )
+  ).rows[0].id;
+  const say = () =>
+    asUser(guest, (tx) =>
+      tx.query(
+        "insert into messages(conversation_id,sender_id,body) values($1,$2,'hello')",
+        [conv, guest],
+      ),
+    );
+  for (let i = 0; i < 30; i++) await say();
+  await assert.rejects(say(), /slow down/i);
+
+  // Offers: 30 a day for one business.
+  const shop = await auditBusiness();
+  const offer = () =>
+    asUser(shop, (tx) =>
+      tx.query(
+        "insert into offers(business_id,title,description,starts_at,ends_at,status) values($1,'Haircut deal','A friendly haircut offer',now()+interval '2 hours',now()+interval '4 hours','draft')",
+        [shop],
+      ),
+    );
+  for (let i = 0; i < 30; i++) await offer();
+  await assert.rejects(offer(), /up to 30 offers a day/);
+});
+
+test("text fields have server-side length limits, so the API can't be used to post walls of text", async () => {
+  const who = await corePersonal();
+  await assert.rejects(
+    asUser(who, (tx) =>
+      tx.query(
+        "insert into posts(author_id,title,description,starts_at,vacancies,venue_id) values($1,$2,'A friendly evening walk',now()+interval '4 hours',2,'10000000-0000-0000-0000-000000000032')",
+        [who, "x".repeat(81)],
+      ),
+    ),
+    // Already guarded by the plan trigger; kept here so it stays guarded.
+    /invalid post details/,
+  );
+  await assert.rejects(
+    asUser(who, (tx) =>
+      tx.query("update profiles set bio=$2 where id=$1", [
+        who,
+        "x".repeat(501),
+      ]),
+    ),
+    /check constraint/,
+  );
+  await assert.rejects(
+    asUser(who, (tx) =>
+      tx.query("update profiles set display_name=$2 where id=$1", [
+        who,
+        "x".repeat(101),
+      ]),
+    ),
+    /check constraint/,
+  );
+  // Normal values still pass.
+  await asUser(who, (tx) =>
+    tx.query("update profiles set bio=$2 where id=$1", [who, "x".repeat(500)]),
+  );
+});
+
+test("upload buckets only take images up to 10 MB", async () => {
+  const rows = (
+    await db.query(
+      "select id,file_size_limit,allowed_mime_types from storage.buckets where id in ('avatars','photos','verification_docs') order by id",
+    )
+  ).rows;
+  assert.deepEqual(
+    rows.map((r: any) => [
+      r.id,
+      Number(r.file_size_limit),
+      r.allowed_mime_types,
+    ]),
+    ["avatars", "photos", "verification_docs"].map((id) => [
+      id,
+      10485760,
+      ["image/jpeg", "image/png", "image/webp"],
+    ]),
+  );
+});
+
+test("signed-out visitors can't call internal helper functions or read push tokens", async () => {
+  for (const sql of [
+    "select account_active('00000000-0000-0000-0000-000000000001')",
+    "select approved_join_count(gen_random_uuid())",
+    "select token from push_tokens limit 1",
+    // The app never reads while signed out, so plans can't be scraped anonymously.
+    "select count(*) from posts",
+  ])
+    await assert.rejects(
+      asUser(null, (tx) => tx.query(sql), "anon"),
+      /permission denied/,
+    );
+});
+
+test("00053 pins search_path only on our own trigger functions, never on extension ones", async () => {
+  const sql = await readFile(
+    new URL(
+      "../supabase/migrations/00053_media_write_safety.sql",
+      import.meta.url,
+    ),
+    "utf8",
+  );
+  const loop = sql.match(
+    /do \$\$ declare f record;begin[\s\S]*?end \$\$;/,
+  )?.[0];
+  assert.ok(loop, "00053 still has its search_path loop");
+  // Supabase's PostGIS ships trigger functions in public that only its own
+  // role may alter; a stand-in extension member reproduces that here.
+  await db.exec(`
+    create function public.ext_owned_trigger() returns trigger language plpgsql as $f$begin return new;end$f$;
+    alter extension plpgsql add function public.ext_owned_trigger();
+    create function public.own_unpinned_trigger() returns trigger language plpgsql as $f$begin return new;end$f$;
+  `);
+  try {
+    await db.exec(loop);
+    const config = async (name: string) =>
+      (
+        await db.query(
+          "select proconfig from pg_proc where proname=$1 and pronamespace='public'::regnamespace",
+          [name],
+        )
+      ).rows[0].proconfig;
+    assert.equal(await config("ext_owned_trigger"), null);
+    assert.deepEqual(await config("own_unpinned_trigger"), [
+      "search_path=public, pg_temp",
+    ]);
+  } finally {
+    await db.exec(`
+      alter extension plpgsql drop function public.ext_owned_trigger();
+      drop function public.ext_owned_trigger();
+      drop function public.own_unpinned_trigger();
+    `);
+  }
 });

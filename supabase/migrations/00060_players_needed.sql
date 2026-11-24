@@ -7,7 +7,7 @@
 -- ── Part 1: notification switches and the alert area ─────────────────────
 
 create function valid_notification_settings(v jsonb) returns boolean
-language sql immutable set search_path = public as $$
+language sql immutable set search_path=public,pg_temp as $$
   select coalesce(
     jsonb_typeof(v) = 'object'
     and not exists (
@@ -27,17 +27,17 @@ revoke select(notification_settings) on profiles from anon, authenticated;
 -- Which switch a notification kind belongs to; null = always delivered
 -- (account notices such as verification results).
 create function notification_category(p_kind text) returns text
-language sql immutable set search_path = public as $$
+language sql immutable set search_path=public,pg_temp as $$
   select case
     when p_kind in ('message','plan_group_message') then 'messages'
-    when p_kind in ('join_request','request_approved','request_declined','request_full','post_cancelled') then 'plans'
+    when p_kind in ('join_request','request_approved','request_declined','request_full','post_cancelled','plan_reminder') then 'plans'
     when p_kind in ('booking','booking_confirmed','booking_cancelled') then 'bookings'
     when p_kind = 'nearby_plan' then 'nearby'
   end
 $$;
 
 create function notification_category_enabled(p_user uuid, p_kind text) returns boolean
-language sql stable security definer set search_path = public as $$
+language sql stable security definer set search_path=public,pg_temp as $$
   select notification_category(p_kind) is null
     or coalesce((select p.notification_settings->>notification_category(p_kind)
                  from profiles p where p.id = p_user), 'true') <> 'false'
@@ -54,7 +54,7 @@ begin
  end if;
  return new;
 end;
-$$ language plpgsql security definer set search_path=public;
+$$ language plpgsql security definer set search_path=public,pg_temp;
 
 create or replace function get_notification_preferences() returns jsonb as $$
  select jsonb_build_object(
@@ -66,7 +66,7 @@ create or replace function get_notification_preferences() returns jsonb as $$
    'alertArea', case when onboarding_preferences ? 'area'
      then jsonb_build_object('label', onboarding_preferences#>>'{area,label}') end)
  from profiles where id = auth.uid();
-$$ language sql stable security definer set search_path=public;
+$$ language sql stable security definer set search_path=public,pg_temp;
 
 create function set_notification_category(p_category text, p_enabled boolean) returns void as $$
 begin
@@ -77,7 +77,7 @@ begin
  update profiles set notification_settings = notification_settings || jsonb_build_object(p_category, p_enabled)
   where id = auth.uid();
 end;
-$$ language plpgsql security definer set search_path=public;
+$$ language plpgsql security definer set search_path=public,pg_temp;
 revoke all on function set_notification_category(text,boolean) from public, anon;
 grant execute on function set_notification_category(text,boolean) to authenticated;
 
@@ -96,7 +96,7 @@ begin
  update profiles set onboarding_preferences = onboarding_preferences || jsonb_build_object('area', p_area)
   where id = auth.uid();
 end;
-$$ language plpgsql security definer set search_path=public;
+$$ language plpgsql security definer set search_path=public,pg_temp;
 revoke all on function set_alert_area(jsonb) from public, anon;
 grant execute on function set_alert_area(jsonb) to authenticated;
 
@@ -112,7 +112,7 @@ begin
  end if;
  return new;
 end;
-$$ language plpgsql set search_path=public;
+$$ language plpgsql set search_path=public,pg_temp;
 revoke all on function round_device_area() from public, anon, authenticated;
 create trigger round_device_area before insert or update of onboarding_preferences on profiles
  for each row execute function round_device_area();
@@ -129,13 +129,13 @@ begin
     and (business_details ? 'latitude' or business_details ? 'longitude')
     and onboarding_location_expired(business_details->>'locationCachedAt');
 end;
-$$ language plpgsql security definer set search_path=public;
+$$ language plpgsql security definer set search_path=public,pg_temp;
 
 alter table notifications drop constraint if exists notifications_kind_check;
 alter table notifications add constraint notifications_kind_check check (kind in (
   'join_request','request_approved','request_declined','request_full','post_cancelled',
   'booking','booking_confirmed','booking_cancelled','message','verification_approved',
-  'verification_rejected','selfie_review','plan_group_message','nearby_plan'));
+  'verification_rejected','selfie_review','plan_group_message','plan_reminder','nearby_plan'));
 
 -- ── Part 2: urgent plans, nearby alerts, auto-accept ────────────────────
 
@@ -154,7 +154,7 @@ create or replace view public.post_cards with (security_invoker=true) as
 
 -- Great-circle distance in km (no PostGIS needed).
 create function km_between(a_lat double precision, a_lng double precision, b_lat double precision, b_lng double precision)
-returns double precision language sql immutable set search_path = public as $$
+returns double precision language sql immutable set search_path=public,pg_temp as $$
   select 6371.0088 * 2 * asin(least(1, sqrt(
     power(sin(radians(b_lat - a_lat) / 2), 2)
     + cos(radians(a_lat)) * cos(radians(b_lat)) * power(sin(radians(b_lng - a_lng) / 2), 2))))
@@ -177,7 +177,7 @@ begin
   execute 'select st_y($1::geometry), st_x($1::geometry)' into lat, lng using v.location;
  end if;
 end;
-$$ language plpgsql stable security definer set search_path = public;
+$$ language plpgsql stable security definer set search_path=public,pg_temp;
 
 create function guard_urgent_plan() returns trigger as $$
 declare v_today int;
@@ -200,7 +200,7 @@ begin
  end if;
  return new;
 end;
-$$ language plpgsql security definer set search_path = public;
+$$ language plpgsql security definer set search_path=public,pg_temp;
 create trigger guard_urgent_plan before insert or update of urgent, auto_accept on posts
  for each row execute function guard_urgent_plan();
 
@@ -241,7 +241,7 @@ begin
  limit 200;
  return new;
 end;
-$$ language plpgsql security definer set search_path = public;
+$$ language plpgsql security definer set search_path=public,pg_temp;
 create trigger alert_nearby_players after insert on posts
  for each row when (new.urgent) execute function alert_nearby_players();
 revoke all on function km_between(double precision,double precision,double precision,double precision),
@@ -284,7 +284,7 @@ begin
   end if;
   return to_jsonb(r);
 end;
-$$ language plpgsql security definer set search_path=public;
+$$ language plpgsql security definer set search_path=public,pg_temp;
 
 create or replace function notify_join_request() returns trigger as $$
 declare v_kind text; v_user uuid; v_title text; v_body text; v_auto boolean;
@@ -329,6 +329,6 @@ begin
   values (v_user, v_kind, v_title, v_body, new.post_id);
   return new;
 end;
-$$ language plpgsql security definer set search_path = public;
+$$ language plpgsql security definer set search_path=public,pg_temp;
 
 notify pgrst, 'reload schema';

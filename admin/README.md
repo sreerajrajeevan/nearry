@@ -56,7 +56,7 @@ Open the review, load its private proof, inspect it, and explicitly confirm revi
 before approval. The preview URL lasts 60 seconds and can be reloaded. Rejection
 requires a reason, which is delivered to the business. Current pending proofs
 remain reviewable by an MFA-authenticated administrator even if their old emailed
-review link expired. Emailed links retain their original seven-day expiry.
+review link expired. Email URLs now hand off to the dashboard; possession of a link grants no account access.
 Changed/replaced documents and already completed decisions are rejected.
 
 Approval/rejection, business notification and admin audit row are one database
@@ -80,9 +80,7 @@ not introduce general browsing of private chats. Refresh updates the queue; retu
 to the browser refreshes it too. Overlapping section loads cannot display stale
 rows under another section's actions. Sign-out clears proof URLs and evidence.
 
-Keep the current verification-email worker in place during cutover. Once the
-operator has signed in and verified the dashboard, retire email delivery separately
-if desired; do not remove the submission trigger or review queue.
+Redeploy notify-verification and review-verification during this update and set ADMIN_CONSOLE_URL. Email alerts remain optional dashboard reminders; do not remove the submission trigger or review queue. Account and proof views are audited before private results are returned.
 
 ## Validation
 

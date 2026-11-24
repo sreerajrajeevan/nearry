@@ -25,6 +25,7 @@ import { DateSheet, TimeSheet } from "../../components/DateTimeSheets";
 import {
   View,
   Text,
+  TextInput,
   ScrollView,
   TouchableOpacity,
   StyleSheet,
@@ -187,7 +188,11 @@ export function PostEditor({
         setTitle(post.title);
         setDescription(post.description);
         setStartsAtDate(new Date(post.startsAt));
-        setExpiresAtDate(post.expiresAt ? new Date(post.expiresAt) : null);
+        setExpiresAtDate(
+          post.expiresAt && new Date(post.expiresAt).getTime() > Date.now()
+            ? new Date(post.expiresAt)
+            : null,
+        );
         setVacancies(post.vacancies);
         setCost(
           post.planDetails?.costMode === "split"
@@ -328,7 +333,6 @@ export function PostEditor({
     }
     if (
       !savedPostId &&
-      !postId &&
       (unfinishedLocation ||
         !hasPostMeetingPlace({
           venueId: venue?.venueId,
@@ -518,7 +522,6 @@ export function PostEditor({
   };
   const chooseActivity = (item: (typeof PLAN_ACTIVITIES)[number]) => {
     const previous = PLAN_ACTIVITIES.find((x) => x.id === activity);
-    if (!title.trim() || title === previous?.title) setTitle(item.title);
     setActivity(item.id);
     if (!planAsksLevel(item.id)) setLevel("any");
     if (!planBookingLabel(item.id)) setVenueBooked(false);
@@ -535,6 +538,13 @@ export function PostEditor({
       0,
       0,
     );
+    if (next.getTime() <= Date.now()) {
+      const soon = new Date(
+        Math.ceil((Date.now() + 30 * 60_000) / (15 * 60_000)) * 15 * 60_000,
+      );
+      if (soon.toDateString() === date.toDateString())
+        next.setTime(soon.getTime());
+    }
     setStartsAtDate(next);
   };
   return (
@@ -631,7 +641,11 @@ export function PostEditor({
         >
           <Input
             label="Title"
-            placeholder="Pick an activity for a suggestion"
+            placeholder={
+              PLAN_ACTIVITIES.find((item) => item.id === activity)?.title ||
+              "Give your plan a title"
+            }
+            clearable
             value={title}
             maxLength={80}
             onChangeText={setTitle}
@@ -814,8 +828,29 @@ export function PostEditor({
               <Text style={styles.stepText}>−</Text>
             </TouchableOpacity>
             <View>
-              <Text style={styles.stepValue}>{vacancies}</Text>
-              <Text style={styles.help}>
+              <TextInput
+                accessibilityLabel="People needed"
+                accessibilityHint="Enter a whole number from 1 to 100"
+                value={vacancies === 0 ? "" : String(vacancies)}
+                keyboardType="number-pad"
+                inputMode="numeric"
+                selectTextOnFocus
+                editable={!publishing}
+                onChangeText={(text) => {
+                  if (/^\d*$/.test(text))
+                    setVacancies(Math.min(100, Number(text)));
+                }}
+                onBlur={() =>
+                  setVacancies((value) =>
+                    Math.min(
+                      100,
+                      Math.max(1, original?.joinedCount ?? 0, value),
+                    ),
+                  )
+                }
+                style={styles.stepValue}
+              />
+              <Text style={[styles.help, { textAlign: "center" }]}>
                 more {vacancies === 1 ? "person" : "people"}
               </Text>
             </View>
@@ -829,6 +864,9 @@ export function PostEditor({
               <Text style={styles.stepText}>+</Text>
             </TouchableOpacity>
           </View>
+          <Text style={styles.help}>
+            Type a number or use + / −. Maximum 100.
+          </Text>
           <Choices
             label="Gender"
             value={genderPref ?? "any"}
@@ -1400,11 +1438,19 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   stepText: { fontSize: 24, color: colors.text },
+  // A visible white box so people see they can tap and type a number.
   stepValue: {
+    width: 88,
+    minHeight: 52,
+    paddingVertical: 4,
     fontSize: 26,
     ...weight("700"),
     color: colors.ink,
     textAlign: "center",
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.lineStrong,
+    borderRadius: 14,
   },
   chips: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   chip: {

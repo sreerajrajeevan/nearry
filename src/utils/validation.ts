@@ -116,7 +116,9 @@ export function validateOfferInput(
     input.priceCents != null &&
     (!Number.isInteger(input.priceCents) || input.priceCents < 0)
   )
-    return "Price cannot be negative.";
+    return "Enter a valid price of zero or more.";
+  if (input.priceCents != null && input.priceCents > 2_147_483_647)
+    return "This price is too large. Enter a smaller amount.";
   if (
     !Number.isInteger(input.slotCapacity) ||
     input.slotCapacity < 1 ||

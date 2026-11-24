@@ -18,7 +18,8 @@ import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
 import { colors, typography, spacing, surfaces } from "../../theme";
 import { useAuth } from "../../store/AuthContext";
-import { listVenues, updateVenueAmenities } from "../../services/venues";
+import { getMyBusinessVenue } from "../../services/verification";
+import { getVenue, updateVenueAmenities } from "../../services/venues";
 import {
   pickPhoto,
   uploadPhoto,
@@ -34,6 +35,8 @@ import { Venue } from "../../services/mappers";
 export function ManageVenueScreen() {
   const navigation = useNavigation();
   const { profile } = useAuth();
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
   const [venue, setVenue] = useState<Venue | null>(null);
   const [photos, setPhotos] = useState<PhotoRef[]>([]);
   const [amenities, setAmenities] = useState<string[]>([]);
@@ -43,12 +46,22 @@ export function ManageVenueScreen() {
 
   const load = useCallback(async () => {
     if (!profile) return;
-    const venues = await listVenues();
-    const mine = venues.find((v) => v.businessId === profile.id) ?? null;
-    setVenue(mine);
-    if (mine) {
-      setAmenities(mine.amenities ?? []);
-      setPhotos(await listVenuePhotos(mine.id));
+    setLoading(true);
+    setError("");
+    try {
+      const state = await getMyBusinessVenue();
+      const mine = state.venue ? await getVenue(state.venue.id) : null;
+      setVenue(mine);
+      if (mine) {
+        setAmenities(mine.amenities ?? []);
+        setPhotos(await listVenuePhotos(mine.id));
+      }
+    } catch {
+      setError(
+        "Could not load your venue. Check your connection and try again.",
+      );
+    } finally {
+      setLoading(false);
     }
   }, [profile?.id]);
 
@@ -120,6 +133,21 @@ export function ManageVenueScreen() {
       setSaving(false);
     }
   };
+
+  if (loading || error)
+    return (
+      <Screen>
+        <BackButton onPress={() => navigation.goBack()} />
+        {loading ? (
+          <LoadingDots />
+        ) : (
+          <>
+            <EmptyState title="Could not load venue" hint={error} />
+            <Button title="Try again" onPress={() => void load()} />
+          </>
+        )}
+      </Screen>
+    );
 
   return (
     <Screen>

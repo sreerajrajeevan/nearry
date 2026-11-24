@@ -2,7 +2,7 @@
 
 Never run `run-all.sql` against an existing project. It is generated, fresh-install-only and protected by a transaction and existing-schema guard.
 
-For a fresh database, run `run-all.sql`, or apply `00001` through `00025` once in order. For an existing project, inspect its migration history and apply **only missing** numbered migrations in order. Back up the project first. Do not replay old migrations.
+For a fresh database, run `run-all.sql`, or apply every current .sql file once in lexicographic filename order. For an existing project, inspect its migration history and apply **only missing** numbered migrations in order. Back up the project first. Do not replay old migrations.
 
 For a project already on `00010`, apply `00011` through `00018` in order. These are forward migrations. Existing posts, profiles, offers and bookings are preserved. New columns and grants require deploying the matching app build together with these migrations.
 
@@ -49,7 +49,7 @@ Existing projects at 00023 apply only `00024_account_safety.sql` and `00025_push
 service-only overview, business queue and moderation functions. Apply after
 00028; allowlist confirmed operator UUIDs separately and deploy `admin-console`.
 See [admin setup](../../admin/README.md). The old unmerged admin migration 00027
-was renumbered. Existing email review remains unchanged. Never grant ordinary
+was renumbered. After the November reliability update, email review links hand off to this authenticated MFA dashboard. Never grant ordinary
 clients access to admin tables or let users add themselves as administrators.
 
 - **00030_personal_selfie_verification.sql** — optional private camera selfie reviews, versioned admin decisions, current-avatar binding and cleanup. Requires 00029. See [selfie setup](../../docs/personal-selfie-verification.md). New camera and immutable avatar paths require a fresh phone build.
@@ -66,4 +66,21 @@ clients access to admin tables or let users add themselves as administrators.
 
 `00049`: business chats show the business name. `list_my_conversations()` adds `other_is_business` and `other_business_name`; `conversation_safety()` adds `isBusiness`, `businessName`, `kind` and `contextTitle`; message notifications from a business read "Message from <business name>". Additive only, so older builds keep working; the new chat header, list tags and tappable links need the matching app build. Numbered 00049 because open branches use 00046–00048; it does not depend on them.
 
-`00050`: players needed. Adds per-person notification switches (messages, plan requests and updates, bookings, nearby players needed) that gate push, keeps the area chosen at sign-up or in settings until the person removes it (GPS areas rounded to about 1 km, including ones already saved), urgent plans that alert eligible people nearby, and auto-accept. Additive: old builds keep working. Apply with or after the matching app build.
+
+## November reliability update (00050, 00052–00054)
+
+See [rollout instructions and validation](../../docs/review-fix-tracker.md). Apply the four new forward files before the matching app/worker release. Existing content and history are retained. The stale milestone schema.sql has been removed; run-all.sql is the only generated fresh-install bundle.
+
+Historical duplicate numeric prefixes (00021 and 00025) are ordered by the full filename in this repository. Do not rename or replay applied files. Record the full filename when applying manually, and inspect the target database's actual objects and migration history before importing it into a migration tool that requires unique numeric versions. Reserved numbers for independent branches are not missing dependencies.
+
+## Plan chat join and leave lines (00055)
+
+Adds `plan_group_events`, written by a trigger on `join_requests` whenever someone becomes an approved member (`joined`) or stops being one (`left` when they withdraw, `removed` otherwise). Members of the plan's group can read it; nobody can write to it directly. Lines start from the moment this file is applied; earlier joins are not back-filled.
+
+## Abuse limits (00056)
+
+Database-enforced spam limits that also hold for direct API calls: 10 plans a day, 40 join requests an hour, 30 chat messages a minute, 30 offers a day (signed-in writers only; workers and admins are not limited, and new plan timestamps are stamped by the server). Adds length limits on profile name (100), business name (120) and bio (500); restricts the avatars, photos and verification_docs buckets to JPEG/PNG/WebP up to 10 MB; revokes signed-out access to internal helper functions and push tokens, and the unused update grant on messages.
+
+## Players needed (00060)
+
+Numbered 00060 so it applies after 00055–00059. Adds per-person notification switches (messages, plan requests and updates, bookings, nearby players needed) that gate push, keeps the area chosen at sign-up or in settings until the person removes it (GPS areas rounded to about 1 km, including ones already saved), urgent plans that alert eligible people nearby, and auto-accept. Additive: old builds keep working. Apply with or after the matching app build.

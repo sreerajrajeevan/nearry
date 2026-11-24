@@ -33,8 +33,13 @@ export function planShareMessage(
 export function planIdFromLink(url: string | null | undefined): string | null {
   if (!url) return null;
   const app = /^nearry:\/\/plan\/([^/?#]+)/i.exec(url);
-  const id = app
-    ? decodeURIComponent(app[1])
-    : /^https:\/\/[^?#]+[?&]plan=([^&#]+)/i.exec(url)?.[1];
+  let id: string | undefined;
+  try {
+    id = app
+      ? decodeURIComponent(app[1])
+      : /^https:\/\/[^?#]+[?&]plan=([^&#]+)/i.exec(url)?.[1];
+  } catch {
+    return null;
+  }
   return id && PLAN_ID.test(id) ? id : null;
 }

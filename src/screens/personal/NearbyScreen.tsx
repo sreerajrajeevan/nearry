@@ -1,6 +1,17 @@
+import { useReducedMotion } from "../../store/MotionContext";
+import { headerScrollState } from "../../utils/headerScroll";
+import { useCardDistanceOrigin } from "../../store/CardDistanceContext";
+import type { DistanceOrigin } from "../../utils/cardDistance";
+import { mergePage, type Cursor } from "../../utils/pagination";
 import { PlanListSkeleton } from "../../components/Skeletons";
 import { useMyRequests } from "../../store/MyRequestsContext";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useMemo,
+} from "react";
 import {
   View,
   Text,
@@ -10,6 +21,9 @@ import {
   Keyboard,
   FlatList,
   Platform,
+  Animated,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import {
@@ -34,8 +48,12 @@ import { VenueRow } from "../../components/VenueRow";
 import { DiscoverySearch } from "../../components/DiscoverySearch";
 import { LocationSheet } from "../../components/LocationSheet";
 import { colors, typography, spacing, weight } from "../../theme";
-import { listPosts, subscribeToPosts } from "../../services/posts";
-import { listLiveOffers, subscribeToOffers } from "../../services/offers";
+import {
+  listPostsPage,
+  type PostPageFilter,
+  subscribeToPosts,
+} from "../../services/posts";
+import { listOffersPage, subscribeToOffers } from "../../services/offers";
 import {
   getCurrentPosition,
   getPositionIfAllowed,
@@ -59,6 +77,7 @@ import {
   PlanOptions,
 } from "../../utils/planDiscovery";
 import {
+  HOME_DISTANCES,
   HomeLocation,
   MAX_HOME_DISTANCE,
   RecentPlace,
@@ -95,6 +114,8 @@ export function NearbyScreen() {
   const route = useRoute<RouteProp<PersonalTabParamList, "Nearby">>();
   const { demoMode, profile, session } = useAuth();
   const now = useDiscoveryClock();
+  const cardOrigin = useCardDistanceOrigin();
+  const [resultOrigin, setResultOrigin] = useState<DistanceOrigin | null>(null);
   const setup = onboardingPreferences(profile?.onboardingPreferences);
   const accountId = profile?.id ?? session?.user.id ?? null;
   const [posts, setPosts] = useState<NeedPost[]>([]);
@@ -102,6 +123,14 @@ export function NearbyScreen() {
   const [offers, setOffers] = useState<Offer[]>([]);
   const [state, setState] = useState<"loading" | "error" | "ready">("loading");
   const [refreshing, setRefreshing] = useState(false);
+  const [cursor, setCursor] = useState<Cursor | null>(null),
+    [loadingMore, setLoadingMore] = useState(false),
+    [pageError, setPageError] = useState("");
+  const [effectiveKm, setEffectiveKm] = useState<number | null>(null),
+    [soonPosts, setSoonPosts] = useState<NeedPost[]>([]);
+  const moreLock = useRef(false),
+    loadedScope = useRef("");
+  const calendarDay = now.toDateString();
   // Where Home searches from, and what to call it.
   const [point, setPoint] = useState<LatLng | null>(() =>
     setup.area
@@ -129,6 +158,47 @@ export function NearbyScreen() {
   const request = useRef(0);
   const scroll = useRef<FlatList<NeedPost>>(null);
   const picked = useRef(false);
+  const reduced = useReducedMotion();
+  const [headerHeight, setHeaderHeight] = useState(64),
+    [backToTop, setBackToTop] = useState(false);
+  const headerShift = useRef(new Animated.Value(0)).current;
+  const scrollState = useRef({ lastY: 0, travel: 0, shown: true });
+  const setHeaderShown = useCallback(
+    (shown: boolean) => {
+      scrollState.current.shown = shown;
+      headerShift.stopAnimation();
+      Animated.timing(headerShift, {
+        toValue: shown ? 0 : -headerHeight,
+        duration: reduced ? 0 : 180,
+        useNativeDriver: true,
+      }).start();
+    },
+    [headerHeight, reduced, headerShift],
+  );
+  useEffect(() => {
+    setHeaderShown(scrollState.current.shown);
+    return () => headerShift.stopAnimation();
+  }, [setHeaderShown]);
+  const onListScroll = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const previous = scrollState.current,
+        next = headerScrollState(
+          previous,
+          event.nativeEvent.contentOffset.y,
+          headerHeight,
+        );
+      scrollState.current = next;
+      if (next.shown !== previous.shown) setHeaderShown(next.shown);
+      setBackToTop(next.lastY > 600);
+    },
+    [headerHeight, setHeaderShown],
+  );
+  const scrollToTop = () => {
+    scrollState.current = { lastY: 0, travel: 0, shown: true };
+    setHeaderShown(true);
+    setBackToTop(false);
+    scroll.current?.scrollToOffset({ offset: 0, animated: !reduced });
+  };
 
   const persist = (next: HomeLocation) => {
     if (demoMode || !accountId) return;
@@ -171,10 +241,6 @@ export function NearbyScreen() {
           });
           setPointLabel(NEAR_YOU);
           setChosenKm(saved.distanceKm ?? defaultDistance("me"));
-          // Quietly move to where they are now, without a permission prompt.
-          void getPositionIfAllowed().then((position) => {
-            if (active && position && !picked.current) setPoint(position);
-          });
         }
       })
       .catch(() => {});
@@ -188,6 +254,7 @@ export function NearbyScreen() {
     const kind = placeKind(chosen);
     const km = defaultDistance(kind);
     const nextRecents = rememberPlace(recents, chosen);
+    cardOrigin?.selectArea({ kind: "area", point: chosen, label: chosen.name });
     setPlace(nextRecents[0]);
     setPoint({ latitude: chosen.latitude, longitude: chosen.longitude });
     setPointLabel("");
@@ -218,6 +285,7 @@ export function NearbyScreen() {
         const km = defaultDistance("me");
         setPlace(null);
         setPoint(position);
+        cardOrigin?.setDevice(position);
         setPointLabel(NEAR_YOU);
         setChosenKm(km);
         setLocationOpen(false);
@@ -232,7 +300,7 @@ export function NearbyScreen() {
         });
       } else
         setLocationError(
-          "Location is off for Nearry. Search for your area instead.",
+          "Could not get your location. Check location permission and GPS, or search for your area.",
         );
     } finally {
       setLocating(false);
@@ -248,33 +316,140 @@ export function NearbyScreen() {
     });
   };
 
+  const queryScope = JSON.stringify([
+    accountId,
+    point,
+    chosenKm,
+    options,
+    dateFilter,
+    calendarDay,
+  ]);
+  const pageFilter = (km: number | null): PostPageFilter => ({
+    category: options.category,
+    freeOnly: options.freeOnly,
+    audience: options.audience,
+    sort: options.sort,
+    date: dateFilter,
+    excludeAuthorId: accountId ?? undefined,
+    ...(point
+      ? { nearby: { ...point, radiusM: (km ?? MAX_HOME_DISTANCE) * 1000 } }
+      : {}),
+  });
   const load = useCallback(
     async (silent = false) => {
-      const version = ++request.current;
-      if (!silent) setState("loading");
+      const ticket = ++request.current;
+      if (loadedScope.current !== queryScope) {
+        setVenues([]);
+        setOffers([]);
+        setSoonPosts([]);
+      }
+      if (!silent || loadedScope.current !== queryScope) {
+        setState("loading");
+        setCursor(null);
+      }
+      setPageError("");
       try {
-        // Fetch the widest area once; distance is applied on the phone so
-        // changing it, or widening when nothing is close, needs no reload.
-        const radiusM = MAX_HOME_DISTANCE * 1000;
-        const places = point
-          ? await nearbyVenues(point.latitude, point.longitude, radiusM)
-          : await listVenues();
-        const ids = point ? places.map((v) => v.id) : undefined;
-        const [plans, openings] = await Promise.all([
-          listPosts(point ? { nearby: { ...point, radiusM } } : {}),
-          listLiveOffers(ids),
-        ]);
-        if (request.current !== version) return;
-        setPosts(plans);
-        setVenues(places);
-        setOffers(openings);
+        const max = options.maxDistanceKm ?? MAX_HOME_DISTANCE;
+        const base = point ? Math.min(chosenKm ?? max, max) : max;
+        const radii = point
+          ? [base, ...HOME_DISTANCES.filter((km) => km > base && km <= max)]
+          : [max];
+        let selected = base,
+          page = await listPostsPage(pageFilter(base));
+        if (!page.items.length)
+          for (const radius of radii.slice(1)) {
+            selected = radius;
+            page = await listPostsPage(pageFilter(radius));
+            if (page.items.length) break;
+          }
+        if (request.current !== ticket) return;
+        loadedScope.current = queryScope;
+        setPosts(page.items);
+        setResultOrigin(
+          demoMode
+            ? { kind: "sample" }
+            : {
+                kind: pointLabel === NEAR_YOU ? "saved" : "area",
+                point: point ?? undefined,
+                label: place?.name || pointLabel || "selected area",
+              },
+        );
+        setCursor(page.cursor);
+        setEffectiveKm(point ? selected : null);
         setState("ready");
+        // Side previews are independently bounded; they cannot hide a healthy plan feed.
+        const [places, openings, soon] = await Promise.allSettled([
+          point
+            ? nearbyVenues(point.latitude, point.longitude, selected * 1000)
+            : listVenues(),
+          listOffersPage(
+            {
+              discoveryCategory: options.category,
+              ...(point
+                ? { nearby: { ...point, radiusM: selected * 1000 } }
+                : {}),
+            },
+            null,
+            20,
+          ),
+          dateFilter === "all" && options.sort === "soonest"
+            ? Promise.resolve(page)
+            : listPostsPage(
+                { ...pageFilter(selected), date: "all", sort: "soonest" },
+                null,
+                8,
+              ),
+        ]);
+        if (request.current !== ticket) return;
+
+        setVenues(places.status === "fulfilled" ? places.value : []);
+        setOffers(openings.status === "fulfilled" ? openings.value.items : []);
+        setSoonPosts(soon.status === "fulfilled" ? soon.value.items : []);
+        setState("ready");
+        if (openings.status === "rejected")
+          setPageError("Offers could not refresh. Pull down to try again.");
       } catch {
-        if (request.current === version) setState("error");
+        if (request.current === ticket) {
+          if (loadedScope.current === queryScope)
+            setPageError(
+              "Could not refresh nearby plans. Pull down to try again.",
+            );
+          else setState("error");
+        }
       }
     },
-    [point],
+    [
+      point,
+      chosenKm,
+      options,
+      dateFilter,
+      accountId,
+      calendarDay,
+      pointLabel,
+      place?.name,
+      demoMode,
+    ],
   );
+  const loadMore = async () => {
+    if (!cursor || moreLock.current || loadedScope.current !== queryScope)
+      return;
+    moreLock.current = true;
+    setLoadingMore(true);
+    setPageError("");
+    const ticket = request.current;
+    try {
+      const page = await listPostsPage(pageFilter(effectiveKm), cursor);
+      if (ticket !== request.current) return;
+      setPosts((old) => mergePage(old, page.items));
+      setCursor(page.cursor);
+    } catch {
+      if (ticket === request.current)
+        setPageError("Could not load more plans. Please try again.");
+    } finally {
+      moreLock.current = false;
+      setLoadingMore(false);
+    }
+  };
 
   // A stable function, so it can sit in the focus effect's dependencies.
   const refreshMyRequests = useMyRequests()?.refresh;
@@ -294,36 +469,64 @@ export function NearbyScreen() {
     }, [load, refreshMyRequests]),
   );
   const onRefresh = async () => {
+    cardOrigin?.refresh();
     setRefreshing(true);
     await load(true);
     setRefreshing(false);
   };
 
-  const distances = new Map(venues.map((v) => [v.id, v.distanceKm]));
-  const excludeAuthorId = profile?.id ?? session?.user.id;
-  const plansWithin = (
-    opts: PlanOptions,
-    km: number | null,
-    date: PlanDateFilter = dateFilter,
-  ) =>
-    discoveryPlans(
-      posts,
-      { ...opts, date, distances, excludeAuthorId, maxDistanceKm: km },
-      now,
-    );
-  const reachFor = (opts: PlanOptions) =>
-    chosenKm == null
-      ? { distanceKm: null, widened: false }
-      : widenDistance(chosenKm, (km) => plansWithin(opts, km).length);
-  const reach = reachFor(options);
+  useEffect(() => {
+    if (!cardOrigin?.device || place) return;
+    if (!point || pointLabel === NEAR_YOU) {
+      setPoint(cardOrigin.device);
+      setPointLabel(NEAR_YOU);
+      setChosenKm((km) => km ?? defaultDistance("me"));
+    }
+  }, [cardOrigin?.device]);
+  const hintOrigin: DistanceOrigin | undefined = resultOrigin
+    ? cardOrigin?.device &&
+      resultOrigin.point &&
+      cardOrigin.device.latitude === resultOrigin.point.latitude &&
+      cardOrigin.device.longitude === resultOrigin.point.longitude
+      ? { ...resultOrigin, kind: "device" }
+      : resultOrigin
+    : undefined;
+  const distances = useMemo(
+    () =>
+      new Map([
+        ...venues.map((v) => [v.id, v.distanceKm] as const),
+        ...offers
+          .filter((o) => o.venueId && o.distanceKm != null)
+          .map((o) => [o.venueId!, o.distanceKm] as const),
+      ]),
+    [venues, offers],
+  );
+  const excludeAuthorId = accountId ?? undefined;
+  const reach = {
+    distanceKm: effectiveKm,
+    widened: chosenKm != null && effectiveKm != null && effectiveKm > chosenKm,
+  };
   const shownKm = reach.distanceKm;
   const withinShown = (distance: number | undefined) =>
     shownKm == null || (distance ?? Infinity) <= shownKm;
-  const visiblePosts = plansWithin(options, shownKm);
-  // Ignores the day filter: "soon" is always the next few hours.
-  const startingSoon = startingSoonPlans(
-    plansWithin(options, shownKm, "all"),
-    now,
+  const visiblePosts = useMemo(
+    () =>
+      discoveryPlans(
+        posts,
+        {
+          ...options,
+          date: dateFilter,
+          distances,
+          excludeAuthorId,
+          maxDistanceKm: shownKm,
+        },
+        now,
+      ),
+    [posts, options, dateFilter, distances, excludeAuthorId, shownKm, now],
+  );
+  const startingSoon = useMemo(
+    () => startingSoonPlans(soonPosts, now),
+    [soonPosts, now],
   );
   const visibleOffers = offers.filter(
     (o) =>
@@ -409,6 +612,7 @@ export function NearbyScreen() {
         post={post}
         now={now}
         distanceKm={planDistance(post, distances)}
+        distanceOrigin={hintOrigin}
         onPress={() => navigation.navigate("PostDetails", { postId: post.id })}
       />
     </EnterView>
@@ -416,323 +620,386 @@ export function NearbyScreen() {
 
   return (
     <Screen style={styles.page}>
-      <FlatList
-        ref={scroll}
-        data={showPlans ? visiblePosts : []}
-        keyExtractor={planKey}
-        renderItem={renderPlan}
-        // Only the cards near the screen are built; the rest wait.
-        initialNumToRender={4}
-        maxToRenderPerBatch={4}
-        windowSize={7}
-        removeClippedSubviews={Platform.OS === "android"}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-        contentContainerStyle={styles.scroll}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={colors.accent}
-            colors={[colors.accent]}
-          />
-        }
-        ListHeaderComponent={
-          <>
-            <PersonalHeader
-              compact
-              context={headerLabel}
-              location
-              onContextPress={openLocation}
+      <View style={styles.stage}>
+        <FlatList
+          ref={scroll}
+          onScroll={onListScroll}
+          scrollEventThrottle={16}
+          data={showPlans ? visiblePosts : []}
+          keyExtractor={planKey}
+          renderItem={renderPlan}
+          // Only the cards near the screen are built; the rest wait.
+          initialNumToRender={4}
+          maxToRenderPerBatch={4}
+          windowSize={7}
+          removeClippedSubviews={Platform.OS === "android"}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={styles.scroll}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={colors.accent}
+              colors={[colors.accent]}
             />
-            {place ? (
-              <PlaceAttributions places={[place]} />
-            ) : (
-              ((!!pointLabel &&
-                pointLabel === setup.area?.label &&
-                setup.area?.source === "google") ||
-                posts.some((p) => p.location?.source === "google")) && (
-                <GoogleMapsCredit />
-              )
-            )}
+          }
+          ListHeaderComponent={
+            <>
+              <View
+                accessibilityElementsHidden
+                importantForAccessibility="no-hide-descendants"
+                style={{ height: headerHeight }}
+              />
+              {place ? (
+                <PlaceAttributions places={[place]} />
+              ) : (
+                ((!!pointLabel &&
+                  pointLabel === setup.area?.label &&
+                  setup.area?.source === "google") ||
+                  posts.some((p) => p.location?.source === "google")) && (
+                  <GoogleMapsCredit />
+                )
+              )}
 
-            <DiscoverySearch
-              compact
-              onPress={() => navigation.navigate("Search")}
-              onFilterPress={() => {
-                Keyboard.dismiss();
-                setFiltersOpen(true);
-              }}
-              filtersOpen={filtersOpen}
-              filtersActive={sheetFilters}
-            />
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.categories}
-              style={styles.categoryRail}
-            >
-              {([null, ...DISCOVERY_CATEGORIES] as const).map((item) => {
-                const selected = category === item;
-                const label = item ?? "All";
-                return (
-                  <MotionPressable
-                    key={label}
-                    accessibilityRole="button"
-                    accessibilityLabel={
-                      item ? `${item} plans and offers` : "All plans and offers"
-                    }
-                    aria-pressed={selected}
-                    accessibilityState={{ selected }}
-                    onPress={() =>
-                      setOptions((o) => ({ ...o, category: item }))
-                    }
-                    style={[
-                      styles.categoryChip,
-                      selected && styles.categoryChipOn,
-                    ]}
-                  >
-                    {selected && <View style={styles.categoryDot} />}
-                    <Text
+              <DiscoverySearch
+                compact
+                onPress={() => navigation.navigate("Search")}
+                onFilterPress={() => {
+                  Keyboard.dismiss();
+                  setFiltersOpen(true);
+                }}
+                filtersOpen={filtersOpen}
+                filtersActive={sheetFilters}
+              />
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.categories}
+                style={styles.categoryRail}
+              >
+                {([null, ...DISCOVERY_CATEGORIES] as const).map((item) => {
+                  const selected = category === item;
+                  const label = item ?? "All";
+                  return (
+                    <MotionPressable
+                      key={label}
+                      accessibilityRole="button"
+                      accessibilityLabel={
+                        item
+                          ? `${item} plans and offers`
+                          : "All plans and offers"
+                      }
+                      aria-pressed={selected}
+                      accessibilityState={{ selected }}
+                      onPress={() =>
+                        setOptions((o) => ({ ...o, category: item }))
+                      }
                       style={[
-                        styles.categoryText,
-                        selected && styles.categoryTextOn,
+                        styles.categoryChip,
+                        selected && styles.categoryChipOn,
                       ]}
                     >
-                      {label}
-                    </Text>
-                  </MotionPressable>
-                );
-              })}
-            </ScrollView>
-            {state === "loading" &&
-            posts.length === 0 &&
-            offers.length === 0 ? (
-              <PlanListSkeleton label="Finding nearby plans" />
-            ) : state === "error" &&
+                      {selected && <View style={styles.categoryDot} />}
+                      <Text
+                        style={[
+                          styles.categoryText,
+                          selected && styles.categoryTextOn,
+                        ]}
+                      >
+                        {label}
+                      </Text>
+                    </MotionPressable>
+                  );
+                })}
+              </ScrollView>
+              {state === "loading" &&
               posts.length === 0 &&
               offers.length === 0 ? (
-              <>
-                <EmptyState
-                  title="Couldn’t load nearby"
-                  hint="Check your connection and try again."
-                />
-                <Button
-                  title="Try again"
-                  variant="ghost"
-                  onPress={() => void load()}
-                />
-              </>
-            ) : (
-              <>
-                {state === "error" && (
-                  <View>
-                    <Text accessibilityRole="alert" style={styles.error}>
-                      Couldn’t refresh. Showing your last results.
-                    </Text>
-                    <Button
-                      title="Try again"
-                      variant="ghost"
-                      onPress={() => void load(true)}
-                    />
-                  </View>
-                )}
-                <FeaturedOffers
-                  offers={visibleOffers}
-                  distances={distances}
-                  now={now}
-                  onOpen={(offerId) =>
-                    navigation.navigate("OfferDetails", { offerId })
-                  }
-                  onViewAll={() =>
-                    navigation.navigate("AllOffers", {
-                      // Same area as Home: only the venues it is showing.
-                      venueIds: point ? areaVenues.map((v) => v.id) : undefined,
-                      distances: areaVenues.flatMap((v) =>
-                        v.distanceKm == null
-                          ? []
-                          : [[v.id, v.distanceKm] as [string, number]],
-                      ),
-                    })
-                  }
-                />
-                <StartingSoon
-                  posts={startingSoon}
-                  now={now}
-                  distanceOf={(post) => planDistance(post, distances)}
-                  onOpen={(postId) =>
-                    navigation.navigate("PostDetails", { postId })
-                  }
-                />
-                <View style={styles.plansHeading}>
-                  <Text accessibilityRole="header" style={styles.plansTitle}>
-                    Plans near you
-                  </Text>
-                  <MotionPressable
-                    accessibilityRole="button"
-                    accessibilityLabel={`When: ${DATE_LABELS[dateFilter]}`}
-                    accessibilityHint="Choose which days to show"
-                    accessibilityState={{ expanded: dateMenuOpen }}
-                    onPress={() => setDateMenuOpen((open) => !open)}
-                    style={styles.whenButton}
-                  >
-                    <Text style={styles.whenText}>
-                      {DATE_LABELS[dateFilter]}
-                    </Text>
-                    <Icon
-                      name={dateMenuOpen ? "chevron-up" : "chevron-down"}
-                      size={15}
-                      color={colors.ink}
-                    />
-                  </MotionPressable>
-                </View>
-                {dateMenuOpen && (
-                  <View style={styles.whenMenu} accessibilityRole="menu">
-                    {(Object.keys(DATE_LABELS) as PlanDateFilter[]).map(
-                      (key) => (
-                        <MotionPressable
-                          key={key}
-                          accessibilityRole="menuitem"
-                          accessibilityState={{ selected: dateFilter === key }}
-                          onPress={() => {
-                            setDateFilter(key);
-                            setDateMenuOpen(false);
-                          }}
-                          style={styles.whenOption}
-                        >
-                          <Text
-                            style={[
-                              styles.whenOptionText,
-                              dateFilter === key && styles.whenOptionTextOn,
-                            ]}
-                          >
-                            {DATE_LABELS[key]}
-                          </Text>
-                          {dateFilter === key && (
-                            <Icon name="check" size={17} color={colors.ink} />
-                          )}
-                        </MotionPressable>
-                      ),
-                    )}
-                  </View>
-                )}
-                {reach.widened && chosenKm != null && (
-                  <MotionPressable
-                    accessibilityRole="button"
-                    accessibilityHint="Change location or distance"
-                    onPress={openLocation}
-                    style={styles.widened}
-                  >
-                    <Icon name="compass" size={16} color={colors.amberDeep} />
-                    <Text style={styles.widenedText}>
-                      Nothing within {chosenKm} km of {nearWhat}, so we’re
-                      showing plans within {shownKm} km.{" "}
-                      <Text style={styles.widenedLink}>Change</Text>
-                    </Text>
-                  </MotionPressable>
-                )}
-                {state === "loading" && posts.length > 0 && (
-                  <Text
-                    accessibilityLiveRegion="polite"
-                    style={styles.sectionMeta}
-                  >
-                    Updating nearby plans…
-                  </Text>
-                )}
-                {chips.length > 0 && (
-                  <View style={styles.appliedFilters}>
-                    {chips.map((chip) => (
-                      <MotionPressable
-                        key={chip.key}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Remove ${chip.label}`}
-                        onPress={chip.remove}
-                        style={styles.appliedChip}
-                      >
-                        <Text style={styles.appliedText}>{chip.label}</Text>
-                        <Icon name="x" size={13} color={colors.forest} />
-                      </MotionPressable>
-                    ))}
-                  </View>
-                )}
-              </>
-            )}
-          </>
-        }
-        ListFooterComponent={
-          showPlans ? (
-            <>
-              {visiblePosts.length === 0 && state !== "loading" && (
+                <PlanListSkeleton label="Finding nearby plans" />
+              ) : state === "error" &&
+                posts.length === 0 &&
+                offers.length === 0 ? (
                 <>
                   <EmptyState
-                    title={
-                      hasFilters
-                        ? "No plans for these filters"
-                        : point
-                          ? `No plans near ${nearWhat} yet`
-                          : "No plans here yet"
+                    title="Couldn’t load nearby"
+                    hint="Check your connection and try again."
+                  />
+                  <Button
+                    title="Try again"
+                    variant="ghost"
+                    onPress={() => void load()}
+                  />
+                </>
+              ) : (
+                <>
+                  {state === "error" && (
+                    <View>
+                      <Text accessibilityRole="alert" style={styles.error}>
+                        Couldn’t refresh. Showing your last results.
+                      </Text>
+                      <Button
+                        title="Try again"
+                        variant="ghost"
+                        onPress={() => void load(true)}
+                      />
+                    </View>
+                  )}
+                  <FeaturedOffers
+                    offers={visibleOffers}
+                    distances={distances}
+                    distanceOrigin={hintOrigin}
+                    now={now}
+                    onOpen={(offerId) =>
+                      navigation.navigate("OfferDetails", { offerId })
                     }
-                    hint={
-                      hasFilters
-                        ? `Nothing within ${MAX_HOME_DISTANCE} km matches. Try another day or remove a filter.`
-                        : point
-                          ? `Nothing within ${MAX_HOME_DISTANCE} km right now. Be the first to post one here.`
-                          : "Start a plan and invite someone nearby."
+                    onViewAll={() =>
+                      navigation.navigate("AllOffers", {
+                        // Same area as Home: only the venues it is showing.
+                        distanceOrigin: hintOrigin
+                          ? {
+                              ...hintOrigin,
+                              kind:
+                                hintOrigin.kind === "device"
+                                  ? "saved"
+                                  : hintOrigin.kind,
+                            }
+                          : undefined,
+                        area: point
+                          ? {
+                              ...point,
+                              radiusM: (shownKm ?? MAX_HOME_DISTANCE) * 1000,
+                            }
+                          : undefined,
+                        distances: areaVenues.flatMap((v) =>
+                          v.distanceKm == null
+                            ? []
+                            : [[v.id, v.distanceKm] as [string, number]],
+                        ),
+                      })
                     }
                   />
-                  <View style={styles.emptyActions}>
-                    {hasFilters ? (
-                      <Button
-                        title="Clear filters"
-                        variant="secondary"
-                        onPress={clearFilters}
+                  <StartingSoon
+                    posts={startingSoon}
+                    now={now}
+                    distanceOf={(post) => planDistance(post, distances)}
+                    distanceOrigin={hintOrigin}
+                    onOpen={(postId) =>
+                      navigation.navigate("PostDetails", { postId })
+                    }
+                  />
+                  <View style={styles.plansHeading}>
+                    <Text accessibilityRole="header" style={styles.plansTitle}>
+                      Plans near you
+                    </Text>
+                    <MotionPressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`When: ${DATE_LABELS[dateFilter]}`}
+                      accessibilityHint="Choose which days to show"
+                      accessibilityState={{ expanded: dateMenuOpen }}
+                      onPress={() => setDateMenuOpen((open) => !open)}
+                      style={styles.whenButton}
+                    >
+                      <Text style={styles.whenText}>
+                        {DATE_LABELS[dateFilter]}
+                      </Text>
+                      <Icon
+                        name={dateMenuOpen ? "chevron-up" : "chevron-down"}
+                        size={15}
+                        color={colors.ink}
                       />
-                    ) : (
-                      <Button
-                        title={
-                          point ? "Post the first plan here" : "Start a plan"
-                        }
-                        variant="secondary"
-                        onPress={() => navigation.navigate("CreatePost")}
-                      />
-                    )}
-                    <Button
-                      title={point ? "Change location" : "Choose location"}
-                      variant="ghost"
-                      onPress={openLocation}
-                    />
+                    </MotionPressable>
                   </View>
-                </>
-              )}
-              {visibleVenues.length > 0 && (
-                <>
-                  <Text style={styles.sectionHeading}>
-                    Around the neighbourhood
-                  </Text>
-                  {visibleVenues.slice(0, 8).map((venue) => (
-                    <VenueRow
-                      key={venue.id}
-                      venue={venue}
-                      onPress={() =>
-                        navigation.navigate("VenueDetails", {
-                          venueId: venue.id,
-                        })
-                      }
-                    />
-                  ))}
+                  {dateMenuOpen && (
+                    <View style={styles.whenMenu} accessibilityRole="menu">
+                      {(Object.keys(DATE_LABELS) as PlanDateFilter[]).map(
+                        (key) => (
+                          <MotionPressable
+                            key={key}
+                            accessibilityRole="menuitem"
+                            accessibilityState={{
+                              selected: dateFilter === key,
+                            }}
+                            onPress={() => {
+                              setDateFilter(key);
+                              setDateMenuOpen(false);
+                            }}
+                            style={styles.whenOption}
+                          >
+                            <Text
+                              style={[
+                                styles.whenOptionText,
+                                dateFilter === key && styles.whenOptionTextOn,
+                              ]}
+                            >
+                              {DATE_LABELS[key]}
+                            </Text>
+                            {dateFilter === key && (
+                              <Icon name="check" size={17} color={colors.ink} />
+                            )}
+                          </MotionPressable>
+                        ),
+                      )}
+                    </View>
+                  )}
+                  {reach.widened && chosenKm != null && (
+                    <MotionPressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Nothing within ${chosenKm} km of ${nearWhat}, so showing plans within ${shownKm} km. Change`}
+                      accessibilityHint="Change location or distance"
+                      onPress={openLocation}
+                      style={styles.widened}
+                    >
+                      <Icon name="compass" size={16} color={colors.amberDeep} />
+                      <Text style={styles.widenedText} numberOfLines={1}>
+                        Showing plans within {shownKm} km.{" "}
+                        <Text style={styles.widenedLink}>Change</Text>
+                      </Text>
+                    </MotionPressable>
+                  )}
+                  {state === "loading" && posts.length > 0 && (
+                    <Text
+                      accessibilityLiveRegion="polite"
+                      style={styles.sectionMeta}
+                    >
+                      Updating nearby plans…
+                    </Text>
+                  )}
+                  {chips.length > 0 && (
+                    <View style={styles.appliedFilters}>
+                      {chips.map((chip) => (
+                        <MotionPressable
+                          key={chip.key}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Remove ${chip.label}`}
+                          onPress={chip.remove}
+                          style={styles.appliedChip}
+                        >
+                          <Text style={styles.appliedText}>{chip.label}</Text>
+                          <Icon name="x" size={13} color={colors.forest} />
+                        </MotionPressable>
+                      ))}
+                    </View>
+                  )}
                 </>
               )}
             </>
-          ) : null
-        }
-      />
+          }
+          ListFooterComponent={
+            showPlans ? (
+              <>
+                {pageError ? (
+                  <Text accessibilityRole="alert" style={styles.sectionMeta}>
+                    {pageError}
+                  </Text>
+                ) : null}
+                {cursor && (
+                  <Button
+                    title="More plans"
+                    loading={loadingMore}
+                    onPress={() => void loadMore()}
+                    variant="secondary"
+                  />
+                )}
+                {visiblePosts.length === 0 && state !== "loading" && (
+                  <>
+                    <EmptyState
+                      title={
+                        hasFilters
+                          ? "No plans for these filters"
+                          : point
+                            ? `No plans near ${nearWhat} yet`
+                            : "No plans here yet"
+                      }
+                      hint={
+                        hasFilters
+                          ? `Nothing within ${effectiveKm ?? chosenKm ?? MAX_HOME_DISTANCE} km matches. Try another day or remove a filter.`
+                          : point
+                            ? `Nothing within ${effectiveKm ?? chosenKm ?? MAX_HOME_DISTANCE} km right now. Be the first to post one here.`
+                            : "Start a plan and invite someone nearby."
+                      }
+                    />
+                    <View style={styles.emptyActions}>
+                      {hasFilters ? (
+                        <Button
+                          title="Clear filters"
+                          variant="secondary"
+                          onPress={clearFilters}
+                        />
+                      ) : (
+                        <Button
+                          title={
+                            point ? "Post the first plan here" : "Start a plan"
+                          }
+                          variant="secondary"
+                          onPress={() => navigation.navigate("CreatePost")}
+                        />
+                      )}
+                      <Button
+                        title={point ? "Change location" : "Choose location"}
+                        variant="ghost"
+                        onPress={openLocation}
+                      />
+                    </View>
+                  </>
+                )}
+                {visibleVenues.length > 0 && (
+                  <>
+                    <Text style={styles.sectionHeading}>
+                      Around the neighbourhood
+                    </Text>
+                    {visibleVenues.slice(0, 8).map((venue) => (
+                      <VenueRow
+                        key={venue.id}
+                        venue={venue}
+                        onPress={() =>
+                          navigation.navigate("VenueDetails", {
+                            venueId: venue.id,
+                          })
+                        }
+                      />
+                    ))}
+                  </>
+                )}
+              </>
+            ) : null
+          }
+        />
+        <Animated.View
+          style={[
+            styles.floatingHeader,
+            { transform: [{ translateY: headerShift }] },
+          ]}
+          onLayout={(e) => {
+            const height = e.nativeEvent.layout.height;
+            if (height > 0 && Math.abs(height - headerHeight) > 1)
+              setHeaderHeight(height);
+          }}
+        >
+          <PersonalHeader
+            compact
+            variant="inline"
+            showMessages={false}
+            context={headerLabel}
+            location
+            onContextPress={openLocation}
+          />
+        </Animated.View>
+        {backToTop && (
+          <MotionPressable
+            accessibilityRole="button"
+            accessibilityLabel="Back to top"
+            onPress={scrollToTop}
+            style={[styles.backToTop, { bottom: 16 }]}
+          >
+            <Icon name="arrow-up" size={20} color={colors.background} />
+          </MotionPressable>
+        )}
+      </View>
       {filtersOpen && (
         <PlanFilterSheet
           value={options}
           hasLocation={hasLocation}
-          countFor={(draft) =>
-            plansWithin(draft, reachFor(draft).distanceKm).length
-          }
           onClose={() => setFiltersOpen(false)}
           onApply={(next) => {
             setOptions(next);
@@ -760,11 +1027,33 @@ export function NearbyScreen() {
 }
 const styles = StyleSheet.create({
   page: { paddingHorizontal: 16 },
+  stage: { flex: 1, overflow: "hidden" },
+  floatingHeader: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+    backgroundColor: colors.background,
+  },
+  backToTop: {
+    position: "absolute",
+    right: 0,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.ink,
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 11,
+    elevation: 5,
+  },
+
   scroll: { paddingBottom: spacing.xl },
   emptyActions: { gap: 4 },
   widened: {
     flexDirection: "row",
-    alignItems: "flex-start",
+    alignItems: "center",
     gap: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,

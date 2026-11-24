@@ -1,3 +1,4 @@
+import { type Cursor, type Page } from "../utils/pagination";
 import { assertLive } from "./demoGuard";
 import { getSupabase, isSupabaseConfigured, isDemoMode } from "./supabase";
 import { mockVenues } from "../data/mock";
@@ -18,7 +19,8 @@ export async function listVenues(): Promise<Venue[]> {
   const { data, error } = await supabase
     .from("venues")
     .select("*")
-    .order("name");
+    .order("name")
+    .limit(80);
   if (error) throw new Error(error.message);
   return ((data ?? []) as DbVenue[]).map(toVenue);
 }
@@ -47,6 +49,53 @@ export async function searchVenues(query: string): Promise<Venue[]> {
   const { data, error } = await req;
   if (error) throw new Error(error.message);
   return ((data ?? []) as DbVenue[]).map(toVenue);
+}
+
+export async function searchVenuesPage(
+  query: string,
+  cursor: Cursor | null = null,
+): Promise<Page<Venue>> {
+  const q = query.trim().slice(0, 120);
+  if (useMock()) {
+    const all = await searchVenues(q);
+    const start = cursor ? all.findIndex((v) => v.id === cursor.id) + 1 : 0,
+      rows = all.slice(start, start + 20),
+      last = rows.at(-1);
+    return {
+      items: rows,
+      cursor:
+        start + rows.length < all.length && last
+          ? { at: last.name, id: last.id }
+          : null,
+    };
+  }
+  let req = getSupabase()!
+    .from("venues")
+    .select("*")
+    .order("name")
+    .order("id")
+    .limit(21);
+  if (q) {
+    const literal = searchLiteral(q);
+    req = req.or(
+      `name.imatch.${literal},category.imatch.${literal},area.imatch.${literal}`,
+    );
+  }
+  if (cursor) {
+    if (!/^[0-9a-f-]{36}$/i.test(cursor.id))
+      throw new Error("Please refresh this search.");
+    const name = JSON.stringify(cursor.at);
+    req = req.or(`name.gt.${name},and(name.eq.${name},id.gt.${cursor.id})`);
+  }
+  const { data, error } = await req;
+  if (error) throw new Error(error.message);
+  if (!Array.isArray(data)) throw new Error("Could not load places.");
+  const rows = data.slice(0, 20).map((r) => toVenue(r as DbVenue)),
+    last = rows.at(-1);
+  return {
+    items: rows,
+    cursor: data.length > 20 && last ? { at: last.name, id: last.id } : null,
+  };
 }
 
 /** Venues near a point, via the PostGIS RPC. */

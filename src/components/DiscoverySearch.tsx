@@ -22,7 +22,14 @@ export function DiscoverySearch(props: Props) {
   if ("onPress" in props)
     return (
       <View style={[styles.row, props.compact && styles.compactRow]}>
-        <View style={[styles.field, props.compact && styles.compact]}>
+        {/* One white box: search on the left, the filter button inside it. */}
+        <View
+          style={[
+            styles.field,
+            props.compact && styles.compact,
+            !!props.onFilterPress && styles.withFilter,
+          ]}
+        >
           <TouchableOpacity
             accessibilityRole="button"
             accessibilityLabel="Search places, plans and offers"
@@ -37,24 +44,25 @@ export function DiscoverySearch(props: Props) {
                 : "Search places or plans"}
             </Text>
           </TouchableOpacity>
+          {props.onFilterPress && (
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel={
+                props.filtersActive
+                  ? "Filter and sort plans, options applied"
+                  : "Filter and sort plans"
+              }
+              accessibilityState={{ expanded: props.filtersOpen }}
+              onPress={props.onFilterPress}
+              activeOpacity={0.7}
+              hitSlop={4}
+              style={styles.filterAction}
+            >
+              <Icon name="sliders" size={18} color={colors.onAmber} />
+              {props.filtersActive && <View style={styles.filterDot} />}
+            </TouchableOpacity>
+          )}
         </View>
-        {props.onFilterPress && (
-          <TouchableOpacity
-            accessibilityRole="button"
-            accessibilityLabel={
-              props.filtersActive
-                ? "Filter and sort plans, options applied"
-                : "Filter and sort plans"
-            }
-            accessibilityState={{ expanded: props.filtersOpen }}
-            onPress={props.onFilterPress}
-            activeOpacity={0.7}
-            style={styles.filterAction}
-          >
-            <Icon name="sliders" size={19} color={colors.onAmber} />
-            {props.filtersActive && <View style={styles.filterDot} />}
-          </TouchableOpacity>
-        )}
       </View>
     );
   return (
@@ -93,13 +101,14 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
     minHeight: 50,
-    backgroundColor: colors.surfaceRaised,
+    backgroundColor: colors.surface,
     borderColor: colors.border,
     borderRadius: 16,
     marginBottom: 0,
     paddingHorizontal: 14,
     gap: 0,
   },
+  withFilter: { paddingRight: 6 },
   searchAction: {
     flex: 1,
     minWidth: 0,
@@ -109,17 +118,17 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   filterAction: {
-    width: 50,
-    height: 50,
+    width: 38,
+    height: 38,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: colors.amberBright,
-    borderRadius: 16,
+    borderRadius: 11,
   },
   filterDot: {
     position: "absolute",
-    top: 10,
-    right: 10,
+    top: 6,
+    right: 6,
     width: 8,
     height: 8,
     borderRadius: 4,

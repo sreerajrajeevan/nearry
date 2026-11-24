@@ -147,7 +147,8 @@ export function BusinessProfileScreen({
         throw new Error(
           "Confirm that the address and map pin belong to your business.",
         );
-      await submitVerificationDoc(profile.id, venueDraft);
+      const submitted = await submitVerificationDoc(profile.id, venueDraft);
+      if (!submitted) return;
       await refreshProfile();
       await load();
       Alert.alert(
@@ -428,14 +429,27 @@ export function BusinessProfileScreen({
         <Button
           title="Log out"
           variant="danger"
-          onPress={() => {
-            void signOut().catch((e) =>
-              Alert.alert(
-                "Could not sign out",
-                e instanceof Error ? e.message : "Please retry.",
-              ),
-            );
-          }}
+          onPress={() =>
+            Alert.alert(
+              "Log out?",
+              "You’ll need to sign in again to use Nearry.",
+              [
+                { text: "Stay", style: "cancel" },
+                {
+                  text: "Log out",
+                  style: "destructive",
+                  onPress: () => {
+                    void signOut().catch((e) =>
+                      Alert.alert(
+                        "Could not sign out",
+                        e instanceof Error ? e.message : "Please retry.",
+                      ),
+                    );
+                  },
+                },
+              ],
+            )
+          }
           style={styles.logoutBtn}
         />
       </ScrollView>

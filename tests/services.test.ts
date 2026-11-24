@@ -585,7 +585,7 @@ test("Google address canonicalization is accepted only when the server binds it 
   await assert.rejects(resolvePlace(prediction), /Could not read/);
 });
 
-test("external meeting spots are saved, reloaded, moved and removed without pretending to be registered venues", async () => {
+test("external meeting spots are saved and moved; edits cannot strip the required place", async () => {
   let row: any = {
     id: "location-post",
     author_id: "host",
@@ -619,12 +619,11 @@ test("external meeting spots are saved, reloaded, moved and removed without pret
     location: { source: "manual", latitude: 11, longitude: 77 },
   });
   assert.equal(moved.location?.latitude, 11);
-  const removed = await posts.updatePost(created.id, {
-    location: null,
-    venueName: null,
-  });
-  assert.equal(removed.location, undefined);
-  assert.equal(removed.venueName, undefined);
+  await assert.rejects(
+    posts.updatePost(created.id, { location: null, venueName: null }),
+    /Select a meeting place/,
+  );
+  assert.equal(row.location_lat, 11);
 });
 
 test("nearby plans query coordinates even when no registered venues exist and preserve RPC distance", async () => {

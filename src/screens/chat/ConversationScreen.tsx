@@ -17,24 +17,33 @@ import {
   KeyboardAvoidingView,
   Platform,
   Keyboard,
-  ActivityIndicator,
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
 import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
 import { ChatAvatar } from "../../components/ChatAvatar";
-import { LinkedText } from "../../components/LinkedText";
 import { chatIdentity } from "../../utils/chatIdentity";
 import { Icon } from "../../components/Icon";
 import { colors, typography, spacing, weight } from "../../theme";
 import { useAuth } from "../../store/AuthContext";
 import {
-  listMessages,
+  listMessagesPage,
   sendMessage,
   markConversationRead,
   subscribeToConversation,
 } from "../../services/chat";
+import * as Crypto from "expo-crypto";
+import { Cursor } from "../../utils/pagination";
+import { setActiveChat } from "../../services/activeChat";
 import { mergeMessages } from "../../utils/chatMessages";
+import { buildTimeline, type TimelineItem } from "../../utils/chatTimeline";
+import {
+  ChatComposer,
+  chatColors,
+  DayChip,
+  EventLine,
+  MessageRow,
+} from "../../components/chat/ChatParts";
 import { ChatMessage } from "../../services/mappers";
 
 type Props = {
@@ -48,41 +57,6 @@ type Props = {
   };
 };
 
-function Bubble({
-  msg,
-  onReport,
-}: {
-  msg: ChatMessage;
-  onReport?: () => void;
-}) {
-  return (
-    <View style={[styles.bubbleRow, msg.mine && styles.bubbleRowMine]}>
-      <TouchableOpacity
-        activeOpacity={0.95}
-        onLongPress={onReport}
-        accessibilityRole={onReport ? "button" : undefined}
-        accessibilityLabel={
-          onReport ? `${msg.body}. Hold to report message` : undefined
-        }
-        style={[styles.bubble, msg.mine && styles.bubbleMine]}
-      >
-        <LinkedText
-          style={[styles.body, msg.mine && styles.bodyMine]}
-          linkStyle={msg.mine ? styles.linkMine : styles.link}
-        >
-          {msg.body}
-        </LinkedText>
-        <Text style={[styles.time, msg.mine && styles.timeMine]}>
-          {new Date(msg.createdAt).toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit",
-          })}
-        </Text>
-      </TouchableOpacity>
-    </View>
-  );
-}
-
 /** 1:1 conversation. Text-only, realtime, server-authorized membership. */
 export function ConversationScreen({ route, navigation }: Props) {
   const { conversationId, title } = route.params;
@@ -90,6 +64,16 @@ export function ConversationScreen({ route, navigation }: Props) {
   const myId = profile?.id ?? "";
   const [peer, setPeer] = useState<ConversationSafety | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [olderCursor, setOlderCursor] = useState<Cursor | null>(null),
+    [olderBusy, setOlderBusy] = useState(false),
+    [olderError, setOlderError] = useState("");
+  const clearBoundary = useRef<string | null>(null),
+    messagesRef = useRef<ChatMessage[]>([]),
+    olderLock = useRef(false);
+  messagesRef.current = messages;
+  const retry = useRef<{ room: string; body: string; key: string } | null>(
+    null,
+  );
   const [draft, setDraft] = useState("");
   const [state, setState] = useState<"loading" | "error" | "ready">("loading");
   const [sending, setSending] = useState(false);
@@ -113,7 +97,7 @@ export function ConversationScreen({ route, navigation }: Props) {
       hide.remove();
     };
   }, []);
-  const listRef = useRef<FlatList<ChatMessage> | null>(null);
+  const listRef = useRef<FlatList<TimelineItem<ChatMessage>> | null>(null);
 
   const focused = useRef(false);
   const generation = useRef(0);
@@ -129,21 +113,27 @@ export function ConversationScreen({ route, navigation }: Props) {
     const ticket = ++generation.current;
     try {
       const [msgs, safety] = await Promise.all([
-        listMessages(conversationId, myId),
+        listMessagesPage(conversationId, myId),
         conversationSafety(conversationId),
       ]);
       if (!focused.current || ticket !== generation.current) return;
       setPeer(safety);
-      // Use the authoritative snapshot: a clear on another device must remove old bubbles.
-      setMessages(msgs);
+      const sameBoundary = clearBoundary.current === msgs.clearedAt;
+      clearBoundary.current = msgs.clearedAt;
+      setMessages((previous) =>
+        sameBoundary ? mergeMessages(previous, msgs.items) : msgs.items,
+      );
+      setOlderCursor((old) =>
+        sameBoundary && messagesRef.current.length > 60 ? old : msgs.cursor,
+      );
       setState("ready");
-      // Only acknowledge the messages in this displayed snapshot.
-      void markConversationRead(
-        conversationId,
-        msgs[msgs.length - 1]?.id,
-      ).catch(() => {});
     } catch {
-      if (focused.current && ticket === generation.current) setState("error");
+      if (
+        focused.current &&
+        ticket === generation.current &&
+        !messagesRef.current.length
+      )
+        setState("error");
     }
   }, [conversationId, myId]);
 
@@ -152,6 +142,10 @@ export function ConversationScreen({ route, navigation }: Props) {
       focused.current = true;
       ++visit.current;
       setDraft("");
+      clearBoundary.current = null;
+      setOlderCursor(null);
+      setOlderError("");
+      const stopActive = setActiveChat(conversationId);
       setSending(false);
       setPeer(null);
       setSendError("");
@@ -169,6 +163,7 @@ export function ConversationScreen({ route, navigation }: Props) {
       });
       const timer = setInterval(() => void load(), 30_000);
       return () => {
+        stopActive();
         app.remove();
         clearInterval(timer);
         focused.current = false;
@@ -190,13 +185,25 @@ export function ConversationScreen({ route, navigation }: Props) {
     setSendError("");
     setSending(true);
     try {
-      const msg = await sendMessage(conversationId, myId, text);
+      if (retry.current?.room !== sendingRoom || retry.current.body !== text)
+        retry.current = {
+          room: sendingRoom,
+          body: text,
+          key: Crypto.randomUUID(),
+        };
+      const msg = await sendMessage(
+        conversationId,
+        myId,
+        text,
+        retry.current.key,
+      );
       if (
         room.current !== sendingRoom ||
         visit.current !== sendingVisit ||
         !focused.current
       )
         return;
+      retry.current = null;
       ++generation.current; // Discard a reload started before this send committed.
       // Keep anything typed while the send was in flight.
       setDraft((current) => (current === sentDraft ? "" : current));
@@ -229,6 +236,56 @@ export function ConversationScreen({ route, navigation }: Props) {
       }
     }
   };
+
+  const loadOlder = async () => {
+    if (!olderCursor || olderLock.current) return;
+    olderLock.current = true;
+    setOlderBusy(true);
+    setOlderError("");
+    const scope = room.current,
+      visitId = visit.current,
+      boundary = clearBoundary.current;
+    try {
+      const page = await listMessagesPage(conversationId, myId, olderCursor);
+      if (
+        room.current !== scope ||
+        visit.current !== visitId ||
+        !focused.current
+      )
+        return;
+      if (page.clearedAt !== boundary) {
+        void load();
+        return;
+      }
+      stickToBottom.current = false;
+      setMessages((previous) => mergeMessages(page.items, previous));
+      setOlderCursor(page.cursor);
+    } catch {
+      if (room.current === scope && visit.current === visitId)
+        setOlderError("Could not load older messages.");
+    } finally {
+      olderLock.current = false;
+      if (room.current === scope && visit.current === visitId)
+        setOlderBusy(false);
+    }
+  };
+  const visibleRead = useRef(
+    ({
+      viewableItems,
+    }: {
+      viewableItems: Array<{
+        item: TimelineItem<ChatMessage>;
+        isViewable: boolean;
+      }>;
+    }) => {
+      const last = viewableItems
+        .filter((i) => i.isViewable)
+        .flatMap((i) => (i.item.type === "message" ? [i.item.message] : []))
+        .at(-1);
+      if (last && focused.current && isForeground())
+        void markConversationRead(last.conversationId, last.id).catch(() => {});
+    },
+  ).current;
 
   // Business chats: business name on top, the person running it underneath.
   const who = peer
@@ -303,7 +360,7 @@ export function ConversationScreen({ route, navigation }: Props) {
           ) : (
             <FlatList
               ref={listRef}
-              style={styles.flex}
+              style={styles.listView}
               keyboardShouldPersistTaps="handled"
               keyboardDismissMode={
                 Platform.OS === "ios" ? "interactive" : "on-drag"
@@ -312,25 +369,61 @@ export function ConversationScreen({ route, navigation }: Props) {
                 if (stickToBottom.current)
                   listRef.current?.scrollToEnd({ animated: false });
               }}
-              data={messages}
-              keyExtractor={(m: ChatMessage) => m.id}
-              renderItem={({ item }: { item: ChatMessage }) => (
-                <Bubble
-                  msg={item}
-                  onReport={
-                    item.mine
-                      ? undefined
-                      : () =>
-                          navigation.navigate("Report", {
-                            target: {
-                              kind: "message",
-                              id: item.id,
-                              name: "Message",
-                            },
-                          })
-                  }
-                />
-              )}
+              data={buildTimeline(messages, [], {
+                now: new Date(),
+                myId,
+              })}
+              maintainVisibleContentPosition={{ minIndexForVisible: 0 }}
+              onViewableItemsChanged={visibleRead}
+              viewabilityConfig={{
+                itemVisiblePercentThreshold: 80,
+                minimumViewTime: 500,
+              }}
+              ListHeaderComponent={
+                <>
+                  {!!olderError && (
+                    <Text accessibilityRole="alert" style={styles.sendError}>
+                      {olderError}
+                    </Text>
+                  )}
+                  {olderCursor && (
+                    <Button
+                      title="Older messages"
+                      variant="ghost"
+                      loading={olderBusy}
+                      onPress={() => void loadOlder()}
+                    />
+                  )}
+                </>
+              }
+              keyExtractor={(item) => item.key}
+              renderItem={({ item }) =>
+                item.type === "day" ? (
+                  <DayChip label={item.label} />
+                ) : item.type === "event" ? (
+                  <EventLine text={item.text} />
+                ) : (
+                  <MessageRow
+                    item={item}
+                    group={false}
+                    hint={
+                      item.message.mine ? undefined : "Hold to report message"
+                    }
+                    onLongPress={
+                      item.message.mine
+                        ? undefined
+                        : () =>
+                            navigation.navigate("Report", {
+                              target: {
+                                kind: "message",
+                                id: item.message.id,
+                                name: "Message",
+                              },
+                            })
+                    }
+                  />
+                )
+              }
               contentContainerStyle={styles.list}
               onScroll={({ nativeEvent }) => {
                 stickToBottom.current =
@@ -362,53 +455,20 @@ export function ConversationScreen({ route, navigation }: Props) {
             {sendError} Your message is still here; tap Send to retry.
           </Text>
         )}
-        <View
-          style={[
-            styles.composer,
-            {
-              paddingBottom: keyboardOpen
-                ? spacing.sm
-                : Math.max(insets.bottom, spacing.sm),
-            },
-          ]}
-        >
-          <TextInput
-            ref={inputRef}
-            accessibilityLabel="Message"
-            style={styles.input}
-            placeholder="Write a message…"
-            placeholderTextColor={colors.textFaint}
-            value={draft}
-            onChangeText={setDraft}
-            multiline
-            maxLength={2000}
-            editable={!!peer?.canMessage}
-            // Enter inserts a newline; sending is always an explicit tap.
-            submitBehavior="newline"
-          />
-          <TouchableOpacity
-            accessibilityRole="button"
-            accessibilityLabel="Send message"
-            accessibilityState={{
-              disabled: !draft.trim() || sending || !peer?.canMessage,
-              busy: sending,
-            }}
-            style={[
-              styles.send,
-              (!draft.trim() || sending || !peer?.canMessage) &&
-                styles.sendDisabled,
-            ]}
-            activeOpacity={0.8}
-            onPress={onSend}
-            disabled={!draft.trim() || sending || !peer?.canMessage}
-          >
-            {sending ? (
-              <ActivityIndicator color={colors.night} size="small" />
-            ) : (
-              <Icon name="arrow-up" size={20} color={colors.night} />
-            )}
-          </TouchableOpacity>
-        </View>
+        <ChatComposer
+          inputRef={inputRef}
+          value={draft}
+          onChangeText={setDraft}
+          onSend={onSend}
+          sending={sending}
+          disabled={!peer?.canMessage}
+          placeholder="Write a message…"
+          label="Message"
+          sendLabel="Send message"
+          bottomInset={
+            keyboardOpen ? spacing.sm : Math.max(insets.bottom, spacing.sm)
+          }
+        />
         {actionsOpen && (
           <ConversationActions
             conversationId={conversationId}
@@ -434,16 +494,17 @@ export function ConversationScreen({ route, navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1, minHeight: 0, backgroundColor: colors.background },
+  flex: { flex: 1, minHeight: 0, backgroundColor: colors.surface },
+  listView: { flex: 1, minHeight: 0 },
   heading: {
     flexDirection: "row",
     alignItems: "center",
     gap: spacing.sm,
     paddingVertical: spacing.sm,
     paddingHorizontal: 4,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
-    backgroundColor: colors.card,
+    borderBottomWidth: 1,
+    borderBottomColor: chatColors.theirsBorder,
+    backgroundColor: colors.surface,
     flexShrink: 0,
   },
   iconButton: {
@@ -461,78 +522,22 @@ const styles = StyleSheet.create({
     color: colors.textDim,
     padding: spacing.sm,
   },
-  transcript: { flex: 1, minHeight: 0, overflow: "hidden" },
-  list: { padding: spacing.md, flexGrow: 1, justifyContent: "flex-end" },
+  transcript: {
+    flex: 1,
+    minHeight: 0,
+    overflow: "hidden",
+    backgroundColor: chatColors.canvas,
+  },
+  list: {
+    paddingHorizontal: 12,
+    paddingBottom: 12,
+    flexGrow: 1,
+    justifyContent: "flex-end",
+  },
   sendError: {
     ...typography.bodySmall,
     color: colors.red,
     paddingHorizontal: spacing.md,
     paddingTop: spacing.sm,
   },
-  bubbleRow: { alignItems: "flex-start", marginBottom: spacing.sm },
-  bubbleRowMine: { alignItems: "flex-end" },
-  bubble: {
-    maxWidth: "80%",
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: 18,
-    borderBottomLeftRadius: 4,
-  },
-  bubbleMine: {
-    backgroundColor: colors.amberBright,
-    borderColor: colors.amberBright,
-    borderBottomLeftRadius: 18,
-    borderBottomRightRadius: 4,
-  },
-  body: { ...typography.body, color: colors.text },
-  bodyMine: { color: colors.night },
-  link: { color: colors.amberDeep, ...weight("600") },
-  linkMine: { color: colors.night, ...weight("700") },
-  time: {
-    ...typography.caption,
-    color: colors.textFaint,
-    marginTop: 4,
-    fontSize: 11,
-  },
-  timeMine: { color: colors.gray800 },
-  composer: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    gap: spacing.sm,
-    flexShrink: 0,
-    paddingHorizontal: spacing.md,
-    paddingTop: spacing.sm,
-    backgroundColor: colors.card,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.border,
-  },
-  input: {
-    flex: 1,
-    ...typography.body,
-    fontSize: 16,
-    minHeight: 48,
-    minWidth: 0,
-    backgroundColor: colors.background,
-    textAlignVertical: "top",
-    color: colors.text,
-    borderWidth: 1,
-    borderColor: colors.borderStrong,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    maxHeight: 110,
-    borderRadius: 24,
-  },
-  send: {
-    borderRadius: 23,
-    width: 46,
-    height: 46,
-    backgroundColor: colors.amber,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  sendDisabled: { opacity: 0.4 },
-  sendText: { ...typography.title, color: colors.white },
 });

@@ -1,48 +1,46 @@
-import { RowListSkeleton } from "../components/Skeletons";
-import { Alert } from "../services/appAlert";
-import { timeAgo } from "../utils/format";
-import { BackButton } from "../components/BackButton";
-import { PageHeading } from "../components/PageHeading";
 import React, { useCallback, useRef, useState } from "react";
 import {
   AppState,
   View,
   Text,
   StyleSheet,
-  ScrollView,
+  SectionList,
   TouchableOpacity,
 } from "react-native";
 import { useFocusEffect } from "@react-navigation/native";
+import { Alert } from "../services/appAlert";
 import { Screen } from "../components/Screen";
+import { BackButton } from "../components/BackButton";
 import { Button } from "../components/Button";
-import { Badge } from "../components/Badge";
+import { FilterTabs } from "../components/FilterTabs";
+import { Icon } from "../components/Icon";
 import { EmptyState } from "../components/EmptyState";
-import { colors, typography, spacing, surfaces } from "../theme";
+import { RowListSkeleton } from "../components/Skeletons";
+import { colors, typography, spacing, weight } from "../theme";
+import { useAuth } from "../store/AuthContext";
+import type { AppNotification } from "../services/mappers";
+import type { Cursor } from "../utils/pagination";
+import { notificationTarget } from "../utils/notificationTarget";
+import { timeAgo } from "../utils/format";
+import {
+  filterNotifications,
+  filtersFor,
+  groupNotificationsByDay,
+  notificationLook,
+  rowTime,
+  type NotificationFilter,
+} from "../utils/notificationGroups";
 import {
   subscribeToNotifications,
-  listNotifications,
+  listNotificationPage,
   markNotificationRead,
   markNotificationUnread,
   markAllNotificationsRead,
   deleteNotification,
   clearAllNotifications,
 } from "../services/notifications";
-import { useAuth } from "../store/AuthContext";
-import { AppNotification } from "../services/mappers";
-import { notificationTarget } from "../utils/notificationTarget";
-
-function kindTone(kind: string): "neutral" | "green" | "red" {
-  if (kind === "request_approved" || kind === "booking_confirmed")
-    return "green";
-  if (kind === "request_declined" || kind === "booking_cancelled") return "red";
-  return "neutral";
-}
-
-function kindLabel(kind: string): string {
-  return kind.replace(/_/g, " ").toUpperCase();
-}
-
-/** In-app notification center with read/unread states. Shared by both lanes. */
+const keyOf = (n: AppNotification) =>
+  n.threadKey ? n.kind + ":" + n.threadKey : n.id;
 export function NotificationCenterScreen({
   navigation,
 }: {
@@ -53,280 +51,362 @@ export function NotificationCenterScreen({
 }) {
   const { profile } = useAuth();
   const focused = useRef(false),
-    version = useRef(0);
-  const [items, setItems] = useState<AppNotification[]>([]);
-  const [state, setState] = useState<"loading" | "error" | "ready">("loading");
-
-  const load = useCallback(async (silent = false) => {
-    const ticket = ++version.current;
-    if (!silent) setState("loading");
-    try {
-      const result = await listNotifications();
-      if (!focused.current || ticket !== version.current) return;
-      setItems(result);
-      setState("ready");
-    } catch {
-      if (focused.current && ticket === version.current && !silent)
-        setState("error");
-    }
-  }, []);
-
+    version = useRef(0),
+    moreLock = useRef(false);
+  const [items, setItems] = useState<AppNotification[]>([]),
+    [state, setState] = useState<"loading" | "error" | "ready">("loading");
+  const [cursor, setCursor] = useState<Cursor | null>(null),
+    [more, setMore] = useState(false),
+    [filter, setFilter] = useState<NotificationFilter>("all"),
+    [moreError, setMoreError] = useState("");
+  // Plans and Bookings only need non-message notices, which the server can
+  // page on its own; the chips then narrow the loaded notices further.
+  const updates = filter === "plans" || filter === "bookings";
+  const load = useCallback(
+    async (silent = false) => {
+      const ticket = ++version.current;
+      if (!silent) setState("loading");
+      try {
+        const page = await listNotificationPage(null, updates);
+        if (!focused.current || ticket !== version.current) return;
+        setItems(page.items);
+        setCursor(page.cursor);
+        setMoreError("");
+        setState("ready");
+      } catch {
+        if (focused.current && ticket === version.current && !silent)
+          setState("error");
+      }
+    },
+    [updates],
+  );
   useFocusEffect(
     useCallback(() => {
       focused.current = true;
+      setItems([]);
+      setCursor(null);
       void load();
-      const refresh = () => void load(true);
       const stop = profile
-        ? subscribeToNotifications(profile.id, refresh)
+        ? subscribeToNotifications(profile.id, () => void load(true))
         : () => {};
-      const appState = AppState.addEventListener("change", (state) => {
-        if (state === "active") refresh();
+      const app = AppState.addEventListener("change", (s) => {
+        if (s === "active") void load(true);
       });
-      const timer = setInterval(refresh, 30000);
       return () => {
         focused.current = false;
         ++version.current;
         stop();
-        appState.remove();
-        clearInterval(timer);
+        app.remove();
       };
     }, [load, profile?.id]),
   );
-
-  const onOpen = async (n: AppNotification) => {
-    if (!n.read) {
-      try {
-        await markNotificationRead(n.id);
-        setItems((prev) =>
-          prev.map((x) => (x.id === n.id ? { ...x, read: true } : x)),
-        );
-      } catch {
-        Alert.alert(
-          "Could not mark as read",
-          "Check your connection and try again.",
-        );
-      }
+  const loadMore = async () => {
+    if (!cursor || moreLock.current) return;
+    moreLock.current = true;
+    setMore(true);
+    setMoreError("");
+    const ticket = version.current;
+    try {
+      const page = await listNotificationPage(cursor, updates);
+      if (!focused.current || ticket !== version.current) return;
+      setItems((old) => {
+        const map = new Map(old.map((n) => [keyOf(n), n]));
+        for (const n of page.items) map.set(keyOf(n), n);
+        return [...map.values()];
+      });
+      setCursor(page.cursor);
+    } catch {
+      if (focused.current && ticket === version.current)
+        setMoreError("Could not load older updates. Please retry.");
+    } finally {
+      moreLock.current = false;
+      if (focused.current) setMore(false);
     }
+  };
+  const run = async (work: () => Promise<void>) => {
+    try {
+      await work();
+    } catch {
+      Alert.alert(
+        "Could not update notifications",
+        "Check your connection and try again.",
+      );
+    }
+  };
+  const open = async (n: AppNotification) => {
+    if (!n.read)
+      await run(async () => {
+        await markNotificationRead(n.id);
+        setItems((old) =>
+          old.map((x) =>
+            x.id === n.id ? { ...x, read: true, unreadCount: 0 } : x,
+          ),
+        );
+      });
     if (profile) {
       const target = notificationTarget(n, profile.accountType);
       navigation.navigate(target.screen, target.params);
     }
   };
-
-  const onMarkAll = async () => {
-    try {
-      await markAllNotificationsRead();
-      await load(true);
-    } catch {
-      Alert.alert(
-        "Could not mark all as read",
-        "Check your connection and try again.",
+  const filters = filtersFor(
+    profile?.accountType === "business" ? "business" : "personal",
+  );
+  const visible = filterNotifications(items, filter);
+  const sections = groupNotificationsByDay(visible, new Date());
+  const unread = items.some((n) => !n.read);
+  const toggleRead = (n: AppNotification) =>
+    void run(async () => {
+      await (n.read
+        ? markNotificationUnread(n.id)
+        : markNotificationRead(n.id));
+      setItems((old) =>
+        old.map((x) =>
+          x.id === n.id ? { ...x, read: !n.read, unreadCount: 0 } : x,
+        ),
       );
-    }
-  };
-
-  const onToggleRead = async (n: AppNotification) => {
-    try {
-      if (n.read) {
-        await markNotificationUnread(n.id);
-      } else {
-        await markNotificationRead(n.id);
-      }
-      setItems((prev) =>
-        prev.map((x) => (x.id === n.id ? { ...x, read: !x.read } : x)),
-      );
-    } catch {
-      Alert.alert("Could not update", "Check your connection and try again.");
-    }
-  };
-
-  const onDelete = async (n: AppNotification) => {
-    try {
+    });
+  const remove = (n: AppNotification) =>
+    void run(async () => {
       await deleteNotification(n.id);
-      setItems((prev) => prev.filter((x) => x.id !== n.id));
-    } catch {
-      Alert.alert("Could not delete", "Check your connection and try again.");
-    }
-  };
-
-  const onClearAll = () => {
+      setItems((old) => old.filter((x) => x.id !== n.id));
+    });
+  const rowMenu = (n: AppNotification) =>
+    Alert.alert(n.title, undefined, [
+      {
+        text: n.read ? "Mark as unread" : "Mark as read",
+        onPress: () => toggleRead(n),
+      },
+      { text: "Remove", style: "destructive", onPress: () => remove(n) },
+      { text: "Cancel", style: "cancel" },
+    ]);
+  const clearAll = () =>
     Alert.alert(
       "Clear all notifications?",
-      "This deletes every notification. You can't undo it.",
+      "This removes your notification history.",
       [
-        { text: "Cancel", style: "cancel" },
+        { text: "Keep", style: "cancel" },
         {
           text: "Clear all",
           style: "destructive",
-          onPress: async () => {
-            try {
+          onPress: () =>
+            void run(async () => {
               await clearAllNotifications();
               setItems([]);
-            } catch {
-              Alert.alert(
-                "Could not clear",
-                "Check your connection and try again.",
-              );
-            }
-          },
+              setCursor(null);
+            }),
         },
       ],
     );
+  const emptyHint: Record<NotificationFilter, string> = {
+    all: "Your plans, bookings and conversations will show up here.",
+    plans: "Requests, approvals and plan changes will show up here.",
+    bookings: "Booking requests and confirmations will show up here.",
+    messages: "New chat messages will show up here.",
   };
-
-  const unread = items.filter((n) => !n.read).length;
-
   return (
     <Screen>
-      <ScrollView
+      <SectionList
+        sections={state === "ready" ? sections : []}
+        keyExtractor={keyOf}
+        stickySectionHeadersEnabled={false}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scroll}
-      >
-        <BackButton onPress={() => navigation.goBack()} />
-        <PageHeading
-          compact
-          title="Notifications"
-          subtitle="The latest from your plans and people."
-        />
-        <View style={styles.headerRow}>
-          <View style={styles.headerActions}>
-            {unread > 0 && (
-              <TouchableOpacity onPress={onMarkAll} activeOpacity={0.7}>
-                <Text style={styles.markAll}>Mark all read</Text>
-              </TouchableOpacity>
-            )}
-            {items.length > 0 && (
-              <TouchableOpacity onPress={onClearAll} activeOpacity={0.7}>
-                <Text style={styles.clearAll}>Clear</Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
-
-        {state === "loading" ? (
-          <RowListSkeleton label="Loading notifications" />
-        ) : state === "error" ? (
-          <View>
-            <EmptyState
-              title="Couldn't load notifications"
-              hint="Check your connection and retry."
-            />
-            <Button title="Retry" onPress={() => void load()} />
-          </View>
-        ) : items.length === 0 ? (
-          <EmptyState
-            title="All quiet"
-            hint="Join requests, bookings and messages will show up here."
-          />
-        ) : (
-          items.map((n) => (
-            <View key={n.id} style={styles.row}>
-              <TouchableOpacity
-                activeOpacity={0.7}
-                onPress={() => onOpen(n)}
-                style={styles.rowMain}
-              >
-                <View style={styles.topRow}>
-                  <Text style={styles.title}>{n.title}</Text>
+        ListHeaderComponent={
+          <>
+            <View style={styles.topBar}>
+              <BackButton onPress={() => navigation.goBack()} />
+              <View style={styles.topActions}>
+                {unread && (
                   <TouchableOpacity
-                    onPress={() => onToggleRead(n)}
-                    activeOpacity={0.7}
-                    hitSlop={8}
                     accessibilityRole="button"
-                    accessibilityLabel={
-                      n.read ? "Mark as unread" : "Mark as read"
+                    onPress={() =>
+                      void run(async () => {
+                        await markAllNotificationsRead();
+                        setItems((old) =>
+                          old.map((n) => ({
+                            ...n,
+                            read: true,
+                            unreadCount: 0,
+                          })),
+                        );
+                      })
                     }
+                    style={styles.textAction}
                   >
-                    <View style={[styles.dot, n.read && styles.dotRead]} />
+                    <Text style={styles.textActionLabel}>Mark all read</Text>
                   </TouchableOpacity>
-                </View>
-                <Text style={styles.body}>{n.body}</Text>
-                <View style={styles.metaRow}>
-                  <Badge label={kindLabel(n.kind)} tone={kindTone(n.kind)} />
-                  <Text style={styles.time}>{timeAgo(n.createdAt)}</Text>
-                </View>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => onDelete(n)}
-                activeOpacity={0.7}
-                hitSlop={8}
-                style={styles.deleteBtn}
-                accessibilityRole="button"
-                accessibilityLabel="Delete notification"
-              >
-                <Text style={styles.deleteText}>×</Text>
-              </TouchableOpacity>
+                )}
+                {items.length > 0 && (
+                  <TouchableOpacity
+                    accessibilityRole="button"
+                    accessibilityLabel="More options"
+                    onPress={clearAll}
+                    style={styles.iconAction}
+                  >
+                    <Icon name="more-vertical" size={20} color={colors.text} />
+                  </TouchableOpacity>
+                )}
+              </View>
             </View>
-          ))
+            <Text accessibilityRole="header" style={styles.heading}>
+              Notifications
+            </Text>
+            <FilterTabs
+              label="Show notifications"
+              options={filters}
+              selected={filter}
+              onSelect={setFilter}
+            />
+          </>
+        }
+        renderSectionHeader={({ section }) => (
+          <Text accessibilityRole="header" style={styles.section}>
+            {section.title.toUpperCase()}
+          </Text>
         )}
-      </ScrollView>
+        ListEmptyComponent={
+          state === "loading" ? (
+            <RowListSkeleton label="Loading notifications" />
+          ) : state === "error" ? (
+            <>
+              <EmptyState
+                title="Could not load notifications"
+                hint="Check your connection and retry."
+              />
+              <Button title="Try again" onPress={() => void load()} />
+            </>
+          ) : (
+            <EmptyState title="You're all caught up" hint={emptyHint[filter]} />
+          )
+        }
+        renderItem={({ item: n }) => {
+          const look = notificationLook(n.kind);
+          const count = n.unreadCount ?? 0;
+          return (
+            <TouchableOpacity
+              style={[styles.row, !n.read && styles.rowUnread]}
+              onPress={() => void open(n)}
+              onLongPress={() => rowMenu(n)}
+              delayLongPress={350}
+              accessibilityRole="button"
+              accessibilityLabel={`${n.read ? "" : "Unread. "}${n.title}. ${n.body}. ${timeAgo(n.createdAt)}`}
+              accessibilityHint="Opens it. Hold for more options."
+              accessibilityActions={[
+                { name: "longpress", label: "More options" },
+              ]}
+              onAccessibilityAction={() => rowMenu(n)}
+            >
+              <View style={[styles.iconCircle, { backgroundColor: look.bg }]}>
+                <Icon name={look.icon} size={19} color={look.fg} />
+              </View>
+              <View style={styles.rowMain}>
+                <Text
+                  style={[styles.title, !n.read && styles.titleUnread]}
+                  numberOfLines={1}
+                >
+                  {n.title}
+                </Text>
+                {!!n.body && (
+                  <Text style={styles.body} numberOfLines={2}>
+                    {n.body}
+                  </Text>
+                )}
+                {count > 1 && (
+                  <Text style={styles.count}>{count} new messages</Text>
+                )}
+              </View>
+              <View style={styles.rowSide}>
+                <Text style={styles.time}>
+                  {rowTime(n.createdAt, new Date())}
+                </Text>
+                {!n.read && <View style={styles.dot} />}
+              </View>
+            </TouchableOpacity>
+          );
+        }}
+        ListFooterComponent={
+          <>
+            {moreError ? (
+              <Text accessibilityRole="alert" style={styles.body}>
+                {moreError}
+              </Text>
+            ) : null}
+            {cursor && (
+              <Button
+                title={moreError ? "Retry older updates" : "Older updates"}
+                loading={more}
+                onPress={() => void loadMore()}
+                variant="secondary"
+              />
+            )}
+          </>
+        }
+      />
     </Screen>
   );
 }
-
 const styles = StyleSheet.create({
   scroll: { paddingBottom: spacing.xl },
-  headerRow: {
+  topBar: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    marginTop: spacing.sm,
-    marginBottom: spacing.md,
+    justifyContent: "space-between",
   },
-  header: { ...typography.title, color: colors.text },
-  markAll: { ...typography.label, color: colors.accent },
-  status: { ...typography.label, color: colors.textDim, marginTop: spacing.xl },
+  topActions: { flexDirection: "row", alignItems: "center" },
+  textAction: { minHeight: 44, justifyContent: "center", paddingHorizontal: 8 },
+  textActionLabel: { ...typography.label, color: colors.amberDeep },
+  iconAction: {
+    width: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  heading: {
+    ...typography.title,
+    color: colors.text,
+    marginTop: 4,
+    marginBottom: 12,
+  },
+  section: {
+    ...typography.caption,
+    letterSpacing: 0.8,
+    color: colors.textDim,
+    marginTop: 14,
+    marginBottom: 6,
+  },
   row: {
-    ...surfaces.card,
-    paddingVertical: spacing.lg,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.border,
     flexDirection: "row",
     alignItems: "flex-start",
+    gap: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    marginBottom: 4,
+    borderRadius: 14,
   },
-  topRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
+  rowUnread: { backgroundColor: "#FFFBEB" },
+  iconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: "center",
-    gap: spacing.sm,
-  },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: colors.goldDeep,
-  },
-  dotRead: { backgroundColor: colors.border },
-  headerActions: {
-    flexDirection: "row",
-    gap: spacing.md,
-    alignItems: "center",
-  },
-  clearAll: { ...typography.label, color: colors.textDim },
-  rowMain: { flex: 1 },
-  deleteBtn: {
     justifyContent: "center",
-    paddingLeft: spacing.sm,
   },
-  deleteText: {
-    ...typography.title,
-    color: colors.textFaint,
-    lineHeight: 20,
-  },
-  title: { ...typography.body, color: colors.text, flex: 1 },
-  body: {
-    ...typography.bodySmall,
-    color: colors.textDim,
-    marginTop: spacing.xs,
-  },
-  metaRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    marginTop: spacing.sm,
-  },
-  time: {
+  rowMain: { flex: 1, minWidth: 0 },
+  title: { ...typography.body, color: colors.text, ...weight("500") },
+  titleUnread: { ...weight("700") },
+  body: { ...typography.bodySmall, color: colors.textDim, marginTop: 2 },
+  count: {
     ...typography.caption,
-    color: colors.textFaint,
+    color: colors.amberDeep,
+    marginTop: 4,
+    ...weight("700"),
+  },
+  rowSide: { alignItems: "flex-end", gap: 8, minWidth: 44 },
+  time: { ...typography.caption, color: colors.textDim },
+  dot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: colors.amberBright,
   },
 });

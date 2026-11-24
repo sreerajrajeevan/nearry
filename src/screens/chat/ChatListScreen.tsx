@@ -129,6 +129,18 @@ export function ChatListScreen({ navigation }: Props) {
     if (tab === "requests") tabsRef.current?.scrollToEnd({ animated: false });
     else tabsRef.current?.scrollTo({ x: 0, animated: false });
   }, [tab]);
+  useEffect(() => {
+    ++version.current;
+    setSelected(null);
+    setConversations([]);
+    setGroups([]);
+    setRequests([]);
+    setTab("all");
+    setQuery("");
+    setSearching(false);
+    setHistory(false);
+    setLoading(true);
+  }, [profile?.id]);
   const load = useCallback(
     async (silent = false) => {
       const ticket = ++version.current;
@@ -157,12 +169,6 @@ export function ChatListScreen({ navigation }: Props) {
     useCallback(() => {
       focused.current = true;
       setSelected(null);
-      setConversations([]);
-      setGroups([]);
-      setRequests([]);
-      setHistory(false);
-      setQuery("");
-      setTab("all");
       setNow(Date.now());
       void load();
       const refresh = () => {

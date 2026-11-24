@@ -1,3 +1,6 @@
+import { parsePage, Page, Cursor } from "../utils/pagination";
+import { DbPost, toNeedPost } from "./mappers";
+import { requestPresentation } from "../utils/activity";
 import { assertLive } from "./demoGuard";
 import { getSupabase, isSupabaseConfigured, isDemoMode } from "./supabase";
 import { mockPosts } from "../data/mock";
@@ -398,4 +401,82 @@ export function demoApprovedPlanMembers(postId: string) {
   return mockRequests
     .filter((r) => r.postId === postId && r.status === "approved")
     .map((r) => ({ id: r.requesterId, name: r.requesterName, host: false }));
+}
+
+export async function listMyRequestsPage(
+  id: string,
+  history: boolean,
+  cursor: Cursor | null = null,
+): Promise<Page<MyJoinRequest>> {
+  if (useMock()) {
+    const all = (await listMyRequests(id)).filter(
+      (r) => requestPresentation(r).history === history,
+    );
+    const start = cursor ? all.findIndex((r) => r.id === cursor.id) + 1 : 0,
+      items = all.slice(start, start + 30),
+      last = items.at(-1);
+    return {
+      items,
+      cursor:
+        start + items.length < all.length && last
+          ? { at: last.createdAt, id: last.id }
+          : null,
+    };
+  }
+  const { data, error } = await getSupabase()!.rpc("activity_requests", {
+    p_history: history,
+    p_cursor: cursor,
+    p_limit: 30,
+  });
+  if (error) throw new Error(error.message);
+  const page = parsePage(data);
+  return {
+    items: page.items.map((r) => ({
+      ...withRequester(r),
+      postTitle: String(r.post_title ?? "Plan"),
+      postStatus: r.post_status as NeedPost["status"],
+      postStartsAt: r.post_starts_at as string | undefined,
+    })),
+    cursor: page.cursor,
+  };
+}
+export async function listHostRequestPage(
+  id: string,
+  cursor: Cursor | null = null,
+): Promise<Page<JoinRequest & { post: NeedPost }>> {
+  if (useMock()) {
+    const all = await listPendingRequestsForHost(id),
+      start = cursor ? all.findIndex((r) => r.id === cursor.id) + 1 : 0,
+      rows = all.slice(start, start + 30),
+      last = rows.at(-1);
+    return {
+      items: rows.flatMap((r) => {
+        const post = mockPosts.find((p) => p.id === r.postId);
+        return post ? [{ ...r, post }] : [];
+      }),
+      cursor:
+        start + rows.length < all.length && last
+          ? { at: last.createdAt, id: last.id }
+          : null,
+    };
+  }
+  const { data, error } = await getSupabase()!.rpc("host_request_page", {
+    p_cursor: cursor,
+    p_limit: 30,
+  });
+  if (error) throw new Error(error.message);
+  const page = parsePage(data);
+  return {
+    items: page.items.map((r) => ({
+      ...toJoinRequest({
+        ...(r as unknown as DbJoinRequest),
+        requester: {
+          display_name: String(r.requester_name ?? "Someone"),
+          avatar_url: r.requester_avatar as string | null,
+        },
+      }),
+      post: toNeedPost(r.post as DbPost),
+    })),
+    cursor: page.cursor,
+  };
 }

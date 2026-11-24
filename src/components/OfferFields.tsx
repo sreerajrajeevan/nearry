@@ -4,7 +4,7 @@ import { colors, typography, weight } from "../theme";
 import { Icon } from "./Icon";
 
 export const SLOT_MINUTES = [30, 45, 60, 90, 120] as const;
-const MAX_PLACES = 50;
+const MAX_PLACES = 500;
 
 /** A titled card that groups related offer fields. */
 export function FormSection({

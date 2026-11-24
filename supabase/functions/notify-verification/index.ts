@@ -1,7 +1,9 @@
+import { deadlineFetch } from "../_shared/workerFetch.ts";
+import { adminDashboardUrl } from "../_shared/reviewHandler.ts";
 // Scheduled private worker. Submission only queues work; email failures never block it.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { signReviewToken, escapeHtml as esc } from "../_shared/reviewToken.ts";
+import { escapeHtml as esc } from "../_shared/reviewToken.ts";
 
 serve(async (req) => {
   if (req.method !== "POST")
@@ -16,18 +18,14 @@ serve(async (req) => {
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   const resendKey = Deno.env.get("RESEND_API_KEY");
   const adminEmail = Deno.env.get("ADMIN_EMAIL");
-  const reviewSecret = Deno.env.get("REVIEW_SECRET");
+  const reviewUrl = adminDashboardUrl(Deno.env.get("ADMIN_CONSOLE_URL"));
   const from = Deno.env.get("VERIFICATION_FROM_EMAIL");
-  if (
-    !url ||
-    !serviceKey ||
-    !resendKey ||
-    !adminEmail ||
-    !reviewSecret ||
-    !from
-  )
+  if (!url || !serviceKey || !resendKey || !adminEmail || !from)
     return new Response("email not configured", { status: 503 });
-  const db = createClient(url, serviceKey);
+  const db = createClient(url, serviceKey, {
+    auth: { persistSession: false },
+    global: { fetch: deadlineFetch() },
+  });
   const { data: jobs, error } = await db.rpc("claim_verification_jobs");
   if (error) return new Response("queue unavailable", { status: 503 });
   let sent = 0,
@@ -47,20 +45,11 @@ serve(async (req) => {
         p.verification_doc_path !== job.document_path
       )
         continue;
-      const token = await signReviewToken(
-        {
-          user_id: job.user_id,
-          review_id: job.id,
-          document_path: job.document_path,
-          exp: new Date(job.created_at).getTime() + 7 * 86400000,
-        },
-        reviewSecret,
-      );
-      const reviewUrl = `${url}/functions/v1/review-verification?token=${encodeURIComponent(token)}`;
       const name = p.business_name || p.display_name;
-      // Private document is viewed using a short-lived URL on the review page.
+      // No bearer review credentials or private proof URLs in email.
       const response = await fetch("https://api.resend.com/emails", {
         method: "POST",
+        signal: AbortSignal.timeout(10_000),
         headers: {
           Authorization: `Bearer ${resendKey}`,
           "Content-Type": "application/json",
@@ -69,7 +58,7 @@ serve(async (req) => {
           from,
           to: [adminEmail],
           subject: `Verify business: ${name}`,
-          html: `<h2>${esc(name)}</h2><p>A business document is ready for review.</p><p><a href="${esc(reviewUrl)}">Review submission</a></p><p>This link expires seven days after submission. Opening it does not approve the business.</p>`,
+          html: `<h2>${esc(name)}</h2><p>A business document is ready for review.</p>${reviewUrl ? `<p><a href="${esc(reviewUrl)}">Open Nearry Admin</a></p>` : "<p>Open your saved Nearry Admin dashboard address.</p>"}<p>Sign in with your authenticator to review the submission.</p>`,
         }),
       });
       if (!response.ok)

@@ -49,6 +49,12 @@ function fixture(options: any = {}) {
       const call: any = { table };
       calls.push(call);
       const result = () => {
+        if (
+          table === "admin_console_audit" &&
+          call.insert &&
+          settings.auditFails
+        )
+          return { data: null, error: { message: "audit unavailable" } };
         if (settings.fail)
           return {
             data: null,
@@ -107,6 +113,10 @@ function fixture(options: any = {}) {
         return { data: settings.rows ?? [], error: null };
       };
       const chain: any = {
+        insert: (value: unknown) => {
+          call.insert = value;
+          return chain;
+        },
         select: (v: string) => {
           call.select = v;
           return chain;
@@ -804,4 +814,32 @@ test("admin business approval requires explicit location review; rejection remai
     }),
   );
   assert.equal(rejection.status, 200);
+});
+
+test("admin: account and proof reads are audited and fail closed when the audit cannot be saved", async () => {
+  for (const action of [
+    { action: "account", id: user },
+    { action: "proof", id: review, kind: "business" },
+    { action: "proof", id: review, kind: "selfie" },
+  ]) {
+    const ok = fixture({ selfie: action.kind === "selfie" }),
+      response = await ok.handler(req(action));
+    assert.equal(response.status, 200);
+    assert.ok(
+      ok.calls.some(
+        (c) => c.table === "admin_console_audit" && c.insert?.actor_id === user,
+      ),
+    );
+    const fail = fixture({
+        auditFails: true,
+        selfie: action.kind === "selfie",
+      }),
+      blocked = await fail.handler(req(action));
+    assert.equal(blocked.status, 500);
+    const body = await blocked.text();
+    assert.doesNotMatch(
+      body,
+      /signedUrl|proof.jpg|cafe-owner@example.com|audit unavailable/,
+    );
+  }
 });

@@ -1,3 +1,5 @@
+import { CardDistanceProvider } from "./src/store/CardDistanceContext";
+import { UnreadProvider } from "./src/store/UnreadContext";
 import { navigationRef } from "./src/navigation/navigationRef";
 import React, { useEffect, useState } from "react";
 import { View, StyleSheet } from "react-native";
@@ -24,10 +26,17 @@ import { MotionProvider } from "./src/store/MotionContext";
 import { ToastProvider } from "./src/store/ToastContext";
 import { AppAlertHost } from "./src/components/AppAlertHost";
 import { AppErrorBoundary } from "./src/components/AppErrorBoundary";
-import { initMonitoring, trackScreen } from "./src/services/monitoring";
+import { configureDiagnostics } from "./src/services/diagnostics";
+import {
+  initMonitoring,
+  trackScreen,
+  reportError,
+  wrapMonitoring,
+} from "./src/services/monitoring";
 
 // Before anything renders, so start-up crashes are caught too.
 initMonitoring();
+configureDiagnostics(reportError);
 
 // Hold the native brand artwork until React has laid out its matching launch frame.
 void SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -100,7 +109,7 @@ function AppShell({ resourcesReady }: { resourcesReady: boolean }) {
   );
 }
 
-export default function App() {
+function App() {
   const [fontsLoaded, fontError] = useFonts({
     ...Feather.font,
     PlusJakartaSans_400Regular,
@@ -117,11 +126,15 @@ export default function App() {
           <StatusBar style="dark" />
           <ToastProvider>
             <AuthProvider>
-              <AppShell
-                resourcesReady={
-                  !!(fontsLoaded || fontError) && !!(assets || assetError)
-                }
-              />
+              <UnreadProvider>
+                <CardDistanceProvider>
+                  <AppShell
+                    resourcesReady={
+                      !!(fontsLoaded || fontError) && !!(assets || assetError)
+                    }
+                  />
+                </CardDistanceProvider>
+              </UnreadProvider>
             </AuthProvider>
           </ToastProvider>
           <AppAlertHost />
@@ -135,3 +148,5 @@ const styles = StyleSheet.create({
   canvas: { flex: 1, backgroundColor: colors.background },
   app: { flex: 1, width: "100%", maxWidth: 720, alignSelf: "center" },
 });
+
+export default wrapMonitoring(App);

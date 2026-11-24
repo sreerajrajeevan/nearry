@@ -1,3 +1,6 @@
+import { withDeadline } from "../utils/deadline";
+import { clearOnboardingDrafts } from "../services/localOnboardingDrafts";
+import { personalProfileReady } from "../utils/profileReadiness";
 import { DemoBlockedError } from "../services/demoGuard";
 import React, {
   createContext,
@@ -10,11 +13,14 @@ import React, {
 import { AppState } from "react-native";
 import * as Linking from "expo-linking";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { authStorage } from "../services/authStorage";
+import { parsePendingRole, rememberPendingRole } from "../services/pendingRole";
 import { Session } from "@supabase/supabase-js";
 import { AccountType } from "../navigation/types";
 import {
   getSupabase,
   configureAuthStorage,
+  clearPersistedAuth,
   requireSupabase,
   setDemoMode,
 } from "../services/supabase";
@@ -33,7 +39,7 @@ import { completePersonalProfile as savePersonalDetails } from "../services/prof
 import { RequestVersion } from "../utils/requestVersion";
 import type { OnboardingPreferences } from "../utils/onboarding";
 import { AccountChoiceStore } from "../services/accountChoice";
-configureAuthStorage(AsyncStorage);
+configureAuthStorage(authStorage);
 const accountChoices = new AccountChoiceStore(AsyncStorage);
 
 export type OnboardingData = {
@@ -212,6 +218,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         version.current.current(ticket) &&
         !demoRef.current
       ) {
+        if (
+          (saved.accountType === "business"
+            ? saved.onboardingCompleted
+            : personalProfileReady(saved)) ||
+          saved.deletionRequestedAt
+        ) {
+          await clearOnboardingDrafts(saved.id).catch(() => {});
+          if (
+            !mounted.current ||
+            !version.current.current(ticket) ||
+            demoRef.current
+          )
+            return;
+        }
         profileRef.current = saved;
         setProfile(saved);
         // Existing account, fresh login, lane != saved type: tell the user
@@ -247,9 +267,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     mounted.current = true;
     const roleRestored = AsyncStorage.getItem("nearry.pendingRole")
       .then((role) => {
-        if (mounted.current && (role === "personal" || role === "business")) {
-          intendedRoleRef.current = role;
-          setIntendedRole(role);
+        const pending = parsePendingRole(role);
+        if (mounted.current && pending) {
+          intendedRoleRef.current = pending;
+          setIntendedRole(pending);
+        } else if (role) {
+          void AsyncStorage.removeItem("nearry.pendingRole").catch(() => {});
         }
       })
       .catch(() => {});
@@ -344,7 +367,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Discard old pre-login consent intents from earlier app versions.
     // New consent is collected only on the final onboarding review screen.
     await AsyncStorage.removeItem("nearry.signupAgreement");
-    await AsyncStorage.setItem("nearry.pendingRole", role);
+    await rememberPendingRole(role);
     await accountChoices.begin(role, flow, email);
   }
   async function action(work: () => Promise<void>) {
@@ -380,17 +403,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
   async function signOut(localOnly = false) {
     await action(async () => {
+      const leavingUser = sessionRef.current?.user.id;
       if (!demoRef.current) {
-        if (localOnly) {
-          await requireSupabase()
-            .auth.signOut({ scope: "local" })
-            .catch(() => {});
-          await AsyncStorage.removeItem("nearry.pushToken");
-        } else {
-          await unregisterPushToken();
-          await serviceSignOut();
-        }
+        // Remote notification cleanup cannot veto a user's local sign-out.
+        await withDeadline(unregisterPushToken(), 4_000).catch(() => {});
+        await (
+          localOnly
+            ? requireSupabase().auth.signOut({ scope: "local" })
+            : serviceSignOut()
+        ).catch(() => {});
+        await clearPersistedAuth();
+        // With storage cleared this emits SIGNED_OUT without needing a network session.
+        await requireSupabase()
+          .auth.signOut({ scope: "local" })
+          .catch(() => {});
       }
+      if (leavingUser) await clearOnboardingDrafts(leavingUser).catch(() => {});
       version.current.invalidate();
       sessionEpoch.current++;
       initialProfiles.current.clear();
@@ -454,6 +482,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           },
         );
         if (error) throw error;
+        await clearOnboardingDrafts(id).catch(() => {});
         if (data.celebrate !== false) setOnboardingCelebration(true);
         await refreshProfile();
         return;
@@ -480,6 +509,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .update(patch)
         .eq("id", id);
       if (error) throw error;
+      await clearOnboardingDrafts(id).catch(() => {});
       if (data.celebrate !== false) setOnboardingCelebration(true);
       if (version.current.current(ticket) && sessionRef.current?.user.id === id)
         await refreshProfile();

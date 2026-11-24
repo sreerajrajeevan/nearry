@@ -4891,7 +4891,688 @@ $$ language plpgsql security definer set search_path=public;
 notify pgrst, 'reload schema';
 
 
--- 00050_players_needed.sql
+-- 00050_review_reliability.sql
+-- Confirmed November review fixes. Forward-only; existing content/history is retained.
+
+create index bookings_slot_state on public.bookings(slot_id,status,hold_expires_at) include(party_size,offer_id);
+create index bookings_offer_time on public.bookings(offer_id,slot,id) include(status,party_size,hold_expires_at);
+create index bookings_customer_time on public.bookings(customer_id,status,slot,id);
+create index conversations_user_a on public.conversations(user_a,id);
+create index conversations_user_b on public.conversations(user_b,id);
+create index joins_post_state on public.join_requests(post_id,status);
+create index notices_user_page on public.notifications(user_id,created_at desc,id desc);
+create index push_jobs_ready on public.push_jobs(next_attempt_at,id) where sent_at is null and attempts<5;
+
+-- Client edits must not strip a previously required meeting place. Trusted
+-- retention jobs may still clear expired Google coordinates as designed.
+create function public.require_edited_meeting_place() returns trigger as $$
+begin
+ if current_user='authenticated' and new.venue_id is null and
+   (char_length(btrim(coalesce(new.venue_name,''))) not between 1 and 120 or new.location_lat is null or new.location_lng is null)
+ then raise exception 'Select a meeting place or add a place with coordinates before saving.'; end if;
+ return new;
+end;
+$$ language plpgsql set search_path=public,pg_temp;
+revoke all on function public.require_edited_meeting_place() from public,anon,authenticated;
+create trigger zz_require_edited_meeting_place before update of venue_id,venue_name,location_lat,location_lng on public.posts
+ for each row execute function public.require_edited_meeting_place();
+
+create function public.offer_booking_counts(p_ids uuid[]) returns jsonb as $$
+begin
+ if not public.account_active(auth.uid()) or cardinality(p_ids)>100 then raise exception 'Account unavailable or too many offers';end if;
+ return (select coalesce(jsonb_object_agg(q.id,q.n),'{}') from
+  (select o.id,count(b.id) n from offers o left join bookings b on b.offer_id=o.id
+   and (b.status='confirmed' or b.status='pending' and (b.hold_expires_at is null or b.hold_expires_at>now()))
+   where o.id=any(p_ids) and o.business_id=auth.uid() group by o.id) q);
+end;
+$$ language plpgsql stable security definer set search_path=public,pg_temp;
+revoke all on function public.offer_booking_counts(uuid[]) from public,anon;
+grant execute on function public.offer_booking_counts(uuid[]) to authenticated;
+
+-- Retries return the original direct message rather than inserting duplicates.
+alter table public.messages add column client_key text check(client_key is null or char_length(client_key) between 8 and 100);
+create unique index direct_message_client_key on public.messages(conversation_id,sender_id,client_key) where client_key is not null;
+grant insert(client_key) on public.messages to authenticated;
+create function public.send_direct_message(p_conversation uuid,p_body text,p_client_key text) returns jsonb as $$
+declare m messages;
+begin
+ if not account_active(auth.uid()) or p_body is null or char_length(btrim(p_body)) not between 1 and 2000
+ or p_client_key is null or char_length(p_client_key) not between 8 and 100 then raise exception 'Write a message under 2000 characters';end if;
+ -- Serialize this sender's retry without taking other participants' profile locks.
+ perform 1 from profiles where id=auth.uid() for update;
+ select * into m from messages where conversation_id=p_conversation and sender_id=auth.uid() and client_key=p_client_key;
+ if found then
+   if m.body<>btrim(p_body) then raise exception 'This send was already used for another message';end if;
+   return to_jsonb(m)||jsonb_build_object('sender',jsonb_build_object('display_name',(select display_name from profiles where id=auth.uid())));
+ end if;
+ insert into messages(conversation_id,sender_id,body,client_key) values(p_conversation,auth.uid(),btrim(p_body),p_client_key) returning * into m;
+ return to_jsonb(m)||jsonb_build_object('sender',jsonb_build_object('display_name',(select display_name from profiles where id=auth.uid())));
+end;
+$$ language plpgsql security invoker set search_path=public,pg_temp;
+revoke all on function public.send_direct_message(uuid,text,text) from public,anon;
+grant execute on function public.send_direct_message(uuid,text,text) to authenticated;
+
+-- Keep every underlying notice for read boundaries/history, but present one
+-- latest chat card per conversation. No old notice IDs or read states change.
+alter table public.notifications add column thread_key uuid;
+update public.notifications set thread_key=ref_id where kind='message';
+update public.notifications n set thread_key=m.group_id from public.plan_group_messages m
+ where n.kind='plan_group_message' and n.ref_id=m.id;
+create index notices_thread_page on public.notifications(user_id,kind,thread_key,created_at desc,id desc) where thread_key is not null;
+create function public.notice_thread_key() returns trigger as $$
+begin
+ if new.kind='message' then new.thread_key=new.ref_id;
+ elsif new.kind='plan_group_message' then select group_id into new.thread_key from plan_group_messages where id=new.ref_id;
+ else new.thread_key=null;end if;
+ return new;
+end;
+$$ language plpgsql security definer set search_path=public,pg_temp;
+revoke all on function public.notice_thread_key() from public,anon,authenticated;
+create trigger notice_thread_key before insert on public.notifications for each row execute function public.notice_thread_key();
+
+create function public.notification_cards(p_limit int default 40,p_cursor jsonb default null,p_updates_only boolean default false) returns jsonb as $$
+declare rows jsonb; tail jsonb; lim int:=least(80,greatest(1,coalesce(p_limit,40)));
+begin
+ if not account_active(auth.uid()) then raise exception 'Account unavailable';end if;
+ with candidates as (
+  select n.*,case when n.thread_key is null then (n.read_at is null)::int else
+   (select count(*)::int from notifications u where u.user_id=auth.uid() and u.kind=n.kind and u.thread_key=n.thread_key and u.read_at is null) end unread_count
+  from notifications n
+  where n.user_id=auth.uid() and notification_allowed(auth.uid(),n.kind,n.ref_id)
+   and (not p_updates_only or n.kind not in ('message','plan_group_message'))
+   and (p_cursor is null or (n.created_at,n.id)<((p_cursor->>'at')::timestamptz,(p_cursor->>'id')::uuid))
+   and (n.thread_key is null or not exists(select 1 from notifications newer where newer.user_id=n.user_id and newer.kind=n.kind and newer.thread_key=n.thread_key and notification_allowed(auth.uid(),newer.kind,newer.ref_id) and (newer.created_at,newer.id)>(n.created_at,n.id)))
+  order by n.created_at desc,n.id desc limit lim+1
+ ), numbered as (select *,row_number() over(order by created_at desc,id desc) rn from candidates)
+ select coalesce(jsonb_agg(to_jsonb(numbered)-'rn' order by created_at desc,id desc) filter(where rn<=lim),'[]'),
+  to_jsonb(max(case when rn=lim+1 then 1 else 0 end)) into rows,tail from numbered;
+ if tail='1'::jsonb then tail=jsonb_build_object('at',rows->(lim-1)->>'created_at','id',rows->(lim-1)->>'id');else tail=null;end if;
+ return jsonb_build_object('items',rows,'cursor',tail);
+end;
+$$ language plpgsql stable security definer set search_path=public,pg_temp;
+revoke all on function public.notification_cards(int,jsonb,boolean) from public,anon;
+grant execute on function public.notification_cards(int,jsonb,boolean) to authenticated;
+
+create function public.change_notice_thread(p_id uuid,p_action text) returns void as $$
+declare n notifications;
+begin
+ if not account_active(auth.uid()) or p_action not in ('read','unread','delete') then raise exception 'Account unavailable or invalid action';end if;
+ select * into n from notifications where id=p_id and user_id=auth.uid();
+ if not found then return;end if;
+ if p_action='delete' then
+  delete from notifications x where x.user_id=auth.uid() and
+   (x.id=n.id or n.thread_key is not null and x.kind=n.kind and x.thread_key=n.thread_key and (x.created_at,x.id)<=(n.created_at,n.id));
+ else
+  update notifications x set read_at=case when p_action='read' then clock_timestamp() else null end where x.user_id=auth.uid() and
+   (x.id=n.id or n.thread_key is not null and x.kind=n.kind and x.thread_key=n.thread_key and (x.created_at,x.id)<=(n.created_at,n.id));
+ end if;
+end;
+$$ language plpgsql security invoker set search_path=public,pg_temp;
+revoke all on function public.change_notice_thread(uuid,text) from public,anon;
+grant execute on function public.change_notice_thread(uuid,text) to authenticated;
+
+alter function public.unread_counts() rename to unread_counts_before_review;
+revoke all on function public.unread_counts_before_review() from public,anon,authenticated;
+create function public.unread_counts() returns jsonb as $$
+declare result jsonb; notices bigint; others bigint; direct_count bigint; group_count bigint;
+begin
+ if not account_active(auth.uid()) then return jsonb_build_object('messages',0,'notifications',0,'other_notifications',0);end if;
+ select count(*) into direct_count from messages m join conversations c on c.id=m.conversation_id
+ left join conversation_reads r on r.conversation_id=c.id and r.user_id=auth.uid()
+ left join conversation_clears d on d.conversation_id=c.id and d.user_id=auth.uid()
+ where (c.user_a=auth.uid() or c.user_b=auth.uid()) and m.sender_id<>auth.uid()
+ and account_active(c.user_a) and account_active(c.user_b) and not users_blocked(c.user_a,c.user_b)
+ and m.created_at>greatest(coalesce(r.last_read_at,'1970-01-01'::timestamptz),coalesce(d.cleared_at,'1970-01-01'::timestamptz));
+ with eligible as materialized(
+ select g.id from plan_groups g where g.post_id in(select id from posts where author_id=auth.uid() union select post_id from join_requests where requester_id=auth.uid() and status='approved') and plan_group_member(g.id,auth.uid())
+ ) select count(*) into group_count from eligible g join plan_group_messages m on m.group_id=g.id left join plan_group_reads r on r.group_id=g.id and r.user_id=auth.uid() where m.sender_id<>auth.uid() and m.seq>coalesce(r.last_seq,0) and visible_author(m.sender_id) and content_visible('plan_message',m.id);
+ result=jsonb_build_object('messages',direct_count+group_count);
+ select count(distinct case when thread_key is null then id::text else kind||':'||thread_key::text end),
+ count(*) filter(where kind not in ('message','plan_group_message')) into notices,others
+ from notifications where user_id=auth.uid() and read_at is null and notification_allowed(auth.uid(),kind,ref_id);
+ return result||jsonb_build_object('notifications',notices,'other_notifications',others);
+end;
+$$ language plpgsql stable security definer set search_path=public,pg_temp;
+revoke all on function public.unread_counts() from public,anon;
+grant execute on function public.unread_counts() to authenticated;
+
+-- Coalesce pending chat bursts; approvals/bookings have priority. This is a
+-- worker batch size, not an Expo/device quota. In-flight jobs are not replaced.
+create or replace function public.claim_push_jobs() returns jsonb as $$
+begin
+ update push_jobs j set sent_at=now(),last_error='coalesced chat preview'
+ where j.id in (
+  select old.id from push_jobs old join notifications n on n.id=old.notification_id
+  where old.sent_at is null and (old.attempts=0 or old.next_attempt_at<=now()) and n.thread_key is not null
+  and exists(select 1 from notifications m
+    where m.user_id=n.user_id and m.kind=n.kind and m.thread_key=n.thread_key and (m.created_at,m.id)>(n.created_at,n.id))
+  order by old.next_attempt_at limit 500
+ );
+ return (
+ with jobs as(
+  select j.id from push_jobs j join notifications n on n.id=j.notification_id join profiles p on p.id=n.user_id
+  where j.sent_at is null and j.attempts<5 and j.next_attempt_at<=now() and p.push_enabled
+  and notification_allowed(n.user_id,n.kind,n.ref_id)
+  and (n.thread_key is null or not exists(select 1 from notifications m where m.user_id=n.user_id and m.kind=n.kind and m.thread_key=n.thread_key and (m.created_at,m.id)>(n.created_at,n.id)))
+  order by case when n.kind in ('message','plan_group_message') then 1 else 0 end,j.next_attempt_at,j.id
+  for update of j skip locked limit 25
+ ),claimed as (
+  update push_jobs j set attempts=j.attempts+1,next_attempt_at=now()+interval '2 minutes' from jobs where jobs.id=j.id returning j.id,j.notification_id
+ ) select coalesce(jsonb_agg(jsonb_build_object('id',c.id,'notification_id',n.id,'user_id',n.user_id,'kind',n.kind,'ref_id',n.ref_id,'thread_key',n.thread_key,'title',n.title,'body',n.body)),'[]')
+ from claimed c join notifications n on n.id=c.notification_id);
+end;
+$$ language plpgsql security definer set search_path=public,pg_temp;
+create function public.release_push_jobs(p_ids uuid[]) returns void as $$
+ update push_jobs set attempts=greatest(0,attempts-1),next_attempt_at=now() where id=any(p_ids) and sent_at is null;
+$$ language sql security definer set search_path=public,pg_temp;
+revoke all on function public.release_push_jobs(uuid[]) from public,anon,authenticated;
+grant execute on function public.release_push_jobs(uuid[]) to service_role;
+
+-- A device-held capability can revoke its own registration after local logout,
+-- including a later online retry. It grants no read or registration access.
+alter table public.push_tokens add column revoke_hash bytea;
+create function public.register_push_installation(p_token text,p_platform text,p_secret text) returns void as $$
+begin
+ if p_secret is null or p_secret !~ '^[a-f0-9]{64}$' then raise exception 'Invalid installation';end if;
+ perform register_push_token(p_token,p_platform);
+ update push_tokens set revoke_hash=sha256(convert_to(p_secret,'UTF8')) where token=p_token and user_id=auth.uid();
+end;
+$$ language plpgsql security definer set search_path=public,pg_temp;
+create function public.revoke_push_installation(p_token text,p_secret text) returns void as $$
+begin
+ if p_token is null or char_length(p_token)>256 or p_secret is null or p_secret !~ '^[a-f0-9]{64}$' then return;end if;
+ delete from push_tokens where token=p_token and revoke_hash=sha256(convert_to(p_secret,'UTF8'));
+end;
+$$ language plpgsql security definer set search_path=public,pg_temp;
+revoke all on function public.register_push_installation(text,text,text) from public,anon;
+grant execute on function public.register_push_installation(text,text,text) to authenticated;
+revoke all on function public.revoke_push_installation(text,text) from public;
+grant execute on function public.revoke_push_installation(text,text) to anon,authenticated;
+
+-- Blocked/inactive accounts must not consume the paid place-search allowance.
+alter function public.reserve_place_search(uuid) rename to reserve_place_search_before_review;
+revoke all on function public.reserve_place_search_before_review(uuid) from public,anon,authenticated,service_role;
+create function public.reserve_place_search(p_user_id uuid) returns boolean as $$
+begin
+ if not account_active(p_user_id) then return false;end if;
+ return reserve_place_search_before_review(p_user_id);
+end;
+$$ language plpgsql security definer set search_path=public,pg_temp;
+revoke all on function public.reserve_place_search(uuid) from public,anon,authenticated;
+grant execute on function public.reserve_place_search(uuid) to service_role;
+
+notify pgrst,'reload schema';
+
+
+-- 00052_discovery_pagination.sql
+-- Indexed discovery with bounded, filter-aware cursor pages.
+-- 00051 is reserved for the existing independent plan/offer bundle branch.
+
+create function public.discovery_category(p_title text,p_tags text[]) returns text as $$
+ select case
+ when regexp_replace(normalize(lower(coalesce(p_title,'')||' '||array_to_string(coalesce(p_tags,'{}'),' ')),NFD),'[̀-ͯ]','','g') ~ '(^|[^a-z0-9_])(football|cricket|sports?|games?|turf|match|badminton|tennis|running|run|cycling|swimming|swim|volleyball|basketball)([^a-z0-9_]|$)' then 'Play'
+ when regexp_replace(normalize(lower(coalesce(p_title,'')||' '||array_to_string(coalesce(p_tags,'{}'),' ')),NFD),'[̀-ͯ]','','g') ~ '(^|[^a-z0-9_])(coffee|cafe|restaurant|dining|meet|chat|dinner|lunch|drinks?|social|movie|tea|chaya|food|brunch)([^a-z0-9_]|$)' then 'Meet'
+ when regexp_replace(normalize(lower(coalesce(p_title,'')||' '||array_to_string(coalesce(p_tags,'{}'),' ')),NFD),'[̀-ͯ]','','g') ~ '(^|[^a-z0-9_])(salon|haircut|spa|massage|wellness|yoga|meditation|relax|unwind)([^a-z0-9_]|$)' then 'Unwind'
+ else 'Explore' end;
+$$ language sql immutable parallel safe set search_path=public,pg_temp;
+alter table public.posts add column discovery_category text generated always as (public.discovery_category(title,tags)) stored;
+create index posts_open_schedule on public.posts(starts_at,id) where status='open';
+create index posts_open_category_schedule on public.posts(discovery_category,starts_at,id) where status='open';
+create index posts_created_page on public.posts(created_at desc,starts_at,id);
+create index posts_author_page on public.posts(author_id,created_at desc,id);
+
+-- A separate RLS table keeps the cached spatial index out of the public post
+-- row and makes Google's coordinate expiry apply even to direct REST reads.
+create table public.post_locations(
+ post_id uuid primary key references public.posts(id) on delete cascade,
+ point geography(point, 4326) not null
+);
+alter table public.post_locations enable row level security;
+revoke all on public.post_locations from public,anon,authenticated;
+grant select on public.post_locations to authenticated;
+grant all on public.post_locations to service_role;
+create policy "visible current plan locations" on public.post_locations for select using(
+ exists(select 1 from public.posts p where p.id=post_id and
+ (p.venue_id is not null or p.location_source is distinct from 'google' or p.location_cached_at>now()-interval '29 days'))
+);
+create index post_locations_point_gist on public.post_locations using gist(point);
+insert into public.post_locations(post_id,point)
+ select p.id,coalesce(case when p.location_lat is not null and (p.location_source is distinct from 'google' or p.location_cached_at>now()-interval '29 days')
+ then st_setsrid(st_makepoint(p.location_lng,p.location_lat),4326)::geography end,v.location)
+ from public.posts p left join public.venues v on v.id=p.venue_id
+ where coalesce(case when p.location_lat is not null and (p.location_source is distinct from 'google' or p.location_cached_at>now()-interval '29 days')
+ then st_setsrid(st_makepoint(p.location_lng,p.location_lat),4326)::geography end,v.location) is not null;
+
+create function public.sync_post_location_index() returns trigger as $$
+declare spot geography;
+begin
+ if new.location_lat is not null and (new.location_source is distinct from 'google' or new.location_cached_at>now()-interval '29 days') then
+  spot=st_setsrid(st_makepoint(new.location_lng,new.location_lat),4326)::geography;
+ elsif new.venue_id is not null then select location into spot from public.venues where id=new.venue_id;end if;
+ if spot is null then delete from public.post_locations where post_id=new.id;
+ else insert into public.post_locations values(new.id,spot) on conflict(post_id) do update set point=excluded.point;end if;
+ return new;
+end;
+$$ language plpgsql security definer set search_path=public,pg_temp;
+revoke all on function public.sync_post_location_index() from public,anon,authenticated;
+create trigger sync_post_location_index after insert or update of venue_id,location_lat,location_lng,location_cached_at,location_source on public.posts
+ for each row execute function public.sync_post_location_index();
+create function public.sync_venue_location_index() returns trigger as $$
+begin
+ insert into public.post_locations(post_id,point)
+ select id,new.location from public.posts where venue_id=new.id and new.location is not null and (location_lat is null or location_source='google' and location_cached_at<=now()-interval '29 days')
+ on conflict(post_id) do update set point=excluded.point;
+ if new.location is null then delete from public.post_locations where post_id in(select id from public.posts where venue_id=new.id and (location_lat is null or location_source='google' and location_cached_at<=now()-interval '29 days'));end if;
+ return new;
+end;
+$$ language plpgsql security definer set search_path=public,pg_temp;
+revoke all on function public.sync_venue_location_index() from public,anon,authenticated;
+create trigger sync_venue_location_index after update of location on public.venues for each row execute function public.sync_venue_location_index();
+
+create function public.discover_posts(p_filters jsonb default '{}',p_cursor jsonb default null,p_limit int default 30) returns jsonb as $fn$
+declare f jsonb:=coalesce(p_filters,'{}'); origin geography; radius double precision; lat double precision; lng double precision;
+ lim int:=least(80,greatest(1,coalesce(p_limit,30))); sort text:=coalesce(f->>'sort','soonest'); ordering text; cursor_test text; result jsonb;
+begin
+ if not account_active(auth.uid()) then raise exception 'Account unavailable';end if;
+ if jsonb_typeof(f)<>'object' or octet_length(f::text)>4000 or length(coalesce(f->>'search',''))>120
+  or sort not in ('soonest','nearest','newest') or coalesce(f->>'status','open') not in ('open','all','closed','cancelled')
+  or f->>'category' is not null and f->>'category' not in ('Play','Meet','Explore','Unwind')
+  or f->>'audience' is not null and f->>'audience' not in ('all','any','male','female') then raise exception 'Choose valid discovery filters';end if;
+ lat=(f->>'latitude')::double precision;lng=(f->>'longitude')::double precision;
+ if (lat is null)<>(lng is null) then raise exception 'Choose a valid search area';end if;
+ if lat is not null then
+  radius=coalesce((f->>'radiusM')::double precision,5000);
+  if not(lat between -90 and 90 and lng between -180 and 180 and radius between 100 and 50000) then raise exception 'Choose a valid area and distance';end if;
+  origin=st_setsrid(st_makepoint(lng,lat),4326)::geography;
+ end if;
+ if sort='nearest' and origin is null then sort='soonest';end if;
+ ordering=case sort when 'nearest' then 'distance_m asc,p.starts_at asc,p.id asc'
+  when 'newest' then 'p.created_at desc,p.starts_at asc,p.id asc' else 'p.starts_at asc,p.id asc' end;
+ cursor_test=case sort when 'nearest' then '(loc.point <-> $4,p.starts_at,p.id)>(($2->>''distanceM'')::double precision,($2->>''at'')::timestamptz,($2->>''id'')::uuid)'
+  when 'newest' then '(p.created_at<($2->>''at'')::timestamptz or p.created_at=($2->>''at'')::timestamptz and (p.starts_at,p.id)>(($2->>''startsAt'')::timestamptz,($2->>''id'')::uuid))'
+  else '(p.starts_at,p.id)>(($2->>''at'')::timestamptz,($2->>''id'')::uuid)' end;
+ execute '
+ with candidates as materialized(
+  select p.id,p.starts_at,p.created_at,case when $4 is not null then loc.point <-> $4 end distance_m
+  from public.posts p left join public.post_locations loc on loc.post_id=p.id
+  where (coalesce($1->>''status'',''open'')=''all'' or p.status=coalesce($1->>''status'',''open''))
+   and (coalesce($1->>''status'',''open'')<>''open'' or p.starts_at>now() and (p.expires_at is null or p.expires_at>now()))
+   and ($4 is null or st_dwithin(loc.point,$4,$5))
+   and (not coalesce(($1->>''excludeCancelled'')::boolean,false) or p.status<>''cancelled'')
+   and ($1->>''authorId'' is null or p.author_id=($1->>''authorId'')::uuid)
+   and ($1->>''excludeAuthorId'' is null or p.author_id<>($1->>''excludeAuthorId'')::uuid)
+   and ($1->>''category'' is null or p.discovery_category=$1->>''category'')
+   and ($1->>''audience'' is null or $1->>''audience''=''all'' or coalesce(p.gender_preference,''any'')=$1->>''audience'')
+   and (not coalesce(($1->>''freeOnly'')::boolean,false) or p.cost_cents=0)
+   and ($1->>''from'' is null or p.starts_at>=($1->>''from'')::timestamptz)
+   and ($1->>''until'' is null or p.starts_at<($1->>''until'')::timestamptz)
+   and ($1->>''tag'' is null or p.tags @> array[$1->>''tag''])
+   and ($1->>''search'' is null or position(lower($1->>''search'') in lower(p.title||'' ''||p.description||'' ''||coalesce(p.venue_name,'''')))>0)
+   and ($1->''venueIds'' is null or p.venue_id in(select value::uuid from jsonb_array_elements_text($1->''venueIds'')))
+   and ($2 is null or '||cursor_test||')
+  order by '||ordering||' limit $3+1
+ ), ranked as (
+  select *,row_number() over(order by '||replace(ordering,'p.','')||') rn from candidates
+ ), cards as (
+  select r.rn,to_jsonb(c)||jsonb_build_object(''distance_km'',r.distance_m/1000) item,
+   jsonb_build_object(''at'',case when $6=''newest'' then r.created_at else r.starts_at end,''startsAt'',r.starts_at,''id'',r.id,''distanceM'',r.distance_m) cursor
+  from ranked r join public.post_cards c on c.id=r.id where r.rn<=$3
+ )
+ select jsonb_build_object(''items'',coalesce((select jsonb_agg(item order by rn) from cards),''[]''),
+ ''cursor'',case when exists(select 1 from ranked where rn>$3) then (select cursor from cards order by rn desc limit 1) else null end)'
+ into result using f,p_cursor,lim,origin,radius,sort;
+ return result;
+exception when invalid_text_representation or numeric_value_out_of_range or invalid_datetime_format then raise exception 'Choose valid discovery filters';
+end;
+$fn$ language plpgsql stable security invoker set search_path=public,pg_temp;
+revoke all on function public.discover_posts(jsonb,jsonb,int) from public,anon;
+grant execute on function public.discover_posts(jsonb,jsonb,int) to authenticated;
+
+
+create function public.offer_discovery_kind(p_text text) returns text as $$
+ select case
+ when normalize(lower(p_text),NFD) ~ '\m(gym|fitness|workout|training|strength|pilates|crossfit)\M' then 'fitness'
+ when normalize(lower(p_text),NFD) ~ '\m(football|cricket|badminton|tennis|sports?|turf|court|swimming|cycling)\M' then 'sports'
+ when regexp_replace(normalize(lower(p_text),NFD),'[̀-ͯ]','','g') ~ '\m(food|cafe|coffee|restaurant|dining|lunch|dinner|brunch|meal|pizza|biriyani|biryani)\M' then 'food'
+ when normalize(lower(p_text),NFD) ~ '\m(wellness|yoga|salon|spa|haircut|massage|meditation|unwind|relax)\M' then 'wellness'
+ else 'all' end;
+$$ language sql immutable parallel safe set search_path=public,pg_temp;
+create index offers_venue_ending_page on public.offers(venue_id,ends_at,id) where status='live';
+create index offers_live_ending_page on public.offers(is_spotlight desc,ends_at,id) where status='live';
+create function public.discover_offers(p_filters jsonb default '{}',p_cursor jsonb default null,p_limit int default 30) returns jsonb as $$
+declare f jsonb:=coalesce(p_filters,'{}'); origin geography; lat double precision; lng double precision; radius double precision;
+ lim int:=least(80,greatest(1,coalesce(p_limit,30))); result jsonb;
+begin
+ if not account_active(auth.uid()) then raise exception 'Account unavailable';end if;
+ if jsonb_typeof(f)<>'object' or octet_length(f::text)>4000 or length(coalesce(f->>'search',''))>120
+ or coalesce(f->>'category','all') not in ('all','fitness','sports','food','wellness')
+ or f->>'discoveryCategory' is not null and f->>'discoveryCategory' not in ('Play','Meet','Unwind','Explore') then raise exception 'Choose valid offer filters';end if;
+ lat=(f->>'latitude')::double precision;lng=(f->>'longitude')::double precision;
+ if (lat is null)<>(lng is null) then raise exception 'Choose a valid search area';end if;
+ if lat is not null then
+ radius=coalesce((f->>'radiusM')::double precision,5000);
+ if not(lat between -90 and 90 and lng between -180 and 180 and radius between 100 and 50000) then raise exception 'Choose a valid area and distance';end if;
+ origin=st_setsrid(st_makepoint(lng,lat),4326)::geography;
+ end if;
+ with rows as (
+ select o.*,case when origin is not null then st_distance(v.location,origin)/1000 end distance_km,
+ offer_discovery_kind(o.title||' '||o.description||' '||coalesce(o.discovery_business_name,o.discovery_display_name,'')) bucket
+ from discovery_offers o left join venues v on v.id=o.venue_id
+ where o.status='live' and o.ends_at>now() and (o.max_redemptions is null or o.redemptions<o.max_redemptions)
+ and (origin is null or st_dwithin(v.location,origin,radius))
+ and (not coalesce((f->>'spotlight')::boolean,false) or o.is_spotlight)
+ and (f->'venueIds' is null or o.venue_id in(select value::uuid from jsonb_array_elements_text(f->'venueIds')))
+ and (f->>'search' is null or position(lower(f->>'search') in lower(o.title||' '||o.description||' '||coalesce(o.discovery_business_name,o.discovery_display_name,'')))>0)
+ and (p_cursor is null or o.is_spotlight<(p_cursor->>'spotlight')::boolean or o.is_spotlight=(p_cursor->>'spotlight')::boolean and (o.ends_at,o.id)>((p_cursor->>'at')::timestamptz,(p_cursor->>'id')::uuid))
+ ), filtered as (
+ select * from rows where (coalesce(f->>'category','all')='all' or bucket=f->>'category')
+ and (f->>'discoveryCategory' is null or
+  (case bucket when 'fitness' then 'Play' when 'sports' then 'Play' when 'food' then 'Meet' when 'wellness' then 'Unwind'
+   else discovery_category(title||' '||description||' '||coalesce(discovery_business_name,discovery_display_name,''),'{}') end)=f->>'discoveryCategory')
+ order by is_spotlight desc,ends_at,id limit lim+1
+ ), numbered as (select *,row_number() over(order by is_spotlight desc,ends_at,id) rn from filtered)
+ select jsonb_build_object('items',coalesce(jsonb_agg(to_jsonb(numbered)-'rn'-'bucket' order by rn) filter(where rn<=lim),'[]'),
+ 'cursor',case when count(*)>lim then (select jsonb_build_object('at',ends_at,'id',id,'spotlight',is_spotlight) from numbered where rn=lim) else null end)
+ into result from numbered;
+ return result;
+exception when invalid_text_representation or numeric_value_out_of_range or invalid_datetime_format then raise exception 'Choose valid offer filters';
+end;
+$$ language plpgsql stable security invoker set search_path=public,pg_temp;
+revoke all on function public.discover_offers(jsonb,jsonb,int) from public,anon;
+grant execute on function public.discover_offers(jsonb,jsonb,int) to authenticated;
+
+-- Directory previews are bounded independently of the paged plan/offer feeds.
+create or replace function public.nearby_venues_with_distance(p_lat double precision,p_lng double precision,p_radius_m int)
+returns jsonb as $$
+begin
+ if p_lat is null or p_lng is null or not(p_lat between -90 and 90 and p_lng between -180 and 180 and p_radius_m between 100 and 50000) then raise exception 'invalid location or radius';end if;
+ return (select coalesce(jsonb_agg(to_jsonb(t) order by t.distance_m),'[]') from (
+ select v.*,st_distance(v.location,st_setsrid(st_makepoint(p_lng,p_lat),4326)::geography) distance_m from venues v
+ where v.location is not null and st_dwithin(v.location,st_setsrid(st_makepoint(p_lng,p_lat),4326)::geography,p_radius_m)
+ order by v.location <-> st_setsrid(st_makepoint(p_lng,p_lat),4326)::geography,v.id limit 80
+ )t);
+end;
+$$ language plpgsql stable security invoker set search_path=public,pg_temp;
+revoke all on function public.discovery_category(text,text[]),public.offer_discovery_kind(text) from public,anon;
+grant execute on function public.discovery_category(text,text[]),public.offer_discovery_kind(text) to authenticated,service_role;
+
+-- Older builds keep the same response shape, with a safe result bound.
+create or replace function public.nearby_post_cards(p_lat double precision,p_lng double precision,p_radius_m double precision)
+returns setof jsonb as $$
+ select value from jsonb_array_elements(public.discover_posts(jsonb_build_object('latitude',p_lat,'longitude',p_lng,'radiusM',p_radius_m,'sort','nearest'),null,80)->'items');
+$$ language sql stable security invoker set search_path=public,pg_temp;
+notify pgrst,'reload schema';
+
+
+-- 00053_media_write_safety.sql
+-- Direct writes use the same ownership, count and media lifecycle rules as the app.
+
+create function public.guard_public_photo_attachment() returns trigger as $$
+declare owner uuid; amount int; max_photos int; object_path text; issuer text; origin text; job media_cleanup_jobs;
+begin
+ if current_setting('role',true)<>'authenticated' then return new;end if;
+ if tg_table_name='post_photos' then
+  select author_id into owner from posts where id=new.post_id for update;
+  max_photos=5;
+ else
+  select business_id into owner from venues where id=new.venue_id for update;
+  max_photos=20;
+ end if;
+ if owner is distinct from auth.uid() or not account_active(auth.uid()) then raise exception 'Only the active owner can attach photos';end if;
+ -- Unchanged legacy URLs may be reordered; moving them to another parent is a new attachment.
+ if tg_op='UPDATE' and new.photo_url=old.photo_url and
+   ((tg_table_name='post_photos' and to_jsonb(new)->>'post_id'=to_jsonb(old)->>'post_id') or
+    (tg_table_name='venue_photos' and to_jsonb(new)->>'venue_id'=to_jsonb(old)->>'venue_id')) then return new;end if;
+ issuer=nullif(current_setting('request.jwt.claims',true),'')::jsonb->>'iss';
+ origin=substring(issuer from '^(https://[^/]+)/auth/v1$');
+ object_path=split_part(new.photo_url,'/storage/v1/object/public/photos/',2);
+ if origin is null or new.photo_url<>origin||'/storage/v1/object/public/photos/'||object_path
+   or object_path !~ '^[a-f0-9-]{36}/[a-zA-Z0-9-]+/[a-zA-Z0-9._-]+$'
+   or split_part(object_path,'/',1)<>auth.uid()::text
+   or not exists(select 1 from storage.objects where bucket_id='photos' and name=object_path)
+ then raise exception 'Upload your own photo before attaching it';end if;
+ if tg_table_name='post_photos' then
+  select count(*) into amount from post_photos where post_id=new.post_id and id<>new.id;
+  if exists(select 1 from post_photos where post_id=new.post_id and photo_url=new.photo_url and id<>new.id) then raise exception 'Choose different photos';end if;
+ else
+  select count(*) into amount from venue_photos where venue_id=new.venue_id and id<>new.id;
+  if exists(select 1 from venue_photos where venue_id=new.venue_id and photo_url=new.photo_url and id<>new.id) then raise exception 'Choose different photos';end if;
+ end if;
+ if amount>=max_photos then raise exception 'Too many photos (maximum %)',max_photos;end if;
+ select * into job from media_cleanup_jobs where bucket='photos' and path in(object_path,replace(object_path,'-full.jpg','-thumb.jpg')) order by attempts desc limit 1 for update;
+ if found and job.attempts>0 then raise exception 'This old photo is being removed. Upload it again.';end if;
+ delete from media_cleanup_jobs where bucket='photos' and path in(object_path,replace(object_path,'-full.jpg','-thumb.jpg')) and attempts=0;
+ return new;
+end;
+$$ language plpgsql security definer set search_path=public,pg_temp;
+revoke all on function public.guard_public_photo_attachment() from public,anon,authenticated;
+create trigger guard_public_photo_attachment before insert or update on public.post_photos for each row execute function public.guard_public_photo_attachment();
+create trigger guard_public_photo_attachment before insert or update on public.venue_photos for each row execute function public.guard_public_photo_attachment();
+
+create function public.public_photo_referenced(p_path text) returns boolean as $$
+ select exists(select 1 from post_photos where split_part(photo_url,'/storage/v1/object/public/photos/',2)=p_path)
+ or exists(select 1 from venue_photos where split_part(photo_url,'/storage/v1/object/public/photos/',2)=p_path)
+ or exists(select 1 from offers where split_part(cover_photo_url,'/storage/v1/object/public/photos/',2)=p_path);
+$$ language sql stable security definer set search_path=public,pg_temp;
+revoke all on function public.public_photo_referenced(text) from public,anon,authenticated;
+
+create function public.queue_removed_public_photo() returns trigger as $$
+declare url text; removed_path text;
+begin
+ url=case when tg_table_name='offers' then to_jsonb(old)->>'cover_photo_url' else to_jsonb(old)->>'photo_url' end;
+ if tg_op='UPDATE' and url=(case when tg_table_name='offers' then to_jsonb(new)->>'cover_photo_url' else to_jsonb(new)->>'photo_url' end) then return new;end if;
+ removed_path=split_part(url,'/storage/v1/object/public/photos/',2);
+ if removed_path ~ '^[a-f0-9-]{36}/[a-zA-Z0-9-]+/[a-zA-Z0-9._-]+$' and not public_photo_referenced(removed_path) then
+  insert into media_cleanup_jobs(bucket,path,next_attempt_at) values('photos',removed_path,now()+interval '1 day') on conflict(path) do nothing;
+  if removed_path ~ '-full\.jpg$' then insert into media_cleanup_jobs(bucket,path,next_attempt_at) values('photos',regexp_replace(removed_path,'-full\.jpg$','-thumb.jpg'),now()+interval '1 day') on conflict(path) do nothing;end if;
+ end if;
+ return null;
+end;
+$$ language plpgsql security definer set search_path=public,pg_temp;
+revoke all on function public.queue_removed_public_photo() from public,anon,authenticated;
+create trigger queue_removed_public_photo after delete or update of photo_url on public.post_photos for each row execute function public.queue_removed_public_photo();
+create trigger queue_removed_public_photo after delete or update of photo_url on public.venue_photos for each row execute function public.queue_removed_public_photo();
+create trigger queue_removed_offer_photo after delete or update of cover_photo_url on public.offers for each row execute function public.queue_removed_public_photo();
+
+create or replace function public.claim_media_cleanup() returns setof media_cleanup_jobs as $$
+begin
+ -- Reattachment (including old-client retries) always wins before a cleanup lease.
+ delete from media_cleanup_jobs where bucket='photos' and public_photo_referenced(regexp_replace(path,'-thumb\.jpg$','-full.jpg'));
+ return query with due as(select id from media_cleanup_jobs where next_attempt_at<=now() and attempts<20 order by next_attempt_at for update skip locked limit 100)
+ update media_cleanup_jobs j set attempts=j.attempts+1,next_attempt_at=now()+interval '10 minutes' from due where j.id=due.id returning j.*;
+end;
+$$ language plpgsql security definer set search_path=public,pg_temp;
+
+-- Registration from older app versions invalidates any previous logout capability.
+create or replace function public.register_push_token(p_token text,p_platform text) returns void as $$
+begin
+ if not account_active(auth.uid()) then raise exception 'Account unavailable';end if;
+ if p_token is null or p_token !~ '^(ExponentPushToken|ExpoPushToken)\[[A-Za-z0-9_-]+\]$'
+ or p_platform is null or p_platform not in ('ios','android') then raise exception 'invalid push token';end if;
+ insert into push_tokens(user_id,token,platform,updated_at,revoke_hash) values(auth.uid(),p_token,p_platform,now(),null)
+ on conflict(token) do update set user_id=excluded.user_id,platform=excluded.platform,updated_at=now(),revoke_hash=null;
+end;
+$$ language plpgsql security definer set search_path=public,pg_temp;
+
+-- Historical trigger functions keep their behavior with a pinned lookup path.
+-- Fixed 23 Nov 2026 before its first live run: the loop stopped at PostGIS's own trigger functions.
+do $$ declare f record;begin
+ for f in select p.oid::regprocedure signature from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+ where n.nspname='public' and p.prorettype='trigger'::regtype and not exists(select 1 from unnest(coalesce(p.proconfig,'{}')) c where c like 'search_path=%')
+ -- Skip functions owned by extensions (PostGIS ships trigger functions in public that only supabase_admin may alter).
+ and not exists(select 1 from pg_depend d where d.classid='pg_proc'::regclass and d.objid=p.oid and d.deptype='e')
+ loop execute format('alter function %s set search_path=public,pg_temp',f.signature);end loop;
+end $$;
+notify pgrst,'reload schema';
+
+
+-- 00054_activity_pages.sql
+
+create function public.activity_requests(p_history boolean default false,p_cursor jsonb default null,p_limit int default 30) returns jsonb as $$
+declare result jsonb;lim int=least(80,greatest(1,coalesce(p_limit,30)));
+begin
+ if not account_active(auth.uid()) then raise exception 'Account unavailable';end if;
+ with page as materialized(
+ select j.*,p.title post_title,p.status post_status,p.starts_at post_starts_at
+ from join_requests j left join posts p on p.id=j.post_id where j.requester_id=auth.uid()
+ and (coalesce(p.status='cancelled' or p.starts_at<=now(),true) or j.status in('withdrawn','declined','full'))=coalesce(p_history,false)
+ and(p_cursor is null or (j.created_at,j.id)<((p_cursor->>'at')::timestamptz,(p_cursor->>'id')::uuid))
+ order by j.created_at desc,j.id desc limit lim+1
+ ), numbered as(select *,row_number() over(order by created_at desc,id desc) rn from page)
+ select jsonb_build_object('items',coalesce(jsonb_agg(to_jsonb(numbered)-'rn' order by rn) filter(where rn<=lim),'[]'),
+ 'cursor',case when count(*)>lim then(select jsonb_build_object('at',created_at,'id',id) from numbered where rn=lim)else null end) into result from numbered;
+ return result;
+end;
+$$ language plpgsql stable security invoker set search_path=public,pg_temp;
+create function public.host_request_page(p_cursor jsonb default null,p_limit int default 30) returns jsonb as $$
+declare result jsonb;lim int=least(80,greatest(1,coalesce(p_limit,30)));
+begin
+ if not account_active(auth.uid()) then raise exception 'Account unavailable';end if;
+ with page as materialized(
+ select j.*,u.display_name requester_name,u.avatar_url requester_avatar
+ from join_requests j join posts p on p.id=j.post_id join profiles u on u.id=j.requester_id
+ where p.author_id=auth.uid() and j.status='pending' and p.status in('open','closed') and p.starts_at>now() and(p.expires_at is null or p.expires_at>now())
+ and(p_cursor is null or (j.created_at,j.id)<((p_cursor->>'at')::timestamptz,(p_cursor->>'id')::uuid))
+ order by j.created_at desc,j.id desc limit lim+1
+ ), numbered as(select *,row_number() over(order by created_at desc,id desc) rn from page),
+ cards as(select n.rn,n.created_at,n.id,to_jsonb(n)-'rn'||jsonb_build_object('post',to_jsonb(p)) item from numbered n join post_cards p on p.id=n.post_id where rn<=lim)
+ select jsonb_build_object('items',coalesce((select jsonb_agg(item order by rn) from cards),'[]'),
+ 'cursor',case when exists(select 1 from numbered where rn>lim) then(select jsonb_build_object('at',created_at,'id',id) from cards order by rn desc limit 1)else null end) into result;
+ return result;
+end;
+$$ language plpgsql stable security invoker set search_path=public,pg_temp;
+revoke all on function public.activity_requests(boolean,jsonb,int),public.host_request_page(jsonb,int) from public,anon;
+grant execute on function public.activity_requests(boolean,jsonb,int),public.host_request_page(jsonb,int) to authenticated;
+create index joins_requester_page on join_requests(requester_id,created_at desc,id desc);
+
+create function public.business_day_summary(p_from timestamptz,p_until timestamptz) returns jsonb as $$
+begin
+ if not account_active(auth.uid()) or p_until<=p_from or p_until-p_from>interval '2 days' then raise exception 'Choose a valid day';end if;
+ return jsonb_build_object(
+ 'today',(select count(*) from business_bookings where business_id=auth.uid() and slot>=p_from and slot<p_until and status<>'cancelled'),
+ 'waiting',(select count(*) from business_bookings where business_id=auth.uid() and slot>=p_from and slot<p_until and slot>now() and status='pending' and(hold_expires_at is null or hold_expires_at>now())),
+ 'liveOffers',(select count(*) from offers where business_id=auth.uid() and status='live' and ends_at>now()),
+ 'drafts',(select count(*) from offers where business_id=auth.uid() and status='draft'));
+end;
+$$ language plpgsql stable security invoker set search_path=public,pg_temp;
+revoke all on function public.business_day_summary(timestamptz,timestamptz) from public,anon;
+grant execute on function public.business_day_summary(timestamptz,timestamptz) to authenticated;
+notify pgrst,'reload schema';
+
+
+-- 00055_plan_chat_events.sql
+
+-- Plan chats show WhatsApp-style lines such as "Anu joined" and "Rahul left".
+-- join_requests only keeps the current status, so this log records the moment
+-- someone becomes an approved member or stops being one. Only the database
+-- writes it; members of the plan's group read it.
+create table public.plan_group_events(
+  id uuid primary key default gen_random_uuid(),
+  post_id uuid not null references public.posts(id) on delete cascade,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  kind text not null check (kind in ('joined','left','removed')),
+  created_at timestamptz not null default clock_timestamp()
+);
+create index plan_group_events_post on public.plan_group_events(post_id,created_at);
+create index plan_group_events_user on public.plan_group_events(user_id);
+alter table public.plan_group_events enable row level security;
+revoke all on public.plan_group_events from public,anon,authenticated;
+grant select on public.plan_group_events to authenticated;
+grant all on public.plan_group_events to service_role;
+create policy "plan members see join and leave lines" on public.plan_group_events for select to authenticated
+ using (
+  exists(select 1 from public.plan_groups g where g.post_id=plan_group_events.post_id and public.my_plan_group_member(g.id))
+  and public.visible_author(user_id)
+ );
+
+create function public.log_plan_membership() returns trigger as $$
+begin
+ if new.status='approved' and (tg_op='INSERT' or old.status is distinct from 'approved') then
+  insert into public.plan_group_events(post_id,user_id,kind) values(new.post_id,new.requester_id,'joined');
+ elsif tg_op='UPDATE' and old.status='approved' and new.status<>'approved' then
+  insert into public.plan_group_events(post_id,user_id,kind)
+  values(new.post_id,new.requester_id,case when new.status='withdrawn' then 'left' else 'removed' end);
+ end if;
+ return null;
+end;
+$$ language plpgsql security definer set search_path=public,pg_temp;
+revoke all on function public.log_plan_membership() from public,anon,authenticated;
+create trigger log_plan_membership after insert or update of status on public.join_requests
+ for each row execute function public.log_plan_membership();
+
+do $$begin
+ if exists(select 1 from pg_publication where pubname='supabase_realtime') then
+  alter publication supabase_realtime add table public.plan_group_events;
+ end if;
+end$$;
+
+
+-- 00056_abuse_limits.sql
+
+-- Spam and abuse limits enforced by the database, so they also hold for
+-- anyone calling the API directly instead of using the app.
+
+-- One rate check for every user-written table. Arguments: the column holding
+-- the writer's id, the window, the most writes allowed in it, and the message.
+-- Only writes made for a signed-in user are counted; workers, admins and
+-- migrations (no auth.uid()) are not limited.
+create function public.enforce_write_rate() returns trigger as $$
+declare
+ actor uuid;
+ recent int;
+ lim int = tg_argv[2]::int;
+begin
+ actor = nullif(to_jsonb(new)->>tg_argv[0],'')::uuid;
+ if auth.uid() is null or actor is distinct from auth.uid() then return new; end if;
+ -- Clients can't backdate a row to slip outside the window.
+ if to_jsonb(new) ? 'created_at' then new.created_at = now(); end if;
+ -- One writer at a time per table, so parallel requests can't overshoot.
+ perform pg_advisory_xact_lock(hashtextextended('nearry-rate:'||tg_table_name||':'||actor::text,0));
+ execute format('select count(*) from %I.%I where %I=$1 and created_at>now()-$2::interval',
+   tg_table_schema, tg_table_name, tg_argv[0])
+   into recent using actor, tg_argv[1];
+ if recent >= lim then raise exception '%', tg_argv[3] using errcode = 'P0001'; end if;
+ return new;
+end;
+$$ language plpgsql security definer set search_path=public,pg_temp;
+revoke all on function public.enforce_write_rate() from public,anon,authenticated;
+
+create trigger rate_limit_posts before insert on public.posts for each row
+ execute function public.enforce_write_rate('author_id','24 hours','10','You can post up to 10 plans a day. Try again tomorrow.');
+create trigger rate_limit_join_requests before insert on public.join_requests for each row
+ execute function public.enforce_write_rate('requester_id','1 hour','40','You''ve sent a lot of join requests. Try again in an hour.');
+create trigger rate_limit_messages before insert on public.messages for each row
+ execute function public.enforce_write_rate('sender_id','1 minute','30','Slow down: you''re sending messages too quickly.');
+create trigger rate_limit_offers before insert on public.offers for each row
+ execute function public.enforce_write_rate('business_id','24 hours','30','You can create up to 30 offers a day. Try again tomorrow.');
+
+-- The counts above read these.
+create index if not exists messages_sender_time on public.messages(sender_id,created_at desc);
+create index if not exists offers_business_time on public.offers(business_id,created_at desc);
+
+-- Profile text can be edited directly, so it needs limits of its own. They
+-- are looser than the app's (names come from Google, which can be long).
+alter table public.profiles
+ add constraint profiles_display_name_length check (display_name is null or char_length(display_name) <= 100),
+ add constraint profiles_business_name_length check (business_name is null or char_length(business_name) <= 120),
+ add constraint profiles_bio_length check (bio is null or char_length(bio) <= 500);
+
+-- Uploads: only the image types the app sends, up to 10 MB (the app's own cap).
+update storage.buckets
+ set file_size_limit = 10485760, allowed_mime_types = array['image/jpeg','image/png','image/webp']
+ where id in ('avatars','photos','verification_docs');
+
+-- Signed-out visitors don't need these.
+revoke execute on function public.account_active(uuid), public.approved_join_count(uuid),
+ public.content_visible(text,uuid), public.visible_author(uuid), public.my_offer_booking(uuid) from anon;
+revoke all on public.push_tokens from anon;
+-- Messages are never edited by users; there is no update policy, so drop the grant too.
+revoke update on public.messages from authenticated;
+
+notify pgrst,'reload schema';
+
+
+-- 00060_players_needed.sql
 -- Players needed: notification switches, a kept alert area, urgent plans that
 -- alert nearby people, and auto-accept.
 --
@@ -4901,7 +5582,7 @@ notify pgrst, 'reload schema';
 -- ── Part 1: notification switches and the alert area ─────────────────────
 
 create function valid_notification_settings(v jsonb) returns boolean
-language sql immutable set search_path = public as $$
+language sql immutable set search_path=public,pg_temp as $$
   select coalesce(
     jsonb_typeof(v) = 'object'
     and not exists (
@@ -4921,17 +5602,17 @@ revoke select(notification_settings) on profiles from anon, authenticated;
 -- Which switch a notification kind belongs to; null = always delivered
 -- (account notices such as verification results).
 create function notification_category(p_kind text) returns text
-language sql immutable set search_path = public as $$
+language sql immutable set search_path=public,pg_temp as $$
   select case
     when p_kind in ('message','plan_group_message') then 'messages'
-    when p_kind in ('join_request','request_approved','request_declined','request_full','post_cancelled') then 'plans'
+    when p_kind in ('join_request','request_approved','request_declined','request_full','post_cancelled','plan_reminder') then 'plans'
     when p_kind in ('booking','booking_confirmed','booking_cancelled') then 'bookings'
     when p_kind = 'nearby_plan' then 'nearby'
   end
 $$;
 
 create function notification_category_enabled(p_user uuid, p_kind text) returns boolean
-language sql stable security definer set search_path = public as $$
+language sql stable security definer set search_path=public,pg_temp as $$
   select notification_category(p_kind) is null
     or coalesce((select p.notification_settings->>notification_category(p_kind)
                  from profiles p where p.id = p_user), 'true') <> 'false'
@@ -4948,7 +5629,7 @@ begin
  end if;
  return new;
 end;
-$$ language plpgsql security definer set search_path=public;
+$$ language plpgsql security definer set search_path=public,pg_temp;
 
 create or replace function get_notification_preferences() returns jsonb as $$
  select jsonb_build_object(
@@ -4960,7 +5641,7 @@ create or replace function get_notification_preferences() returns jsonb as $$
    'alertArea', case when onboarding_preferences ? 'area'
      then jsonb_build_object('label', onboarding_preferences#>>'{area,label}') end)
  from profiles where id = auth.uid();
-$$ language sql stable security definer set search_path=public;
+$$ language sql stable security definer set search_path=public,pg_temp;
 
 create function set_notification_category(p_category text, p_enabled boolean) returns void as $$
 begin
@@ -4971,7 +5652,7 @@ begin
  update profiles set notification_settings = notification_settings || jsonb_build_object(p_category, p_enabled)
   where id = auth.uid();
 end;
-$$ language plpgsql security definer set search_path=public;
+$$ language plpgsql security definer set search_path=public,pg_temp;
 revoke all on function set_notification_category(text,boolean) from public, anon;
 grant execute on function set_notification_category(text,boolean) to authenticated;
 
@@ -4990,7 +5671,7 @@ begin
  update profiles set onboarding_preferences = onboarding_preferences || jsonb_build_object('area', p_area)
   where id = auth.uid();
 end;
-$$ language plpgsql security definer set search_path=public;
+$$ language plpgsql security definer set search_path=public,pg_temp;
 revoke all on function set_alert_area(jsonb) from public, anon;
 grant execute on function set_alert_area(jsonb) to authenticated;
 
@@ -5006,7 +5687,7 @@ begin
  end if;
  return new;
 end;
-$$ language plpgsql set search_path=public;
+$$ language plpgsql set search_path=public,pg_temp;
 revoke all on function round_device_area() from public, anon, authenticated;
 create trigger round_device_area before insert or update of onboarding_preferences on profiles
  for each row execute function round_device_area();
@@ -5023,13 +5704,13 @@ begin
     and (business_details ? 'latitude' or business_details ? 'longitude')
     and onboarding_location_expired(business_details->>'locationCachedAt');
 end;
-$$ language plpgsql security definer set search_path=public;
+$$ language plpgsql security definer set search_path=public,pg_temp;
 
 alter table notifications drop constraint if exists notifications_kind_check;
 alter table notifications add constraint notifications_kind_check check (kind in (
   'join_request','request_approved','request_declined','request_full','post_cancelled',
   'booking','booking_confirmed','booking_cancelled','message','verification_approved',
-  'verification_rejected','selfie_review','plan_group_message','nearby_plan'));
+  'verification_rejected','selfie_review','plan_group_message','plan_reminder','nearby_plan'));
 
 -- ── Part 2: urgent plans, nearby alerts, auto-accept ────────────────────
 
@@ -5048,7 +5729,7 @@ create or replace view public.post_cards with (security_invoker=true) as
 
 -- Great-circle distance in km (no PostGIS needed).
 create function km_between(a_lat double precision, a_lng double precision, b_lat double precision, b_lng double precision)
-returns double precision language sql immutable set search_path = public as $$
+returns double precision language sql immutable set search_path=public,pg_temp as $$
   select 6371.0088 * 2 * asin(least(1, sqrt(
     power(sin(radians(b_lat - a_lat) / 2), 2)
     + cos(radians(a_lat)) * cos(radians(b_lat)) * power(sin(radians(b_lng - a_lng) / 2), 2))))
@@ -5071,7 +5752,7 @@ begin
   execute 'select st_y($1::geometry), st_x($1::geometry)' into lat, lng using v.location;
  end if;
 end;
-$$ language plpgsql stable security definer set search_path = public;
+$$ language plpgsql stable security definer set search_path=public,pg_temp;
 
 create function guard_urgent_plan() returns trigger as $$
 declare v_today int;
@@ -5094,7 +5775,7 @@ begin
  end if;
  return new;
 end;
-$$ language plpgsql security definer set search_path = public;
+$$ language plpgsql security definer set search_path=public,pg_temp;
 create trigger guard_urgent_plan before insert or update of urgent, auto_accept on posts
  for each row execute function guard_urgent_plan();
 
@@ -5135,7 +5816,7 @@ begin
  limit 200;
  return new;
 end;
-$$ language plpgsql security definer set search_path = public;
+$$ language plpgsql security definer set search_path=public,pg_temp;
 create trigger alert_nearby_players after insert on posts
  for each row when (new.urgent) execute function alert_nearby_players();
 revoke all on function km_between(double precision,double precision,double precision,double precision),
@@ -5178,7 +5859,7 @@ begin
   end if;
   return to_jsonb(r);
 end;
-$$ language plpgsql security definer set search_path=public;
+$$ language plpgsql security definer set search_path=public,pg_temp;
 
 create or replace function notify_join_request() returns trigger as $$
 declare v_kind text; v_user uuid; v_title text; v_body text; v_auto boolean;
@@ -5223,7 +5904,7 @@ begin
   values (v_user, v_kind, v_title, v_body, new.post_id);
   return new;
 end;
-$$ language plpgsql security definer set search_path = public;
+$$ language plpgsql security definer set search_path=public,pg_temp;
 
 notify pgrst, 'reload schema';
 

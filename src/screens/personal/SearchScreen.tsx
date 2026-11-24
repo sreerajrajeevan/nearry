@@ -1,26 +1,27 @@
-import { LoadingState } from "../../components/LoadingState";
 import React, { useEffect, useState } from "react";
-import { View, Text, ScrollView, StyleSheet } from "react-native";
+import { View, Text, FlatList, StyleSheet } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { PlaceSuggestions } from "../../components/PlaceSuggestions";
 import { usePlaceSuggestions } from "../../hooks/usePlaceSuggestions";
+import { usePagedQuery } from "../../hooks/usePagedQuery";
 import { Screen } from "../../components/Screen";
 import { PersonalHeader } from "../../components/PersonalHeader";
 import { PageHeading } from "../../components/PageHeading";
 import { FilterTabs } from "../../components/FilterTabs";
 import { DiscoverySearch } from "../../components/DiscoverySearch";
 import { VenueRow } from "../../components/VenueRow";
-import { EmptyState } from "../../components/EmptyState";
-import { Button } from "../../components/Button";
 import { PostRow } from "../../components/PostRow";
 import { OfferRow } from "../../components/OfferRow";
-import { colors, typography, spacing } from "../../theme";
-import { searchVenues } from "../../services/venues";
-import { listPosts } from "../../services/posts";
-import { listLiveOffers } from "../../services/offers";
+import { EmptyState } from "../../components/EmptyState";
+import { LoadingState } from "../../components/LoadingState";
+import { Button } from "../../components/Button";
+import { searchVenuesPage } from "../../services/venues";
+import { listPostsPage } from "../../services/posts";
+import { listOffersPage } from "../../services/offers";
 import { NeedPost, Venue, Offer } from "../../services/mappers";
 import { PersonalTabNav } from "../../navigation/types";
-
+import { useAuth } from "../../store/AuthContext";
+import { colors, typography, spacing } from "../../theme";
 type Filter = "all" | "venues" | "posts" | "offers";
 const filters: { key: Filter; label: string }[] = [
   { key: "all", label: "All" },
@@ -28,183 +29,176 @@ const filters: { key: Filter; label: string }[] = [
   { key: "posts", label: "Plans" },
   { key: "offers", label: "Offers" },
 ];
+type Row =
+  | { kind: "post"; value: NeedPost }
+  | { kind: "venue"; value: Venue }
+  | { kind: "offer"; value: Offer };
 export function SearchScreen() {
-  const navigation = useNavigation<PersonalTabNav>();
-  const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<Filter>("all");
+  const navigation = useNavigation<PersonalTabNav>(),
+    { profile } = useAuth();
+  const [query, setQuery] = useState(""),
+    [term, setTerm] = useState(""),
+    [filter, setFilter] = useState<Filter>("all");
+  useEffect(() => {
+    const timer = setTimeout(() => setTerm(query.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [query]);
+  const enabled = query.trim() === term && !!term,
+    scope = profile?.id ?? "";
+  const venues = usePagedQuery("search-venues:" + scope + ":" + term, (c) =>
+    term
+      ? searchVenuesPage(term, c)
+      : Promise.resolve({ items: [], cursor: null }),
+  );
+  const posts = usePagedQuery("search-posts:" + scope + ":" + term, (c) =>
+    term
+      ? listPostsPage({ search: term, status: "open" }, c)
+      : Promise.resolve({ items: [], cursor: null }),
+  );
+  const offers = usePagedQuery("search-offers:" + scope + ":" + term, (c) =>
+    term
+      ? listOffersPage({ search: term }, c)
+      : Promise.resolve({ items: [], cursor: null }),
+  );
   const suggestions = usePlaceSuggestions(
     query,
     undefined,
     filter === "all" || filter === "venues",
   );
-  const [retry, setRetry] = useState(0);
-  const [venues, setVenues] = useState<Venue[]>([]);
-  const [posts, setPosts] = useState<NeedPost[]>([]);
-  const [offers, setOffers] = useState<Offer[]>([]);
-  const [state, setState] = useState<"idle" | "loading" | "error" | "ready">(
-    "idle",
-  );
-  useEffect(() => {
-    let active = true;
-    const q = query.trim();
-    setVenues([]);
-    setPosts([]);
-    setOffers([]);
-    if (!q) {
-      setState("idle");
-      return;
-    }
-    setState("loading");
-    const timer = setTimeout(async () => {
-      try {
-        const [v, p, o] = await Promise.all([
-          searchVenues(q),
-          listPosts({ search: q }),
-          listLiveOffers(),
-        ]);
-        if (!active) return;
-        setVenues(v);
-        setPosts(p);
-        setOffers(
-          o.filter((offer) =>
-            `${offer.title} ${offer.businessName} ${offer.description}`
-              .toLowerCase()
-              .includes(q.toLowerCase()),
-          ),
-        );
-        setState("ready");
-      } catch {
-        if (active) setState("error");
-      }
-    }, 300);
-    return () => {
-      active = false;
-      clearTimeout(timer);
-    };
-  }, [query, retry]);
-  const showVenues = filter === "all" || filter === "venues";
-  const showPosts = filter === "all" || filter === "posts";
-  const showOffers = filter === "all" || filter === "offers";
-  const count =
-    (showVenues ? venues.length : 0) +
-    (showPosts ? posts.length : 0) +
-    (showOffers ? offers.length : 0);
+  const rows: Row[] = enabled
+    ? [
+        ...(filter === "all" || filter === "posts"
+          ? posts.items.map((value) => ({ kind: "post" as const, value }))
+          : []),
+        ...(filter === "all" || filter === "offers"
+          ? offers.items.map((value) => ({ kind: "offer" as const, value }))
+          : []),
+        ...(filter === "all" || filter === "venues"
+          ? venues.items.map((value) => ({ kind: "venue" as const, value }))
+          : []),
+      ]
+    : [];
+  const sections = [
+    { key: "posts", label: "plans", page: posts },
+    { key: "offers", label: "offers", page: offers },
+    { key: "venues", label: "places", page: venues },
+  ].filter((s) => filter === "all" || filter === s.key);
+  const loading =
+    !!query.trim() &&
+    (!enabled || sections.some((s) => s.page.state === "loading"));
   return (
     <Screen keyboard>
-      <ScrollView
-        showsVerticalScrollIndicator={false}
+      <FlatList
+        data={rows}
+        keyExtractor={(r) => r.kind + ":" + r.value.id}
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={styles.scroll}
-      >
-        <PersonalHeader />
-        <PageHeading
-          compact
-          greeting="Something in mind?"
-          title={"Find your\nnext hello."}
-        />
-        <DiscoverySearch value={query} onChangeText={setQuery} />
-        <FilterTabs
-          options={filters}
-          selected={filter}
-          onSelect={setFilter}
-          label="Search results"
-        />
-        {showVenues && query.trim().length >= 3 && (
-          <View style={{ marginBottom: spacing.lg }}>
-            <Text style={styles.sectionLabel}>Find a location</Text>
-            <PlaceSuggestions
-              {...suggestions}
-              onRetry={suggestions.retry}
-              onSelect={(place) =>
-                navigation.navigate("PlaceDetails", { place })
+        ListHeaderComponent={
+          <>
+            <PersonalHeader />
+            <PageHeading
+              compact
+              greeting="Something in mind?"
+              title={"Find your\nnext hello."}
+            />
+            <DiscoverySearch value={query} onChangeText={setQuery} />
+            <FilterTabs
+              options={filters}
+              selected={filter}
+              onSelect={setFilter}
+              label="Search results"
+            />
+            {(filter === "all" || filter === "venues") &&
+              query.trim().length >= 3 && (
+                <View style={{ marginBottom: spacing.lg }}>
+                  <Text style={styles.label}>Find a location</Text>
+                  <PlaceSuggestions
+                    {...suggestions}
+                    onRetry={suggestions.retry}
+                    onSelect={(place) =>
+                      navigation.navigate("PlaceDetails", { place })
+                    }
+                  />
+                </View>
+              )}
+            {loading && <LoadingState label="Searching…" layout="list" />}
+          </>
+        }
+        renderItem={({ item: r }) =>
+          r.kind === "post" ? (
+            <PostRow
+              post={r.value}
+              onPress={() =>
+                navigation.navigate("PostDetails", { postId: r.value.id })
               }
             />
-          </View>
-        )}
-        {state === "idle" ? (
-          <EmptyState
-            title="What would you like to find?"
-            hint="Search for places, plans, or an opening nearby."
-          />
-        ) : state === "loading" ? (
-          <LoadingState label="Looking nearby…" layout="list" />
-        ) : state === "error" ? (
-          <>
+          ) : r.kind === "offer" ? (
+            <OfferRow
+              offer={r.value}
+              onPress={() =>
+                navigation.navigate("OfferDetails", { offerId: r.value.id })
+              }
+            />
+          ) : (
+            <VenueRow
+              venue={r.value}
+              onPress={() =>
+                navigation.navigate("VenueDetails", { venueId: r.value.id })
+              }
+            />
+          )
+        }
+        ListEmptyComponent={
+          !loading ? (
             <EmptyState
-              title="Couldn’t search right now"
-              hint="Check your connection and try again."
+              title={
+                term
+                  ? "No matching Nearry plans or venues"
+                  : "What would you like to find?"
+              }
+              hint="Search for a place, activity, or service."
             />
-            <Button
-              title="Try again"
-              variant="ghost"
-              onPress={() => setRetry((v) => v + 1)}
-            />
-          </>
-        ) : count === 0 ? (
-          <EmptyState
-            title="No matching Nearry plans or venues"
-            hint="Try another place, activity, or service."
-          />
-        ) : (
-          <>
-            <Text accessibilityLiveRegion="polite" style={styles.status}>
-              {count} result{count === 1 ? "" : "s"}
-            </Text>
-            {showPosts && posts.length > 0 && (
-              <>
-                <Text style={styles.sectionLabel}>People & plans</Text>
-                {posts.map((post) => (
-                  <PostRow
-                    key={post.id}
-                    post={post}
-                    onPress={() =>
-                      navigation.navigate("PostDetails", { postId: post.id })
-                    }
-                  />
-                ))}
-              </>
-            )}
-            {showOffers && offers.length > 0 && (
-              <>
-                <Text style={styles.sectionLabel}>A little opening</Text>
-                {offers.map((offer) => (
-                  <OfferRow
-                    key={offer.id}
-                    offer={offer}
-                    onPress={() =>
-                      navigation.navigate("OfferDetails", { offerId: offer.id })
-                    }
-                  />
-                ))}
-              </>
-            )}
-            {showVenues && venues.length > 0 && (
-              <>
-                <Text style={styles.sectionLabel}>Places on Nearry</Text>
-                {venues.map((venue) => (
-                  <VenueRow
-                    key={venue.id}
-                    venue={venue}
-                    onPress={() =>
-                      navigation.navigate("VenueDetails", { venueId: venue.id })
-                    }
-                  />
-                ))}
-              </>
-            )}
-          </>
-        )}
-      </ScrollView>
+          ) : null
+        }
+        ListFooterComponent={
+          enabled ? (
+            <>
+              {sections.map((s) => (
+                <View key={s.key}>
+                  {(s.page.state === "error" || s.page.error) && (
+                    <Button
+                      title={"Retry " + s.label}
+                      variant="ghost"
+                      onPress={() => void s.page.refresh()}
+                    />
+                  )}
+                  {s.page.moreError && (
+                    <Text accessibilityRole="alert" style={styles.label}>
+                      {s.page.moreError}
+                    </Text>
+                  )}
+                  {s.page.cursor && (
+                    <Button
+                      title={"More " + s.label}
+                      loading={s.page.loadingMore}
+                      variant="ghost"
+                      onPress={() => void s.page.loadMore()}
+                    />
+                  )}
+                </View>
+              ))}
+            </>
+          ) : null
+        }
+      />
     </Screen>
   );
 }
 const styles = StyleSheet.create({
   scroll: { paddingTop: spacing.md, paddingBottom: spacing.xl },
-  status: { ...typography.bodySmall, color: colors.textDim },
-  sectionLabel: {
-    ...typography.heading,
-    color: colors.text,
-    marginTop: spacing.lg,
-    marginBottom: spacing.md,
+  label: {
+    ...typography.bodySmall,
+    color: colors.textDim,
+    marginVertical: spacing.md,
   },
 });
