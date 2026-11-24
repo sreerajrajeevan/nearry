@@ -7224,3 +7224,83 @@ test("storage caps: profile photos 2 MB, plan and venue photos 5 MB", async () =
     photos: 5 * 1024 * 1024,
   });
 });
+
+test("booking reminders: confirmed bookings get one push on the day, at 8 am or 2 hours before", async () => {
+  const business = await auditBusiness();
+  const [anu, ben, cara] = [
+    await corePersonal(),
+    await corePersonal(),
+    await corePersonal(),
+  ];
+  const offer = (
+    await db.query(
+      `insert into offers(business_id,title,description,starts_at,ends_at,slot_capacity,slot_minutes,resource_key,status)
+       values($1,'Evening turf','A friendly evening turf session',$2,$3,6,60,gen_random_uuid()::text,'live') returning id`,
+      [business, await istAt(2, "09:00"), await istAt(2, "20:00")],
+    )
+  ).rows[0].id;
+  const slotAt = async (hhmm: string) =>
+    (
+      await db.query(
+        "select id from offer_slots where offer_id=$1 and starts_at=$2",
+        [offer, await istAt(2, hhmm)],
+      )
+    ).rows[0].id;
+  const book = async (who: string, slot: string, party: number) =>
+    (
+      await asUser(who, (tx) =>
+        tx.query("select book_offer_slot($1,$2) r", [slot, party]),
+      )
+    ).rows[0].r.booking_id as string;
+  const confirm = (id: string) =>
+    asUser(business, (tx) =>
+      tx.query("select change_booking_status($1,'confirmed')", [id]),
+    );
+  // Anu: confirmed, 6 pm, 2 people. Ben: confirmed, 9 am (earlier than 8 + 2 h).
+  await confirm(await book(anu, await slotAt("18:00"), 2));
+  await confirm(await book(ben, await slotAt("09:00"), 1));
+  // Cara: still waiting for the business, so no reminder.
+  await book(cara, await slotAt("12:00"), 1);
+
+  const mine = async () =>
+    (
+      await db.query(
+        "select user_id, title, body from notifications where kind='booking_reminder' and ref_id=$1 order by user_id",
+        [offer],
+      )
+    ).rows;
+  const run = (day: number, hhmm: string) =>
+    istAt(day, hhmm).then((t) =>
+      db.query("select public.send_booking_reminders($1)", [t]),
+    );
+
+  await run(1, "23:00");
+  await run(2, "06:59");
+  assert.deepEqual(await mine(), []);
+  await run(2, "07:00");
+  assert.deepEqual(
+    (await mine()).map((r: any) => r.user_id),
+    [ben],
+  );
+  await run(2, "08:00");
+  await run(2, "08:10");
+  const rows = await mine();
+  assert.deepEqual(rows.map((r: any) => r.user_id).sort(), [anu, ben].sort());
+  const anuRow = rows.find((r: any) => r.user_id === anu);
+  assert.equal(anuRow.title, "Today: Evening turf");
+  assert.match(anuRow.body, /^6:00 pm at Audit Salon · 2 people\./);
+  assert.match(anuRow.body, /Can't make it\? Cancel it in the app/);
+
+  // Only the scheduler (service_role) can send them.
+  await assert.rejects(
+    asUser(anu, (tx) => tx.query("select public.send_booking_reminders()")),
+  );
+  assert.equal(
+    (
+      await db.query(
+        "select public.notification_category('booking_reminder') c",
+      )
+    ).rows[0].c,
+    "bookings",
+  );
+});

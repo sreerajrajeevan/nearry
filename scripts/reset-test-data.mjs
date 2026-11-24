@@ -39,6 +39,7 @@ export const CLEAR_TABLES = [
   "verification_review_jobs",
   "join_requests",
   "bookings",
+  "booking_reminder_log",
   "offer_slots",
   "offers",
   "posts",
