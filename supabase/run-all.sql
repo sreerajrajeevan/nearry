@@ -5572,6 +5572,249 @@ revoke update on public.messages from authenticated;
 notify pgrst,'reload schema';
 
 
+-- 00057_daily_cleanup.sql
+
+-- Daily cleanup to keep the database and photo storage small.
+-- Scheduled once a day by supabase/ops/setup-maintenance.sql.
+-- Applied live on 23 Nov 2026 (the unused-files step a few minutes after the rest).
+create function public.daily_cleanup() returns jsonb as $$
+declare
+ photos int;
+ orphans int;
+ notices int;
+ cron_rows int = 0;
+begin
+ -- Photos of plans that started more than 7 days ago (finished or cancelled).
+ -- Removing the rows queues the stored files (and thumbnails) for the
+ -- storage worker through queue_removed_public_photo; the plan itself stays.
+ with gone as (
+  delete from post_photos ph using posts p
+  where p.id = ph.post_id and p.starts_at < now() - interval '7 days'
+  returning ph.id
+ ) select count(*) into photos from gone;
+
+ -- Stored plan/offer photos that nothing points to any more (old orphans,
+ -- abandoned uploads). Two days' grace covers uploads still being attached;
+ -- a thumbnail is kept while its full-size photo is in use. The storage worker
+ -- deletes the files; a photo reattached before then is kept.
+ with queued as (
+  insert into media_cleanup_jobs(bucket,path,next_attempt_at)
+  select 'photos', o.name, now() from storage.objects o
+  where o.bucket_id = 'photos' and o.created_at < now() - interval '2 days'
+   and not public_photo_referenced(o.name)
+   and not public_photo_referenced(regexp_replace(o.name, '-thumb\.jpg$', '-full.jpg'))
+  on conflict (path) do nothing
+  returning 1
+ ) select count(*) into orphans from queued;
+
+ -- Notifications older than 90 days.
+ with gone as (
+  delete from notifications where created_at < now() - interval '90 days' returning id
+ ) select count(*) into notices from gone;
+
+ -- pg_cron keeps a row for every run (about 3,500 a day); keep one week.
+ if to_regclass('cron.job_run_details') is not null then
+  execute 'with gone as (delete from cron.job_run_details where start_time < now() - interval ''7 days'' returning 1) select count(*) from gone'
+   into cron_rows;
+ end if;
+
+ return jsonb_build_object('planPhotos', photos, 'unusedFiles', orphans, 'notifications', notices, 'cronHistory', cron_rows);
+end;
+$$ language plpgsql security definer set search_path=public,pg_temp;
+revoke all on function public.daily_cleanup() from public,anon,authenticated;
+grant execute on function public.daily_cleanup() to service_role;
+
+
+-- 00058_policy_and_index_tidy.sql
+
+-- Performance tidy-up from the Supabase advisor.
+
+-- 1) Row-security rules: wrap auth.uid() in a sub-select so Postgres reads the
+--    signed-in user once per query instead of once per row. Same meaning;
+--    already-wrapped calls are left alone.
+do $$
+declare p record; using_expr text; check_expr text; stmt text;
+begin
+ for p in select schemaname, tablename, policyname, qual, with_check from pg_policies
+  where schemaname = 'public'
+ loop
+  using_expr = regexp_replace(p.qual, '(?<!select )auth\.uid\(\)', '(select auth.uid())', 'gi');
+  check_expr = regexp_replace(p.with_check, '(?<!select )auth\.uid\(\)', '(select auth.uid())', 'gi');
+  if using_expr is not distinct from p.qual and check_expr is not distinct from p.with_check then continue; end if;
+  stmt = format('alter policy %I on %I.%I', p.policyname, p.schemaname, p.tablename);
+  if p.qual is not null then stmt = stmt || format(' using (%s)', using_expr); end if;
+  if p.with_check is not null then stmt = stmt || format(' with check (%s)', check_expr); end if;
+  execute stmt;
+ end loop;
+end $$;
+
+-- 2) Foreign keys used for lookups and for account removal.
+create index if not exists admin_console_audit_actor on public.admin_console_audit(actor_id);
+create index if not exists content_reports_subject_user on public.content_reports(subject_user_id);
+create index if not exists conversation_clears_user on public.conversation_clears(user_id);
+create index if not exists conversation_reads_user on public.conversation_reads(user_id);
+create index if not exists notifications_message on public.notifications(message_id);
+create index if not exists offers_venue on public.offers(venue_id);
+create index if not exists plan_group_reads_user on public.plan_group_reads(user_id);
+create index if not exists posts_venue on public.posts(venue_id);
+create index if not exists venues_business on public.venues(business_id);
+create index if not exists verification_review_jobs_user on public.verification_review_jobs(user_id);
+-- Tables that only exist on projects upgraded from the first schema.
+do $$begin
+ if to_regclass('public.legacy_messages') is not null then
+  create index if not exists legacy_messages_sender on public.legacy_messages(sender_id);
+  create index if not exists legacy_messages_thread on public.legacy_messages(thread_id);
+ end if;
+ if to_regclass('public.legacy_notifications') is not null then
+  create index if not exists legacy_notifications_user on public.legacy_notifications(user_id);
+ end if;
+ if to_regclass('public.legacy_threads') is not null then
+  create index if not exists legacy_threads_booking on public.legacy_threads(booking_id);
+ end if;
+end$$;
+
+
+-- 00059_plan_reminders.sql
+
+-- Plan reminders: a same-day push to the host and members, "Going / Not
+-- going" answers, and a count of confirmations for the host.
+-- Design: docs/superpowers/specs/2026-11-24-plan-reminders-design.md
+
+alter table public.notifications drop constraint notifications_kind_check;
+alter table public.notifications add constraint notifications_kind_check check (kind in (
+ 'join_request','request_approved','request_declined','request_full','post_cancelled',
+ 'booking','booking_confirmed','booking_cancelled','message','verification_approved',
+ 'verification_rejected','selfie_review','plan_group_message','plan_reminder'));
+
+create table public.plan_attendance(
+  post_id uuid not null references public.posts(id) on delete cascade,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  status text not null check (status in ('going','not_going')),
+  updated_at timestamptz not null default now(),
+  primary key (post_id, user_id)
+);
+create index plan_attendance_user on public.plan_attendance(user_id);
+alter table public.plan_attendance enable row level security;
+revoke all on public.plan_attendance from public,anon,authenticated;
+grant select on public.plan_attendance to authenticated;
+grant all on public.plan_attendance to service_role;
+create policy "own answer or host of the plan" on public.plan_attendance for select to authenticated
+ using (user_id = (select auth.uid())
+   or exists(select 1 from public.posts p where p.id = plan_attendance.post_id and p.author_id = (select auth.uid())));
+
+create function public.plan_is_member(p_post uuid, p_user uuid) returns boolean as $$
+ select exists(select 1 from join_requests where post_id = p_post and requester_id = p_user and status = 'approved');
+$$ language sql stable security definer set search_path=public,pg_temp;
+revoke all on function public.plan_is_member(uuid,uuid) from public,anon,authenticated;
+
+create function public.set_plan_attendance(p_post uuid, p_going boolean) returns void as $$
+begin
+ if auth.uid() is null or not account_active(auth.uid()) or not plan_is_member(p_post, auth.uid()) then
+  raise exception 'Only people in this plan can answer';
+ end if;
+ insert into plan_attendance(post_id, user_id, status, updated_at)
+ values (p_post, auth.uid(), case when p_going then 'going' else 'not_going' end, now())
+ on conflict (post_id, user_id) do update set status = excluded.status, updated_at = now();
+end;
+$$ language plpgsql security definer set search_path=public,pg_temp;
+revoke all on function public.set_plan_attendance(uuid,boolean) from public,anon;
+grant execute on function public.set_plan_attendance(uuid,boolean) to authenticated;
+
+-- Going / not going counts among current members.
+create function public.plan_attendance_counts(p_post uuid) returns jsonb as $$
+ select jsonb_build_object(
+  'going', count(*) filter (where a.status = 'going'),
+  'notGoing', count(*) filter (where a.status = 'not_going'),
+  'members', count(*))
+ from join_requests j
+ left join plan_attendance a on a.post_id = j.post_id and a.user_id = j.requester_id
+ where j.post_id = p_post and j.status = 'approved';
+$$ language sql stable security definer set search_path=public,pg_temp;
+revoke all on function public.plan_attendance_counts(uuid) from public,anon,authenticated;
+
+create function public.plan_attendance_summary(p_post uuid) returns jsonb as $$
+begin
+ if not exists(select 1 from posts where id = p_post and author_id = auth.uid()) then
+  raise exception 'Only the host can see who confirmed';
+ end if;
+ return plan_attendance_counts(p_post);
+end;
+$$ language plpgsql stable security definer set search_path=public,pg_temp;
+revoke all on function public.plan_attendance_summary(uuid) from public,anon;
+grant execute on function public.plan_attendance_summary(uuid) to authenticated;
+
+-- The signed-in person's plans on the India-time day of p_at that haven't
+-- started yet: hosting or approved member, not cancelled. Earliest first.
+create function public.plans_for_day(p_at timestamptz default now()) returns jsonb as $$
+ with day as (select timezone('Asia/Kolkata', p_at)::date d),
+ mine as (
+  select p.*, (p.author_id = auth.uid()) is_host
+  from posts p, day
+  where p.status <> 'cancelled' and p.starts_at > p_at
+   and timezone('Asia/Kolkata', p.starts_at)::date = day.d
+   and (p.author_id = auth.uid() or plan_is_member(p.id, auth.uid()))
+ )
+ select coalesce(jsonb_agg(jsonb_build_object(
+   'postId', m.id, 'title', m.title, 'startsAt', m.starts_at,
+   'place', coalesce(v.name, nullif(m.venue_name, '')),
+   'host', m.is_host,
+   'myStatus', (select a.status from plan_attendance a where a.post_id = m.id and a.user_id = auth.uid()),
+   'going', (plan_attendance_counts(m.id)->>'going')::int,
+   'members', (plan_attendance_counts(m.id)->>'members')::int
+  ) order by m.starts_at, m.id), '[]'::jsonb)
+ from mine m left join venues v on v.id = m.venue_id;
+$$ language sql stable security definer set search_path=public,pg_temp;
+revoke all on function public.plans_for_day(timestamptz) from public,anon;
+grant execute on function public.plans_for_day(timestamptz) to authenticated;
+
+-- Sends due reminders and returns how many. Due at 8:00 am India time on the
+-- plan's day, or 2 hours before the start if that is earlier; once per person
+-- per plan. Run every 10 minutes by supabase/ops/setup-maintenance.sql.
+create function public.send_plan_reminders(p_now timestamptz default now()) returns int as $$
+declare sent int;
+begin
+ with due as (
+  select p.id, p.author_id, p.title, p.starts_at,
+   coalesce(v.name, nullif(p.venue_name, ''), 'the meeting place') place,
+   lower(to_char(timezone('Asia/Kolkata', p.starts_at), 'FMHH12:MI am')) at_time
+  from posts p left join venues v on v.id = p.venue_id
+  where p.status <> 'cancelled'
+   and p.starts_at > p_now
+   and p.starts_at <= p_now + interval '24 hours'
+   and timezone('Asia/Kolkata', p.starts_at)::date = timezone('Asia/Kolkata', p_now)::date
+   and p_now >= least(
+     (timezone('Asia/Kolkata', p.starts_at)::date + time '08:00') at time zone 'Asia/Kolkata',
+     p.starts_at - interval '2 hours')
+ ),
+ people as (
+  select d.*, d.author_id person, true is_host from due d
+  union all
+  select d.*, j.requester_id, false from due d
+  join join_requests j on j.post_id = d.id and j.status = 'approved'
+ ),
+ inserted as (
+  insert into notifications(user_id, kind, ref_id, title, body)
+  select x.person, 'plan_reminder', x.id,
+   case when x.is_host then 'You''re hosting today: ' else 'Today: ' end || x.title,
+   case when x.is_host then
+     x.at_time || ' at ' || x.place || '. '
+     || (plan_attendance_counts(x.id)->>'going') || ' of '
+     || (plan_attendance_counts(x.id)->>'members') || ' confirmed so far.'
+   else x.at_time || ' at ' || x.place || '. Still going?' end
+  from people x
+  where account_active(x.person)
+   and not exists(select 1 from notifications n
+     where n.user_id = x.person and n.kind = 'plan_reminder' and n.ref_id = x.id)
+  returning 1
+ )
+ select count(*) into sent from inserted;
+ return sent;
+end;
+$$ language plpgsql security definer set search_path=public,pg_temp;
+revoke all on function public.send_plan_reminders(timestamptz) from public,anon,authenticated;
+grant execute on function public.send_plan_reminders(timestamptz) to service_role;
+
+
 -- 00060_players_needed.sql
 -- Players needed: notification switches, a kept alert area, urgent plans that
 -- alert nearby people, and auto-accept.

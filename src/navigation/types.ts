@@ -49,7 +49,8 @@ export type PersonalTabParamList = {
 export type PersonalStackParamList = SafetyStackParamList & {
   PersonalTabs: NavigatorScreenParams<PersonalTabParamList> | undefined;
   PlaceDetails: { place: Place };
-  PostDetails: { postId: string };
+  /** confirmLeave: opened from "Not going", so ask whether to leave the plan. */
+  PostDetails: { postId: string; confirmLeave?: boolean };
   /** Anyone's public profile: a host, or someone asking to join your plan. */
   HostProfile: { userId: string; name?: string; requestNote?: string };
   VenueDetails: { venueId: string };

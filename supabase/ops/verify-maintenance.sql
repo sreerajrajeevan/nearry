@@ -9,7 +9,7 @@ select count(*) pending,count(*) filter(where attempts>=20) exhausted,min(reques
 select count(*) pending,count(*) filter(where attempts>=20) exhausted from public.media_cleanup_jobs;
 select count(*) overdue_plans from public.posts where status='open' and (starts_at<=now() or expires_at<=now());
 select count(*) overdue_holds from public.bookings where status='pending' and hold_expires_at<=now();
--- Confirm all five jobs exist and are active; recent executions succeed; HTTP
+-- Confirm all six jobs (including nearry-daily-cleanup) exist and are active; recent executions succeed; HTTP
 -- workers return 200 (401 = secret mismatch, 5xx = worker failure).
 -- A queue whose oldest item keeps aging needs investigation. Do not blindly
 -- reset attempt counters: inspect/retry the failed operation deliberately.
