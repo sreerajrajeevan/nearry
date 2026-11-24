@@ -88,3 +88,7 @@ Database-enforced spam limits that also hold for direct API calls: 10 plans a da
 ## Policy and index tidy-up (00058)
 
 Rewrites every `public` row-security rule so `auth.uid()` is read once per query (`(select auth.uid())`) instead of once per row; the rules mean the same thing. Adds indexes for the foreign keys the Supabase advisor flagged (and, where they exist, the legacy tables from the first schema). Applied live on 24 Nov 2026.
+
+## Plan reminders (00059)
+
+Same-day reminders for plans: `send_plan_reminders()` (every 10 minutes via `supabase/ops/setup-maintenance.sql`, job `nearry-plan-reminders`) notifies the host and approved members at 8:00 am India time, or 2 hours before an earlier start, once per person per plan, through the normal push pipeline (`plan_reminder` kind). Members answer with `set_plan_attendance` (stored in `plan_attendance`); hosts read `plan_attendance_summary`; the app's "Plans for today" pop-up reads `plans_for_day`. Design: `docs/superpowers/specs/2026-11-24-plan-reminders-design.md`.

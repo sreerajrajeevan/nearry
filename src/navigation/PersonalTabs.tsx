@@ -14,6 +14,7 @@ import { CreatePostScreen } from "../screens/personal/CreatePostScreen";
 import { ActivityScreen } from "../screens/personal/ActivityScreen";
 import { ProfileScreen } from "../screens/personal/ProfileScreen";
 import { ChatListScreen } from "../screens/chat/ChatListScreen";
+import { TodayPlansPrompt } from "../components/TodayPlansPrompt";
 
 const Tab = createBottomTabNavigator<PersonalTabParamList>();
 
@@ -91,6 +92,7 @@ export function PersonalTabs() {
           }}
         />
       </Tab.Navigator>
+      <TodayPlansPrompt />
     </PersonalMessagesContext.Provider>
   );
 }
