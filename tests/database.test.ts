@@ -6726,7 +6726,7 @@ test("text fields have server-side length limits, so the API can't be used to po
   );
 });
 
-test("upload buckets only take images up to 10 MB", async () => {
+test("upload buckets only take images, within each bucket's size cap", async () => {
   const rows = (
     await db.query(
       "select id,file_size_limit,allowed_mime_types from storage.buckets where id in ('avatars','photos','verification_docs') order by id",
@@ -6738,11 +6738,13 @@ test("upload buckets only take images up to 10 MB", async () => {
       Number(r.file_size_limit),
       r.allowed_mime_types,
     ]),
-    ["avatars", "photos", "verification_docs"].map((id) => [
-      id,
-      10485760,
-      ["image/jpeg", "image/png", "image/webp"],
-    ]),
+    (
+      [
+        ["avatars", 2097152],
+        ["photos", 5242880],
+        ["verification_docs", 10485760],
+      ] as const
+    ).map(([id, cap]) => [id, cap, ["image/jpeg", "image/png", "image/webp"]]),
   );
 });
 
@@ -7207,4 +7209,18 @@ test("offers: different offers can run at the same time; only a duplicate title 
   const c2 = await offer("Badminton doubles", 50, 52, "court 1 ");
   await book(a, await slotAt(c1));
   await assert.rejects(book(b, await slotAt(c2)), /resource already booked/);
+});
+
+test("storage caps: profile photos 2 MB, plan and venue photos 5 MB", async () => {
+  const limits = Object.fromEntries(
+    (
+      await db.query(
+        "select id, file_size_limit from storage.buckets where id in ('avatars','photos')",
+      )
+    ).rows.map((r: any) => [r.id, Number(r.file_size_limit)]),
+  );
+  assert.deepEqual(limits, {
+    avatars: 2 * 1024 * 1024,
+    photos: 5 * 1024 * 1024,
+  });
 });
