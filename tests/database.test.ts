@@ -6591,6 +6591,7 @@ test("daily cleanup queues stored photos nothing uses any more, but keeps used o
     )
   ).rows.map((r: any) => r.bucket + ":" + r.path);
   assert.deepEqual(queued, ["photos:" + dir + "orphan.png"]);
+});
 
 test("row-security rules read the signed-in user once per query, not once per row", async () => {
   const perRow = (
