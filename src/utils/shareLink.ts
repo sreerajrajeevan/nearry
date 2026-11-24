@@ -43,3 +43,34 @@ export function planIdFromLink(url: string | null | undefined): string | null {
   }
   return id && PLAN_ID.test(id) ? id : null;
 }
+
+/**
+ * The link a venue shares (or prints as a QR) so a host short of players can
+ * start a plan there: https://…open.html?newplan=<venue id>. Null when the
+ * build has no https share page or the id isn't clean.
+ */
+export function newPlanShareUrl(
+  venueId: string,
+  base = process.env.EXPO_PUBLIC_SHARE_URL?.trim(),
+): string | null {
+  if (!base || !/^https:\/\//.test(base) || !PLAN_ID.test(venueId)) return null;
+  return `${base}${base.includes("?") ? "&" : "?"}newplan=${encodeURIComponent(venueId)}`;
+}
+
+/** The venue id in nearry://new-plan?venue=<id> or https://…?newplan=<id>. */
+export function newPlanVenueFromLink(
+  url: string | null | undefined,
+): string | null {
+  if (!url) return null;
+  const match =
+    /^nearry:\/\/new-plan\?(?:[^#]*&)?venue=([^&#]+)/i.exec(url) ??
+    /^https:\/\/[^?#]+\?(?:[^#]*&)?newplan=([^&#]+)/i.exec(url);
+  if (!match) return null;
+  let id: string;
+  try {
+    id = decodeURIComponent(match[1]);
+  } catch {
+    return null;
+  }
+  return PLAN_ID.test(id) ? id : null;
+}

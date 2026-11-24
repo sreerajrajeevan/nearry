@@ -64,3 +64,35 @@ test("publishing with a gap points at the section that needs it", () => {
   assert.equal(planErrorSection("Choose an age range between 18 and 100."), 5);
   assert.equal(planErrorSection("Enter a valid amount for this plan."), 6);
 });
+
+test("new-plan links carry a venue id from the app scheme or the share page", async () => {
+  const { newPlanVenueFromLink } = await import("../src/utils/shareLink");
+  assert.equal(newPlanVenueFromLink("nearry://new-plan?venue=v_1"), "v_1");
+  assert.equal(
+    newPlanVenueFromLink("https://x.github.io/nearry/open.html?newplan=abc-9"),
+    "abc-9",
+  );
+  assert.equal(newPlanVenueFromLink("https://x.test/open.html?plan=p1"), null);
+  assert.equal(
+    newPlanVenueFromLink("http://x.test/open.html?newplan=v1"),
+    null,
+  );
+  assert.equal(newPlanVenueFromLink("nearry://new-plan?venue=bad%20id"), null);
+  assert.equal(newPlanVenueFromLink("other://new-plan?venue=v1"), null);
+  assert.equal(newPlanVenueFromLink(null), null);
+});
+
+test("new-plan share URL needs an https base and a clean venue id", async () => {
+  const { newPlanShareUrl } = await import("../src/utils/shareLink");
+  assert.equal(
+    newPlanShareUrl("v1", "https://x.test/open.html"),
+    "https://x.test/open.html?newplan=v1",
+  );
+  assert.equal(
+    newPlanShareUrl("v1", "https://x.test/open.html?a=1"),
+    "https://x.test/open.html?a=1&newplan=v1",
+  );
+  assert.equal(newPlanShareUrl("v1", "http://x.test/open.html"), null);
+  assert.equal(newPlanShareUrl("v1", ""), null);
+  assert.equal(newPlanShareUrl("bad id", "https://x.test/open.html"), null);
+});

@@ -3,7 +3,7 @@ import { Linking } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { navigationRef } from "../navigation/navigationRef";
 import { useAuth } from "../store/AuthContext";
-import { planIdFromLink } from "../utils/shareLink";
+import { newPlanVenueFromLink, planIdFromLink } from "../utils/shareLink";
 import { parseDeferredPlan, DeferredPlan } from "../utils/deferredPlan";
 import { Alert } from "../services/appAlert";
 const KEY = "nearry.deferredPlan.v1";
@@ -12,6 +12,9 @@ export function usePlanLinks() {
   const auth = useAuth(),
     state = useRef(auth);
   state.current = auth;
+  // A venue's "short of players?" link: start a plan there. Kept in memory
+  // only; it is acted on once the person is signed in this session.
+  const pendingVenue = useRef<string | null>(null);
   const pending = useRef<DeferredPlan | null>(null),
     revision = useRef(0),
     storage = useRef(Promise.resolve());
@@ -28,9 +31,10 @@ export function usePlanLinks() {
   const go = useRef(() => {});
   go.current = () => {
     const a = state.current,
-      p = pending.current;
-    if (!p || !navigationRef.isReady()) return;
-    if (!parseDeferredPlan(JSON.stringify(p))) {
+      p = pending.current,
+      venue = pendingVenue.current;
+    if ((!p && !venue) || !navigationRef.isReady()) return;
+    if (p && !parseDeferredPlan(JSON.stringify(p))) {
       pending.current = null;
       persist(null);
       return;
@@ -46,6 +50,7 @@ export function usePlanLinks() {
       return;
     if (a.profile.accountType === "business") {
       pending.current = null;
+      pendingVenue.current = null;
       persist(null);
       Alert.alert(
         "A personal plan",
@@ -55,6 +60,18 @@ export function usePlanLinks() {
     }
     if (!navigationRef.getRootState()?.routeNames.includes("PersonalApp"))
       return;
+    if (venue) {
+      pendingVenue.current = null;
+      navigationRef.navigate("PersonalApp", {
+        screen: "PersonalTabs",
+        params: {
+          screen: "CreatePost",
+          params: { venueId: venue, urgent: true },
+        },
+      });
+      return;
+    }
+    if (!p) return;
     pending.current = null;
     persist(null);
     navigationRef.navigate("PersonalApp", {
@@ -65,6 +82,12 @@ export function usePlanLinks() {
   useEffect(() => {
     let active = true;
     const capture = (url: string | null) => {
+      const venue = newPlanVenueFromLink(url);
+      if (active && venue) {
+        pendingVenue.current = venue;
+        go.current();
+        return;
+      }
       const id = planIdFromLink(url);
       if (!active || !id) return;
       revision.current++;
@@ -78,6 +101,8 @@ export function usePlanLinks() {
       Linking.getInitialURL().catch(() => null),
     ]).then(([raw, url]) => {
       if (!active || revision.current !== start) return;
+      const venue = newPlanVenueFromLink(url);
+      if (venue) pendingVenue.current = venue;
       const id = planIdFromLink(url),
         saved = parseDeferredPlan(raw);
       pending.current = id ? { id, at: Date.now() } : saved;
