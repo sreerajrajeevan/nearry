@@ -83,6 +83,7 @@ export type BusinessStackParamList = SafetyStackParamList & {
   EditBusinessProfile: undefined;
   BusinessVerification: undefined;
   ManageVenue: undefined;
+  PlayersCard: undefined;
 };
 
 export type BusinessTabNav = CompositeNavigationProp<
