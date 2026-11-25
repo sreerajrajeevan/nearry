@@ -111,7 +111,7 @@ before(async () => {
           /create function public.nearby_post_cards[\s\S]*?grant execute on function public.nearby_post_cards[^;]+;/,
           "",
         );
-      if (file === "00065_hosted_by_filter.sql")
+      if (file === "00066_hosted_by_filter.sql")
         // discover_posts (00052, PostGIS) is skipped here; PostGIS CI runs it.
         sql = sql.replace(
           /create or replace function public.discover_posts[\s\S]*?grant execute on function public.discover_posts[^;]+;/,
@@ -6910,7 +6910,7 @@ test("spam limits: plans per day, join requests per hour, messages per minute, o
       ),
     );
   // Plans: 10 a day for one person. Premium lifts the free 3-a-day limit
-  // (00064) but never these spam caps.
+  // (00065) but never these spam caps.
   const premium = (id: string) =>
     db.query(
       "insert into premium_entitlements(user_id,expires_at) values($1,now()+interval '1 day')",
@@ -7592,4 +7592,19 @@ test("booking reminders: confirmed bookings get one push on the day, at 8 am or 
     ).rows[0].c,
     "bookings",
   );
+});
+
+test("plan details accept a co-ride with a bike or car choice", async () => {
+  const ok = async (v: object) =>
+    (
+      await db.query("select valid_plan_details($1::jsonb) v", [
+        JSON.stringify(v),
+      ])
+    ).rows[0].v as boolean;
+  assert.equal(await ok({ activity: "ride", rideMode: "bike" }), true);
+  assert.equal(await ok({ activity: "ride", rideMode: "car" }), true);
+  assert.equal(await ok({ activity: "ride" }), true);
+  assert.equal(await ok({ activity: "ride", rideMode: "boat" }), false);
+  assert.equal(await ok({ activity: "football", rideMode: "car" }), false);
+  assert.equal(await ok({ activity: "rocket" }), false);
 });
