@@ -40,10 +40,20 @@ test("age preferences reject impossible or underage ranges before publishing", (
 test("the plan form only asks for experience and bookings where they fit the activity", async () => {
   const { planAsksLevel, planBookingLabel, planAgeLabel } =
     await import("../src/utils/planComposer");
-  for (const id of ["movies", "coffee", "food", "walk", undefined] as const)
+  // "Other" can be anything, so it never asks for a skill level; nor do rides.
+  for (const id of [
+    "movies",
+    "coffee",
+    "food",
+    "walk",
+    "other",
+    "ride",
+    undefined,
+  ] as const)
     assert.equal(planAsksLevel(id), false, String(id));
-  for (const id of ["badminton", "football", "gym", "other"] as const)
+  for (const id of ["badminton", "football", "gym"] as const)
     assert.equal(planAsksLevel(id), true, id);
+  assert.equal(planBookingLabel("ride"), null);
   assert.equal(planBookingLabel("movies"), "Tickets already booked");
   assert.equal(planBookingLabel("badminton"), "Court already booked");
   assert.equal(planBookingLabel("coffee"), null);
@@ -52,4 +62,17 @@ test("the plan form only asks for experience and bookings where they fit the act
   assert.equal(planAgeLabel({ ageMin: 18, ageMax: 100 }), null);
   assert.equal(planAgeLabel({ ageMin: 25, ageMax: 40 }), "Ages 25–40");
   assert.equal(planAgeLabel({ ageMin: 30 }), "Ages 30+");
+});
+
+test("co-ride is a plan type with a bike or car choice", async () => {
+  const { PLAN_ACTIVITIES, rideModeLabel, joinNoteHint } =
+    await import("../src/utils/planComposer");
+  const ride = PLAN_ACTIVITIES.find((a) => a.id === "ride");
+  assert.ok(ride);
+  assert.equal(ride.label, "Co-ride");
+  assert.equal(PLAN_ACTIVITIES.at(-1)!.id, "other");
+  assert.equal(rideModeLabel("bike"), "Bike ride");
+  assert.equal(rideModeLabel("car"), "Car ride");
+  assert.equal(rideModeLabel(undefined), null);
+  assert.match(joinNoteHint("ride"), /fuel/);
 });

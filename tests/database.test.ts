@@ -7304,3 +7304,18 @@ test("booking reminders: confirmed bookings get one push on the day, at 8 am or 
     "bookings",
   );
 });
+
+test("plan details accept a co-ride with a bike or car choice", async () => {
+  const ok = async (v: object) =>
+    (
+      await db.query("select valid_plan_details($1::jsonb) v", [
+        JSON.stringify(v),
+      ])
+    ).rows[0].v as boolean;
+  assert.equal(await ok({ activity: "ride", rideMode: "bike" }), true);
+  assert.equal(await ok({ activity: "ride", rideMode: "car" }), true);
+  assert.equal(await ok({ activity: "ride" }), true);
+  assert.equal(await ok({ activity: "ride", rideMode: "boat" }), false);
+  assert.equal(await ok({ activity: "football", rideMode: "car" }), false);
+  assert.equal(await ok({ activity: "rocket" }), false);
+});
