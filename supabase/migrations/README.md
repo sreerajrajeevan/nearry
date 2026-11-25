@@ -123,3 +123,9 @@ cancelled bookings get none. New notification kind `booking_reminder` under the
 Bookings switch; `booking_reminder_log` records each booking reminded.
 Schedule `nearry-booking-reminders` (every 10 minutes) from
 `ops/setup-maintenance.sql`.
+
+## Co-ride plans (00064)
+
+Adds the plan type `ride` ("Co-ride") with an optional `rideMode` of `bike` or
+`car` (absent = either), allowed only on a ride. Only widens what plan details
+accept; existing plans are unaffected.

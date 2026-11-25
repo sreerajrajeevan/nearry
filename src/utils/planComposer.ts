@@ -85,6 +85,14 @@ export const PLAN_ACTIVITIES = [
     tag: "outdoors",
   },
   {
+    id: "ride",
+    label: "Co-ride",
+    art: null,
+    icon: "navigation",
+    title: "Sharing a ride, anyone going my way?",
+    tag: "ride",
+  },
+  {
     id: "other",
     label: "Other",
     art: null,
@@ -109,9 +117,11 @@ export type PlanDetails = {
   ageMin?: number;
   ageMax?: number;
   totalCostCents?: number;
+  /** Co-ride only: bike or car. Absent means either. */
+  rideMode?: "bike" | "car";
 };
 type ActivityId = (typeof PLAN_ACTIVITIES)[number]["id"];
-/** Skill level only matters for sports and open-ended activities such as games. */
+/** Skill level only matters for sports; "Other" can be anything, so it never asks. */
 const LEVEL_ACTIVITIES: ReadonlySet<ActivityId> = new Set([
   "gym",
   "football",
@@ -120,7 +130,6 @@ const LEVEL_ACTIVITIES: ReadonlySet<ActivityId> = new Set([
   "running",
   "cycling",
   "tennis",
-  "other",
 ]);
 const BOOKING_LABELS: Partial<Record<ActivityId, string>> = {
   football: "Turf already booked",
@@ -147,7 +156,11 @@ const JOIN_NOTE_HINTS: Partial<Record<ActivityId, string>> = {
   coffee: "e.g. I’m new to the area",
   food: "e.g. I’m vegetarian, hope that’s fine",
   walk: "e.g. I’m new to the area",
+  ride: "e.g. Happy to share fuel costs",
 };
+/** "Bike ride" / "Car ride" for a co-ride, or null when either works. */
+export const rideModeLabel = (mode?: PlanDetails["rideMode"]) =>
+  mode === "bike" ? "Bike ride" : mode === "car" ? "Car ride" : null;
 /** An example note that fits the activity, shown in the join sheet. */
 export const joinNoteHint = (activity?: ActivityId) =>
   `Anything the host should know? ${(activity && JOIN_NOTE_HINTS[activity]) ?? "e.g. A question about the plan"}`;

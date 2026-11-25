@@ -7,6 +7,7 @@ import {
   joinNoteHint,
   planAgeLabel,
   planBookingLabel,
+  rideModeLabel,
 } from "../../utils/planComposer";
 import { JoinRequestSheet } from "../../components/JoinRequestSheet";
 import { RequestNote } from "../../components/RequestNote";
@@ -303,6 +304,7 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
         : `${details.durationMinutes} min`
       : "",
     details?.level && details.level !== "any" ? `${details.level} level` : "",
+    rideModeLabel(details?.rideMode) ?? "",
     details ? (planAgeLabel(details) ?? "") : "",
     details?.venueBooked
       ? `${planBookingLabel(details.activity) ?? "Venue booked"}`

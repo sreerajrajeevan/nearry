@@ -177,6 +177,7 @@ export function PostEditor({
   const [duration, setDuration] =
     useState<NonNullable<PlanDetails["durationMinutes"]>>(60);
   const [level, setLevel] = useState<NonNullable<PlanDetails["level"]>>("any");
+  const [rideMode, setRideMode] = useState<"any" | "bike" | "car">("any");
   const [venueBooked, setVenueBooked] = useState(false);
   const [costMode, setCostMode] =
     useState<NonNullable<PlanDetails["costMode"]>>("free");
@@ -211,6 +212,7 @@ export function PostEditor({
         setActivity(post.planDetails?.activity ?? "other");
         setDuration(post.planDetails?.durationMinutes ?? 60);
         setLevel(post.planDetails?.level ?? "any");
+        setRideMode(post.planDetails?.rideMode ?? "any");
         setVenueBooked(post.planDetails?.venueBooked ?? false);
         setCostMode(
           post.planDetails?.costMode ?? (post.costCents ? "person" : "free"),
@@ -352,6 +354,7 @@ export function PostEditor({
       activity,
       durationMinutes: duration,
       level: asksLevel ? level : "any",
+      ...(activity === "ride" && rideMode !== "any" ? { rideMode } : {}),
       venueBooked: !!bookingLabel && venueBooked,
       costMode,
       ageMin: ageOpen ? Number(ageMin) : 18,
@@ -535,6 +538,7 @@ export function PostEditor({
     activity,
     durationMinutes: duration,
     level: asksLevel ? level : "any",
+    ...(activity === "ride" && rideMode !== "any" ? { rideMode } : {}),
     venueBooked: !!bookingLabel && venueBooked,
     costMode,
     ageMin: ageOpen ? Number(ageMin) : 18,
@@ -671,6 +675,19 @@ export function PostEditor({
               </TouchableOpacity>
             ))}
           </View>
+          {activity === "ride" && (
+            <Choices
+              label="Ride type"
+              value={rideMode}
+              onChange={(v) => setRideMode(v as typeof rideMode)}
+              items={[
+                { value: "any", label: "Either" },
+                { value: "bike", label: "Bike" },
+                { value: "car", label: "Car" },
+              ]}
+              disabled={publishing}
+            />
+          )}
         </PlanSection>
         <PlanSection
           number={2}
@@ -1403,10 +1420,15 @@ const styles = StyleSheet.create({
   },
   switchText: { flex: 1 },
   switchHint: { fontSize: 13, lineHeight: 18, color: colors.textDim },
-  activities: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  // Three equal tiles a row; a tile left alone on the last row keeps its size.
+  activities: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    rowGap: 8,
+    justifyContent: "space-between",
+  },
   activity: {
-    width: "31%",
-    flexGrow: 1,
+    width: "31.8%",
     minHeight: 96,
     alignItems: "center",
     justifyContent: "center",
