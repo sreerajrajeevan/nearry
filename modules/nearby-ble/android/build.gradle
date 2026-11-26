@@ -1,0 +1,15 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'com.nearry'
+version = '1.0.0'
+
+android {
+  namespace "expo.modules.nearbyble"
+  defaultConfig {
+    versionCode 1
+    versionName '1.0.0'
+  }
+}

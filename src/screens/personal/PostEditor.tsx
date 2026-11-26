@@ -8,6 +8,8 @@ import { Alert } from "../../services/appAlert";
 import { ActivityArt } from "../../components/ActivityArt";
 import React, { useEffect, useRef, useState } from "react";
 import { urgentAllowed } from "../../utils/urgentPlan";
+import { shareHereAllowed } from "../../utils/aroundYou";
+import { aroundYouAvailable, startSharingPlan } from "../../services/aroundYou";
 import { getVenue } from "../../services/venues";
 import {
   PLAN_ACTIVITIES,
@@ -145,6 +147,12 @@ export function PostEditor({
   });
   const [urgent, setUrgent] = useState(!postId && initialUrgent);
   const [autoAccept, setAutoAccept] = useState(false);
+  const [shareHere, setShareHere] = useState(false);
+  const canShareHere =
+    !postId && aroundYouAvailable() && shareHereAllowed(startsAtDate);
+  useEffect(() => {
+    if (shareHere && !canShareHere) setShareHere(false);
+  }, [shareHere, canShareHere]);
   const canUrgent = !postId && urgentAllowed(startsAtDate);
   useEffect(() => {
     if (urgent && !canUrgent) setUrgent(false);
@@ -473,6 +481,18 @@ export function PostEditor({
           `Your ${postId ? "changes are" : "post is"} saved. Photo changes still need saving. ${result.error}`,
         );
         return;
+      }
+      if (!postId && shareHere && shareHereAllowed(startsAt)) {
+        try {
+          await startSharingPlan(id, details.title);
+        } catch (e) {
+          Alert.alert(
+            "Your plan is posted",
+            `It isn't being shared right here yet. ${
+              e instanceof Error ? e.message : ""
+            } You can try again from the plan page.`.trim(),
+          );
+        }
       }
       openSavedPost(id);
     } catch (e) {
@@ -1032,6 +1052,24 @@ export function PostEditor({
                     accessibilityLabel="Players needed now — alert people nearby"
                     value={urgent}
                     onValueChange={setUrgent}
+                    disabled={publishing}
+                    trackColor={{ true: colors.amber }}
+                  />
+                </View>
+              )}
+              {canShareHere && (
+                <View style={styles.switchRow}>
+                  <View style={styles.switchText}>
+                    <Text style={styles.label}>Show to people right here</Text>
+                    <Text style={styles.switchHint}>
+                      Shares this plan over Bluetooth with people in the same
+                      place who tap Look around. Stops on its own.
+                    </Text>
+                  </View>
+                  <Switch
+                    accessibilityLabel="Show to people right here over Bluetooth"
+                    value={shareHere}
+                    onValueChange={setShareHere}
                     disabled={publishing}
                     trackColor={{ true: colors.amber }}
                   />

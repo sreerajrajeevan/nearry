@@ -31,6 +31,8 @@ export const CLEAR_TABLES = [
   "content_reports",
   "user_blocks",
   "post_photos",
+  "plan_beacon_codes",
+  "plan_beacons",
   "plan_attendance",
   "post_locations",
   "venue_photos",

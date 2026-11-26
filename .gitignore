@@ -13,8 +13,8 @@ dist-legal/
 dist-store/
 
 # Generated native projects and private signing material
-android/
-ios/
+/android/
+/ios/
 .env.*
 !.env.example
 credentials.json

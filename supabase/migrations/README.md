@@ -141,8 +141,18 @@ calling `send-push` when nothing is waiting; the live cron command is
 `select public.dispatch_nearry_push() where public.push_work_due();`. The daily
 cleanup now keeps 2 days of pg_cron history instead of 7.
 
-## Nearry Premium (00066–00067)
+## Plans around you (00066)
 
-`00066`: `premium_entitlements` (written only by the `revenuecat-webhook` function with the service role; users read their own row), `has_premium()`, and `daily_usage` with triggers enforcing the free daily limits: 3 new plans and 10 join requests per India day (`daily_plan_limit` / `daily_join_limit`). Server and admin inserts are never limited. Apply after the Premium app build has reached users, or older builds show the raw limit text.
+Hosts can share an open plan starting within 2 hours over Bluetooth.
+`start_plan_beacon` stores one random code per 10-minute window (in
+`plan_beacons` / `plan_beacon_codes`, which no app user can read) and returns
+them for the phone to broadcast; `stop_plan_beacon` stops it;
+`plan_beacon_status` tells the host. `resolve_plan_beacons` turns codes heard
+nearby into plan ids, honouring blocks, the plan's gender and age settings and
+stopped sharing. See `docs/plans-around-you.md`.
 
-`00067`: the Premium "Hosted by" filter. `hosts_matching_gender()` (security definer, Premium-only, honours blocks and visibility) and an optional `hostGender` key in `discover_posts` (requires 00052). Without the key results are unchanged, so older builds and `nearby_post_cards` keep working. Separate from the abuse limits in 00056, which cap everyone (Premium included); the free-tier triggers run first, so free users see the upgrade prompt.
+## Nearry Premium (00067–00068)
+
+`00067`: `premium_entitlements` (written only by the `revenuecat-webhook` function with the service role; users read their own row), `has_premium()`, and `daily_usage` with triggers enforcing the free daily limits: 3 new plans and 10 join requests per India day (`daily_plan_limit` / `daily_join_limit`). Server and admin inserts are never limited. Apply after the Premium app build has reached users, or older builds show the raw limit text.
+
+`00068`: the Premium "Hosted by" filter. `hosts_matching_gender()` (security definer, Premium-only, honours blocks and visibility) and an optional `hostGender` key in `discover_posts` (requires 00052). Without the key results are unchanged, so older builds and `nearby_post_cards` keep working. Separate from the abuse limits in 00056, which cap everyone (Premium included); the free-tier triggers run first, so free users see the upgrade prompt.

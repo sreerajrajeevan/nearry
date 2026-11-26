@@ -42,6 +42,8 @@ import { PersonalHeader } from "../../components/PersonalHeader";
 import { Button } from "../../components/Button";
 import { EmptyState } from "../../components/EmptyState";
 import { PostRow } from "../../components/PostRow";
+import { AroundYouCard } from "../../components/AroundYouCard";
+import { aroundYouAvailable } from "../../services/aroundYou";
 import { FeaturedOffers } from "../../components/FeaturedOffers";
 import { StartingSoon } from "../../components/StartingSoon";
 import { VenueRow } from "../../components/VenueRow";
@@ -828,6 +830,14 @@ export function NearbyScreen() {
                       navigation.navigate("PostDetails", { postId })
                     }
                   />
+                  {aroundYouAvailable() && (
+                    <AroundYouCard
+                      onOpen={(postId) =>
+                        navigation.navigate("PostDetails", { postId })
+                      }
+                      onPost={() => navigation.navigate("CreatePost")}
+                    />
+                  )}
                   <View style={styles.plansHeading}>
                     <Text accessibilityRole="header" style={styles.plansTitle}>
                       Plans near you
