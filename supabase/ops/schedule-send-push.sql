@@ -33,7 +33,9 @@ select cron.schedule(
     ),
     body := '{}'::jsonb,
     timeout_milliseconds := 10000
-  );
+  )
+  -- Only when a push is waiting or a receipt is due (migration 00065).
+  where public.push_work_due();
   $$
 );
 
