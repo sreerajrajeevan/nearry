@@ -14,6 +14,9 @@ import { RequestNote } from "../../components/RequestNote";
 import { PersonLink } from "../../components/PersonLink";
 import { haptic } from "../../services/haptics";
 import { planShareMessage } from "../../utils/shareLink";
+import { ShareHereCard } from "../../components/ShareHereCard";
+import { aroundYouAvailable } from "../../services/aroundYou";
+import { shareHereAllowed } from "../../utils/aroundYou";
 import { AudienceBadge, audienceLabel } from "../../components/AudienceBadge";
 import { ProfileRequired } from "../../components/ProfileRequired";
 import {
@@ -535,6 +538,12 @@ export function PostDetailsScreen({ route, navigation }: PostDetailsProps) {
             Your group chat opens when your first member is approved to join.
           </Text>
         )}
+        {isHost &&
+          post.status === "open" &&
+          aroundYouAvailable() &&
+          shareHereAllowed(new Date(post.startsAt)) && (
+            <ShareHereCard postId={post.id} title={post.title} />
+          )}
         {post.tags.length > 0 && (
           <View style={styles.tags}>
             {post.tags.map((tag) => (

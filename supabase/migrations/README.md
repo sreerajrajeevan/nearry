@@ -129,3 +129,13 @@ Schedule `nearry-booking-reminders` (every 10 minutes) from
 Adds the plan type `ride` ("Co-ride") with an optional `rideMode` of `bike` or
 `car` (absent = either), allowed only on a ride. Only widens what plan details
 accept; existing plans are unaffected.
+
+## Plans around you (00065)
+
+Hosts can share an open plan starting within 2 hours over Bluetooth.
+`start_plan_beacon` stores one random code per 10-minute window (in
+`plan_beacons` / `plan_beacon_codes`, which no app user can read) and returns
+them for the phone to broadcast; `stop_plan_beacon` stops it;
+`plan_beacon_status` tells the host. `resolve_plan_beacons` turns codes heard
+nearby into plan ids, honouring blocks, the plan's gender and age settings and
+stopped sharing. See `docs/plans-around-you.md`.
