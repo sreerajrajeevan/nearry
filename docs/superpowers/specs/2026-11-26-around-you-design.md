@@ -1,32 +1,28 @@
-# Around you: design
+# Plans around you (Bluetooth): design
 
-**Why:** sometimes you'd like to meet someone who is in the same place right now, at a mall, a café or a gym, but you're too shy to walk up to them. With "Around you", people who have chosen to be visible can find each other over Bluetooth and send a polite invite ("Coffee now?"). It is a small extra inside Nearry, not a dating app: Nearry stays a plans app.
+**Why:** sometimes you'd like company right where you are, at a mall, a café or a gym, but you're too shy to walk up to someone. Instead of browsing people, Nearry lets you share a *plan* with the people in the same place: "Coffee at the food court, anyone?". People nearby see the plan, not a list of people, and join it the normal way. Nobody can be found just by being in the room.
 
 ## How it works for people
 
-- **Open to meet.** A switch on Discover and in Profile: "Open to meet for the next hour". You pick what you're up for (coffee, food, a walk, gym, shopping, a game) and who can invite you (everyone, women only or men only). It turns itself off after 1 hour, or when you switch it off. While it is on, a small banner says you're visible.
-- **Around you list.** Only while your own switch is on, a list shows other people nearby who are also Open to meet: first name, a verified tick if they have one, and what they're up for. No photo, no distance, no direction, no "last seen". Someone drops off the list about 2 minutes after their phone is out of Bluetooth range.
-- **Invite.** Tap a person and send an invite: pick one of their activities and add an optional note of up to 80 characters. They get a notification. They see your first name, your photo and your note.
-  - **Accept:** a one-to-one chat opens for both of you, and now you both see each other's photo. This reuses the existing chats.
-  - **Decline, or no reply within 1 hour:** the invite closes. You both stop seeing each other in Around you for good. The sender is told only "No reply this time".
-- **Limits.** 5 invites a day. One invite per pair of people, ever. Blocks and reports work here as everywhere else. Blocked people never see each other.
-- **Who can use it.** Personal accounts that finished onboarding, have a profile photo and confirm "I'm 18 or older" the first time they switch it on.
+- **Share a plan right here.** When posting a plan that starts within the next 2 hours, the host can turn on "Show to people right here". Nearry then shares the plan over Bluetooth until the plan starts plus 30 minutes, for 2 hours at most, or until the host taps Stop. While sharing, Android shows a notification "Sharing your plan nearby" with a Stop button, so the host can put the phone in their pocket.
+- **See plans around you.** On Discover, an "Around you" card with a **Look around** button. It listens over Bluetooth for about a minute and lists plans being shared nearby: title, activity, start time, spots left, host's first name. No distance or direction. Looking around never broadcasts anything, so the people looking are invisible.
+- **Join.** Tapping a plan opens the normal plan page. Joining sends the usual request: the host approves (or auto-accept is on), and then the plan group chat opens. All existing rules apply: plan gender settings (for example women only), spots, blocks, reports and request limits.
 
 ## How it works under the hood
 
-- **Bluetooth, Android first.** The phone broadcasts a random code over Bluetooth Low Energy and listens for other Nearry codes. The code never contains your name or ID, and it changes every 10 minutes, so a Bluetooth scanner can't follow anyone. Only the Nearry server can turn a code into a profile, and only for someone whose switch is on too. Bluetooth runs only while the switch is on and the app is open.
-- **Native code.** Expo has no Bluetooth broadcasting, so we add a small native Android module in the repo (`modules/nearby-ble`). It needs a development or release build (EAS); it won't run in Expo Go. Android asks for the "Nearby devices" permission (Android 12+); older Android also needs location permission for Bluetooth scans.
-- **iPhone later.** iOS only allows broadcasting with the app open, and differently from Android. We add it as a second step once Android works.
-- **Database.** New tables for meet sessions (switch on/off, activities, who can invite, expiry), the current code per session, invites, and hidden pairs. Phones send the codes they heard to one function, which returns only people who are visible, not blocked, allowed by both sides' "who can invite" settings and not hidden. Invites, accept and decline go through database functions that enforce the limits.
-- **Hidden at launch.** The feature only appears in builds with `EXPO_PUBLIC_AROUND_YOU=1`, so you can test it with friends using a test APK before anyone else sees it.
+- **Bluetooth, Android first.** The host's phone broadcasts a random code for the plan. The code never contains the plan or person ID and changes every 10 minutes, so a scanner can't follow anyone. Only the Nearry server can turn a code into a plan.
+- **Server check.** Phones send the codes they heard to one function. It returns a plan only if it's still open, still being shared, hasn't started more than 30 minutes ago, the viewer isn't blocked either way, and the viewer fits the plan's gender setting. The viewer's own plans aren't returned.
+- **Native code.** Expo has no Bluetooth broadcasting, so we add a small Android module in the repo (`modules/nearby-ble`). It needs a release or development build (EAS); it won't run in Expo Go. Android asks for "Nearby devices" (Android 12+); older Android also asks for location for Bluetooth scans.
+- **iPhone later.** iPhones can look around with the app open; sharing from an iPhone is more limited. Both come after Android works.
+- **Hidden at launch.** Only builds with `EXPO_PUBLIC_AROUND_YOU=1` show it, so you can test with friends on a test APK first.
 
 ## Decisions
 
+- Plans only, never a list of people: the user's choice, for safety.
 - Bluetooth instead of phone location, because location is unreliable indoors in malls (the user's choice).
-- It sits inside Nearry as a small extra, framed around activities ("coffee now?"), not dating (the user's choice).
-- No photo in the list, only after an accepted invite. Photos would let anyone match a profile to a stranger in the room, including someone who said no.
-- 18+ is a self-confirmation for now. A selfie check is a separate, later feature.
+- Only the host broadcasts. People looking around stay invisible.
+- Sharing is limited to plans starting within 2 hours, and stops automatically.
 
 ## Non-goals
 
-No map, distance or direction. No browsing people when your own switch is off. No background Bluetooth while the app is closed. No group invites. No iPhone in the first version.
+No list or map of people, no distance or direction, no background scanning, no invites to a specific person, no iPhone in the first version.
