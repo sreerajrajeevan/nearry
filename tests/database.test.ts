@@ -7319,3 +7319,135 @@ test("plan details accept a co-ride with a bike or car choice", async () => {
   assert.equal(await ok({ activity: "football", rideMode: "car" }), false);
   assert.equal(await ok({ activity: "rocket" }), false);
 });
+
+async function soonPlan(gender: string | null = null) {
+  return (
+    await db.query(
+      `insert into posts(author_id,title,description,starts_at,vacancies,venue_id,gender_preference)
+       values($1,'Coffee at the food court','Anyone up for a quick coffee?',now()+interval '40 minutes',2,'10000000-0000-0000-0000-000000000032',$2) returning id`,
+      [host, gender],
+    )
+  ).rows[0].id;
+}
+const startSharing = (pid: string, who = host) =>
+  asUser(
+    who,
+    async (tx) =>
+      (await tx.query("select start_plan_beacon($1) r", [pid])).rows[0].r,
+  );
+const lookAround = (codes: string[], who = b) =>
+  asUser(
+    who,
+    async (tx) =>
+      (await tx.query("select resolve_plan_beacons($1::text[]) r", [codes]))
+        .rows[0].r as string[],
+  );
+
+test("plans around you: the host shares a plan starting soon and gets codes that change every 10 minutes", async () => {
+  const pid = await soonPlan();
+  const r = await startSharing(pid);
+  const codes = r.codes as {
+    code: string;
+    from_ms: number;
+    until_ms: number;
+  }[];
+  // Starts in 40 min, so sharing runs until 30 min after the start: 70 min → 7 codes.
+  assert.equal(codes.length, 7);
+  for (const c of codes) assert.match(c.code, /^[0-9a-f]{16}$/);
+  assert.equal(new Set(codes.map((c) => c.code)).size, 7);
+  for (let i = 1; i < codes.length; i++)
+    assert.equal(codes[i].from_ms, codes[i - 1].until_ms);
+  assert.equal(codes.at(-1)!.until_ms, Number(r.ends_ms));
+  const startsMs = Number(
+    (
+      await db.query(
+        "select extract(epoch from starts_at)*1000 ms from posts where id=$1",
+        [pid],
+      )
+    ).rows[0].ms,
+  );
+  assert.ok(Math.abs(Number(r.ends_ms) - (startsMs + 30 * 60_000)) < 2000);
+  // Sharing again replaces the old codes.
+  const again = await startSharing(pid);
+  assert.deepEqual(await lookAround([codes[0].code]), []);
+  assert.deepEqual(await lookAround([again.codes[0].code]), [pid]);
+});
+
+test("plans around you: only the host can share, only open plans starting within 2 hours", async () => {
+  const pid = await soonPlan();
+  await assert.rejects(startSharing(pid, b), /Only the host/);
+  const later = await post(); // starts in 4 hours
+  await assert.rejects(startSharing(later), /starting within 2 hours/);
+  await db.query("update posts set status='cancelled' where id=$1", [pid]);
+  await assert.rejects(startSharing(pid), /open plans/);
+  await assert.rejects(
+    asUser(null, (tx) => tx.query("select start_plan_beacon($1)", [later])),
+    /permission denied|not authenticated/,
+  );
+});
+
+test("plans around you: people nearby find the plan from its current code; nothing else leaks", async () => {
+  const pid = await soonPlan();
+  const r = await startSharing(pid);
+  const [now, next] = r.codes;
+  assert.deepEqual(
+    await lookAround([now.code, "0123456789abcdef", "not a code"]),
+    [pid],
+  );
+  // A code for a later 10-minute window doesn't work yet; the host's own plan isn't shown to them.
+  assert.deepEqual(await lookAround([next.code]), []);
+  assert.deepEqual(await lookAround([now.code], host), []);
+  // Too many codes at once is refused.
+  await assert.rejects(lookAround(Array(65).fill(now.code)), /Too many/);
+  // Nobody can read the code tables directly.
+  await assert.rejects(
+    asUser(b, (tx) => tx.query("select * from plan_beacon_codes")),
+    /permission denied/,
+  );
+  await assert.rejects(
+    asUser(b, (tx) => tx.query("select * from plan_beacons")),
+    /permission denied/,
+  );
+});
+
+test("plans around you: blocked people, the wrong gender and stopped sharing get nothing", async () => {
+  const pid = await soonPlan();
+  const { codes } = await startSharing(pid);
+  await db.query(
+    "insert into user_blocks(blocker_id,blocked_id) values($1,$2)",
+    [host, c],
+  );
+  try {
+    assert.deepEqual(await lookAround([codes[0].code], c), []);
+  } finally {
+    await db.query(
+      "delete from user_blocks where blocker_id=$1 and blocked_id=$2",
+      [host, c],
+    );
+  }
+  const womenOnly = await soonPlan("female");
+  const w = await startSharing(womenOnly);
+  assert.deepEqual(await lookAround([w.codes[0].code]), []); // b is male
+  assert.equal(
+    (
+      await asUser(host, (tx) =>
+        tx.query("select plan_beacon_status($1) s", [pid]),
+      )
+    ).rows[0].s.sharing,
+    true,
+  );
+  await asUser(host, (tx) => tx.query("select stop_plan_beacon($1)", [pid]));
+  assert.deepEqual(await lookAround([codes[0].code]), []);
+  assert.equal(
+    (
+      await asUser(host, (tx) =>
+        tx.query("select plan_beacon_status($1) s", [pid]),
+      )
+    ).rows[0].s.sharing,
+    false,
+  );
+  await assert.rejects(
+    asUser(b, (tx) => tx.query("select stop_plan_beacon($1)", [pid])),
+    /Only the host/,
+  );
+});
