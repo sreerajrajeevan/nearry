@@ -130,6 +130,17 @@ Adds the plan type `ride` ("Co-ride") with an optional `rideMode` of `bike` or
 `car` (absent = either), allowed only on a ride. Only widens what plan details
 accept; existing plans are unaffected.
 
+## Push worker fix (00065)
+
+`claim_push_jobs` from 00050 returned a data-modifying `WITH` from inside a
+subquery, which Postgres rejects, so from 23 Nov 2026 every `send-push` run
+failed and no push was delivered. It's now a top-level statement. Pushes for
+notifications older than 12 hours are closed as "too old to push" (the in-app
+notification stays). `push_work_due()` lets the every-minute dispatcher skip
+calling `send-push` when nothing is waiting; the live cron command is
+`select public.dispatch_nearry_push() where public.push_work_due();`. The daily
+cleanup now keeps 2 days of pg_cron history instead of 7.
+
 ## Plans around you (00066)
 
 Hosts can share an open plan starting within 2 hours over Bluetooth.
