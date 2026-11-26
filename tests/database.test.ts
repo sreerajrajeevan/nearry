@@ -111,7 +111,7 @@ before(async () => {
           /create function public.nearby_post_cards[\s\S]*?grant execute on function public.nearby_post_cards[^;]+;/,
           "",
         );
-      if (file === "00066_hosted_by_filter.sql")
+      if (file === "00067_hosted_by_filter.sql")
         // discover_posts (00052, PostGIS) is skipped here; PostGIS CI runs it.
         sql = sql.replace(
           /create or replace function public.discover_posts[\s\S]*?grant execute on function public.discover_posts[^;]+;/,
@@ -6910,7 +6910,7 @@ test("spam limits: plans per day, join requests per hour, messages per minute, o
       ),
     );
   // Plans: 10 a day for one person. Premium lifts the free 3-a-day limit
-  // (00065) but never these spam caps.
+  // (00066) but never these spam caps.
   const premium = (id: string) =>
     db.query(
       "insert into premium_entitlements(user_id,expires_at) values($1,now()+interval '1 day')",
@@ -7607,4 +7607,48 @@ test("plan details accept a co-ride with a bike or car choice", async () => {
   assert.equal(await ok({ activity: "ride", rideMode: "boat" }), false);
   assert.equal(await ok({ activity: "football", rideMode: "car" }), false);
   assert.equal(await ok({ activity: "rocket" }), false);
+});
+
+test("push worker: claims due notifications and skips ones too old to be useful", async () => {
+  const u = await corePersonal();
+  await db.query("update push_jobs set sent_at=now() where sent_at is null");
+  const notify = async (age: string) => {
+    const n = (
+      await db.query(
+        `insert into notifications(user_id,kind,title,body,created_at)
+         values($1,'booking','Booking update','Open Nearry',now()-$2::interval) returning id`,
+        [u, age],
+      )
+    ).rows[0].id;
+    await db.query(
+      "update push_jobs set next_attempt_at=now()-$2::interval where notification_id=$1",
+      [n, age],
+    );
+    return n;
+  };
+  const fresh = await notify("1 minute");
+  const stale = await notify("2 days");
+  const claimed = (await db.query("select claim_push_jobs() j")).rows[0].j as {
+    notification_id: string;
+  }[];
+  assert.deepEqual(
+    claimed.map((j) => j.notification_id),
+    [fresh],
+  );
+  const job = async (n: string) =>
+    (
+      await db.query(
+        "select attempts, sent_at, last_error from push_jobs where notification_id=$1",
+        [n],
+      )
+    ).rows[0];
+  assert.equal((await job(fresh)).attempts, 1);
+  assert.ok((await job(stale)).sent_at);
+  assert.equal((await job(stale)).last_error, "too old to push");
+  // Nothing due: the dispatcher doesn't call the push worker at all.
+  await db.query("update push_jobs set sent_at=now() where sent_at is null");
+  assert.equal((await db.query("select push_work_due() d")).rows[0].d, false);
+  await notify("1 minute");
+  assert.equal((await db.query("select push_work_due() d")).rows[0].d, true);
+  await db.query("update push_jobs set sent_at=now() where sent_at is null");
 });

@@ -130,8 +130,19 @@ Adds the plan type `ride` ("Co-ride") with an optional `rideMode` of `bike` or
 `car` (absent = either), allowed only on a ride. Only widens what plan details
 accept; existing plans are unaffected.
 
-## Nearry Premium (00065–00066)
+## Push worker fix (00065)
 
-`00065`: `premium_entitlements` (written only by the `revenuecat-webhook` function with the service role; users read their own row), `has_premium()`, and `daily_usage` with triggers enforcing the free daily limits: 3 new plans and 10 join requests per India day (`daily_plan_limit` / `daily_join_limit`). Server and admin inserts are never limited. Apply after the Premium app build has reached users, or older builds show the raw limit text.
+`claim_push_jobs` from 00050 returned a data-modifying `WITH` from inside a
+subquery, which Postgres rejects, so from 23 Nov 2026 every `send-push` run
+failed and no push was delivered. It's now a top-level statement. Pushes for
+notifications older than 12 hours are closed as "too old to push" (the in-app
+notification stays). `push_work_due()` lets the every-minute dispatcher skip
+calling `send-push` when nothing is waiting; the live cron command is
+`select public.dispatch_nearry_push() where public.push_work_due();`. The daily
+cleanup now keeps 2 days of pg_cron history instead of 7.
 
-`00066`: the Premium "Hosted by" filter. `hosts_matching_gender()` (security definer, Premium-only, honours blocks and visibility) and an optional `hostGender` key in `discover_posts` (requires 00052). Without the key results are unchanged, so older builds and `nearby_post_cards` keep working. Separate from the abuse limits in 00056, which cap everyone (Premium included); the free-tier triggers run first, so free users see the upgrade prompt.
+## Nearry Premium (00066–00067)
+
+`00066`: `premium_entitlements` (written only by the `revenuecat-webhook` function with the service role; users read their own row), `has_premium()`, and `daily_usage` with triggers enforcing the free daily limits: 3 new plans and 10 join requests per India day (`daily_plan_limit` / `daily_join_limit`). Server and admin inserts are never limited. Apply after the Premium app build has reached users, or older builds show the raw limit text.
+
+`00067`: the Premium "Hosted by" filter. `hosts_matching_gender()` (security definer, Premium-only, honours blocks and visibility) and an optional `hostGender` key in `discover_posts` (requires 00052). Without the key results are unchanged, so older builds and `nearby_post_cards` keep working. Separate from the abuse limits in 00056, which cap everyone (Premium included); the free-tier triggers run first, so free users see the upgrade prompt.
