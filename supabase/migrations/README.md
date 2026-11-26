@@ -130,7 +130,7 @@ Adds the plan type `ride` ("Co-ride") with an optional `rideMode` of `bike` or
 `car` (absent = either), allowed only on a ride. Only widens what plan details
 accept; existing plans are unaffected.
 
-## Plans around you (00065)
+## Plans around you (00066)
 
 Hosts can share an open plan starting within 2 hours over Bluetooth.
 `start_plan_beacon` stores one random code per 10-minute window (in

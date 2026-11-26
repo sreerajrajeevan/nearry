@@ -6382,7 +6382,7 @@ create or replace function valid_plan_details(v jsonb) returns boolean as $$
 $$ language sql immutable set search_path=public,pg_temp;
 
 
--- 00065_plans_around_you.sql
+-- 00066_plans_around_you.sql
 -- Plans around you: a host can share an open plan that starts within the next
 -- 2 hours with people in the same place, over Bluetooth. The phone broadcasts
 -- random codes that change every 10 minutes; only this database can turn a

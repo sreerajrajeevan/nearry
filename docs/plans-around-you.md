@@ -20,7 +20,7 @@ different accounts.
 
 - **Sharing.** The host turns on "Show to people right here" when posting a
   plan that starts within 2 hours, or taps "Share right here" on the plan
-  page. The database (`start_plan_beacon`, migration 00065) returns one random
+  page. The database (`start_plan_beacon`, migration 00066) returns one random
   16-character code per 10-minute window, until 30 minutes after the start
   (2 hours at most). The phone broadcasts the current code from a foreground
   service with a "Sharing your plan nearby" notification and a Stop button.
