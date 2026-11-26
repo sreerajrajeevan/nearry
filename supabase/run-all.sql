@@ -6482,7 +6482,6 @@ begin
 end;
 $$ language plpgsql security definer set search_path=public,pg_temp;
 revoke all on function public.daily_cleanup() from public,anon,authenticated;
-revoke all on function public.daily_cleanup() from public,anon,authenticated;
 grant execute on function public.daily_cleanup() to service_role;
 
 
