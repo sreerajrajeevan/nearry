@@ -39,7 +39,9 @@ begin
   select decrypted_secret into worker_secret from vault.decrypted_secrets where name=task.secret limit 1;
   if worker_secret is null or length(worker_secret)<20 then raise exception 'Missing worker secret in Vault: %',task.secret;end if;
   -- Store the lookup, never a decrypted credential, in the scheduler command.
-  command_text=format('select net.http_post(url := %L,headers := jsonb_build_object(''Content-Type'',''application/json'',''x-dispatch-secret'',(select decrypted_secret from vault.decrypted_secrets where name=%L limit 1)),body := ''{}''::jsonb,timeout_milliseconds := 45000);',backend||'/functions/v1/'||task.endpoint,task.secret);
+  command_text=format('select net.http_post(url := %L,headers := jsonb_build_object(''Content-Type'',''application/json'',''x-dispatch-secret'',(select decrypted_secret from vault.decrypted_secrets where name=%L limit 1)),body := ''{}''::jsonb,timeout_milliseconds := 45000)%s;',backend||'/functions/v1/'||task.endpoint,task.secret,
+   -- send-push only when there is something to send (migration 00065).
+   case when task.endpoint='send-push' then ' where public.push_work_due()' else '' end);
   perform cron.schedule(task.name,task.schedule,command_text);
  end loop;
 end;
