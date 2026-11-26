@@ -140,3 +140,13 @@ notification stays). `push_work_due()` lets the every-minute dispatcher skip
 calling `send-push` when nothing is waiting; the live cron command is
 `select public.dispatch_nearry_push() where public.push_work_due();`. The daily
 cleanup now keeps 2 days of pg_cron history instead of 7.
+
+## Plans around you (00066)
+
+Hosts can share an open plan starting within 2 hours over Bluetooth.
+`start_plan_beacon` stores one random code per 10-minute window (in
+`plan_beacons` / `plan_beacon_codes`, which no app user can read) and returns
+them for the phone to broadcast; `stop_plan_beacon` stops it;
+`plan_beacon_status` tells the host. `resolve_plan_beacons` turns codes heard
+nearby into plan ids, honouring blocks, the plan's gender and age settings and
+stopped sharing. See `docs/plans-around-you.md`.

@@ -255,6 +255,29 @@ export async function listPostsPage(
   };
 }
 
+/** Several plans by id, in the order given (missing or hidden ones are skipped). */
+export async function getPostsByIds(ids: string[]): Promise<NeedPost[]> {
+  if (!ids.length) return [];
+  if (useMock()) {
+    const byId = new Map(mockPosts.map((p) => [p.id, p]));
+    return withPhotoCovers(ids.flatMap((id) => byId.get(id) ?? []));
+  }
+  const { data, error } = await getSupabase()!
+    .from("post_cards")
+    .select("*")
+    .in("id", ids);
+  if (error) throw new Error(error.message);
+  const byId = new Map(
+    ((data ?? []) as Record<string, unknown>[]).map((r) => [r.id as string, r]),
+  );
+  return withPhotoCovers(
+    ids.flatMap((id) => {
+      const row = byId.get(id);
+      return row ? [toCard(row)] : [];
+    }),
+  );
+}
+
 export async function getPost(id: string): Promise<NeedPost | null> {
   if (useMock()) return mockPosts.find((p) => p.id === id) ?? null;
   const supabase = getSupabase()!;
