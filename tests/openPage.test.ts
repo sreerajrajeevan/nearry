@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import vm from "node:vm";
+import { createHash } from "node:crypto";
 import { openPage } from "../scripts/openPage";
 
 const PLAY = "https://play.google.com/store/apps/details?id=com.nearry.app";
@@ -52,4 +53,23 @@ test("a bad id doesn't redirect and leaves the Play Store button", () => {
   const { location, els } = visit("?newplan=bad%20id");
   assert.equal(location.href, "");
   assert.equal(els.open.style.display, "none");
+});
+
+test("the share page only runs its own script and sends no referrer", () => {
+  const html = openPage(PLAY);
+  const script = /<script>([\s\S]*)<\/script>/.exec(html)![1];
+  const csp =
+    /<meta http-equiv="Content-Security-Policy" content="([^"]+)">/.exec(
+      html,
+    )?.[1];
+  assert.ok(csp, "has a Content-Security-Policy");
+  const hash = createHash("sha256").update(script).digest("base64");
+  assert.match(
+    csp!,
+    new RegExp(`script-src 'sha256-${hash.replace(/[+/]/g, "\\$&")}'`),
+  );
+  assert.match(csp!, /default-src 'none'/);
+  assert.match(csp!, /base-uri 'none'/);
+  assert.match(csp!, /form-action 'none'/);
+  assert.match(html, /<meta name="referrer" content="no-referrer">/);
 });

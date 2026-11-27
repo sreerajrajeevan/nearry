@@ -158,3 +158,18 @@ limit, only plans that have a location, nearest first, with the usual filters
 and paging. Discover uses it when nothing is within the widest distance, so the
 feed shows the nearest plans anywhere under a "Nothing near you yet" note
 instead of an empty screen.
+
+## Security hardening (00068)
+
+Signed-out callers keep read access where RLS allows it but lose every table
+write grant (RLS already refused those writes). Nobody but the owner can
+TRUNCATE app tables. Trigger functions can no longer be called as `/rpc/`
+endpoints; they still fire as triggers. `nearby_venues` gets a fixed
+`search_path`.
+
+PostGIS keeps `spatial_ref_sys` in `public`, owned by `supabase_admin`, so its
+grants cannot be changed from a migration. `public.guard_api_request()` is set
+as PostgREST's `db_pre_request` on the `authenticator` role and refuses writes
+to `spatial_ref_sys`, `geometry_columns` and `geography_columns` through the
+API. If PostgREST ever reports that function missing, every API call fails:
+restore it, or run `alter role authenticator reset pgrst.db_pre_request; notify pgrst, 'reload config';`.

@@ -7562,3 +7562,87 @@ test(
     }
   },
 );
+
+test("security: signed-out callers cannot write tables, and nobody can truncate them", async () => {
+  for (const table of ["posts", "messages", "notifications", "post_photos"]) {
+    const grants = (
+      await db.query(
+        `select has_table_privilege('anon','public.'||$1,'insert') anon_insert,
+                has_table_privilege('anon','public.'||$1,'update') anon_update,
+                has_table_privilege('anon','public.'||$1,'delete') anon_delete,
+                has_table_privilege('authenticated','public.'||$1,'truncate') user_truncate,
+                has_table_privilege('anon','public.'||$1,'select') anon_select`,
+        [table],
+      )
+    ).rows[0];
+    assert.deepEqual(
+      grants,
+      {
+        anon_insert: false,
+        anon_update: false,
+        anon_delete: false,
+        user_truncate: false,
+        anon_select: true,
+      },
+      table,
+    );
+  }
+  await assert.rejects(
+    asUser(
+      null,
+      (tx) =>
+        tx.query(
+          "insert into posts(author_id,title,description,starts_at,vacancies) values($1,'x','y',now()+interval '1 day',2)",
+          [host],
+        ),
+      "anon",
+    ),
+    /permission denied/,
+  );
+});
+
+test("security: trigger functions run as triggers but cannot be called through the API", async () => {
+  const callable = (
+    await db.query(
+      `select count(*)::int n from pg_proc p join pg_namespace s on s.oid=p.pronamespace
+       where s.nspname='public' and p.prorettype='trigger'::regtype
+         and (has_function_privilege('anon',p.oid,'execute') or has_function_privilege('authenticated',p.oid,'execute'))
+         and not exists(select 1 from pg_depend d where d.objid=p.oid and d.deptype='e')`,
+    )
+  ).rows[0].n;
+  assert.equal(callable, 0);
+  // Triggers still fire for signed-in users: a new post still gets its card.
+  const pid = await post();
+  assert.ok(pid);
+});
+
+test("security: the API refuses writes to PostGIS reference tables", async () => {
+  const check = (method: string, path: string) =>
+    asUser(
+      null,
+      async (tx) => {
+        await tx.query("select set_config('request.method',$1,true)", [method]);
+        await tx.query("select set_config('request.path',$1,true)", [path]);
+        await tx.query("select public.guard_api_request()");
+        return "allowed";
+      },
+      "anon",
+    );
+  for (const path of [
+    "/spatial_ref_sys",
+    "/geometry_columns",
+    "/geography_columns",
+  ]) {
+    for (const method of ["POST", "PATCH", "DELETE", "PUT"])
+      await assert.rejects(
+        check(method, path),
+        /read-only/,
+        `${method} ${path}`,
+      );
+    assert.equal(await check("GET", path), "allowed");
+  }
+  assert.equal(await check("POST", "/posts"), "allowed");
+  assert.equal(await check("POST", "/rpc/discover_posts"), "allowed");
+  // Missing request settings (direct SQL, cron, tests) never block anything.
+  await db.query("select public.guard_api_request()");
+});
