@@ -66,6 +66,8 @@ const useMock = () => {
 
 export type PostFilter = {
   nearby?: { latitude: number; longitude: number; radiusM: number };
+  /** No distance limit: plans anywhere, measured from this point. */
+  anywhere?: { latitude: number; longitude: number };
   search?: string;
   tag?: string;
   /** Defaults to open posts only. */
@@ -112,7 +114,15 @@ export async function listPosts(filter: PostFilter = {}): Promise<NeedPost[]> {
           (p.venueName ?? "").toLowerCase().includes(q),
       );
     }
-    if (filter.nearby) {
+    if (filter.anywhere) {
+      const origin = filter.anywhere;
+      posts = posts.flatMap((p) => {
+        const km = p.location
+          ? distanceKm(origin, p.location)
+          : mockVenues.find((v) => v.id === p.venueId)?.distanceKm;
+        return km != null ? [{ ...p, distanceKm: km }] : [];
+      });
+    } else if (filter.nearby) {
       const origin = filter.nearby;
       posts = posts.flatMap((p) => {
         if (!p.location) {
@@ -231,7 +241,7 @@ export async function listPostsPage(
           : null,
     };
   }
-  const { nearby, date, ...rest } = filter;
+  const { nearby, anywhere, date, ...rest } = filter;
   const { data, error } = await getSupabase()!.rpc("discover_posts", {
     p_filters: {
       ...rest,
@@ -241,7 +251,13 @@ export async function listPostsPage(
             longitude: nearby.longitude,
             radiusM: nearby.radiusM,
           }
-        : {}),
+        : anywhere
+          ? {
+              latitude: anywhere.latitude,
+              longitude: anywhere.longitude,
+              anyDistance: true,
+            }
+          : {}),
       ...planDateBounds(date ?? "all"),
     },
     p_cursor: cursor,

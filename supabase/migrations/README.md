@@ -150,3 +150,11 @@ them for the phone to broadcast; `stop_plan_beacon` stops it;
 `plan_beacon_status` tells the host. `resolve_plan_beacons` turns codes heard
 nearby into plan ids, honouring blocks, the plan's gender and age settings and
 stopped sharing. See `docs/plans-around-you.md`.
+
+## Plans anywhere (00067)
+
+`discover_posts` accepts `anyDistance: true` with a search point: no distance
+limit, only plans that have a location, nearest first, with the usual filters
+and paging. Discover uses it when nothing is within the widest distance, so the
+feed shows the nearest plans anywhere under a "Nothing near you yet" note
+instead of an empty screen.
