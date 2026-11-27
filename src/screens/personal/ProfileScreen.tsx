@@ -2,6 +2,7 @@ import { Alert } from "../../services/appAlert";
 import { personalProfileReady } from "../../utils/profileReadiness";
 import { PageHeading } from "../../components/PageHeading";
 
+import { Linking } from "react-native";
 import React, { useEffect, useRef, useState } from "react";
 import { View, Text, ScrollView, StyleSheet } from "react-native";
 import { Screen } from "../../components/Screen";
@@ -19,6 +20,7 @@ import { AccountMenuRow } from "../../components/AccountMenuRow";
 import { MotionPressable } from "../../components/Motion";
 import { Icon } from "../../components/Icon";
 import { colors, typography, spacing, surfaces, weight } from "../../theme";
+import { usePremium } from "../../store/PremiumContext";
 import { useAuth } from "../../store/AuthContext";
 import {
   getMySelfieReview,
@@ -31,10 +33,34 @@ import { useCallback } from "react";
 import { useUnreadCounts } from "../../hooks/useUnreadCounts";
 import { PersonalTabNav, PersonalTabParamList } from "../../navigation/types";
 
+const MANAGE_URL =
+  "https://play.google.com/store/account/subscriptions?package=com.nearry.app";
+const MONTHS = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];
+/** d MMM yyyy, e.g. 16 Dec 2026. */
+function activeUntil(iso: string | null) {
+  const d = iso ? new Date(iso) : null;
+  return d && !isNaN(d.getTime())
+    ? `${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`
+    : "";
+}
 type Props = { navigation: PersonalTabNav };
 export function ProfileScreen({ navigation }: Props) {
   const { profile, session, demoMode, signOut, enterDemoMode } = useAuth();
   const { notifications, messages } = useUnreadCounts();
+  const premium = usePremium();
   const [selfieChecked, setSelfieChecked] = useState(false);
   const [review, setReview] = useState<SelfieReview>({ status: "unverified" });
   const [reviewLoaded, setReviewLoaded] = useState(false);
@@ -294,6 +320,28 @@ export function ProfileScreen({ navigation }: Props) {
               )}
             </View>
           </MotionPressable>
+        )}
+        {premium && (
+          <View style={[styles.group, styles.premiumGroup]}>
+            <AccountMenuRow
+              icon="star"
+              title={
+                premium.isPremium
+                  ? `Nearry Premium · Active until ${activeUntil(premium.snapshot.expiresAt)}`
+                  : "Nearry Premium"
+              }
+              hint={
+                premium.isPremium
+                  ? "Manage subscription"
+                  : "Unlimited plans and the Hosted by filter"
+              }
+              onPress={() =>
+                premium.isPremium
+                  ? void Linking.openURL(MANAGE_URL).catch(() => {})
+                  : premium.showUpgrade("profile")
+              }
+            />
+          </View>
         )}
         <View style={styles.quick}>
           {(
@@ -695,6 +743,7 @@ const styles = StyleSheet.create({
   },
   emailLabel: { ...typography.caption, color: colors.textDim },
   emailValue: { ...typography.bodySmall, color: colors.text, flexShrink: 1 },
+  premiumGroup: { marginTop: spacing.md },
   demoSwitch: { marginTop: spacing.lg },
   logout: { marginTop: spacing.md },
 });

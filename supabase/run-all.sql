@@ -6750,4 +6750,184 @@ begin
 end $$;
 
 
+-- 00069_premium_limits.sql
+-- 00069 — Nearry Premium: entitlements and daily plan / join limits.
+-- premium_entitlements is written only by the service role (store webhook /
+-- verify edge function); users read their own row. Free accounts get 3 plans
+-- and 10 join requests per India day; Premium is unlimited but still counted.
+-- daily_usage holds one row per (user, kind, day, ref): deleting a plan does
+-- not give the slot back, and re-sending the same request is free.
+
+create table public.premium_entitlements (
+  user_id uuid primary key references public.profiles(id) on delete cascade,
+  expires_at timestamptz not null,
+  product_id text,
+  store text,
+  updated_at timestamptz not null default now()
+);
+alter table public.premium_entitlements enable row level security;
+create policy "premium read own" on public.premium_entitlements
+  for select using (user_id = (select auth.uid()));
+revoke all on public.premium_entitlements from public, anon, authenticated;
+grant select on public.premium_entitlements to authenticated;
+grant select, insert, update, delete on public.premium_entitlements to service_role;
+
+create or replace function public.has_premium(p_user uuid) returns boolean as $$
+  select exists(select 1 from public.premium_entitlements
+    where user_id = p_user and expires_at > now());
+$$ language sql stable security definer set search_path = public, pg_temp;
+revoke execute on function public.has_premium(uuid) from public, anon, authenticated;
+grant execute on function public.has_premium(uuid) to service_role;
+
+create table public.daily_usage (
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  day date not null,
+  kind text not null check (kind in ('plan','join')),
+  ref_id uuid not null,
+  primary key (user_id, kind, day, ref_id)
+);
+alter table public.daily_usage enable row level security;
+revoke all on public.daily_usage from public, anon, authenticated;
+grant select, insert, update, delete on public.daily_usage to service_role;
+
+create or replace function public.count_daily_usage(p_user uuid, p_kind text, p_ref uuid) returns void as $$
+declare v_day date := (now() at time zone 'Asia/Kolkata')::date; v_limit int;
+begin
+  if auth.uid() is distinct from p_user then return; end if;
+  -- Serialize per user and kind so parallel inserts cannot all pass the count.
+  perform pg_advisory_xact_lock(hashtextextended(p_user::text || ':' || p_kind, 0));
+  -- Re-sending a join request does not cost a new slot. Plans never get this
+  -- shortcut: clients can pick the post id, so delete + re-insert must count.
+  if p_kind = 'join' and exists(select 1 from public.daily_usage
+    where user_id = p_user and kind = p_kind and day = v_day and ref_id = p_ref) then return; end if;
+  v_limit := case p_kind when 'plan' then 3 else 10 end;
+  if not public.has_premium(p_user)
+    and (select count(*) from public.daily_usage where user_id = p_user and kind = p_kind and day = v_day) >= v_limit then
+    raise exception '%', case p_kind when 'plan' then 'daily_plan_limit' else 'daily_join_limit' end;
+  end if;
+  insert into public.daily_usage(user_id, day, kind, ref_id) values(p_user, v_day, p_kind, p_ref);
+end;
+$$ language plpgsql security definer set search_path = public, pg_temp;
+revoke execute on function public.count_daily_usage(uuid, text, uuid) from public, anon, authenticated;
+
+create or replace function public.daily_plan_limit_trg() returns trigger as $$
+begin
+  perform public.count_daily_usage(new.author_id, 'plan', new.id);
+  return new;
+end;
+$$ language plpgsql security definer set search_path = public, pg_temp;
+revoke execute on function public.daily_plan_limit_trg() from public, anon, authenticated;
+create trigger a_daily_plan_limit before insert on public.posts
+  for each row execute function public.daily_plan_limit_trg();
+
+create or replace function public.daily_join_limit_trg() returns trigger as $$
+begin
+  perform public.count_daily_usage(new.requester_id, 'join', new.post_id);
+  return new;
+end;
+$$ language plpgsql security definer set search_path = public, pg_temp;
+revoke execute on function public.daily_join_limit_trg() from public, anon, authenticated;
+create trigger a_daily_join_limit before insert on public.join_requests
+  for each row execute function public.daily_join_limit_trg();
+
+notify pgrst, 'reload schema';
+
+
+-- 00070_hosted_by_filter.sql
+-- 00070 — Nearry Premium: server-side "Hosted by" filter.
+-- Gender is never readable across profiles; the filter runs only inside this
+-- security-definer function, which returns host ids (open, upcoming plans
+-- only, honouring blocks, suspended accounts and removed plans) and is
+-- Premium-gated. discover_posts (00052, 00067) accepts an optional "hostGender"
+-- filter key; without it results are unchanged, so older builds and the
+-- nearby_post_cards wrapper keep working. Requires 00067 and 00069.
+
+create function public.hosts_matching_gender(p_gender text) returns setof uuid as $$
+begin
+ if p_gender is null or p_gender not in ('female','male','other') then
+  raise exception 'invalid host filter';
+ end if;
+ if not public.has_premium(auth.uid()) then
+  raise exception 'premium_required';
+ end if;
+ return query
+ select distinct p.author_id from public.posts p
+ join public.profiles pr on pr.id=p.author_id
+ where p.status='open' and p.starts_at>now() and (p.expires_at is null or p.expires_at>now())
+  and pr.gender=p_gender
+  and public.visible_author(p.author_id) and public.content_visible('post',p.id);
+end;
+$$ language plpgsql stable security definer set search_path = public, pg_temp;
+revoke all on function public.hosts_matching_gender(text) from public, anon;
+grant execute on function public.hosts_matching_gender(text) to authenticated;
+
+-- Same body as 00067 (plans anywhere), plus the optional hostGender filter ($7).
+create or replace function public.discover_posts(p_filters jsonb default '{}',p_cursor jsonb default null,p_limit int default 30) returns jsonb as $fn$
+declare f jsonb:=coalesce(p_filters,'{}'); origin geography; radius double precision; lat double precision; lng double precision;
+ lim int:=least(80,greatest(1,coalesce(p_limit,30))); sort text:=coalesce(f->>'sort','soonest'); wide boolean; ordering text; cursor_test text; result jsonb; hosts uuid[];
+begin
+ if not account_active(auth.uid()) then raise exception 'Account unavailable';end if;
+ if jsonb_typeof(f)<>'object' or octet_length(f::text)>4000 or length(coalesce(f->>'search',''))>120
+  or sort not in ('soonest','nearest','newest') or coalesce(f->>'status','open') not in ('open','all','closed','cancelled')
+  or f->>'category' is not null and f->>'category' not in ('Play','Meet','Explore','Unwind')
+  or f->>'audience' is not null and f->>'audience' not in ('all','any','male','female')
+  or f->>'hostGender' is not null and f->>'hostGender' not in ('female','male','other') then raise exception 'Choose valid discovery filters';end if;
+ -- Premium "Hosted by": raises premium_required for free users, even in an empty area.
+ if f->>'hostGender' is not null then hosts:=array(select public.hosts_matching_gender(f->>'hostGender'));end if;
+ lat=(f->>'latitude')::double precision;lng=(f->>'longitude')::double precision;
+ wide=coalesce((f->>'anyDistance')::boolean,false);
+ if (lat is null)<>(lng is null) or wide and lat is null then raise exception 'Choose a valid search area';end if;
+ if lat is not null then
+  -- anyDistance: no distance limit, plans anywhere (with a location) by distance.
+  radius=case when wide then null else coalesce((f->>'radiusM')::double precision,5000) end;
+  if not(lat between -90 and 90 and lng between -180 and 180 and (wide or radius between 100 and 50000)) then raise exception 'Choose a valid area and distance';end if;
+  origin=st_setsrid(st_makepoint(lng,lat),4326)::geography;
+ end if;
+ if sort='nearest' and origin is null then sort='soonest';end if;
+ ordering=case sort when 'nearest' then 'distance_m asc,p.starts_at asc,p.id asc'
+  when 'newest' then 'p.created_at desc,p.starts_at asc,p.id asc' else 'p.starts_at asc,p.id asc' end;
+ cursor_test=case sort when 'nearest' then '(loc.point <-> $4,p.starts_at,p.id)>(($2->>''distanceM'')::double precision,($2->>''at'')::timestamptz,($2->>''id'')::uuid)'
+  when 'newest' then '(p.created_at<($2->>''at'')::timestamptz or p.created_at=($2->>''at'')::timestamptz and (p.starts_at,p.id)>(($2->>''startsAt'')::timestamptz,($2->>''id'')::uuid))'
+  else '(p.starts_at,p.id)>(($2->>''at'')::timestamptz,($2->>''id'')::uuid)' end;
+ execute '
+ with candidates as materialized(
+  select p.id,p.starts_at,p.created_at,case when $4 is not null then loc.point <-> $4 end distance_m
+  from public.posts p left join public.post_locations loc on loc.post_id=p.id
+  where (coalesce($1->>''status'',''open'')=''all'' or p.status=coalesce($1->>''status'',''open''))
+   and (coalesce($1->>''status'',''open'')<>''open'' or p.starts_at>now() and (p.expires_at is null or p.expires_at>now()))
+   and ($4 is null or ($5 is null and loc.point is not null) or st_dwithin(loc.point,$4,$5))
+   and (not coalesce(($1->>''excludeCancelled'')::boolean,false) or p.status<>''cancelled'')
+   and ($1->>''authorId'' is null or p.author_id=($1->>''authorId'')::uuid)
+   and ($1->>''excludeAuthorId'' is null or p.author_id<>($1->>''excludeAuthorId'')::uuid)
+   and ($1->>''category'' is null or p.discovery_category=$1->>''category'')
+   and ($1->>''audience'' is null or $1->>''audience''=''all'' or coalesce(p.gender_preference,''any'')=$1->>''audience'')
+   and (not coalesce(($1->>''freeOnly'')::boolean,false) or p.cost_cents=0)
+   and ($1->>''from'' is null or p.starts_at>=($1->>''from'')::timestamptz)
+   and ($1->>''until'' is null or p.starts_at<($1->>''until'')::timestamptz)
+   and ($1->>''tag'' is null or p.tags @> array[$1->>''tag''])
+   and ($1->>''search'' is null or position(lower($1->>''search'') in lower(p.title||'' ''||p.description||'' ''||coalesce(p.venue_name,'''')))>0)
+   and ($1->''venueIds'' is null or p.venue_id in(select value::uuid from jsonb_array_elements_text($1->''venueIds'')))
+   and ($7 is null or p.author_id=any($7))
+   and ($2 is null or '||cursor_test||')
+  order by '||ordering||' limit $3+1
+ ), ranked as (
+  select *,row_number() over(order by '||replace(ordering,'p.','')||') rn from candidates
+ ), cards as (
+  select r.rn,to_jsonb(c)||jsonb_build_object(''distance_km'',r.distance_m/1000) item,
+   jsonb_build_object(''at'',case when $6=''newest'' then r.created_at else r.starts_at end,''startsAt'',r.starts_at,''id'',r.id,''distanceM'',r.distance_m) cursor
+  from ranked r join public.post_cards c on c.id=r.id where r.rn<=$3
+ )
+ select jsonb_build_object(''items'',coalesce((select jsonb_agg(item order by rn) from cards),''[]''),
+ ''cursor'',case when exists(select 1 from ranked where rn>$3) then (select cursor from cards order by rn desc limit 1) else null end)'
+ into result using f,p_cursor,lim,origin,radius,sort,hosts;
+ return result;
+exception when invalid_text_representation or numeric_value_out_of_range or invalid_datetime_format then raise exception 'Choose valid discovery filters';
+end;
+$fn$ language plpgsql stable security invoker set search_path=public,pg_temp;
+revoke all on function public.discover_posts(jsonb,jsonb,int) from public,anon;
+grant execute on function public.discover_posts(jsonb,jsonb,int) to authenticated;
+
+notify pgrst, 'reload schema';
+
+
 commit;

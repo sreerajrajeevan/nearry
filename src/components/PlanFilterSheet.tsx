@@ -17,6 +17,8 @@ import { colors, typography, weight } from "../theme";
 import { useReducedMotion } from "../store/MotionContext";
 import {
   DEFAULT_PLAN_OPTIONS,
+  HOST_GENDER_LABELS,
+  HostGender,
   PLAN_AUDIENCE_LABELS,
   PLAN_SORT_LABELS,
   PlanAudience,
@@ -25,6 +27,7 @@ import {
 } from "../utils/planDiscovery";
 import { Button } from "./Button";
 import { Icon } from "./Icon";
+import { usePremium } from "../store/PremiumContext";
 
 function Choices<T extends string | number | null>({
   label,
@@ -34,7 +37,12 @@ function Choices<T extends string | number | null>({
 }: {
   label: string;
   value: T;
-  options: { value: T; label: string; disabled?: boolean }[];
+  options: {
+    value: T;
+    label: string;
+    disabled?: boolean;
+    locked?: boolean;
+  }[];
   onChange: (value: T) => void;
 }) {
   return (
@@ -67,14 +75,17 @@ function Choices<T extends string | number | null>({
               pressed && pressedStyle,
             ]}
           >
-            <Text
-              style={[
-                styles.choiceText,
-                value === option.value && styles.selectedText,
-              ]}
-            >
-              {option.label}
-            </Text>
+            <View style={styles.choiceRow}>
+              {option.locked && <Icon name="lock" size={14} />}
+              <Text
+                style={[
+                  styles.choiceText,
+                  value === option.value && styles.selectedText,
+                ]}
+              >
+                {option.label}
+              </Text>
+            </View>
           </Pressable>
         ))}
       </View>
@@ -101,6 +112,9 @@ export function PlanFilterSheet({
   const [draft, setDraft] = useState(value);
   const insets = useSafeAreaInsets();
   const reduced = useReducedMotion();
+  const premium = usePremium();
+  // Still loading counts as locked: the server rejects the filter for free users.
+  const unlocked = premium?.snapshot.status === "premium";
   return (
     <Modal
       visible
@@ -176,6 +190,33 @@ export function PlanFilterSheet({
               <Text style={styles.hint}>
                 Shows the host’s audience preference. Joining rules still apply.
               </Text>
+              <Choices<HostGender>
+                label="Hosted by"
+                value={draft.hostGender}
+                options={(["all", "female", "male", "other"] as const).map(
+                  (value) => {
+                    const locked = value !== "all" && !unlocked;
+                    return {
+                      value,
+                      label: locked
+                        ? `${HOST_GENDER_LABELS[value]} · Premium`
+                        : HOST_GENDER_LABELS[value],
+                      locked,
+                      disabled: !hasLocation,
+                    };
+                  },
+                )}
+                onChange={(hostGender) => {
+                  if (hostGender !== "all" && !unlocked) {
+                    premium?.showUpgrade("filter");
+                    return;
+                  }
+                  setDraft((d) => ({ ...d, hostGender }));
+                }}
+              />
+              {!hasLocation && (
+                <Text style={styles.hint}>Set your area to filter by host</Text>
+              )}
             </ScrollView>
             <View
               style={[
@@ -261,6 +302,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     justifyContent: "center",
   },
+  choiceRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   choiceText: { ...typography.bodySmall, color: colors.textDim, flexShrink: 1 },
   selected: { backgroundColor: colors.sageSoft, borderColor: colors.forest },
   selectedText: { color: colors.forest, ...weight("600") },

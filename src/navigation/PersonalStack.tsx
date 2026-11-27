@@ -30,6 +30,7 @@ import { PlanGroupScreen } from "../screens/chat/PlanGroupScreen";
 import { ConversationScreen } from "../screens/chat/ConversationScreen";
 import { NotificationCenterScreen } from "../screens/NotificationCenterScreen";
 
+import { PremiumProvider } from "../store/PremiumContext";
 import { SavedPlansProvider } from "../store/SavedPlansContext";
 import { SavedPlansScreen } from "../screens/personal/SavedPlansScreen";
 
@@ -41,53 +42,61 @@ export function PersonalStack() {
   return (
     <SavedPlansProvider>
       <MyRequestsProvider>
-        <Stack.Navigator
-          screenLayout={({ children }) => (
-            <AppErrorBoundary>{children}</AppErrorBoundary>
-          )}
-          screenOptions={{
-            headerShown: false,
-            contentStyle: { backgroundColor: colors.background },
-            animation: reduced ? "none" : "slide_from_right",
-            animationDuration: 240,
-          }}
-        >
-          <Stack.Screen name="PersonalTabs" component={PersonalTabs} />
-          <Stack.Screen name="PostDetails" component={PostDetailsScreen} />
-          <Stack.Screen name="HostProfile" component={HostProfileScreen} />
-          <Stack.Screen name="AllOffers" component={AllOffersScreen} />
-          <Stack.Screen name="PlaceDetails" component={PlaceDetailsScreen} />
-          <Stack.Screen name="VenueDetails" component={VenueDetailsScreen} />
-          <Stack.Screen name="EditPost" component={EditPostScreen} />
-          <Stack.Screen name="MyPosts" component={MyPostsScreen} />
-          <Stack.Screen name="SavedPlans" component={SavedPlansScreen} />
-          <Stack.Screen name="EditProfile" component={EditProfileScreen} />
-          <Stack.Screen
-            name="SelfieVerification"
-            component={SelfieVerificationScreen}
-          />
-          <Stack.Screen
-            name="CompleteProfile"
-            component={CompleteProfileScreen}
-          />
-          <Stack.Screen name="OfferDetails" component={OfferDetailsScreen} />
-          <Stack.Screen name="Conversation" component={ConversationScreen} />
-          <Stack.Screen name="PlanGroup" component={PlanGroupScreen} />
-          <Stack.Screen
-            name="Notifications"
-            component={NotificationCenterScreen}
-          />
-          <Stack.Screen name="SafetyPrivacy" component={SafetyPrivacyScreen} />
-          <Stack.Screen name="BlockedUsers" component={BlockedUsersScreen} />
-          <Stack.Screen name="MyReports" component={MyReportsScreen} />
-          <Stack.Screen name="Report" component={ReportScreen} />
-          <Stack.Screen
-            name="NotificationSettings"
-            component={NotificationSettingsScreen}
-          />
-          <Stack.Screen name="DeleteAccount" component={DeleteAccountScreen} />
-          <Stack.Screen name="Legal" component={LegalScreen} />
-        </Stack.Navigator>
+        <PremiumProvider>
+          <Stack.Navigator
+            screenLayout={({ children }) => (
+              <AppErrorBoundary>{children}</AppErrorBoundary>
+            )}
+            screenOptions={{
+              headerShown: false,
+              contentStyle: { backgroundColor: colors.background },
+              animation: reduced ? "none" : "slide_from_right",
+              animationDuration: 240,
+            }}
+          >
+            <Stack.Screen name="PersonalTabs" component={PersonalTabs} />
+            <Stack.Screen name="PostDetails" component={PostDetailsScreen} />
+            <Stack.Screen name="HostProfile" component={HostProfileScreen} />
+            <Stack.Screen name="AllOffers" component={AllOffersScreen} />
+            <Stack.Screen name="PlaceDetails" component={PlaceDetailsScreen} />
+            <Stack.Screen name="VenueDetails" component={VenueDetailsScreen} />
+            <Stack.Screen name="EditPost" component={EditPostScreen} />
+            <Stack.Screen name="MyPosts" component={MyPostsScreen} />
+            <Stack.Screen name="SavedPlans" component={SavedPlansScreen} />
+            <Stack.Screen name="EditProfile" component={EditProfileScreen} />
+            <Stack.Screen
+              name="SelfieVerification"
+              component={SelfieVerificationScreen}
+            />
+            <Stack.Screen
+              name="CompleteProfile"
+              component={CompleteProfileScreen}
+            />
+            <Stack.Screen name="OfferDetails" component={OfferDetailsScreen} />
+            <Stack.Screen name="Conversation" component={ConversationScreen} />
+            <Stack.Screen name="PlanGroup" component={PlanGroupScreen} />
+            <Stack.Screen
+              name="Notifications"
+              component={NotificationCenterScreen}
+            />
+            <Stack.Screen
+              name="SafetyPrivacy"
+              component={SafetyPrivacyScreen}
+            />
+            <Stack.Screen name="BlockedUsers" component={BlockedUsersScreen} />
+            <Stack.Screen name="MyReports" component={MyReportsScreen} />
+            <Stack.Screen name="Report" component={ReportScreen} />
+            <Stack.Screen
+              name="NotificationSettings"
+              component={NotificationSettingsScreen}
+            />
+            <Stack.Screen
+              name="DeleteAccount"
+              component={DeleteAccountScreen}
+            />
+            <Stack.Screen name="Legal" component={LegalScreen} />
+          </Stack.Navigator>
+        </PremiumProvider>
       </MyRequestsProvider>
     </SavedPlansProvider>
   );

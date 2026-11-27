@@ -61,9 +61,9 @@ clients access to admin tables or let users add themselves as administrators.
 
 `00042`: plan-group notification previews show `Sender: message` under the existing group title. Backfills previews from retained messages while preserving read state and timestamps; does not resend pushes or alter chat messages. Device push text stays generic. Apply this migration to an existing project; no app rebuild is required.
 
-`00048`: clearer booking notifications. "Booking confirmed" now names the business, the slot time (India time) and party size, and says to pay at the venue: the total for the party plus the per-person price (offer prices are per person), or "It's free". Business requests and cancellations also show the slot time. Only the text changes: kinds, recipients and the offer reference are the same, so older app builds are unaffected and existing notifications are not rewritten. Numbered 00048 because the unmerged `feat/premium` branch already uses 00046–00047; it does not depend on them.
+`00048`: clearer booking notifications. "Booking confirmed" now names the business, the slot time (India time) and party size, and says to pay at the venue: the total for the party plus the per-person price (offer prices are per person), or "It's free". Business requests and cancellations also show the slot time. Only the text changes: kinds, recipients and the offer reference are the same, so older app builds are unaffected and existing notifications are not rewritten. It does not depend on any other open branch.
 
-`00049`: business chats show the business name. `list_my_conversations()` adds `other_is_business` and `other_business_name`; `conversation_safety()` adds `isBusiness`, `businessName`, `kind` and `contextTitle`; message notifications from a business read "Message from <business name>". Additive only, so older builds keep working; the new chat header, list tags and tappable links need the matching app build. Numbered 00049 because open branches use 00046–00048; it does not depend on them.
+`00049`: business chats show the business name. `list_my_conversations()` adds `other_is_business` and `other_business_name`; `conversation_safety()` adds `isBusiness`, `businessName`, `kind` and `contextTitle`; message notifications from a business read "Message from <business name>". Additive only, so older builds keep working; the new chat header, list tags and tappable links need the matching app build. It does not depend on any other open branch.
 
 ## November reliability update (00050, 00052–00054)
 
@@ -173,3 +173,9 @@ as PostgREST's `db_pre_request` on the `authenticator` role and refuses writes
 to `spatial_ref_sys`, `geometry_columns` and `geography_columns` through the
 API. If PostgREST ever reports that function missing, every API call fails:
 restore it, or run `alter role authenticator reset pgrst.db_pre_request; notify pgrst, 'reload config';`.
+
+## Nearry Premium (00069–00070)
+
+`00069`: `premium_entitlements` (written only by the `revenuecat-webhook` function with the service role; users read their own row), `has_premium()`, and `daily_usage` with triggers enforcing the free daily limits: 3 new plans and 10 join requests per India day (`daily_plan_limit` / `daily_join_limit`). Server and admin inserts are never limited. Apply after the Premium app build has reached users, or older builds show the raw limit text.
+
+`00070`: the Premium "Hosted by" filter. `hosts_matching_gender()` (security definer, Premium-only, honours blocks and visibility) and an optional `hostGender` key in `discover_posts` (rebuilt on 00067 plans anywhere). Without the key results are unchanged, so older builds and `nearby_post_cards` keep working. Separate from the abuse limits in 00056, which cap everyone (Premium included); the free-tier triggers run first, so free users see the upgrade prompt.

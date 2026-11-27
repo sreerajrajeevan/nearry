@@ -659,6 +659,28 @@ test("nearby plans query coordinates even when no registered venues exist and pr
   );
 });
 
+test("discovery pages send hostGender only when a host filter is set", async () => {
+  handler = () => ({ items: [], cursor: null });
+  await posts.listPostsPage({
+    nearby: { latitude: 10, longitude: 76, radiusM: 5000 },
+    hostGender: "female",
+  });
+  const pages = () =>
+    calls.filter((c) => c.url.pathname.endsWith("/discover_posts"));
+  const withFilter = pages()[pages().length - 1].body as {
+    p_filters: Record<string, unknown>;
+  };
+  assert.equal(withFilter.p_filters.hostGender, "female");
+  assert.equal(withFilter.p_filters.radiusM, 5000);
+  await posts.listPostsPage({
+    nearby: { latitude: 10, longitude: 76, radiusM: 5000 },
+  });
+  const plain = pages()[pages().length - 1].body as {
+    p_filters: Record<string, unknown>;
+  };
+  assert.ok(!("hostGender" in plain.p_filters));
+});
+
 test("publishing without a confirmed meeting place is rejected before any network request", async () => {
   const draft = {
     title: "Coffee together",

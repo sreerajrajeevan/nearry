@@ -103,15 +103,13 @@ test("business steps resume independently, and an incomplete business area retur
 });
 test("drafts never record terms consent, session tokens or completion flags", async () => {
   const f = fixture();
-  await f.store
-    .open("sree", "personal")
-    .save({
-      ...complete,
-      agreed: true,
-      termsAccepted: true,
-      onboardingCompleted: true,
-      accessToken: "not-a-real-token",
-    } as OnboardingDraft);
+  await f.store.open("sree", "personal").save({
+    ...complete,
+    agreed: true,
+    termsAccepted: true,
+    onboardingCompleted: true,
+    accessToken: "not-a-real-token",
+  } as OnboardingDraft);
   const raw = [...f.values.values()][0];
   for (const key of [
     "agreed",

@@ -78,6 +78,7 @@ jobs:
           # Crash reporting: on when the DSN variable is set (docs/crash-reporting.md).
           EXPO_PUBLIC_SENTRY_DSN: ${{ vars.EXPO_PUBLIC_SENTRY_DSN }}
           EXPO_PUBLIC_SENTRY_ENVIRONMENT: debug-apk
+          EXPO_PUBLIC_REVENUECAT_ANDROID_KEY: ${{ vars.EXPO_PUBLIC_REVENUECAT_ANDROID_KEY }}
           EXPO_PUBLIC_AROUND_YOU: ${{ inputs.around_you && '1' || '' }}
 
       - name: Upload APK artifact

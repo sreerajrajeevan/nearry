@@ -200,6 +200,8 @@ export type PostPageFilter = PostFilter &
     from?: string;
     until?: string;
     excludeCancelled?: boolean;
+    /** Premium "Hosted by" filter. Ignored in mock and demo mode. */
+    hostGender?: "female" | "male" | "other";
   };
 export async function listPostsPage(
   filter: PostPageFilter = {},

@@ -50,11 +50,13 @@ export const CLEAR_TABLES = [
   "media_cleanup_jobs",
   "removed_content",
   "admin_console_audit",
+  "daily_usage",
 ];
 const KEEP_TABLES = [
   "profiles",
   "admin_console_members",
   "place_search_usage",
+  "premium_entitlements",
   "spatial_ref_sys",
 ];
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

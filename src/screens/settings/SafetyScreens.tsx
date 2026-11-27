@@ -20,6 +20,7 @@ import { Button } from "../../components/Button";
 import { Input } from "../../components/Input";
 import { PageHeading } from "../../components/PageHeading";
 import { useAuth } from "../../store/AuthContext";
+import { usePremium } from "../../store/PremiumContext";
 import { useLiveQuery } from "../../hooks/useLiveQuery";
 import { colors, typography, weight } from "../../theme";
 import {
@@ -297,6 +298,7 @@ export function MyReportsScreen({ navigation }: { navigation: Nav }) {
 }
 export function DeleteAccountScreen({ navigation }: { navigation: Nav }) {
   const { demoMode, signOut, refreshProfile } = useAuth();
+  const isPremium = !!usePremium()?.isPremium;
   const [confirmation, setConfirmation] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -336,6 +338,27 @@ export function DeleteAccountScreen({ navigation }: { navigation: Nav }) {
       </Text>
       {demoMode && (
         <Text style={styles.copy}>The demo has no real account to delete.</Text>
+      )}
+      {isPremium && (
+        <View accessibilityRole="alert">
+          <Text style={styles.copy}>
+            Deleting your account doesn't cancel Nearry Premium. Cancel it in
+            Google Play first.
+          </Text>
+          <Button
+            title="Manage subscription"
+            variant="secondary"
+            onPress={() =>
+              void Linking.openURL(
+                "https://play.google.com/store/account/subscriptions?package=com.nearry.app",
+              ).catch(() =>
+                setError(
+                  "Couldn't open Google Play. Open it and cancel there.",
+                ),
+              )
+            }
+          />
+        </View>
       )}
       {!requested && (
         <Input

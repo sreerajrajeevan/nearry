@@ -116,6 +116,12 @@ before(async () => {
           /create function public.nearby_post_cards[\s\S]*?grant execute on function public.nearby_post_cards[^;]+;/,
           "",
         );
+      if (file === "00070_hosted_by_filter.sql")
+        // discover_posts (00052, PostGIS) is skipped here; PostGIS CI runs it.
+        sql = sql.replace(
+          /create or replace function public.discover_posts[\s\S]*?grant execute on function public.discover_posts[^;]+;/,
+          "",
+        );
       if (file === "00014_location.sql")
         sql = sql.replace(
           /create or replace function nearby_venues_with_distance[\s\S]*?grant execute on function nearby_venues_with_distance[^;]+;/,
@@ -209,6 +215,12 @@ before(async () => {
   await db.query(
     "insert into venues(business_id,name,category,area,verified_at) values($1,'Test Salon','Salon','Kakkanad',now())",
     [biz],
+  );
+  // Shared fixture users send many requests across the suite; the free daily
+  // limits are covered by dedicated tests that use fresh users.
+  await db.query(
+    "insert into premium_entitlements(user_id,expires_at) values($1,now()+interval '10 years'),($2,now()+interval '10 years'),($3,now()+interval '10 years')",
+    [b, c, outsider],
   );
 });
 after(async () => {
@@ -3696,6 +3708,11 @@ test(
   async () => {
     const owner = "00000000-0000-0000-0000-000000003110",
       stranger = "00000000-0000-0000-0000-000000003111";
+    // This host creates many plans across the suite; Premium lifts the daily limit.
+    await db.query(
+      "insert into premium_entitlements(user_id,expires_at) values($1,now()+interval '1 day') on conflict(user_id) do update set expires_at=excluded.expires_at",
+      [owner],
+    );
     const make = async (lat: number, lng: number) =>
       (
         await asUser(owner, async (tx) =>
@@ -3743,6 +3760,32 @@ test(
         "anon",
       ),
     );
+    // The Hosted by filter is Premium-gated even when nothing matches.
+    const hosted = (gender: string) =>
+      asUser(stranger, async (tx) =>
+        tx.query("select discover_posts($1::jsonb) page", [
+          JSON.stringify({
+            latitude: 10.007,
+            longitude: 76.363,
+            radiusM: 5000,
+            hostGender: gender,
+          }),
+        ]),
+      );
+    await assert.rejects(() => hosted("female"), /premium_required/);
+    await assert.rejects(() => hosted("women"), /valid discovery filters/);
+    await db.query("update profiles set gender='female' where id=$1", [owner]);
+    await db.query(
+      "insert into premium_entitlements(user_id,expires_at) values($1,now()+interval '1 day') on conflict(user_id) do update set expires_at=excluded.expires_at",
+      [stranger],
+    );
+    const ids = async (gender: string) =>
+      (await hosted(gender)).rows[0].page.items.map((i: any) => i.id);
+    assert.ok((await ids("female")).includes(near));
+    assert.ok(!(await ids("male")).includes(near));
+    await db.query("delete from premium_entitlements where user_id=$1", [
+      stranger,
+    ]);
     await asUser(stranger, async (tx) =>
       tx.query("select set_user_block($1,true)", [owner]),
     );
@@ -5505,6 +5548,244 @@ test("business venue: old service callers cannot approve without confirming the 
   );
 });
 
+async function planAs(id: string, title = "Evening walk") {
+  return asUser(id, (tx) =>
+    tx.query(
+      "insert into posts(author_id,title,description,starts_at,vacancies,venue_id) values($1,$2,'A friendly evening by the waterfront',now()+interval '4 hours',2,'10000000-0000-0000-0000-000000000032') returning id",
+      [id, title],
+    ),
+  );
+}
+
+test("free users can post 3 plans a day; the 4th is refused with daily_plan_limit", async () => {
+  const u = await corePersonal();
+  for (let i = 0; i < 3; i++) await planAs(u, `Plan ${i}`);
+  await assert.rejects(planAs(u, "Plan 4"), /daily_plan_limit/);
+});
+
+test("deleting a plan does not give the daily slot back", async () => {
+  const u = await corePersonal();
+  const ids: string[] = [];
+  for (let i = 0; i < 3; i++)
+    ids.push((await planAs(u, `Plan ${i}`)).rows[0].id);
+  await asUser(u, (tx) => tx.query("select delete_post($1)", [ids[0]]));
+  await assert.rejects(planAs(u, "Plan 4"), /daily_plan_limit/);
+});
+
+test("yesterday's usage does not count", async () => {
+  const u = await corePersonal();
+  for (let i = 0; i < 3; i++)
+    await db.query(
+      "insert into daily_usage(user_id,kind,day,ref_id) values($1,'plan',(now() at time zone 'Asia/Kolkata')::date - 1,gen_random_uuid())",
+      [u],
+    );
+  await planAs(u, "Today");
+});
+
+test("premium users are counted but never blocked", async () => {
+  const u = await corePersonal();
+  await db.query(
+    "insert into premium_entitlements(user_id,expires_at) values($1,now()+interval '7 days')",
+    [u],
+  );
+  for (let i = 0; i < 5; i++) await planAs(u, `Plan ${i}`);
+  assert.equal(
+    Number(
+      (
+        await db.query(
+          "select count(*) c from daily_usage where user_id=$1 and kind='plan'",
+          [u],
+        )
+      ).rows[0].c,
+    ),
+    5,
+  );
+  await db.query(
+    "update premium_entitlements set expires_at=now()-interval '1 minute' where user_id=$1",
+    [u],
+  );
+  await assert.rejects(planAs(u, "Lapsed"), /daily_plan_limit/);
+});
+
+test("10 join requests a day; re-sending the same request does not count", async () => {
+  const u = await corePersonal();
+  const posts: string[] = [];
+  for (let i = 0; i < 11; i++) posts.push(await post(5));
+  const reqs: string[] = [];
+  for (let i = 0; i < 10; i++) reqs.push(await request(u, posts[i]));
+  await asUser(u, (tx) =>
+    tx.query("select withdraw_join_request($1)", [reqs[0]]),
+  );
+  await request(u, posts[0]);
+  await assert.rejects(request(u, posts[10]), /daily_join_limit/);
+});
+
+test("server-side inserts are never limited", async () => {
+  const count = async () =>
+    Number(
+      (
+        await db.query("select count(*) c from daily_usage where user_id=$1", [
+          host,
+        ])
+      ).rows[0].c,
+    );
+  const before = await count();
+  for (let i = 0; i < 5; i++) await post();
+  assert.equal(await count(), before);
+});
+
+test("clients cannot read or write entitlements or usage of others", async () => {
+  const a = await corePersonal(),
+    other = await corePersonal();
+  await db.query(
+    "insert into premium_entitlements(user_id,expires_at) values($1,now()+interval '1 day'),($2,now()+interval '1 day')",
+    [a, other],
+  );
+  const rows = (
+    await asUser(a, (tx) =>
+      tx.query("select user_id from premium_entitlements"),
+    )
+  ).rows;
+  assert.deepEqual(
+    rows.map((r: any) => r.user_id),
+    [a],
+  );
+  await assert.rejects(
+    asUser(a, (tx) =>
+      tx.query(
+        "insert into premium_entitlements(user_id,expires_at) values($1,now()+interval '1 day')",
+        [a],
+      ),
+    ),
+    /permission denied|row-level security/,
+  );
+  await assert.rejects(
+    asUser(a, (tx) => tx.query("select has_premium($1)", [other])),
+    /permission denied/,
+  );
+  await assert.rejects(
+    asUser(a, (tx) => tx.query("select * from daily_usage")),
+    /permission denied/,
+  );
+});
+
+async function hostWithPlan(gender: string, status = "open") {
+  const u = await corePersonal();
+  await db.query("update profiles set gender=$2 where id=$1", [u, gender]);
+  await db.query(
+    `insert into posts(author_id,title,description,starts_at,vacancies,venue_id,status) values($1,'Hosted plan','Hosted by filter fixture',now()+interval '4 hours',2,'10000000-0000-0000-0000-000000000032',$2)`,
+    [u, status],
+  );
+  return u;
+}
+async function premiumUser() {
+  const u = await corePersonal();
+  await db.query(
+    "insert into premium_entitlements(user_id,expires_at) values($1,now()+interval '7 days')",
+    [u],
+  );
+  return u;
+}
+
+test("hosted-by filter refuses free users with premium_required", async () => {
+  const u = await corePersonal();
+  await assert.rejects(
+    asUser(u, (tx) =>
+      tx.query("select * from hosts_matching_gender('female')"),
+    ),
+    /premium_required/,
+  );
+});
+
+test("hosted-by filter returns only open plans' hosts of that gender", async () => {
+  const a = await hostWithPlan("female"),
+    bMale = await hostWithPlan("male"),
+    cClosed = await hostWithPlan("female", "closed");
+  const viewer = await premiumUser();
+  const ids = async (g: string) =>
+    (
+      await asUser(viewer, (tx) =>
+        tx.query("select hosts_matching_gender($1) id", [g]),
+      )
+    ).rows.map((r: any) => r.id);
+  const female = await ids("female");
+  assert.ok(female.includes(a));
+  assert.ok(!female.includes(bMale));
+  assert.ok(!female.includes(cClosed));
+  assert.ok((await ids("male")).includes(bMale));
+  assert.ok(!(await ids("other")).includes(a));
+});
+
+test("hosted-by filter rejects unknown values", async () => {
+  const viewer = await premiumUser();
+  await assert.rejects(
+    asUser(viewer, (tx) =>
+      tx.query("select * from hosts_matching_gender('women')"),
+    ),
+    /invalid host filter/,
+  );
+});
+
+test("gender stays unreadable to other users", async () => {
+  const a = await hostWithPlan("female");
+  const x = await premiumUser();
+  let rows: any[] = [];
+  try {
+    rows = (
+      await asUser(x, (tx) =>
+        tx.query("select gender from profiles where id=$1", [a]),
+      )
+    ).rows;
+  } catch {
+    return;
+  }
+  assert.ok(rows.every((r) => r.gender == null));
+});
+
+test("hosted-by filter hides hosts who blocked the caller, suspended hosts and removed plans", async () => {
+  const visible = await hostWithPlan("female"),
+    blocker = await hostWithPlan("female"),
+    suspended = await hostWithPlan("female"),
+    removed = await hostWithPlan("female");
+  const viewer = await premiumUser();
+  await asUser(blocker, (tx) =>
+    tx.query("select set_user_block($1,true)", [viewer]),
+  );
+  await db.query("update profiles set suspended_at=now() where id=$1", [
+    suspended,
+  ]);
+  await db.query(
+    "insert into removed_content(target_kind,target_id) select 'post',id from posts where author_id=$1",
+    [removed],
+  );
+  const female = (
+    await asUser(viewer, (tx) =>
+      tx.query("select hosts_matching_gender('female') id"),
+    )
+  ).rows.map((r: any) => r.id);
+  assert.ok(female.includes(visible));
+  assert.ok(!female.includes(blocker));
+  assert.ok(!female.includes(suspended));
+  assert.ok(!female.includes(removed));
+});
+
+test("deleting and re-inserting a plan with the same id still counts", async () => {
+  const u = await corePersonal();
+  const first = (await planAs(u, "Plan 0")).rows[0].id;
+  await planAs(u, "Plan 1");
+  await planAs(u, "Plan 2");
+  await asUser(u, (tx) => tx.query("select delete_post($1)", [first]));
+  await assert.rejects(
+    asUser(u, (tx) =>
+      tx.query(
+        "insert into posts(id,author_id,title,description,starts_at,vacancies,venue_id) values($1,$2,'Again','A friendly evening by the waterfront',now()+interval '4 hours',2,'10000000-0000-0000-0000-000000000032')",
+        [first, u],
+      ),
+    ),
+    /daily_plan_limit/,
+  );
+});
+
 test("business chats carry the business name; message notices use it", async () => {
   const business = await auditBusiness(),
     customer = await corePersonal();
@@ -6633,13 +6914,21 @@ test("spam limits: plans per day, join requests per hour, messages per minute, o
         [who, title],
       ),
     );
-  // Plans: 10 a day for one person.
+  // Plans: 10 a day for one person. Premium lifts the free 3-a-day limit
+  // (00069) but never these spam caps.
+  const premium = (id: string) =>
+    db.query(
+      "insert into premium_entitlements(user_id,expires_at) values($1,now()+interval '1 day')",
+      [id],
+    );
   const poster = await corePersonal();
+  await premium(poster);
   for (let i = 0; i < 10; i++) await insertPlan(poster);
   await assert.rejects(insertPlan(poster), /up to 10 plans a day/);
 
   // Join requests: 40 an hour for one person.
   const joiner = await corePersonal();
+  await premium(joiner);
   const hostIds: string[] = [];
   for (let i = 0; i < 41; i++)
     hostIds.push(

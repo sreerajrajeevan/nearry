@@ -65,6 +65,8 @@ import { nearbyVenues, listVenues } from "../../services/venues";
 import { NeedPost, Venue, Offer } from "../../services/mappers";
 import { DiscoveryCategory, venueCategory } from "../../utils/discovery";
 import { useAuth } from "../../store/AuthContext";
+import { usePremium } from "../../store/PremiumContext";
+import { premiumBlock } from "../../services/premium";
 import { PersonalTabNav, PersonalTabParamList } from "../../navigation/types";
 import { PlanFilterSheet } from "../../components/PlanFilterSheet";
 import { Icon } from "../../components/Icon";
@@ -74,6 +76,7 @@ import {
   planDistance,
   DEFAULT_PLAN_OPTIONS,
   PLAN_SORT_LABELS,
+  HOST_GENDER_LABELS,
   PLAN_AUDIENCE_LABELS,
   PlanDateFilter,
   PlanOptions,
@@ -155,6 +158,9 @@ export function NearbyScreen() {
     ...DEFAULT_PLAN_OPTIONS,
   });
   const { category, freeOnly } = options;
+  const hostGender = options.hostGender;
+  const premium = usePremium();
+  const premiumStatus = premium?.snapshot.status;
   const [dateFilter, setDateFilter] = useState<PlanDateFilter>("all");
   const [dateMenuOpen, setDateMenuOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -338,6 +344,8 @@ export function NearbyScreen() {
     ...(point
       ? { nearby: { ...point, radiusM: (km ?? MAX_HOME_DISTANCE) * 1000 } }
       : {}),
+    // Premium; only applied with an area (the reset effect clears it otherwise).
+    ...(point && hostGender !== "all" ? { hostGender } : {}),
   });
   const fartherFilter = (): PostPageFilter => ({
     ...pageFilter(null),
@@ -428,8 +436,17 @@ export function NearbyScreen() {
         setState("ready");
         if (openings.status === "rejected")
           setPageError("Offers could not refresh. Pull down to try again.");
-      } catch {
-        if (request.current === ticket) {
+      } catch (e) {
+        if (request.current !== ticket) return;
+        // The server says the filter is Premium-only: drop it and reload.
+        if (
+          hostGender !== "all" &&
+          premiumBlock(e instanceof Error ? e.message : "") === "filter"
+        ) {
+          setOptions((o) => ({ ...o, hostGender: "all" }));
+          return;
+        }
+        {
           if (loadedScope.current === queryScope)
             setPageError(
               "Could not refresh nearby plans. Pull down to try again.",
@@ -473,6 +490,17 @@ export function NearbyScreen() {
       setLoadingMore(false);
     }
   };
+
+  // Premium ended: the filter no longer applies. Never while still loading,
+  // or a Premium user would lose it on every app start.
+  // Also cleared without a location: the filter is only applied with a point.
+  useEffect(() => {
+    if (
+      hostGender !== "all" &&
+      (premiumStatus === "free" || premiumStatus === "unavailable" || !point)
+    )
+      setOptions((o) => ({ ...o, hostGender: "all" }));
+  }, [hostGender, premiumStatus, point]);
 
   // A stable function, so it can sit in the focus effect's dependencies.
   const refreshMyRequests = useMyRequests()?.refresh;
@@ -570,7 +598,10 @@ export function NearbyScreen() {
   const headerLabel =
     shownKm != null ? `${placeName} · ${shownKm} km` : placeName;
   const sheetFilters =
-    freeOnly || options.audience !== "all" || options.sort !== "soonest";
+    freeOnly ||
+    options.audience !== "all" ||
+    options.sort !== "soonest" ||
+    hostGender !== "all";
   const hasFilters = !!category || dateFilter !== "all" || sheetFilters;
   const clearFilters = () => {
     setOptions({ ...DEFAULT_PLAN_OPTIONS });
@@ -606,6 +637,15 @@ export function NearbyScreen() {
             key: "audience",
             label: PLAN_AUDIENCE_LABELS[options.audience],
             remove: () => setOptions((o) => ({ ...o, audience: "all" })),
+          },
+        ]
+      : []),
+    ...(hostGender !== "all"
+      ? [
+          {
+            key: "host",
+            label: `Hosted by: ${HOST_GENDER_LABELS[hostGender]}`,
+            remove: () => setOptions((o) => ({ ...o, hostGender: "all" })),
           },
         ]
       : []),
