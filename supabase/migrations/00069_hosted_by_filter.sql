@@ -1,10 +1,10 @@
--- 00068 — Nearry Premium: server-side "Hosted by" filter.
+-- 00069 — Nearry Premium: server-side "Hosted by" filter.
 -- Gender is never readable across profiles; the filter runs only inside this
 -- security-definer function, which returns host ids (open, upcoming plans
 -- only, honouring blocks, suspended accounts and removed plans) and is
--- Premium-gated. discover_posts (00052) accepts an optional "hostGender"
+-- Premium-gated. discover_posts (00052, 00067) accepts an optional "hostGender"
 -- filter key; without it results are unchanged, so older builds and the
--- nearby_post_cards wrapper keep working. Requires 00052 and 00067.
+-- nearby_post_cards wrapper keep working. Requires 00067 and 00068.
 begin;
 
 create function public.hosts_matching_gender(p_gender text) returns setof uuid as $$
@@ -26,10 +26,10 @@ $$ language plpgsql stable security definer set search_path = public, pg_temp;
 revoke all on function public.hosts_matching_gender(text) from public, anon;
 grant execute on function public.hosts_matching_gender(text) to authenticated;
 
--- Same body as 00052, plus the optional hostGender filter ($7).
+-- Same body as 00067 (plans anywhere), plus the optional hostGender filter ($7).
 create or replace function public.discover_posts(p_filters jsonb default '{}',p_cursor jsonb default null,p_limit int default 30) returns jsonb as $fn$
 declare f jsonb:=coalesce(p_filters,'{}'); origin geography; radius double precision; lat double precision; lng double precision;
- lim int:=least(80,greatest(1,coalesce(p_limit,30))); sort text:=coalesce(f->>'sort','soonest'); ordering text; cursor_test text; result jsonb; hosts uuid[];
+ lim int:=least(80,greatest(1,coalesce(p_limit,30))); sort text:=coalesce(f->>'sort','soonest'); wide boolean; ordering text; cursor_test text; result jsonb; hosts uuid[];
 begin
  if not account_active(auth.uid()) then raise exception 'Account unavailable';end if;
  if jsonb_typeof(f)<>'object' or octet_length(f::text)>4000 or length(coalesce(f->>'search',''))>120
@@ -40,10 +40,12 @@ begin
  -- Premium "Hosted by": raises premium_required for free users, even in an empty area.
  if f->>'hostGender' is not null then hosts:=array(select public.hosts_matching_gender(f->>'hostGender'));end if;
  lat=(f->>'latitude')::double precision;lng=(f->>'longitude')::double precision;
- if (lat is null)<>(lng is null) then raise exception 'Choose a valid search area';end if;
+ wide=coalesce((f->>'anyDistance')::boolean,false);
+ if (lat is null)<>(lng is null) or wide and lat is null then raise exception 'Choose a valid search area';end if;
  if lat is not null then
-  radius=coalesce((f->>'radiusM')::double precision,5000);
-  if not(lat between -90 and 90 and lng between -180 and 180 and radius between 100 and 50000) then raise exception 'Choose a valid area and distance';end if;
+  -- anyDistance: no distance limit, plans anywhere (with a location) by distance.
+  radius=case when wide then null else coalesce((f->>'radiusM')::double precision,5000) end;
+  if not(lat between -90 and 90 and lng between -180 and 180 and (wide or radius between 100 and 50000)) then raise exception 'Choose a valid area and distance';end if;
   origin=st_setsrid(st_makepoint(lng,lat),4326)::geography;
  end if;
  if sort='nearest' and origin is null then sort='soonest';end if;
@@ -58,7 +60,7 @@ begin
   from public.posts p left join public.post_locations loc on loc.post_id=p.id
   where (coalesce($1->>''status'',''open'')=''all'' or p.status=coalesce($1->>''status'',''open''))
    and (coalesce($1->>''status'',''open'')<>''open'' or p.starts_at>now() and (p.expires_at is null or p.expires_at>now()))
-   and ($4 is null or st_dwithin(loc.point,$4,$5))
+   and ($4 is null or ($5 is null and loc.point is not null) or st_dwithin(loc.point,$4,$5))
    and (not coalesce(($1->>''excludeCancelled'')::boolean,false) or p.status<>''cancelled'')
    and ($1->>''authorId'' is null or p.author_id=($1->>''authorId'')::uuid)
    and ($1->>''excludeAuthorId'' is null or p.author_id<>($1->>''excludeAuthorId'')::uuid)

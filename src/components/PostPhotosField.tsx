@@ -12,6 +12,8 @@ import { PhotoCropper } from "./PhotoCropper";
 import { Icon } from "./Icon";
 import { pickPhoto } from "../services/photos";
 import { EditablePostPhoto } from "../services/postPhotos";
+import type { UploadStatus } from "../services/photoUploads";
+import { LoadingDots } from "./LoadingDots";
 import { colors, radius, typography, weight } from "../theme";
 
 /**
@@ -22,10 +24,13 @@ export function PostPhotosField({
   photos,
   onChange,
   disabled = false,
+  uploadStatus,
 }: {
   photos: EditablePostPhoto[];
   onChange: (photos: EditablePostPhoto[]) => void;
   disabled?: boolean;
+  /** Background upload of the cover, started as soon as it's picked. */
+  uploadStatus?: UploadStatus;
 }) {
   const [editing, setEditing] = useState<string | null>(null);
   const picking = useRef(false);
@@ -57,6 +62,36 @@ export function PostPhotosField({
             resizeMode="cover"
             accessibilityLabel="Your plan’s cover photo"
           />
+          {uploadStatus && (
+            <View
+              style={styles.status}
+              accessibilityLiveRegion="polite"
+              accessibilityLabel={
+                uploadStatus === "done"
+                  ? "Photo uploaded"
+                  : uploadStatus === "failed"
+                    ? "Photo will upload when you publish"
+                    : "Uploading photo"
+              }
+            >
+              {uploadStatus === "uploading" ? (
+                <LoadingDots color="#FFFFFF" />
+              ) : (
+                <Icon
+                  name={uploadStatus === "done" ? "check" : "clock"}
+                  size={13}
+                  color={uploadStatus === "done" ? colors.amber : "#FFFFFF"}
+                />
+              )}
+              <Text style={styles.statusText}>
+                {uploadStatus === "done"
+                  ? "Uploaded"
+                  : uploadStatus === "failed"
+                    ? "Will upload when you publish"
+                    : "Uploading"}
+              </Text>
+            </View>
+          )}
           <View style={styles.actions}>
             <TouchableOpacity
               accessibilityRole="button"
@@ -134,6 +169,19 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     backgroundColor: "rgba(3,7,18,0.72)",
   },
+  status: {
+    position: "absolute",
+    left: 10,
+    top: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    height: 30,
+    paddingHorizontal: 10,
+    borderRadius: 15,
+    backgroundColor: "rgba(3,7,18,0.72)",
+  },
+  statusText: { fontSize: 12, ...weight("700"), color: "#FFFFFF" },
   iconAction: { width: 44, paddingHorizontal: 0, justifyContent: "center" },
   actionText: { fontSize: 13, ...weight("700"), color: "#FFFFFF" },
   empty: {

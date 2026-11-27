@@ -94,7 +94,12 @@ before(async () => {
     .filter((f) => f.endsWith(".sql"))
     .sort();
   for (const file of files) {
-    if (!external && file === "00052_discovery_pagination.sql") continue; // Spatial migration is exercised unchanged by PostGIS CI.
+    if (
+      !external &&
+      (file === "00052_discovery_pagination.sql" ||
+        file === "00067_plans_anywhere.sql")
+    )
+      continue; // Spatial migrations are exercised unchanged by PostGIS CI.
     let sql = await readFile(`supabase/migrations/${file}`, "utf8");
     // Only PostGIS is stubbed; all production authorization/functions/triggers run unchanged.
     if (!external) {
@@ -111,7 +116,7 @@ before(async () => {
           /create function public.nearby_post_cards[\s\S]*?grant execute on function public.nearby_post_cards[^;]+;/,
           "",
         );
-      if (file === "00068_hosted_by_filter.sql")
+      if (file === "00069_hosted_by_filter.sql")
         // discover_posts (00052, PostGIS) is skipped here; PostGIS CI runs it.
         sql = sql.replace(
           /create or replace function public.discover_posts[\s\S]*?grant execute on function public.discover_posts[^;]+;/,
@@ -6910,7 +6915,7 @@ test("spam limits: plans per day, join requests per hour, messages per minute, o
       ),
     );
   // Plans: 10 a day for one person. Premium lifts the free 3-a-day limit
-  // (00067) but never these spam caps.
+  // (00068) but never these spam caps.
   const premium = (id: string) =>
     db.query(
       "insert into premium_entitlements(user_id,expires_at) values($1,now()+interval '1 day')",
@@ -7784,3 +7789,65 @@ test("plans around you: blocked people, the wrong gender and stopped sharing get
     /Only the host/,
   );
 });
+
+test(
+  "discovery: with nothing nearby, plans anywhere come back nearest first",
+  { skip: !process.env.TEST_DATABASE_URL },
+  async () => {
+    const owner = await corePersonal(),
+      viewer = await corePersonal();
+    try {
+      // Kochi is the viewer's area; plans are 30 km, 120 km and 300 km away.
+      await db.query(
+        `insert into posts(author_id,title,description,starts_at,vacancies,venue_name,location_lat,location_lng,location_source)
+         select $1,'Far plan '||km,'Somewhere else in Kerala',now()+interval '1 day',3,'Somewhere',9.9312+km/111.0,76.2673,'manual'
+         from unnest(array[300,30,120]) km`,
+        [owner],
+      );
+      const page = (
+        f: Record<string, unknown>,
+        cursor: unknown = null,
+        limit = 30,
+      ) =>
+        asUser(viewer, (tx) =>
+          tx.query("select discover_posts($1,$2,$3) page", [
+            { latitude: 9.9312, longitude: 76.2673, authorId: owner, ...f },
+            cursor,
+            limit,
+          ]),
+        ).then((r) => r.rows[0].page);
+      const titles = (p: any) => p.items.map((x: any) => x.title);
+      // Within 50 km only the 30 km plan shows.
+      assert.deepEqual(
+        titles(await page({ radiusM: 50000, sort: "nearest" })),
+        ["Far plan 30"],
+      );
+      // Anywhere: every plan, nearest first, with its distance; pages continue in order.
+      const all = await page({ anyDistance: true, sort: "nearest" });
+      assert.deepEqual(titles(all), [
+        "Far plan 30",
+        "Far plan 120",
+        "Far plan 300",
+      ]);
+      assert.ok(all.items.every((x: any) => x.distance_km > 25));
+      const first = await page({ anyDistance: true, sort: "nearest" }, null, 2);
+      const rest = await page(
+        { anyDistance: true, sort: "nearest" },
+        first.cursor,
+        2,
+      );
+      assert.deepEqual([...titles(first), ...titles(rest)], titles(all));
+      // A search area is required to sort by distance.
+      await assert.rejects(
+        asUser(viewer, (tx) =>
+          tx.query("select discover_posts($1,null,30)", [
+            { anyDistance: true, sort: "nearest" },
+          ]),
+        ),
+        /valid search area/,
+      );
+    } finally {
+      await db.query("delete from posts where author_id=$1", [owner]);
+    }
+  },
+);

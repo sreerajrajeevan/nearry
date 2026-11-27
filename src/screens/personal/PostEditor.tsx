@@ -6,7 +6,7 @@ import {
 import { BackButton } from "../../components/BackButton";
 import { Alert } from "../../services/appAlert";
 import { ActivityArt } from "../../components/ActivityArt";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { urgentAllowed } from "../../utils/urgentPlan";
 import { shareHereAllowed } from "../../utils/aroundYou";
 import { aroundYouAvailable, startSharingPlan } from "../../services/aroundYou";
@@ -39,7 +39,6 @@ import {
 import { PostPhotosField } from "../../components/PostPhotosField";
 import { LoadingState } from "../../components/LoadingState";
 import { postState } from "../../utils/flowState";
-import { PageHeading } from "../../components/PageHeading";
 import { Screen } from "../../components/Screen";
 import { Input } from "../../components/Input";
 import { Button } from "../../components/Button";
@@ -56,6 +55,13 @@ import {
 import { NeedPost } from "../../services/mappers";
 import { validatePostDraft } from "../../utils/validation";
 import { uploadPhoto } from "../../services/photos";
+import { removeUploadedPhoto } from "../../services/photoStorage";
+import { createUploadQueue } from "../../services/photoUploads";
+import {
+  PublishingOverlay,
+  type PublishPhase,
+} from "../../components/PublishingOverlay";
+import { useToast } from "../../store/ToastContext";
 import {
   EditablePostPhoto,
   listPostPhotos,
@@ -180,7 +186,41 @@ export function PostEditor({
     "male" | "female" | "any" | undefined
   >("any");
   const [photos, setPhotos] = useState<EditablePostPhoto[]>([]);
-  const [savedPostId, setSavedPostId] = useState<string | null>(null);
+  const [phase, setPhase] = useState<PublishPhase | null>(null);
+  const toast = useToast();
+  // Photos upload in the background as soon as they're picked.
+  const authorIdRef = useRef("demo-user");
+  authorIdRef.current = profile?.id ?? "demo-user";
+  const uploads = useMemo(
+    () =>
+      createUploadQueue(
+        (uri) => uploadPhoto(authorIdRef.current, uri, "posts"),
+        removeUploadedPhoto,
+      ),
+    [],
+  );
+  const [, uploadsChanged] = useReducer((n: number) => n + 1, 0);
+  useEffect(() => uploads.subscribe(uploadsChanged), [uploads]);
+  const savedPhotoUrls = useRef<string[]>([]);
+  const photosRef = useRef<EditablePostPhoto[]>([]);
+  photosRef.current = photos;
+  const published = useRef(false);
+  useEffect(
+    () => () => {
+      // Leaving without publishing: delete photos uploaded in this visit.
+      if (!published.current)
+        for (const photo of photosRef.current)
+          if (!photo.uploadedUrl) uploads.cancel(photo.uri);
+    },
+    [uploads],
+  );
+  const changePhotos = (next: EditablePostPhoto[]) => {
+    const kept = new Set(next.map((photo) => photo.uri));
+    for (const photo of photos)
+      if (!photo.uploadedUrl && !kept.has(photo.uri)) uploads.cancel(photo.uri);
+    for (const photo of next) if (!photo.uploadedUrl) uploads.start(photo.uri);
+    setPhotos(next);
+  };
   const publishLock = useRef(false);
 
   const [tags, setTags] = useState<string[]>([]);
@@ -255,6 +295,7 @@ export function PostEditor({
             name: post.venueName ?? "",
             location: post.location,
           });
+        savedPhotoUrls.current = savedPhotos.map((photo) => photo.photo_url);
         setPhotos(
           savedPhotos.map((photo) => ({
             uri: photo.photo_url,
@@ -318,7 +359,6 @@ export function PostEditor({
       setAdvanced(false);
       setGenderPref("any");
       setPhotos([]);
-      setSavedPostId(null);
       setFormError("");
     }
     haptic("success");
@@ -358,7 +398,7 @@ export function PostEditor({
     const flag = (message: string) => {
       problems.push(message);
     };
-    if (!savedPostId && !activity) {
+    if (!activity) {
       flag("Choose what you’re planning.");
     }
     const preferences: PlanDetails = {
@@ -375,21 +415,20 @@ export function PostEditor({
         : {}),
     };
     const preferenceError = planPreferencesError(preferences);
-    if (!savedPostId && preferenceError) {
+    if (preferenceError) {
       flag(preferenceError);
     }
     if (
-      !savedPostId &&
-      (unfinishedLocation ||
-        !hasPostMeetingPlace({
-          venueId: venue?.venueId,
-          venueName: venue?.name,
-          location: venue?.location,
-        }))
+      unfinishedLocation ||
+      !hasPostMeetingPlace({
+        venueId: venue?.venueId,
+        venueName: venue?.name,
+        location: venue?.location,
+      })
     ) {
       flag(requiredMeetingPlaceMessage);
     }
-    if (!savedPostId && (unfinishedLocation || (venue && !venue.name.trim()))) {
+    if (unfinishedLocation || (venue && !venue.name.trim())) {
       flag(
         "Choose a meeting place or add its coordinates, or clear the field to leave it out.",
       );
@@ -409,16 +448,14 @@ export function PostEditor({
     ) {
       flag("Cost must be a non-negative number, or leave it empty.");
     }
-    const err = savedPostId
-      ? null
-      : validatePostDraft({
-          title,
-          description,
-          startsAt,
-          expiresAt,
-          vacancies,
-          costCents,
-        });
+    const err = validatePostDraft({
+      title,
+      description,
+      startsAt,
+      expiresAt,
+      vacancies,
+      costCents,
+    });
     if (err) flag(err);
     if (original && vacancies < original.joinedCount) {
       flag(
@@ -435,67 +472,52 @@ export function PostEditor({
     if (!startsAt) return;
     publishLock.current = true;
     setPublishing(true);
+    setPhase("working");
+    const began = Date.now();
+    const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+    // Photos keep uploading while the plan saves.
+    const uploaded = uploads.settle(
+      photos.filter((photo) => !photo.uploadedUrl).map((photo) => photo.uri),
+    );
+    let id: string;
+    const details = {
+      planDetails: preferences,
+      title: title.trim(),
+      description: description.trim(),
+      venueId: venue?.venueId || undefined,
+      location: venue?.location,
+      venueName: venue?.name || undefined,
+      startsAt: startsAt.toISOString(),
+      expiresAt: expiresAt?.toISOString(),
+      vacancies,
+      costCents,
+      tags,
+      genderPreference: genderPref ?? ("any" as const),
+    };
     try {
       const authorId = profile?.id ?? "demo-user";
-      const details = {
-        planDetails: preferences,
-        title: title.trim(),
-        description: description.trim(),
-        venueId: venue?.venueId || undefined,
-        location: venue?.location,
-        venueName: venue?.name || undefined,
-        startsAt: startsAt.toISOString(),
-        expiresAt: expiresAt?.toISOString(),
-        vacancies,
-        costCents,
-        tags,
-        genderPreference: genderPref ?? ("any" as const),
-      };
-      const id =
-        savedPostId ??
-        (postId
-          ? (
-              await updatePost(postId, {
-                ...details,
-                venueId: venue?.venueId || null,
-                location: venue?.location ?? null,
-                venueName: venue?.name || null,
-                expiresAt: details.expiresAt ?? null,
-                costCents: costCents ?? null,
-              })
-            ).id
-          : (
-              await createPost(authorId, {
-                ...details,
-                urgent: urgent && urgentAllowed(startsAt),
-                autoAccept,
-              })
-            ).id);
-      setSavedPostId(id);
-      const result = await savePhotoSelection(id, photos, (uri) =>
-        uploadPhoto(authorId, uri, "posts"),
-      );
-      setPhotos(result.photos);
-      if (result.error) {
-        setFormError(
-          `Your ${postId ? "changes are" : "post is"} saved. Photo changes still need saving. ${result.error}`,
-        );
-        return;
-      }
-      if (!postId && shareHere && shareHereAllowed(startsAt)) {
-        try {
-          await startSharingPlan(id, details.title);
-        } catch (e) {
-          Alert.alert(
-            "Your plan is posted",
-            `It isn't being shared right here yet. ${
-              e instanceof Error ? e.message : ""
-            } You can try again from the plan page.`.trim(),
-          );
-        }
-      }
-      openSavedPost(id);
+      id = postId
+        ? (
+            await updatePost(postId, {
+              ...details,
+              venueId: venue?.venueId || null,
+              location: venue?.location ?? null,
+              venueName: venue?.name || null,
+              expiresAt: details.expiresAt ?? null,
+              costCents: costCents ?? null,
+            })
+          ).id
+        : (
+            await createPost(authorId, {
+              ...details,
+              urgent: urgent && urgentAllowed(startsAt),
+              autoAccept,
+            })
+          ).id;
     } catch (e) {
+      setPhase(null);
+      publishLock.current = false;
+      setPublishing(false);
       const reason = premiumBlock(e instanceof Error ? e.message : "");
       if (reason && premium) {
         premium.showUpgrade(reason);
@@ -505,10 +527,54 @@ export function PostEditor({
         postId ? "Could not save changes" : "Failed to publish",
         e instanceof Error ? e.message : "Please try again.",
       );
-    } finally {
-      publishLock.current = false;
-      setPublishing(false);
+      return;
     }
+    published.current = true;
+    // The plan is saved: from here nothing stops it opening.
+    let photoMissed = false;
+    const urls = await uploaded;
+    const ready = photos.map((photo) => ({
+      ...photo,
+      uploadedUrl: photo.uploadedUrl ?? urls.get(photo.uri) ?? undefined,
+    }));
+    const changed =
+      ready.map((photo) => photo.uploadedUrl).join("|") !==
+      savedPhotoUrls.current.join("|");
+    if (ready.some((photo) => !photo.uploadedUrl)) photoMissed = true;
+    else if (changed) {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const result = await savePhotoSelection(id, ready, () =>
+          Promise.reject(new Error("Photo not uploaded")),
+        );
+        if (!result.error) break;
+        if (attempt === 2) photoMissed = true;
+        else await wait(1000 * (attempt + 1));
+      }
+    }
+    let shareProblem = "";
+    if (!postId && shareHere && shareHereAllowed(startsAt)) {
+      try {
+        await startSharingPlan(id, details.title);
+      } catch (e) {
+        shareProblem = e instanceof Error ? e.message : "Please try again.";
+      }
+    }
+    await wait(Math.max(0, 700 - (Date.now() - began)));
+    setPhase("done");
+    await wait(1100);
+    setPhase(null);
+    publishLock.current = false;
+    setPublishing(false);
+    openSavedPost(id);
+    if (photoMissed)
+      toast(
+        postId
+          ? "Changes saved, but the new photo didn't upload. Try it again from Edit."
+          : "Your plan is live, but the photo didn't upload. Add it from Edit.",
+        "image",
+      );
+    else if (shareProblem)
+      toast(`Not shared right here yet. ${shareProblem}`, "radio");
   };
 
   if (loading)
@@ -525,35 +591,6 @@ export function PostEditor({
         {onCancel && <Button title="Back" variant="ghost" onPress={onCancel} />}
       </Screen>
     );
-  if (savedPostId)
-    return (
-      <Screen scroll keyboard>
-        <PageHeading
-          title="Finish your photos"
-          greeting={postId ? "Your changes are saved." : "Your plan is saved."}
-        />
-        <Text accessibilityRole="alert" style={styles.formError}>
-          {formError}
-        </Text>
-        <PostPhotosField
-          photos={photos}
-          onChange={setPhotos}
-          disabled={publishing}
-        />
-        <Button
-          title="Retry photo changes"
-          loading={publishing}
-          onPress={() => void handlePublish()}
-        />
-        <Button
-          title="Keep saved post without these photo changes"
-          variant="ghost"
-          disabled={publishing}
-          onPress={() => openSavedPost(savedPostId)}
-        />
-      </Screen>
-    );
-
   const days = composerDays();
   const missing = [
     !activity && "activity",
@@ -620,6 +657,7 @@ export function PostEditor({
   };
   return (
     <Screen keyboard>
+      <PublishingOverlay phase={phase} editing={!!postId} />
       <ScrollView
         ref={scrollRef}
         style={{ flex: 1 }}
@@ -752,7 +790,12 @@ export function PostEditor({
           </Text>
           <PostPhotosField
             photos={photos}
-            onChange={setPhotos}
+            onChange={changePhotos}
+            uploadStatus={
+              photos[0] && !photos[0].uploadedUrl
+                ? uploads.status(photos[0].uri)
+                : undefined
+            }
             disabled={publishing}
           />
         </PlanSection>

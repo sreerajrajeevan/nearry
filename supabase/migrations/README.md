@@ -151,8 +151,16 @@ them for the phone to broadcast; `stop_plan_beacon` stops it;
 nearby into plan ids, honouring blocks, the plan's gender and age settings and
 stopped sharing. See `docs/plans-around-you.md`.
 
-## Nearry Premium (00067–00068)
+## Plans anywhere (00067)
 
-`00067`: `premium_entitlements` (written only by the `revenuecat-webhook` function with the service role; users read their own row), `has_premium()`, and `daily_usage` with triggers enforcing the free daily limits: 3 new plans and 10 join requests per India day (`daily_plan_limit` / `daily_join_limit`). Server and admin inserts are never limited. Apply after the Premium app build has reached users, or older builds show the raw limit text.
+`discover_posts` accepts `anyDistance: true` with a search point: no distance
+limit, only plans that have a location, nearest first, with the usual filters
+and paging. Discover uses it when nothing is within the widest distance, so the
+feed shows the nearest plans anywhere under a "Nothing near you yet" note
+instead of an empty screen.
 
-`00068`: the Premium "Hosted by" filter. `hosts_matching_gender()` (security definer, Premium-only, honours blocks and visibility) and an optional `hostGender` key in `discover_posts` (requires 00052). Without the key results are unchanged, so older builds and `nearby_post_cards` keep working. Separate from the abuse limits in 00056, which cap everyone (Premium included); the free-tier triggers run first, so free users see the upgrade prompt.
+## Nearry Premium (00068–00069)
+
+`00068`: `premium_entitlements` (written only by the `revenuecat-webhook` function with the service role; users read their own row), `has_premium()`, and `daily_usage` with triggers enforcing the free daily limits: 3 new plans and 10 join requests per India day (`daily_plan_limit` / `daily_join_limit`). Server and admin inserts are never limited. Apply after the Premium app build has reached users, or older builds show the raw limit text.
+
+`00069`: the Premium "Hosted by" filter. `hosts_matching_gender()` (security definer, Premium-only, honours blocks and visibility) and an optional `hostGender` key in `discover_posts` (rebuilt on 00067 plans anywhere). Without the key results are unchanged, so older builds and `nearby_post_cards` keep working. Separate from the abuse limits in 00056, which cap everyone (Premium included); the free-tier triggers run first, so free users see the upgrade prompt.
