@@ -46,3 +46,23 @@ export async function uploadPhotoBytes(
   }
   return bucket.getPublicUrl(path).data.publicUrl;
 }
+
+/** Storage paths (photo and its thumbnail) behind a public photo URL. */
+export function uploadedPhotoPaths(url: string): string[] {
+  const match = /\/storage\/v1\/object\/public\/photos\/([^?#]+)$/.exec(url);
+  if (!match) return [];
+  const path = decodeURIComponent(match[1]);
+  return /-full\.jpg$/.test(path)
+    ? [path, path.replace(/-full\.jpg$/, "-thumb.jpg")]
+    : [path];
+}
+
+/**
+ * Delete a photo the host uploaded but replaced or removed before saving.
+ * Best effort: the daily cleanup removes anything left unattached.
+ */
+export async function removeUploadedPhoto(url: string): Promise<void> {
+  const paths = uploadedPhotoPaths(url);
+  if (!paths.length) return;
+  await requireSupabase().storage.from("photos").remove(paths);
+}
