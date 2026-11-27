@@ -129,7 +129,9 @@ export function NearbyScreen() {
     [loadingMore, setLoadingMore] = useState(false),
     [pageError, setPageError] = useState("");
   const [effectiveKm, setEffectiveKm] = useState<number | null>(null),
-    [soonPosts, setSoonPosts] = useState<NeedPost[]>([]);
+    [soonPosts, setSoonPosts] = useState<NeedPost[]>([]),
+    // Nothing within the widest distance: showing plans anywhere, nearest first.
+    [farther, setFarther] = useState(false);
   const moreLock = useRef(false),
     loadedScope = useRef("");
   const calendarDay = now.toDateString();
@@ -337,6 +339,12 @@ export function NearbyScreen() {
       ? { nearby: { ...point, radiusM: (km ?? MAX_HOME_DISTANCE) * 1000 } }
       : {}),
   });
+  const fartherFilter = (): PostPageFilter => ({
+    ...pageFilter(null),
+    nearby: undefined,
+    anywhere: point ?? undefined,
+    sort: "nearest",
+  });
   const load = useCallback(
     async (silent = false) => {
       const ticket = ++request.current;
@@ -364,6 +372,15 @@ export function NearbyScreen() {
             page = await listPostsPage(pageFilter(radius));
             if (page.items.length) break;
           }
+        let wide = false;
+        if (!page.items.length && point) {
+          // Never leave the feed empty: show plans anywhere, nearest first.
+          const anywhere = await listPostsPage(fartherFilter());
+          if (anywhere.items.length) {
+            page = anywhere;
+            wide = true;
+          }
+        }
         if (request.current !== ticket) return;
         loadedScope.current = queryScope;
         setPosts(page.items);
@@ -378,6 +395,7 @@ export function NearbyScreen() {
         );
         setCursor(page.cursor);
         setEffectiveKm(point ? selected : null);
+        setFarther(wide);
         setState("ready");
         // Side previews are independently bounded; they cannot hide a healthy plan feed.
         const [places, openings, soon] = await Promise.allSettled([
@@ -440,7 +458,10 @@ export function NearbyScreen() {
     setPageError("");
     const ticket = request.current;
     try {
-      const page = await listPostsPage(pageFilter(effectiveKm), cursor);
+      const page = await listPostsPage(
+        farther ? fartherFilter() : pageFilter(effectiveKm),
+        cursor,
+      );
       if (ticket !== request.current) return;
       setPosts((old) => mergePage(old, page.items));
       setCursor(page.cursor);
@@ -800,7 +821,7 @@ export function NearbyScreen() {
                   )}
                   <View style={styles.plansHeading}>
                     <Text accessibilityRole="header" style={styles.plansTitle}>
-                      Plans near you
+                      {farther ? "Plans farther away" : "Plans near you"}
                     </Text>
                     <MotionPressable
                       accessibilityRole="button"
@@ -852,7 +873,28 @@ export function NearbyScreen() {
                       )}
                     </View>
                   )}
-                  {reach.widened && chosenKm != null && (
+                  {farther && (
+                    <MotionPressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Nothing within ${shownKm ?? MAX_HOME_DISTANCE} km of ${nearWhat}, so showing the nearest plans anywhere. Change location`}
+                      accessibilityHint="Change location or distance"
+                      onPress={openLocation}
+                      style={styles.farther}
+                    >
+                      <Icon name="compass" size={18} color={colors.amberDeep} />
+                      <View style={styles.fartherCopy}>
+                        <Text style={styles.fartherTitle}>
+                          Nothing near {nearWhat} yet
+                        </Text>
+                        <Text style={styles.fartherText}>
+                          No plans within {shownKm ?? MAX_HOME_DISTANCE} km.
+                          Here are the nearest ones, wherever they are.{" "}
+                          <Text style={styles.widenedLink}>Change</Text>
+                        </Text>
+                      </View>
+                    </MotionPressable>
+                  )}
+                  {!farther && reach.widened && chosenKm != null && (
                     <MotionPressable
                       accessibilityRole="button"
                       accessibilityLabel={`Nothing within ${chosenKm} km of ${nearWhat}, so showing plans within ${shownKm} km. Change`}
@@ -1076,6 +1118,18 @@ const styles = StyleSheet.create({
     color: colors.ink,
     flex: 1,
   },
+  farther: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    padding: 14,
+    marginBottom: 14,
+    borderRadius: 16,
+    backgroundColor: colors.amberSoft,
+  },
+  fartherCopy: { flex: 1, gap: 2 },
+  fartherTitle: { ...typography.heading, fontSize: 15, color: colors.ink },
+  fartherText: { ...typography.bodySmall, color: colors.ink },
   widenedLink: { color: colors.amberDeep, ...weight("800") },
   error: {
     ...typography.bodySmall,
