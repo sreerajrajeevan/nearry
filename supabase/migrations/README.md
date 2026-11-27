@@ -159,8 +159,23 @@ and paging. Discover uses it when nothing is within the widest distance, so the
 feed shows the nearest plans anywhere under a "Nothing near you yet" note
 instead of an empty screen.
 
-## Nearry Premium (00068–00069)
+## Security hardening (00068)
 
-`00068`: `premium_entitlements` (written only by the `revenuecat-webhook` function with the service role; users read their own row), `has_premium()`, and `daily_usage` with triggers enforcing the free daily limits: 3 new plans and 10 join requests per India day (`daily_plan_limit` / `daily_join_limit`). Server and admin inserts are never limited. Apply after the Premium app build has reached users, or older builds show the raw limit text.
+Signed-out callers keep read access where RLS allows it but lose every table
+write grant (RLS already refused those writes). Nobody but the owner can
+TRUNCATE app tables. Trigger functions can no longer be called as `/rpc/`
+endpoints; they still fire as triggers. `nearby_venues` gets a fixed
+`search_path`.
 
-`00069`: the Premium "Hosted by" filter. `hosts_matching_gender()` (security definer, Premium-only, honours blocks and visibility) and an optional `hostGender` key in `discover_posts` (rebuilt on 00067 plans anywhere). Without the key results are unchanged, so older builds and `nearby_post_cards` keep working. Separate from the abuse limits in 00056, which cap everyone (Premium included); the free-tier triggers run first, so free users see the upgrade prompt.
+PostGIS keeps `spatial_ref_sys` in `public`, owned by `supabase_admin`, so its
+grants cannot be changed from a migration. `public.guard_api_request()` is set
+as PostgREST's `db_pre_request` on the `authenticator` role and refuses writes
+to `spatial_ref_sys`, `geometry_columns` and `geography_columns` through the
+API. If PostgREST ever reports that function missing, every API call fails:
+restore it, or run `alter role authenticator reset pgrst.db_pre_request; notify pgrst, 'reload config';`.
+
+## Nearry Premium (00069–00070)
+
+`00069`: `premium_entitlements` (written only by the `revenuecat-webhook` function with the service role; users read their own row), `has_premium()`, and `daily_usage` with triggers enforcing the free daily limits: 3 new plans and 10 join requests per India day (`daily_plan_limit` / `daily_join_limit`). Server and admin inserts are never limited. Apply after the Premium app build has reached users, or older builds show the raw limit text.
+
+`00070`: the Premium "Hosted by" filter. `hosts_matching_gender()` (security definer, Premium-only, honours blocks and visibility) and an optional `hostGender` key in `discover_posts` (rebuilt on 00067 plans anywhere). Without the key results are unchanged, so older builds and `nearby_post_cards` keep working. Separate from the abuse limits in 00056, which cap everyone (Premium included); the free-tier triggers run first, so free users see the upgrade prompt.
